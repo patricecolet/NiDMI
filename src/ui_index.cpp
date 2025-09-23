@@ -367,7 +367,73 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         // Etats bus et index des rectangles par label
         const busStates = { I2C:false, SPI:false, UART:false };
         const pinRects = {};
+        // Persistance d’état UI par pin (avant backend)
+        const pinConfigs = {}; // { 'D0': { role: 'Bouton', rtpEnabled:true, rtpType:'Note', ... }, ... }
+        let currentPinLabel = '';
 
+        function readUIToConfig(){
+            const cfg = {};
+            cfg.role = document.getElementById('funcSelect')?.value || '';
+            // Bouton
+            cfg.btnMode = document.getElementById('btnMode')?.value || '';
+            // RTP-MIDI
+            cfg.rtpEnabled = !!document.getElementById('rtpEnabled2')?.checked;
+            cfg.rtpType = document.getElementById('rtpMsgType')?.value || '';
+            cfg.rtpNote = document.getElementById('rtpNote')?.value || '';
+            cfg.rtpCc = document.getElementById('rtpCc')?.value || '';
+            cfg.rtpPc = document.getElementById('rtpPc')?.value || '';
+            cfg.rtpChan = document.getElementById('rtpChan')?.value || '';
+            cfg.rtpCcOn = document.getElementById('rtpCcOn')?.value || '';
+            cfg.rtpCcOff = document.getElementById('rtpCcOff')?.value || '';
+            cfg.rtpVel = document.getElementById('rtpVel')?.value || '';
+            cfg.rtpCcMin = document.getElementById('rtpCcMin')?.value || '';
+            cfg.rtpCcMax = document.getElementById('rtpCcMax')?.value || '';
+            cfg.rtpNoteMin = document.getElementById('rtpNoteMin')?.value || '';
+            cfg.rtpNoteMax = document.getElementById('rtpNoteMax')?.value || '';
+            cfg.rtpNoteVelFix = document.getElementById('rtpNoteVelFix')?.value || '';
+            // LED
+            cfg.ledMode = document.getElementById('ledMode')?.value || '';
+            // OSC & Debug (pour UI)
+            cfg.oscEnabled = !!document.getElementById('oscEnabled2')?.checked;
+            cfg.oscAddress = document.getElementById('oscAddress')?.value || '';
+            cfg.dbgEnabled = !!document.getElementById('dbgEnabled')?.checked;
+            cfg.dbgHeader = document.getElementById('dbgHeader')?.value || '';
+            return cfg;
+        }
+
+        function applyConfigToUI(cfg){
+            if(!cfg) return;
+            const setVal = (id, v)=>{ const el=document.getElementById(id); if(el && typeof v!== 'undefined' && v !== null){ el.value = v; } };
+            const setChk = (id, b)=>{ const el=document.getElementById(id); if(el){ el.checked = !!b; } };
+            // Rôle (reconstruit après updateFuncMenuForLabel)
+            if(cfg.role){ const sel=document.getElementById('funcSelect'); if(sel && !sel.disabled){ sel.value = cfg.role; updateRoleSubcards(); } }
+            // Bouton
+            setVal('btnMode', cfg.btnMode);
+            // RTP-MIDI
+            setChk('rtpEnabled2', cfg.rtpEnabled);
+            if(cfg.rtpType){ const t=document.getElementById('rtpMsgType'); if(t && !t.disabled){ t.value = cfg.rtpType; } }
+            updateRtpParamsVisibility();
+            setVal('rtpNote', cfg.rtpNote);
+            setVal('rtpCc', cfg.rtpCc);
+            setVal('rtpPc', cfg.rtpPc);
+            setVal('rtpChan', cfg.rtpChan);
+            setVal('rtpCcOn', cfg.rtpCcOn);
+            setVal('rtpCcOff', cfg.rtpCcOff);
+            setVal('rtpVel', cfg.rtpVel);
+            setVal('rtpCcMin', cfg.rtpCcMin);
+            setVal('rtpCcMax', cfg.rtpCcMax);
+            setVal('rtpNoteMin', cfg.rtpNoteMin);
+            setVal('rtpNoteMax', cfg.rtpNoteMax);
+            setVal('rtpNoteVelFix', cfg.rtpNoteVelFix);
+            // LED
+            setVal('ledMode', cfg.ledMode);
+            // OSC & Debug (UI)
+            setChk('oscEnabled2', cfg.oscEnabled);
+            setVal('oscAddress', cfg.oscAddress);
+            setChk('dbgEnabled', cfg.dbgEnabled);
+            setVal('dbgHeader', cfg.dbgHeader);
+        }
+ 
         function labelsForBus(bus){
             if(bus==='I2C') return ['SDA','SCL','D4','D5'];
             if(bus==='SPI') return ['MOSI','MISO','SCK','D10','D9','D8'];
@@ -499,9 +565,18 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             };
             if(label==='5V' || label==='3V3' || label==='GND'){ setOptions([], false); updateRoleSubcards(); return; }
             if(/^A\d+$/.test(label)){ setOptions(['Potentiomètre','Analog in (raw)'], true, 0); updateRoleSubcards(); return; }
-            if(label==='SDA' || label==='SCL'){ setOptions(['I2C'], true, 0); updateRoleSubcards(); return; }
-            if(label==='MOSI' || label==='MISO' || label==='SCK'){ setOptions(['SPI'], true, 0); updateRoleSubcards(); return; }
-            if(label==='TX' || label==='RX'){ setOptions(['UART'], true, 0); updateRoleSubcards(); return; }
+            if(label==='SDA' || label==='SCL'){ setOptions(['I2C'], true, 0); updateRoleSubcards();
+                // Activer immédiatement I2C et griser D4/D5 + SDA/SCL
+                busStates.I2C = true; updateBusVisuals();
+                return; }
+            if(label==='MOSI' || label==='MISO' || label==='SCK'){ setOptions(['SPI'], true, 0); updateRoleSubcards();
+                // Activer immédiatement SPI et griser D8/D9/D10 + MOSI/MISO/SCK
+                busStates.SPI = true; updateBusVisuals();
+                return; }
+            if(label==='TX' || label==='RX'){ setOptions(['UART'], true, 0); updateRoleSubcards();
+                // Activer immédiatement UART et griser D6/D7 + TX/RX
+                busStates.UART = true; updateBusVisuals();
+                return; }
             if(/^D\d+$/.test(label)){
                 // Si D appartient à un bus actif, désactiver la fonction
                 const isI2c = (label==='D4' || label==='D5') && busStates.I2C;
@@ -560,12 +635,19 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                             busStates[r.dataset.bus] = false;
                             updateBusVisuals();
                         }
+                        // Sauver l'ancienne pin courante avant de changer
+                        if(currentPinLabel){ pinConfigs[currentPinLabel] = readUIToConfig(); }
                         if(selectedRect) selectedRect.classList.remove('selectedSquare');
                         r.classList.add('selectedSquare');
                         selectedRect = r;
                         updateFuncMenuForLabel(r.dataset.label);
                         // Réévaluer RTP selon rôle courant
                         updateRtpForRole(document.getElementById('funcSelect')?.value || '');
+                        currentPinLabel = r.dataset.label || '';
+                        // Appliquer la config sauvegardée si elle existe
+                        if(currentPinLabel && pinConfigs[currentPinLabel]){
+                            applyConfigToUI(pinConfigs[currentPinLabel]);
+                        }
                     });
                 }
                 return g;
@@ -636,12 +718,24 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                     if((label==='MOSI' || label==='MISO' || label==='SCK') && val==='SPI'){ busStates.SPI = true; updateBusVisuals(); }
                     if((label==='TX' || label==='RX') && val==='UART'){ busStates.UART = true; updateBusVisuals(); }
                     updateRoleSubcards();
+                    // Mettre à jour le cache de la pin courante
+                    if(currentPinLabel){ pinConfigs[currentPinLabel] = readUIToConfig(); }
                 };
             }
 
             // RTP-MIDI params visibility
             const rtpType = document.getElementById('rtpMsgType');
             if(rtpType){ rtpType.onchange = updateRtpParamsVisibility; updateRtpParamsVisibility(); }
+
+            // Brancher les changements champs pour sauvegarde locale immédiate
+            const fieldsToWatch = ['btnMode','rtpEnabled2','rtpMsgType','rtpNote','rtpCc','rtpPc','rtpChan','rtpCcOn','rtpCcOff','rtpVel','rtpCcMin','rtpCcMax','rtpNoteMin','rtpNoteMax','rtpNoteVelFix','ledMode','oscEnabled2','oscAddress','dbgEnabled','dbgHeader'];
+            fieldsToWatch.forEach(id=>{
+                const el = document.getElementById(id);
+                if(el){
+                    el.addEventListener('change', ()=>{ if(currentPinLabel){ pinConfigs[currentPinLabel] = readUIToConfig(); } });
+                    el.addEventListener('input', ()=>{ if(currentPinLabel){ pinConfigs[currentPinLabel] = readUIToConfig(); } });
+                }
+            });
             
             // Formulaire Wi-Fi STA
             $('#sta').onsubmit = async (ev) => {
