@@ -1,6 +1,3 @@
-#include "ui_index.h"
-
-const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -328,7 +325,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     
     <script>
         const $=s=>document.querySelector(s[0]=='#'?s:'#'+s);
-        // Gestion des onglets
+        /* Gestion des onglets */
         document.querySelectorAll('.tab').forEach(tab => {
             tab.onclick = () => {
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -338,7 +335,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             };
         });
         
-        // Chargement du statut
+        /* Chargement du statut */
         async function loadStatus() {
             const res = await fetch('/api/status');
             const data = await res.json();
@@ -350,7 +347,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             $('#staStatus').style.color = data.sta_connected ? '#059669' : '#dc2626';
         }
         
-        // Charger l'état RTP-MIDI
+        /* Charger l'état RTP-MIDI */
         async function loadRtpStatus() {
             const res = await fetch('/api/rtp/status');
             const data = await res.json();
@@ -361,22 +358,22 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             $('#rtpStatus').className = 'status ' + (data.enabled ? 'enabled' : 'disabled');
         }
         
-        // Chargement des capacités des pins
+        /* Chargement des capacités des pins */
         let caps = null;
         let selectedRect = null;
-        // Etats bus et index des rectangles par label
+        /* Etats bus et index des rectangles par label */
         const busStates = { I2C:false, SPI:false, UART:false };
         const pinRects = {};
-        // Persistance d’état UI par pin (avant backend)
-        const pinConfigs = {}; // { 'D0': { role: 'Bouton', rtpEnabled:true, rtpType:'Note', ... }, ... }
+        /* Persistance d'état UI par pin (avant backend) */
+        const pinConfigs = {}; /* { 'D0': { role: 'Bouton', rtpEnabled:true, rtpType:'Note', ... }, ... } */
         let currentPinLabel = '';
 
         function readUIToConfig(){
             const cfg = {};
             cfg.role = document.getElementById('funcSelect')?.value || '';
-            // Bouton
+            /* Bouton */
             cfg.btnMode = document.getElementById('btnMode')?.value || '';
-            // RTP-MIDI
+            /* RTP-MIDI */
             cfg.rtpEnabled = !!document.getElementById('rtpEnabled2')?.checked;
             cfg.rtpType = document.getElementById('rtpMsgType')?.value || '';
             cfg.rtpNote = document.getElementById('rtpNote')?.value || '';
@@ -391,9 +388,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             cfg.rtpNoteMin = document.getElementById('rtpNoteMin')?.value || '';
             cfg.rtpNoteMax = document.getElementById('rtpNoteMax')?.value || '';
             cfg.rtpNoteVelFix = document.getElementById('rtpNoteVelFix')?.value || '';
-            // LED
+            /* LED */
             cfg.ledMode = document.getElementById('ledMode')?.value || '';
-            // OSC & Debug (pour UI)
+            /* OSC & Debug (pour UI) */
             cfg.oscEnabled = !!document.getElementById('oscEnabled2')?.checked;
             cfg.oscAddress = document.getElementById('oscAddress')?.value || '';
             cfg.dbgEnabled = !!document.getElementById('dbgEnabled')?.checked;
@@ -405,11 +402,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             if(!cfg) return;
             const setVal = (id, v)=>{ const el=document.getElementById(id); if(el && typeof v!== 'undefined' && v !== null){ el.value = v; } };
             const setChk = (id, b)=>{ const el=document.getElementById(id); if(el){ el.checked = !!b; } };
-            // Rôle (reconstruit après updateFuncMenuForLabel)
+            /* Rôle (reconstruit après updateFuncMenuForLabel) */
             if(cfg.role){ const sel=document.getElementById('funcSelect'); if(sel && !sel.disabled){ sel.value = cfg.role; updateRoleSubcards(); } }
-            // Bouton
+            /* Bouton */
             setVal('btnMode', cfg.btnMode);
-            // RTP-MIDI
+            /* RTP-MIDI */
             setChk('rtpEnabled2', cfg.rtpEnabled);
             if(cfg.rtpType){ const t=document.getElementById('rtpMsgType'); if(t && !t.disabled){ t.value = cfg.rtpType; } }
             updateRtpParamsVisibility();
@@ -427,7 +424,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             setVal('rtpNoteVelFix', cfg.rtpNoteVelFix);
             // LED
             setVal('ledMode', cfg.ledMode);
-            // OSC & Debug (UI)
+            /* OSC & Debug (UI) */
             setChk('oscEnabled2', cfg.oscEnabled);
             setVal('oscAddress', cfg.oscAddress);
             setChk('dbgEnabled', cfg.dbgEnabled);
@@ -483,7 +480,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             const rtpEnable = document.getElementById('rtpEnabled2');
             const rtpType = document.getElementById('rtpMsgType');
             const rtpParams = document.getElementById('rtpParams');
-            // Par défaut: désactiver si rôle inconnu
+            /* Par défaut: désactiver si rôle inconnu */
             let enabled = true;
             let types = [];
             if(role==='Potentiomètre'){
@@ -491,7 +488,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             } else if(role==='Bouton'){
                 types = ['Note','Control Change','Program Change','Clock','Tap Tempo'];
             } else if(role==='LED'){
-                // Réception: suivre Note/CC
+                /* Réception: suivre Note/CC */
                 types = ['Note','Control Change'];
             } else if(role==='I2C' || role==='SPI' || role==='UART' || role==='Analog in (raw)' || role==='Digital in/out'){
                 enabled = false;
@@ -522,7 +519,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             const roleSel = document.getElementById('funcSelect');
             if(!typeSel || !params) return;
             const v = typeSel.value;
-            // reset
+            /* reset */
             [noteRow, ccRow, ccOnOffRow, pcRow, velRow, chanRow, clockHint, noteSweepRow, ccRangeRow].forEach(el=>{ if(el) el.style.display='none'; });
             params.style.display = 'block';
             if(v==='Note'){
@@ -566,19 +563,19 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             if(label==='5V' || label==='3V3' || label==='GND'){ setOptions([], false); updateRoleSubcards(); return; }
             if(/^A\d+$/.test(label)){ setOptions(['Potentiomètre','Analog in (raw)'], true, 0); updateRoleSubcards(); return; }
             if(label==='SDA' || label==='SCL'){ setOptions(['I2C'], true, 0); updateRoleSubcards();
-                // Activer immédiatement I2C et griser D4/D5 + SDA/SCL
+                /* Activer immédiatement I2C et griser D4/D5 + SDA/SCL */
                 busStates.I2C = true; updateBusVisuals();
                 return; }
             if(label==='MOSI' || label==='MISO' || label==='SCK'){ setOptions(['SPI'], true, 0); updateRoleSubcards();
-                // Activer immédiatement SPI et griser D8/D9/D10 + MOSI/MISO/SCK
+                /* Activer immédiatement SPI et griser D8/D9/D10 + MOSI/MISO/SCK */
                 busStates.SPI = true; updateBusVisuals();
                 return; }
             if(label==='TX' || label==='RX'){ setOptions(['UART'], true, 0); updateRoleSubcards();
-                // Activer immédiatement UART et griser D6/D7 + TX/RX
+                /* Activer immédiatement UART et griser D6/D7 + TX/RX */
                 busStates.UART = true; updateBusVisuals();
                 return; }
             if(/^D\d+$/.test(label)){
-                // Si D appartient à un bus actif, désactiver la fonction
+                /* Si D appartient à un bus actif, désactiver la fonction */
                 const isI2c = (label==='D4' || label==='D5') && busStates.I2C;
                 const isSpi = (label==='D8' || label==='D9' || label==='D10') && busStates.SPI;
                 const isUart = (label==='D6' || label==='D7') && busStates.UART;
@@ -588,15 +585,15 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             }
             setOptions([], false); updateRoleSubcards();
         }
-        // Couleurs fonctions (SVG)
+        /* Couleurs fonctions (SVG) */
         const FUNC_COLORS = { DIGITAL:'#3B82F6', ANALOG:'#EC4899', I2C:'#10B981', UART:'#6B7280', SPI:'#8B5CF6', POWER:'#EF4444', GND:'#000000' };
-        // Disposition CMU simple (statique) — D0..D10 + alim
+        /* Disposition CMU simple (statique) — D0..D10 + alim */
         const PIN_LAYOUT = [
-            // Alim en haut à droite (1 carré non cliquable chacun)
+            /* Alim en haut à droite (1 carré non cliquable chacun) */
             {name:'5V',  side:'right', row:0,  type:'POWER', clickable:false},
             {name:'GND', side:'right', row:1,  type:'GND',   clickable:false},
             {name:'3V3', side:'right', row:2,  type:'POWER', clickable:false},
-            // Gauche: Type puis Digital
+            /* Gauche: Type puis Digital */
             {name:'D0',  side:'left',  row:0,  type:'ANALOG', typeLabel:'A0'},
             {name:'D1',  side:'left',  row:1,  type:'ANALOG', typeLabel:'A1'},
             {name:'D2',  side:'left',  row:2,  type:'ANALOG', typeLabel:'A2'},
@@ -604,7 +601,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             {name:'D4',  side:'left',  row:4,  type:'I2C',    typeLabel:'SDA'},
             {name:'D5',  side:'left',  row:5,  type:'I2C',    typeLabel:'SCL'},
             {name:'D6',  side:'left',  row:6,  type:'UART',   typeLabel:'TX'},
-            // Droite: Digital puis Type
+            /* Droite: Digital puis Type */
             {name:'D10', side:'right', row:3,  type:'SPI',    typeLabel:'MOSI'},
             {name:'D9',  side:'right', row:4,  type:'SPI',    typeLabel:'MISO'},
             {name:'D8',  side:'right', row:5,  type:'SPI',    typeLabel:'SCK'},
@@ -630,21 +627,21 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                     r.dataset.label = label;
                     pinRects[label] = r;
                     r.addEventListener('click', () => {
-                        // Si la pin est grisée par un bus, un clic désactive le bus entier
+                        /* Si la pin est grisée par un bus, un clic désactive le bus entier */
                         if(r.classList.contains('busDisabled') && r.dataset.bus){
                             busStates[r.dataset.bus] = false;
                             updateBusVisuals();
                         }
-                        // Sauver l'ancienne pin courante avant de changer
+                        /* Sauver l'ancienne pin courante avant de changer */
                         if(currentPinLabel){ pinConfigs[currentPinLabel] = readUIToConfig(); }
                         if(selectedRect) selectedRect.classList.remove('selectedSquare');
                         r.classList.add('selectedSquare');
                         selectedRect = r;
                         updateFuncMenuForLabel(r.dataset.label);
-                        // Réévaluer RTP selon rôle courant
+                        /* Réévaluer RTP selon rôle courant */
                         updateRtpForRole(document.getElementById('funcSelect')?.value || '');
                         currentPinLabel = r.dataset.label || '';
-                        // Appliquer la config sauvegardée si elle existe
+                        /* Appliquer la config sauvegardée si elle existe */
                         if(currentPinLabel && pinConfigs[currentPinLabel]){
                             applyConfigToUI(pinConfigs[currentPinLabel]);
                         }
@@ -652,8 +649,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                 }
                 return g;
             };
-            // grille 5 colonnes: c1(typeL) c2(DL) c3(MCU) c4(DR) c5(typeR)
-            // légère séparation entre c1 et c2; ajusté à la nouvelle largeur du MCU
+            /* grille 5 colonnes: c1(typeL) c2(DL) c3(MCU) c4(DR) c5(typeR) */
+            /* légère séparation entre c1 et c2; ajusté à la nouvelle largeur du MCU */
             const COL = { c1:20, c2:68, c4:238, c5:286 };
             const W=44, H=20;
             const renderRowLeft = (row, typeLabel, typeColor, dLabel) => {
@@ -674,7 +671,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                 g.appendChild(makeSquare(COL.c5, y-10, W, H, typeColor, '#9ca3af', typeLabel));
                 right.appendChild(g);
             };
-            // Gauche
+            /* Gauche */
             renderRowLeft(0,'A0',FUNC_COLORS.ANALOG,'D0');
             renderRowLeft(1,'A1',FUNC_COLORS.ANALOG,'D1');
             renderRowLeft(2,'A2',FUNC_COLORS.ANALOG,'D2');
@@ -682,7 +679,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             renderRowLeft(4,'SDA',FUNC_COLORS.I2C,'D4');
             renderRowLeft(5,'SCL',FUNC_COLORS.I2C,'D5');
             renderRowLeft(6,'TX', FUNC_COLORS.UART,'D6');
-            // Droite
+            /* Droite */
             renderRowRightPower(0,'5V',  FUNC_COLORS.POWER);
             renderRowRightPower(1,'GND', FUNC_COLORS.GND);
             renderRowRightPower(2,'3V3', FUNC_COLORS.POWER);
@@ -699,35 +696,35 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             drawBoardPins();
         }
         
-        // Attendre que le DOM soit prêt
+        /* Attendre que le DOM soit prêt */
         window.addEventListener('load', () => {
             loadStatus();
             loadRtpStatus();
             loadCaps();
             drawBoardPins();
-            // Init menu Fonction du pin
+            /* Init menu Fonction du pin */
             const sel = document.getElementById('funcSelect');
             if(sel){ sel.innerHTML = '<option selected>— Sélectionnez une pin —</option>'; sel.disabled = true; }
-            // Brancher le changement de rôle pour afficher/masquer les sous-cartes
+            /* Brancher le changement de rôle pour afficher/masquer les sous-cartes */
             if(sel){
                 sel.onchange = () => {
-                    // Activation bus si on sélectionne une fonction bus sur un label bus
+                    /* Activation bus si on sélectionne une fonction bus sur un label bus */
                     const label = (document.getElementById('selPin')?.textContent || '').trim();
                     const val = sel.value;
                     if((label==='SDA' || label==='SCL') && val==='I2C'){ busStates.I2C = true; updateBusVisuals(); }
                     if((label==='MOSI' || label==='MISO' || label==='SCK') && val==='SPI'){ busStates.SPI = true; updateBusVisuals(); }
                     if((label==='TX' || label==='RX') && val==='UART'){ busStates.UART = true; updateBusVisuals(); }
                     updateRoleSubcards();
-                    // Mettre à jour le cache de la pin courante
+                    /* Mettre à jour le cache de la pin courante */
                     if(currentPinLabel){ pinConfigs[currentPinLabel] = readUIToConfig(); }
                 };
             }
 
-            // RTP-MIDI params visibility
+            /* RTP-MIDI params visibility */
             const rtpType = document.getElementById('rtpMsgType');
             if(rtpType){ rtpType.onchange = updateRtpParamsVisibility; updateRtpParamsVisibility(); }
 
-            // Brancher les changements champs pour sauvegarde locale immédiate
+            /* Brancher les changements champs pour sauvegarde locale immédiate */
             const fieldsToWatch = ['btnMode','rtpEnabled2','rtpMsgType','rtpNote','rtpCc','rtpPc','rtpChan','rtpCcOn','rtpCcOff','rtpVel','rtpCcMin','rtpCcMax','rtpNoteMin','rtpNoteMax','rtpNoteVelFix','ledMode','oscEnabled2','oscAddress','dbgEnabled','dbgHeader'];
             fieldsToWatch.forEach(id=>{
                 const el = document.getElementById(id);
@@ -737,7 +734,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                 }
             });
             
-            // Formulaire Wi-Fi STA
+            /* Formulaire Wi-Fi STA */
             $('#sta').onsubmit = async (ev) => {
                 ev.preventDefault();
                 $('#staMsg').textContent = 'Connexion...';
@@ -749,7 +746,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                 $('#staMsg').textContent = res.ok ? 'Configuration sauvegardée' : 'Erreur ' + res.status;
             };
             
-            // Formulaire RTP-MIDI
+            /* Formulaire RTP-MIDI */
             $('#rtp').onsubmit = async (ev) => {
                 ev.preventDefault();
                 const res = await fetch('/api/rtp', {
@@ -760,7 +757,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                 $('#rtpMsg').textContent = res.ok ? 'Configuration RTP-MIDI enregistrée' : 'Erreur ' + res.status;
             };
             
-            // Toggle RTP-MIDI
+            /* Toggle RTP-MIDI */
             $('#rtpEnabled').onchange = async () => {
                 const enabled = $('#rtpEnabled').checked;
                 const res = await fetch('/api/rtp/enable', {
@@ -771,7 +768,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                 $('#rtpMsg').textContent = res.ok ? 'RTP-MIDI ' + (enabled ? 'activé' : 'désactivé') : 'Erreur ' + res.status;
             };
             
-            // Formulaire OSC
+            /* Formulaire OSC */
             $('#osc').onsubmit = async (ev) => {
                 ev.preventDefault();
                 const res = await fetch('/api/osc', {
@@ -782,7 +779,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                 $('#oscMsg').textContent = res.ok ? 'Configuration OSC enregistrée' : 'Erreur ' + res.status;
             };
 
-            // Enregistrer la config du pin sélectionné
+            /* Enregistrer la config du pin sélectionné */
             const saveBtn = document.getElementById('savePinBtn');
             if(saveBtn){
                 saveBtn.onclick = async () => {
@@ -790,7 +787,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                     const pinLabel = (document.getElementById('selPin')?.textContent || '').trim();
                     const role = (document.getElementById('funcSelect')?.value || '').trim();
                     if(!pinLabel || pinLabel==='— Sélectionnez une pin —' || !role){ if(msg) msg.textContent='Sélectionnez un pin et un rôle'; return; }
-                    // Collecte RTP-MIDI
+                    /* Collecte RTP-MIDI */
                     const rtpOn = !!document.getElementById('rtpEnabled2')?.checked;
                     const rtpType = document.getElementById('rtpMsgType')?.value || '';
                     const rtpNote = document.getElementById('rtpNote')?.value || '';
@@ -800,9 +797,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                     const rtpCcOn = document.getElementById('rtpCcOn')?.value || '';
                     const rtpCcOff = document.getElementById('rtpCcOff')?.value || '';
                     const rtpVel = document.getElementById('rtpVel')?.value || '';
-                    // LED mode
+                    /* LED mode */
                     const ledMode = document.getElementById('ledMode')?.value || '';
-                    // Build form body (x-www-form-urlencoded)
+                    /* Build form body (x-www-form-urlencoded) */
                     const params = new URLSearchParams();
                     params.set('pinLabel', pinLabel);
                     params.set('role', role);
@@ -832,4 +829,3 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     </script>
 </body>
 </html>
-)rawliteral";
