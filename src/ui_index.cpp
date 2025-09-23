@@ -68,6 +68,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         .square-text { font-size:9px; fill:#ffffff; dominant-baseline:middle; pointer-events:none; user-select:none; }
         .square-outline { stroke:#9ca3af; }
         .selectedSquare { stroke:#1d4ed8; stroke-width:2; }
+        /* Bus (I2C/SPI/UART) - visuel pins désactivés par bus */
+        .busDisabled { opacity: 0.45; filter: grayscale(100%); }
 
         /* Disposition Pins/Config */
         .pins-layout { display:flex; gap:20px; align-items:flex-start; }
@@ -362,6 +364,33 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         // Chargement des capacités des pins
         let caps = null;
         let selectedRect = null;
+        // Etats bus et index des rectangles par label
+        const busStates = { I2C:false, SPI:false, UART:false };
+        const pinRects = {};
+
+        function labelsForBus(bus){
+            if(bus==='I2C') return ['SDA','SCL','D4','D5'];
+            if(bus==='SPI') return ['MOSI','MISO','SCK','D10','D9','D8'];
+            if(bus==='UART') return ['TX','RX','D6','D7'];
+            return [];
+        }
+
+        function updateBusVisuals(){
+            ['I2C','SPI','UART'].forEach(bus=>{
+                const labels = labelsForBus(bus);
+                labels.forEach(lbl=>{
+                    const r = pinRects[lbl];
+                    if(!r) return;
+                    if(busStates[bus]){
+                        r.classList.add('busDisabled');
+                        r.dataset.bus = bus;
+                    } else {
+                        r.classList.remove('busDisabled');
+                        if(r.dataset.bus===bus) delete r.dataset.bus;
+                    }
+                });
+            });
+        }
 
         function updateRoleSubcards(){
             const sel = document.getElementById('funcSelect');
@@ -474,6 +503,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             if(label==='MOSI' || label==='MISO' || label==='SCK'){ setOptions(['SPI'], true, 0); updateRoleSubcards(); return; }
             if(label==='TX' || label==='RX'){ setOptions(['UART'], true, 0); updateRoleSubcards(); return; }
             if(/^D\d+$/.test(label)){
+                // Si D appartient à un bus actif, désactiver la fonction
+                const isI2c = (label==='D4' || label==='D5') && busStates.I2C;
+                const isSpi = (label==='D8' || label==='D9' || label==='D10') && busStates.SPI;
+                const isUart = (label==='D6' || label==='D7') && busStates.UART;
+                if(isI2c || isSpi || isUart){ setOptions([], false); updateRoleSubcards(); return; }
                 const roles = ['Bouton','LED','Digital in/out'];
                 setOptions(roles, true, 0); updateRoleSubcards(); return;
             }
@@ -519,7 +553,13 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                 if(clickable){
                     g.style.cursor='pointer';
                     r.dataset.label = label;
+                    pinRects[label] = r;
                     r.addEventListener('click', () => {
+                        // Si la pin est grisée par un bus, un clic désactive le bus entier
+                        if(r.classList.contains('busDisabled') && r.dataset.bus){
+                            busStates[r.dataset.bus] = false;
+                            updateBusVisuals();
+                        }
                         if(selectedRect) selectedRect.classList.remove('selectedSquare');
                         r.classList.add('selectedSquare');
                         selectedRect = r;
@@ -569,6 +609,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             renderRowRight(5,'D8','SCK',  FUNC_COLORS.SPI);
             renderRowRight(6,'D7','RX',   FUNC_COLORS.UART);
             if(caps && caps.board){ $('#boardName').textContent = caps.board.toUpperCase(); }
+            updateBusVisuals();
         }
         async function loadCaps() {
             const res = await fetch('/api/pins/caps');
@@ -586,7 +627,17 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             const sel = document.getElementById('funcSelect');
             if(sel){ sel.innerHTML = '<option selected>— Sélectionnez une pin —</option>'; sel.disabled = true; }
             // Brancher le changement de rôle pour afficher/masquer les sous-cartes
-            if(sel){ sel.onchange = updateRoleSubcards; }
+            if(sel){
+                sel.onchange = () => {
+                    // Activation bus si on sélectionne une fonction bus sur un label bus
+                    const label = (document.getElementById('selPin')?.textContent || '').trim();
+                    const val = sel.value;
+                    if((label==='SDA' || label==='SCL') && val==='I2C'){ busStates.I2C = true; updateBusVisuals(); }
+                    if((label==='MOSI' || label==='MISO' || label==='SCK') && val==='SPI'){ busStates.SPI = true; updateBusVisuals(); }
+                    if((label==='TX' || label==='RX') && val==='UART'){ busStates.UART = true; updateBusVisuals(); }
+                    updateRoleSubcards();
+                };
+            }
 
             // RTP-MIDI params visibility
             const rtpType = document.getElementById('rtpMsgType');
