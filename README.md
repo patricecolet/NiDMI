@@ -100,6 +100,35 @@ Conseil: gardez un firmware qui inclut l’endpoint `/update` pour pouvoir ré�
 - ESP32‑C3: « ESP32C3 Dev Module »
 - ESP32‑S3: « ESP32S3 Dev Module »
 
+## Rôles et messages RTP‑MIDI / OSC
+
+### Potentiomètre (A0–A3) [émission]
+- CC: CC# configurable; canal.
+- Pitch Bend: plage standard; canal.
+- Aftertouch (Channel): 0–127; canal.
+- Note + vélocité (note fixe): note configurable; vélocité issue du potard; canal.
+- Note (balayage): note min/max; vélocité fixe; envoi seulement si la note change; canal.
+
+### Bouton (D0..D6) [émission]
+- Note (On/Off): note configurable; canal.
+- CC (0/127): CC# configurable; canal.
+- Program Change: PC configurable; canal.
+- Clock: impulsion → tick 24 ppq; pas de canal.
+- Tap Tempo: impulsions → calcul BPM; envoi Clock (Start/Stop/Continue) selon logique; pas de canal.
+
+### LED (D7–D9) [réception]
+- Follow Note: note configurable → On/Off.
+- Follow CC: CC# configurable (+ seuil simple) → On/Off.
+
+### LED PWM (D10) [réception]
+- Follow CC: CC# configurable → PWM (0–100%).
+- Follow Note: PWM = vélocité de la note suivie; extinction au Note Off.
+- Vélocité (toutes notes): PWM = vélocité du dernier Note On reçu, quelle que soit la note; extinction optionnelle au Note Off global.
+
+Notes:
+- Clock et Tap Tempo n’ont pas de canal MIDI.
+- Les réglages sont spécifiques à chaque rôle (pas de "paramètres communs" transverses ambiguës).
+
 ## Dépendances
 - Core ESP32 (Espressif Systems)
 - Bibliothèques: « ESP Async WebServer », « AsyncTCP »
