@@ -154,7 +154,20 @@ void setupHttp(AsyncWebServer& server, AsyncWebSocket& ws) {
 			request->send(400, "application/json", "{\"error\":\"target and port required\"}");
 		}
 	});
-	
+
+	// API - Statut OSC
+	server.on("/api/osc/status", HTTP_GET, [](AsyncWebServerRequest *request){
+		preferences.begin("esp32server", false);
+		String target = preferences.getString("osc_target", "sta");
+		int port = preferences.getInt("osc_port", 8000);
+		preferences.end();
+		String json = "{";
+		json += "\"target\":\"" + target + "\",";
+		json += "\"port\":" + String(port);
+		json += "}";
+		request->send(200, "application/json", json);
+	});
+
 	// API - Capacités des pins (C3)
 	server.on("/api/pins/caps", HTTP_GET, [](AsyncWebServerRequest *request){
 		String json = buildC3PinCapsJson();

@@ -65,8 +65,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         .power   { background:#EF4444; } /* rouge */
         .gnd     { background:#000000; } /* noir */
         /* Styles SVG textes */
-        .square-text { font-size:9px; fill:#ffffff; dominant-baseline:middle; }
+        .square-text { font-size:9px; fill:#ffffff; dominant-baseline:middle; pointer-events:none; user-select:none; }
         .square-outline { stroke:#9ca3af; }
+        .selectedSquare { stroke:#1d4ed8; stroke-width:2; }
 
         /* Disposition Pins/Config */
         .pins-layout { display:flex; gap:20px; align-items:flex-start; }
@@ -78,6 +79,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         .row label { color:#374151; font-size:14px; }
         .row select, .row input[type="text"] { padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; }
         .switch { display:flex; align-items:center; gap:8px; }
+        .subcard { background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:12px; margin-top:8px; }
+        .subcard .row { margin:6px 0; }
     </style>
 </head>
 <body>
@@ -213,6 +216,26 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                                 <option>SPI</option>
                             </select>
                         </div>
+                        
+                        <div id="digitalButtonCard" class="subcard" style="display:none;">
+                            <div class="row"><label>Mode bouton:</label>
+                                <select id="btnMode">
+                                    <option value="pulse">Push (impulsion immédiate 1→0)</option>
+                                    <option value="press_release">Push (1 à l'appui, 0 au relâchement)</option>
+                                    <option value="toggle">On/Off (toggle)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div id="ledCard" class="subcard" style="display:none;">
+                            <div class="row"><label>LED mode:</label>
+                                <select id="ledMode">
+                                    <option value="onoff">LED On/Off</option>
+                                    <option value="pwm">LED PWM</option>
+                                </select>
+                            </div>
+                        </div>
+                        
                         <h4>RTP‑MIDI</h4>
                         <div class="row switch">
                             <input type="checkbox" id="rtpEnabled2"/>
@@ -222,8 +245,59 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                                 <option>Note</option>
                                 <option>Control Change</option>
                                 <option>Program Change</option>
+                                <option>Pitch Bend</option>
+                                <option>Aftertouch (Channel)</option>
+                                <option>Note + vélocité</option>
+                                <option>Note (balayage)</option>
                                 <option>Clock</option>
+                                <option>Tap Tempo</option>
                             </select>
+                        </div>
+                        <div id="rtpParams" class="subcard" style="display:none;">
+                            <div class="row" id="rtpNoteRow" style="display:none;">
+                                <label>Note:</label>
+                                <input type="number" id="rtpNote" min="0" max="127" placeholder="60" style="width:90px;"/>
+                            </div>
+                            <div class="row" id="rtpCcRow" style="display:none;">
+                                <label>CC#:</label>
+                                <input type="number" id="rtpCc" min="0" max="127" placeholder="7" style="width:90px;"/>
+                            </div>
+                            <div class="row" id="rtpCcOnOffRow" style="display:none;">
+                                <label>Valeurs:</label>
+                                <span>ON</span>
+                                <input type="number" id="rtpCcOn" min="0" max="127" placeholder="127" style="width:90px;"/>
+                                <span>OFF</span>
+                                <input type="number" id="rtpCcOff" min="0" max="127" placeholder="0" style="width:90px;"/>
+                            </div>
+                            <div class="row" id="rtpPcRow" style="display:none;">
+                                <label>Program#:</label>
+                                <input type="number" id="rtpPc" min="0" max="127" placeholder="0" style="width:90px;"/>
+                            </div>
+                            <div class="row" id="rtpVelRow" style="display:none;">
+                                <label>Vélocité:</label>
+                                <input type="number" id="rtpVel" min="1" max="127" placeholder="100" style="width:90px;"/>
+                            </div>
+                            <div class="row" id="rtpCcRangeRow" style="display:none;">
+                                <label>Plage MIDI:</label>
+                                <input type="number" id="rtpCcMin" min="0" max="127" placeholder="0" style="width:90px;"/>
+                                <span>→</span>
+                                <input type="number" id="rtpCcMax" min="0" max="127" placeholder="127" style="width:90px;"/>
+                            </div>
+                            <div class="row" id="rtpChanRow" style="display:none;">
+                                <label>Canal:</label>
+                                <input type="number" id="rtpChan" min="1" max="16" placeholder="1" style="width:90px;"/>
+                            </div>
+                            <div class="row" id="rtpClockHint" style="display:none; color:#6b7280;">
+                                <span>Clock / Tap Tempo: pas de canal.</span>
+                            </div>
+                            <div class="row" id="rtpNoteSweepRow" style="display:none;">
+                                <label>Balayage:</label>
+                                <input type="number" id="rtpNoteMin" min="0" max="127" placeholder="48" style="width:90px;"/>
+                                <span>→</span>
+                                <input type="number" id="rtpNoteMax" min="0" max="127" placeholder="72" style="width:90px;"/>
+                                <label style="margin-left:8px;">Vélocité fixe:</label>
+                                <input type="number" id="rtpNoteVelFix" min="1" max="127" placeholder="100" style="width:90px;"/>
+                            </div>
                         </div>
                         <h4>OSC</h4>
                         <div class="row switch">
@@ -238,6 +312,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                             <label for="dbgEnabled">Activer</label>
                             <label>Entête:</label>
                             <input type="text" id="dbgHeader" placeholder="[DBG]"/>
+                        </div>
+                        
+                        <div class="row" style="margin-top:12px; justify-content:flex-start; gap:12px;">
+                            <button id="savePinBtn" type="button">Enregistrer</button>
+                            <div class="hint" id="savePinMsg"></div>
                         </div>
                     </div>
                 </div>
@@ -282,6 +361,124 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         
         // Chargement des capacités des pins
         let caps = null;
+        let selectedRect = null;
+
+        function updateRoleSubcards(){
+            const sel = document.getElementById('funcSelect');
+            const digitalBtn = document.getElementById('digitalButtonCard');
+            const ledCard = document.getElementById('ledCard');
+            if(digitalBtn) digitalBtn.style.display='none';
+            if(ledCard) ledCard.style.display='none';
+            if(!sel || sel.disabled) { updateRtpForRole(''); return; }
+            const v = sel.value || '';
+            if(v==='Bouton') {
+                if(digitalBtn) digitalBtn.style.display='block';
+            } else if(v==='LED') {
+                if(ledCard) ledCard.style.display='block';
+            }
+            updateRtpForRole(v);
+        }
+
+        function setSelectOptions(selectEl, labels){
+            if(!selectEl) return;
+            selectEl.innerHTML = labels.map((label,i)=>`<option ${i===0?'selected':''}>${label}</option>`).join('');
+        }
+
+        function updateRtpForRole(role){
+            const rtpEnable = document.getElementById('rtpEnabled2');
+            const rtpType = document.getElementById('rtpMsgType');
+            const rtpParams = document.getElementById('rtpParams');
+            // Par défaut: désactiver si rôle inconnu
+            let enabled = true;
+            let types = [];
+            if(role==='Potentiomètre'){
+                types = ['Control Change','Pitch Bend','Aftertouch (Channel)','Note + vélocité','Note (balayage)'];
+            } else if(role==='Bouton'){
+                types = ['Note','Control Change','Program Change','Clock','Tap Tempo'];
+            } else if(role==='LED'){
+                // Réception: suivre Note/CC
+                types = ['Note','Control Change'];
+            } else if(role==='I2C' || role==='SPI' || role==='UART' || role==='Analog in (raw)' || role==='Digital in/out'){
+                enabled = false;
+            } else if(!role){
+                enabled = false;
+            }
+            if(rtpEnable){ rtpEnable.checked = enabled; rtpEnable.disabled = !enabled; }
+            if(rtpType){
+                if(enabled){ setSelectOptions(rtpType, types); }
+                rtpType.disabled = !enabled;
+            }
+            if(rtpParams){ rtpParams.style.display = enabled ? 'block' : 'none'; }
+            if(enabled) updateRtpParamsVisibility();
+        }
+
+        function updateRtpParamsVisibility(){
+            const typeSel = document.getElementById('rtpMsgType');
+            const params = document.getElementById('rtpParams');
+            const noteRow = document.getElementById('rtpNoteRow');
+            const ccRow = document.getElementById('rtpCcRow');
+            const ccOnOffRow = document.getElementById('rtpCcOnOffRow');
+            const pcRow = document.getElementById('rtpPcRow');
+            const velRow = document.getElementById('rtpVelRow');
+            const ccRangeRow = document.getElementById('rtpCcRangeRow');
+            const chanRow = document.getElementById('rtpChanRow');
+            const clockHint = document.getElementById('rtpClockHint');
+            const noteSweepRow = document.getElementById('rtpNoteSweepRow');
+            const roleSel = document.getElementById('funcSelect');
+            if(!typeSel || !params) return;
+            const v = typeSel.value;
+            // reset
+            [noteRow, ccRow, ccOnOffRow, pcRow, velRow, chanRow, clockHint, noteSweepRow, ccRangeRow].forEach(el=>{ if(el) el.style.display='none'; });
+            params.style.display = 'block';
+            if(v==='Note'){
+                if(noteRow) noteRow.style.display='flex';
+                if(chanRow) chanRow.style.display='flex';
+                const role = roleSel ? roleSel.value : '';
+                if(role==='Bouton' && velRow){ velRow.style.display='flex'; }
+            } else if(v==='Control Change'){
+                if(ccRow) ccRow.style.display='flex';
+                if(chanRow) chanRow.style.display='flex';
+                const role = roleSel ? roleSel.value : '';
+                if(role==='Potentiomètre' && ccRangeRow){ ccRangeRow.style.display='flex'; }
+                if(role==='Bouton' && ccOnOffRow){ ccOnOffRow.style.display='flex'; }
+            } else if(v==='Program Change'){
+                if(pcRow) pcRow.style.display='flex';
+                if(chanRow) chanRow.style.display='flex';
+            } else if(v==='Pitch Bend'){
+                if(chanRow) chanRow.style.display='flex';
+            } else if(v==='Aftertouch (Channel)'){
+                if(chanRow) chanRow.style.display='flex';
+            } else if(v==='Note + vélocité'){
+                if(noteRow) noteRow.style.display='flex';
+                if(chanRow) chanRow.style.display='flex';
+            } else if(v==='Note (balayage)'){
+                if(noteSweepRow) noteSweepRow.style.display='flex';
+                if(chanRow) chanRow.style.display='flex';
+            } else if(v==='Clock' || v==='Tap Tempo'){
+                if(clockHint) clockHint.style.display='flex';
+            }
+        }
+
+        function updateFuncMenuForLabel(label){
+            const sel = document.getElementById('funcSelect');
+            const selPin = document.getElementById('selPin');
+            if(selPin) selPin.textContent = label || '-';
+            if(!sel) return;
+            const setOptions = (opts, enabled=true, preselect=0)=>{
+                sel.innerHTML = opts.map((o,i)=>`<option ${i===preselect?'selected':''}>${o}</option>`).join('');
+                sel.disabled = !enabled;
+            };
+            if(label==='5V' || label==='3V3' || label==='GND'){ setOptions([], false); updateRoleSubcards(); return; }
+            if(/^A\d+$/.test(label)){ setOptions(['Potentiomètre','Analog in (raw)'], true, 0); updateRoleSubcards(); return; }
+            if(label==='SDA' || label==='SCL'){ setOptions(['I2C'], true, 0); updateRoleSubcards(); return; }
+            if(label==='MOSI' || label==='MISO' || label==='SCK'){ setOptions(['SPI'], true, 0); updateRoleSubcards(); return; }
+            if(label==='TX' || label==='RX'){ setOptions(['UART'], true, 0); updateRoleSubcards(); return; }
+            if(/^D\d+$/.test(label)){
+                const roles = ['Bouton','LED','Digital in/out'];
+                setOptions(roles, true, 0); updateRoleSubcards(); return;
+            }
+            setOptions([], false); updateRoleSubcards();
+        }
         // Couleurs fonctions (SVG)
         const FUNC_COLORS = { DIGITAL:'#3B82F6', ANALOG:'#EC4899', I2C:'#10B981', UART:'#6B7280', SPI:'#8B5CF6', POWER:'#EF4444', GND:'#000000' };
         // Disposition CMU simple (statique) — D0..D10 + alim
@@ -314,11 +511,23 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                 const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
                 r.setAttribute('x',x); r.setAttribute('y',y); r.setAttribute('width',w); r.setAttribute('height',h); r.setAttribute('rx','4');
                 r.setAttribute('fill', fill); r.setAttribute('stroke', stroke); g.appendChild(r);
+                if(clickable){ r.style.cursor='pointer'; }
                 const t = document.createElementNS('http://www.w3.org/2000/svg','text');
                 t.setAttribute('x', x + w/2); t.setAttribute('y', y + h/2 + 1);
                 t.setAttribute('text-anchor','middle'); t.setAttribute('class','square-text');
                 t.textContent = label; g.appendChild(t);
-                if(clickable){ g.style.cursor='pointer'; }
+                if(clickable){
+                    g.style.cursor='pointer';
+                    r.dataset.label = label;
+                    r.addEventListener('click', () => {
+                        if(selectedRect) selectedRect.classList.remove('selectedSquare');
+                        r.classList.add('selectedSquare');
+                        selectedRect = r;
+                        updateFuncMenuForLabel(r.dataset.label);
+                        // Réévaluer RTP selon rôle courant
+                        updateRtpForRole(document.getElementById('funcSelect')?.value || '');
+                    });
+                }
                 return g;
             };
             // grille 5 colonnes: c1(typeL) c2(DL) c3(MCU) c4(DR) c5(typeR)
@@ -373,6 +582,15 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             loadRtpStatus();
             loadCaps();
             drawBoardPins();
+            // Init menu Fonction du pin
+            const sel = document.getElementById('funcSelect');
+            if(sel){ sel.innerHTML = '<option selected>— Sélectionnez une pin —</option>'; sel.disabled = true; }
+            // Brancher le changement de rôle pour afficher/masquer les sous-cartes
+            if(sel){ sel.onchange = updateRoleSubcards; }
+
+            // RTP-MIDI params visibility
+            const rtpType = document.getElementById('rtpMsgType');
+            if(rtpType){ rtpType.onchange = updateRtpParamsVisibility; updateRtpParamsVisibility(); }
             
             // Formulaire Wi-Fi STA
             $('#sta').onsubmit = async (ev) => {
@@ -418,6 +636,53 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                 });
                 $('#oscMsg').textContent = res.ok ? 'Configuration OSC enregistrée' : 'Erreur ' + res.status;
             };
+
+            // Enregistrer la config du pin sélectionné
+            const saveBtn = document.getElementById('savePinBtn');
+            if(saveBtn){
+                saveBtn.onclick = async () => {
+                    const msg = document.getElementById('savePinMsg');
+                    const pinLabel = (document.getElementById('selPin')?.textContent || '').trim();
+                    const role = (document.getElementById('funcSelect')?.value || '').trim();
+                    if(!pinLabel || pinLabel==='— Sélectionnez une pin —' || !role){ if(msg) msg.textContent='Sélectionnez un pin et un rôle'; return; }
+                    // Collecte RTP-MIDI
+                    const rtpOn = !!document.getElementById('rtpEnabled2')?.checked;
+                    const rtpType = document.getElementById('rtpMsgType')?.value || '';
+                    const rtpNote = document.getElementById('rtpNote')?.value || '';
+                    const rtpCc = document.getElementById('rtpCc')?.value || '';
+                    const rtpPc = document.getElementById('rtpPc')?.value || '';
+                    const rtpChan = document.getElementById('rtpChan')?.value || '';
+                    const rtpCcOn = document.getElementById('rtpCcOn')?.value || '';
+                    const rtpCcOff = document.getElementById('rtpCcOff')?.value || '';
+                    const rtpVel = document.getElementById('rtpVel')?.value || '';
+                    // LED mode
+                    const ledMode = document.getElementById('ledMode')?.value || '';
+                    // Build form body (x-www-form-urlencoded)
+                    const params = new URLSearchParams();
+                    params.set('pinLabel', pinLabel);
+                    params.set('role', role);
+                    params.set('rtpEnabled', String(rtpOn));
+                    if(rtpType) params.set('rtpType', rtpType);
+                    if(rtpNote) params.set('rtpNote', rtpNote);
+                    if(rtpCc) params.set('rtpCc', rtpCc);
+                    if(rtpPc) params.set('rtpPc', rtpPc);
+                    if(rtpChan) params.set('rtpChan', rtpChan);
+                    if(rtpCcOn) params.set('rtpCcOn', rtpCcOn);
+                    if(rtpCcOff) params.set('rtpCcOff', rtpCcOff);
+                    if(rtpVel) params.set('rtpVel', rtpVel);
+                    if(ledMode) params.set('ledMode', ledMode);
+                    if(msg) msg.textContent='Enregistrement…';
+                    try{
+                        const res = await fetch('/api/pins/set', {
+                            method:'POST',
+                            headers:{'Content-Type':'application/x-www-form-urlencoded'},
+                            body: params.toString()
+                        });
+                        if(!res.ok){ if(msg) msg.textContent = 'Erreur ' + res.status; return; }
+                        if(msg) msg.textContent='Sauvegardé';
+                    }catch(e){ if(msg) msg.textContent='Erreur réseau'; }
+                };
+            }
         });
     </script>
 </body>
