@@ -142,25 +142,41 @@ Notes:
   - échappe correctement les guillemets et backticks
   - génère un header/source (ex: `ui_index.h/.cpp`) avec `const char INDEX_HTML[] PROGMEM = R"(... )";`
 
-Exemple de pipeline (bash):
-```bash
-# 1) concat et nettoyage
-cat web/index.html \
- | sed -E 's/<!--[^>]*-->//g' \
- | sed -E 's@//.*$@@' \
- | tr -d '\n' \
- | tr -s ' ' > build/index.min.html
+### Workflow de développement UI
 
-# 2) génération C++
-printf '#pragma once\nextern const char INDEX_HTML[] PROGMEM;\n' > src/ui_index.h
-{
-  echo '#include "ui_index.h"'
-  echo 'const char INDEX_HTML[] PROGMEM = R"rawliteral('
-  cat build/index.min.html
-  echo ')rawliteral";'
-} > src/ui_index.cpp
+**Structure des fichiers** :
+- `web/index.html` : Interface utilisateur complète (HTML, CSS, JavaScript)
+- `src/ui_index.cpp` : Version minifiée injectée dans le firmware
+- `scripts/minify_safe.sh` : Script de minification automatique
+
+**Workflow** :
+1. **Modifier l'interface** : Éditer `web/index.html`
+2. **Minifier et injecter** : `./scripts/minify_safe.sh`
+3. **Compiler** : Le firmware utilise la version minifiée
+
+**Minification automatique** :
+```bash
+# Minifier l'interface
+./scripts/minify_safe.sh
+
+# Résultat
+# 📊 Résultats:
+#   Taille HTML:      46589 bytes
+#   Taille C++:       31110 bytes
+#   Réduction:        31%
 ```
-- Avantages: code C++ plus lisible, UI modifiable sans re-toucher le C++, empreinte mémoire réduite.
+
+**Optimisations appliquées** :
+- ✅ Suppression des commentaires HTML `<!-- -->`
+- ✅ Suppression des commentaires JavaScript `/* */`
+- ✅ Remplacement des espaces multiples par un seul espace
+- ✅ **Réduction de 31%** (46589 → 31110 bytes)
+
+**Avantages** :
+- **Code lisible** : Interface développée dans `web/index.html`
+- **Mémoire optimisée** : Version minifiée dans le firmware
+- **Workflow simple** : Un script pour tout automatiser
+- **Sécurité** : Minification sûre qui préserve la fonctionnalité
 
 ---
 Questions, retours ou idées d’amélioration: issues bienvenues.
