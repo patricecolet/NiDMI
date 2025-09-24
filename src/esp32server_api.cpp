@@ -15,6 +15,29 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
     }
 }
 
+// Fonction pour envoyer le statut RTP-MIDI via WebSocket
+void sendRtpStatus(AsyncWebSocket& ws) {
+    preferences.begin("esp32server", false);
+    bool enabled = preferences.getBool("rtp_enabled", false);
+    String name = preferences.getString("rtp_name", "ESP32-Studio");
+    String target = preferences.getString("rtp_target", "sta");
+    preferences.end();
+    
+    extern Esp32Server esp32Server;
+    bool connected = esp32Server.rtpMidi().isConnected();
+    
+    String json = "{";
+    json += "\"type\":\"rtp_status\",";
+    json += "\"enabled\":" + String(enabled ? "true" : "false") + ",";
+    json += "\"name\":\"" + name + "\",";
+    json += "\"target\":\"" + target + "\",";
+    json += "\"connected\":" + String(connected ? "true" : "false");
+    json += "}";
+    
+    ws.textAll(json);
+    Serial.println("RTP-MIDI status sent via WebSocket: " + json);
+}
+
 void setupHttp(AsyncWebServer& server, AsyncWebSocket& ws) {
 	// Page principale
 	server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -80,7 +103,7 @@ void setupHttp(AsyncWebServer& server, AsyncWebSocket& ws) {
 			// Redémarrer RTP-MIDI avec le nouveau nom
 			extern Esp32Server esp32Server;
 			esp32Server.rtpMidi().stop();
-			esp32Server.rtpMidi().begin(name);
+			esp32Server.rtpMidi().begin(name); // Le nom sera lu depuis les préférences
 			
 			request->send(200, "application/json", "{\"status\":\"ok\"}");
 		} else {
@@ -124,9 +147,12 @@ void setupHttp(AsyncWebServer& server, AsyncWebSocket& ws) {
 	// API - Statut RTP-MIDI
 	server.on("/api/rtp/status", HTTP_GET, [](AsyncWebServerRequest *request){
 		extern Esp32Server esp32Server;
+		
+		// Pour le sketch de test : enabled = true si RTP-MIDI est initialisé
+		bool enabled = esp32Server.rtpMidi().isInitialized();
+		
 		preferences.begin("esp32server", false);
-		bool enabled = preferences.getBool("rtp_enabled", false);
-		String name = preferences.getString("rtp_name", "ESP32-Studio");
+		String name = preferences.getString("rtp_name", "ESP32-Test");
 		String target = preferences.getString("rtp_target", "sta");
 		preferences.end();
 		

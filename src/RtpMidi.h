@@ -27,6 +27,7 @@ public:
     void sendControlChange(uint8_t channel, uint8_t control, uint8_t value);
     
     bool isConnected() const;
+    bool isInitialized() const { return isStarted; }
     String getName() const { return deviceName; }
 };
 

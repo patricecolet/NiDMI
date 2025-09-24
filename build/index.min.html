@@ -348,6 +348,44 @@
  }
  
  
+ let ws = null;
+ function connectWebSocket() {
+ const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+ const wsUrl = `${protocol}//${window.location.host}/ws`;
+ ws = new WebSocket(wsUrl);
+ 
+ ws.onopen = () => {
+ console.log('WebSocket connected');
+ };
+ 
+ ws.onmessage = (event) => {
+ try {
+ const data = JSON.parse(event.data);
+ if(data.type === 'rtp_status') {
+ // Mettre à jour la checkbox RTP-MIDI
+ $('#rtpEnabled').checked = data.enabled;
+ $('#rtpName').value = data.name;
+ $('#rtpTarget').value = data.target;
+ $('#rtpStatus').textContent = data.enabled ? 'Activé' : 'Désactivé';
+ $('#rtpStatus').className = 'status ' + (data.enabled ? 'enabled' : 'disabled');
+ console.log('RTP-MIDI status updated via WebSocket:', data);
+ }
+ } catch(e) {
+ console.error('WebSocket message error:', e);
+ }
+ };
+ 
+ ws.onclose = () => {
+ console.log('WebSocket disconnected, reconnecting...');
+ setTimeout(connectWebSocket, 1000);
+ };
+ 
+ ws.onerror = (error) => {
+ console.error('WebSocket error:', error);
+ };
+ }
+ 
+ 
  async function loadRtpStatus() {
  const res = await fetch('/api/rtp/status');
  const data = await res.json();
@@ -699,7 +737,8 @@
  
  window.addEventListener('load', () => {
  loadStatus();
- loadRtpStatus();
+ loadRtpStatus(); // Charger l'état RTP-MIDI au démarrage
+ connectWebSocket(); // WebSocket pour les mises à jour en temps réel
  loadCaps();
  drawBoardPins();
  

@@ -31,15 +31,6 @@ void setup(){
     const char* apPass = "esp32pass";
     const char* host = "esp32rtpmidi";
     
-    // Démarrage du serveur web (sauvegarde automatiquement le nom mDNS)
-    srv.begin(apSsid, apPass, host);
-    
-    // Affichage des informations
-    Serial.print("AP SSID: "); Serial.println(apSsid);
-    Serial.print("AP PASS: "); Serial.println(apPass);
-    Serial.print("AP IP: "); Serial.println(WiFi.softAPIP());
-    Serial.print("Interface web: http://"); Serial.print(host); Serial.println(".local/");
-
     // Configuration du réseau STA
     const char* staSsid = "manca";
     const char* staPass = "manca2022";
@@ -62,22 +53,17 @@ void setup(){
         Serial.println("Échec de la connexion STA");
     }
 
+    // Démarrage du serveur web
+    srv.begin(apSsid, apPass, host);
+    
     // ========================================
     // ACTIVATION RTP-MIDI PAR DÉFAUT
     // ========================================
     Serial.println("Activation de RTP-MIDI...");
     
-    // Sauvegarder la configuration en NVS
-    Preferences preferences;
-    preferences.begin("esp32server", true);
-    preferences.putBool("rtp_enabled", true);
-    preferences.putString("rtp_name", "ESP32-Test");
-    preferences.putString("rtp_target", "sta"); // Utiliser STA
-    preferences.end();
-    
     // Initialiser RTP-MIDI seulement si STA est connecté
-    // RTP-MIDI lira automatiquement le nom mDNS depuis les préférences
     if(WiFi.status() == WL_CONNECTED){
+        // Initialiser RTP-MIDI
         esp32Server.rtpMidi().begin("ESP32-Test");
         Serial.println("RTP-MIDI initialisé: ESP32-Test");
         Serial.println("Votre ESP32 devrait maintenant apparaître dans les périphériques MIDI de votre Mac/PC");
@@ -85,6 +71,12 @@ void setup(){
     } else {
         Serial.println("RTP-MIDI non initialisé - STA non connecté");
     }
+    
+    // Affichage des informations
+    Serial.print("AP SSID: "); Serial.println(apSsid);
+    Serial.print("AP PASS: "); Serial.println(apPass);
+    Serial.print("AP IP: "); Serial.println(WiFi.softAPIP());
+    Serial.print("Interface web: http://"); Serial.print(host); Serial.println(".local/");
 }
 
 void loop(){
@@ -104,17 +96,17 @@ void loop(){
     // Affichage périodique des informations réseau
     if(now - lastDisplay > 5000){
         lastDisplay = now;
-        Serial.print("AP IP: "); Serial.print(WiFi.softAPIP());
-        Serial.print("  STA IP: "); Serial.println(WiFi.localIP());
+        //Serial.print("AP IP: "); Serial.print(WiFi.softAPIP());
+        //Serial.print("  STA IP: "); Serial.println(WiFi.localIP());
         
         if(WiFi.status() == WL_CONNECTED){
-            Serial.println("Wi-Fi STA connecté - RTP-MIDI disponible");
+            //Serial.println("Wi-Fi STA connecté - RTP-MIDI disponible");
         } else {
             Serial.println("Wi-Fi STA non connecté - RTP-MIDI indisponible");
         }
         
         if(esp32Server.rtpMidi().isConnected()){
-            Serial.println("RTP-MIDI connecté !");
+            //Serial.println("RTP-MIDI connecté !");
         } else {
             Serial.println("RTP-MIDI en attente de connexion...");
         }
@@ -127,7 +119,7 @@ void loop(){
         // Envoyer une note de test même si la connexion n'est pas détectée
         // Cela permet de tester si RTP-MIDI fonctionne
         esp32Server.rtpMidi().sendNoteOn(1, 60, 100);
-        Serial.println("Note envoyée via RTP-MIDI (test forcé)");
+        //Serial.println("Note envoyée via RTP-MIDI (test forcé)");
         delay(100);
         esp32Server.rtpMidi().sendNoteOff(1, 60, 0);
         
@@ -135,7 +127,7 @@ void loop(){
         if(esp32Server.rtpMidi().isConnected()){
             Serial.println("  -> Connexion RTP-MIDI détectée");
         } else {
-            Serial.println("  -> Connexion RTP-MIDI non détectée (mais note envoyée)");
+            //Serial.println("  -> Connexion RTP-MIDI non détectée (mais note envoyée)");
         }
     }
     
