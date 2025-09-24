@@ -7,6 +7,9 @@
 
 Preferences preferences;
 
+// Signale au runtime de recharger les configs pins
+extern "C" void esp32server_requestReloadPins();
+
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
     if (type == WS_EVT_CONNECT) {
         Serial.println("WebSocket client connected");
@@ -61,9 +64,9 @@ void setupHttp(AsyncWebServer& server, AsyncWebSocket& ws) {
 		if(request->hasParam("ssid", true) && request->hasParam("pass", true)){
 			String ssid = request->getParam("ssid", true)->value();
 			String pass = request->getParam("pass", true)->value();
-			String ip = request->getParam("ip", true)->value();
-			String gateway = request->getParam("gw", true)->value();
-			String subnet = request->getParam("sn", true)->value();
+			String ip = request->hasParam("ip", true) ? request->getParam("ip", true)->value() : String("");
+			String gateway = request->hasParam("gw", true) ? request->getParam("gw", true)->value() : String("");
+			String subnet = request->hasParam("sn", true) ? request->getParam("sn", true)->value() : String("");
 			
 			// Sauvegarder en NVS
 			preferences.begin("esp32server", false);
@@ -75,6 +78,23 @@ void setupHttp(AsyncWebServer& server, AsyncWebSocket& ws) {
 				preferences.putString("sta_sn", subnet);
 			}
 			preferences.end();
+
+			// Vérification immédiate (lecture retour NVS)
+			preferences.begin("esp32server", true);
+			String chkSsid = preferences.getString("sta_ssid", "");
+			String chkPass = preferences.getString("sta_pass", "");
+			String chkIp   = preferences.getString("sta_ip",  "");
+			String chkGw   = preferences.getString("sta_gw",  "");
+			String chkSn   = preferences.getString("sta_sn",  "");
+			preferences.end();
+			Serial.println("[API/STA] Saved to NVS:");
+			Serial.print("  ssid=\""); Serial.print(chkSsid); Serial.println("\"");
+			Serial.print("  pass len="); Serial.println(chkPass.length());
+			if(chkIp.length()>0){
+				Serial.print("  ip="); Serial.print(chkIp);
+				Serial.print(" gw="); Serial.print(chkGw);
+				Serial.print(" sn="); Serial.println(chkSn);
+			}
 			
 			// Connecter au Wi-Fi
 			extern Esp32Server esp32Server;
@@ -83,6 +103,30 @@ void setupHttp(AsyncWebServer& server, AsyncWebSocket& ws) {
 			request->send(200, "application/json", "{\"status\":\"ok\"}");
 		} else {
 			request->send(400, "application/json", "{\"error\":\"ssid and pass required\"}");
+		}
+	});
+
+	// API - Lecture des identifiants STA stockés en NVS
+	server.on("/api/sta/status", HTTP_GET, [](AsyncWebServerRequest *request){
+		try {
+			preferences.begin("esp32server", true);
+			String ssid = preferences.getString("sta_ssid", "");
+			String pass = preferences.getString("sta_pass", "");
+			String ip   = preferences.getString("sta_ip",  "");
+			String gw   = preferences.getString("sta_gw",  "");
+			String sn   = preferences.getString("sta_sn",  "");
+			preferences.end();
+			
+			String json = "{";
+			json += "\"ssid\":\"" + ssid + "\",";
+			json += "\"has_pass\":" + String(pass.length()>0 ? "true" : "false") + ",";
+			json += "\"ip\":\"" + ip + "\",";
+			json += "\"gw\":\"" + gw + "\",";
+			json += "\"sn\":\"" + sn + "\"";
+			json += "}";
+			request->send(200, "application/json", json);
+		} catch (...) {
+			request->send(500, "application/json", "{\"error\":\"NVS read failed\"}");
 		}
 	});
 	
@@ -230,6 +274,59 @@ void setupHttp(AsyncWebServer& server, AsyncWebSocket& ws) {
 	server.on("/api/pins/caps", HTTP_GET, [](AsyncWebServerRequest *request){
 		String json = buildC3PinCapsJson();
 		request->send(200, "application/json", json);
+	});
+
+	// API - Enregistrer la configuration d'un pin
+	server.on("/api/pins/set", HTTP_POST, [](AsyncWebServerRequest *request){
+		// Champs obligatoires
+		if(!request->hasParam("pinLabel", true) || !request->hasParam("role", true)){
+			request->send(400, "application/json", "{\"error\":\"pinLabel and role required\"}");
+			return;
+		}
+		String pinLabel = request->getParam("pinLabel", true)->value();
+		String role     = request->getParam("role", true)->value();
+
+		// Champs optionnels connus (whitelist)
+		auto getOpt = [&](const char* name){ return request->hasParam(name, true) ? request->getParam(name, true)->value() : String(""); };
+		String rtpEnabled = getOpt("rtpEnabled");
+		String rtpType    = getOpt("rtpType");
+		String rtpNote    = getOpt("rtpNote");
+		String rtpCc      = getOpt("rtpCc");
+		String rtpPc      = getOpt("rtpPc");
+		String rtpChan    = getOpt("rtpChan");
+		String rtpCcOn    = getOpt("rtpCcOn");
+		String rtpCcOff   = getOpt("rtpCcOff");
+		String rtpVel     = getOpt("rtpVel");
+		String ledMode    = getOpt("ledMode");
+
+		// Construire un JSON compact à stocker
+		String json = "{";
+		json += "\"pinLabel\":\"" + pinLabel + "\",";
+		json += "\"role\":\"" + role + "\"";
+		if(rtpEnabled.length()) json += ",\"rtpEnabled\":" + String((rtpEnabled=="true")?"true":"false");
+		if(rtpType.length())    json += ",\"rtpType\":\"" + rtpType + "\"";
+		if(rtpNote.length())    json += ",\"rtpNote\":" + rtpNote;
+		if(rtpCc.length())      json += ",\"rtpCc\":" + rtpCc;
+		if(rtpPc.length())      json += ",\"rtpPc\":" + rtpPc;
+		if(rtpChan.length())    json += ",\"rtpChan\":" + rtpChan;
+		if(rtpCcOn.length())    json += ",\"rtpCcOn\":" + rtpCcOn;
+		if(rtpCcOff.length())   json += ",\"rtpCcOff\":" + rtpCcOff;
+		if(rtpVel.length())     json += ",\"rtpVel\":" + rtpVel;
+		if(ledMode.length())    json += ",\"ledMode\":\"" + ledMode + "\"";
+		json += "}";
+
+		// Stocker en NVS sous une clé par pin
+		String key = String("pin_") + pinLabel;
+		preferences.begin("esp32server", false);
+		bool ok = preferences.putString(key.c_str(), json) > 0;
+		preferences.end();
+
+		Serial.print("[API/PINS] Saved "); Serial.print(key); Serial.print(" = "); Serial.println(json);
+		if(ok) {
+			esp32server_requestReloadPins();
+			request->send(200, "application/json", "{\"status\":\"ok\"}");
+		}
+		else   request->send(500, "application/json", "{\"error\":\"store failed\"}");
 	});
 	
 	// WebSocket

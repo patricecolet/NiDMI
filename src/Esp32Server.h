@@ -27,4 +27,17 @@ public:
     RtpMidi& rtpMidi();
 };
 
-#endif
+// API style midimap: objet global avec begin()/loop()
+struct Esp32ServerAPI {
+    void begin();
+    void loop();
+};
+
+// Instance globale exposée
+extern Esp32Server esp32Server;
+extern Esp32ServerAPI esp32server;
+
+// Fonction legacy (optionnelle): init unique
+void esp32server_begin();
+
+#endif // ESP32SERVER_H
