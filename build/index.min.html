@@ -116,26 +116,17 @@
  <div class="panel" id="panel-connection">
  
  <div class="form-group">
- <h3>RTP-MIDI</h3>
- <div class="toggle">
- <input type="checkbox" id="rtpEnabled">
- <label for="rtpEnabled">Activer RTP-MIDI</label>
- <span class="status disabled" id="rtpStatus">Désactivé</span>
- </div>
- <form id="rtp">
+ <h3>Serveur</h3>
+ <form id="mdns">
  <div class="form-group">
- <label for="rtpName">Nom du périphérique</label>
- <input type="text" id="rtpName" placeholder="ESP32-Studio" required>
+ <label for="mdnsName">Nom du serveur</label>
+ <input type="text" id="mdnsName" placeholder="esp32rtpmidi" required>
+ <div class="hint">
+ <small>Ce nom sera utilisé pour l'AP Wi-Fi et l'accès via http://nom.local</small>
  </div>
- <div class="form-group">
- <label for="rtpTarget">Destination</label>
- <select id="rtpTarget">
- <option value="ap">AP (192.168.4.1)</option>
- <option value="sta" id="rtpStaOption">STA</option>
- </select>
  </div>
  <button type="submit">Enregistrer</button>
- <div class="hint" id="rtpMsg"></div>
+ <div class="hint" id="mdnsMsg"></div>
  </form>
  </div>
  
@@ -386,14 +377,10 @@
  }
  
  
- async function loadRtpStatus() {
- const res = await fetch('/api/rtp/status');
+ async function loadMdnsStatus() {
+ const res = await fetch('/api/mdns/status');
  const data = await res.json();
- $('#rtpEnabled').checked = data.enabled;
- $('#rtpName').value = data.name;
- $('#rtpTarget').value = data.target;
- $('#rtpStatus').textContent = data.enabled ? 'Activé' : 'Désactivé';
- $('#rtpStatus').className = 'status ' + (data.enabled ? 'enabled' : 'disabled');
+ $('#mdnsName').value = data.name;
  }
  
  
@@ -737,7 +724,7 @@
  
  window.addEventListener('load', () => {
  loadStatus();
- loadRtpStatus(); // Charger l'état RTP-MIDI au démarrage
+ loadMdnsStatus(); // Charger l'état mDNS au démarrage
  connectWebSocket(); // WebSocket pour les mises à jour en temps réel
  loadCaps();
  drawBoardPins();
@@ -786,27 +773,6 @@
  };
  
  
- $('#rtp').onsubmit = async (ev) => {
- ev.preventDefault();
- const res = await fetch('/api/rtp', {
- method: 'POST',
- headers: {'Content-Type': 'application/x-www-form-urlencoded'},
- body: 'name=' + encodeURIComponent($('#rtpName').value) + '&target=' + $('#rtpTarget').value
- });
- $('#rtpMsg').textContent = res.ok ? 'Configuration RTP-MIDI enregistrée' : 'Erreur ' + res.status;
- };
- 
- 
- $('#rtpEnabled').onchange = async () => {
- const enabled = $('#rtpEnabled').checked;
- const res = await fetch('/api/rtp/enable', {
- method: 'POST',
- headers: {'Content-Type': 'application/x-www-form-urlencoded'},
- body: 'enable=' + enabled
- });
- $('#rtpMsg').textContent = res.ok ? 'RTP-MIDI ' + (enabled ? 'activé' : 'désactivé') : 'Erreur ' + res.status;
- };
- 
  
  $('#osc').onsubmit = async (ev) => {
  ev.preventDefault();
@@ -816,6 +782,18 @@
  body: 'target=' + $('#oscTarget').value + '&port=' + $('#oscPort').value
  });
  $('#oscMsg').textContent = res.ok ? 'Configuration OSC enregistrée' : 'Erreur ' + res.status;
+ };
+ 
+ 
+ $('#mdns').onsubmit = async (ev) => {
+ ev.preventDefault();
+ $('#mdnsMsg').textContent = 'Enregistrement...';
+ const res = await fetch('/api/mdns', {
+ method: 'POST',
+ headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+ body: 'name=' + encodeURIComponent($('#mdnsName').value)
+ });
+ $('#mdnsMsg').textContent = res.ok ? 'Nom du serveur enregistré - Redémarrage nécessaire' : 'Erreur ' + res.status;
  };
 
  

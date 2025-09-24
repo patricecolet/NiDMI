@@ -26,17 +26,49 @@ Notes:
 Ces scripts installent le core `esp32:esp32` et les librairies « ESP Async WebServer » et « AsyncTCP ».
 
 ## Utilisation
-- La classe `Esp32Server` démarre un point d’accès WiFi et un serveur HTTP/WS.
+
+### Exemple de base
+- La classe `Esp32Server` démarre un point d'accès WiFi et un serveur HTTP/WS.
 - Exemple fourni: `examples/esp32server_basic/esp32server_basic.ino`
   - SSID par défaut: `ESP32-Server`, mot de passe: `esp32pass`
   - Page: `http://192.168.4.1/`
   - API: `GET /api/info`, `GET /api/ip`
   - WebSocket: `ws://192.168.4.1/ws`
 
-Personnaliser les identifiants dans l’exemple:
+Personnaliser les identifiants dans l'exemple:
 ```cpp
 srv.begin("MonSSID","MonMotDePasse");
 ```
+
+### Exemple RTP-MIDI avancé
+- Exemple complet: `examples/rtpmidi/rtpmidi_test/rtpmidi_test.ino`
+- Interface web avancée avec onglets (Statut, Connection, Pins)
+- Configuration RTP-MIDI, OSC, mDNS
+- Gestion des pins ESP32-C3 avec interface graphique
+- API endpoints: `/api/status`, `/api/rtp/status`, `/api/osc/status`, `/api/mdns`, `/api/pins/caps`
+
+## Interface web avancée
+
+### Onglets disponibles
+- **Statut** : Informations réseau (AP/STA), connexions
+- **Connection** : Configuration serveur, OSC, Wi-Fi STA
+- **Pins** : Interface graphique ESP32-C3, configuration des pins
+
+### Configuration des pins
+- **Interface graphique** : Diagramme ESP32-C3 cliquable
+- **Rôles** : Potentiomètre, Bouton, LED, I2C, SPI, UART
+- **RTP-MIDI** : Configuration par pin (Note, CC, Program Change, etc.)
+- **OSC** : Adresses personnalisées par pin
+- **Debug** : Console de débogage configurable
+
+### API endpoints
+- `GET /api/status` : Statut réseau
+- `GET /api/osc/status` : Configuration OSC
+- `POST /api/osc` : Configurer OSC
+- `GET /api/mdns/status` : Nom du serveur
+- `POST /api/mdns` : Changer le nom du serveur
+- `GET /api/pins/caps` : Capacités des pins
+- `POST /api/pins/set` : Configuration d'un pin
 
 ## Guide AP/STA (débutants)
 Objectif: garder un **AP** (point d’accès) pour l’accès direct ET connecter la carte à votre **Wi‑Fi domestique (STA)**.
@@ -177,6 +209,25 @@ Notes:
 - **Mémoire optimisée** : Version minifiée dans le firmware
 - **Workflow simple** : Un script pour tout automatiser
 - **Sécurité** : Minification sûre qui préserve la fonctionnalité
+
+### Développement de l'interface web
+
+**Modifier l'interface** :
+1. **Éditer** `web/index.html` avec votre éditeur préféré
+2. **Tester** les modifications dans un navigateur (fichier local)
+3. **Minifier** avec `./scripts/minify_safe.sh`
+4. **Compiler** le firmware pour tester
+
+**Structure de l'interface** :
+- **HTML** : Structure des onglets et formulaires
+- **CSS** : Styles pour l'interface ESP32-C3 et les pins
+- **JavaScript** : Logique des onglets, API calls, gestion des pins
+
+**Conseils de développement** :
+- **Utilisez des commentaires** `/* */` en JavaScript (supprimés automatiquement)
+- **Évitez les commentaires** `//` (peuvent casser la minification)
+- **Testez** toujours après minification
+- **Sauvegardez** `web/index.html` avant modifications importantes
 
 ---
 Questions, retours ou idées d’amélioration: issues bienvenues.

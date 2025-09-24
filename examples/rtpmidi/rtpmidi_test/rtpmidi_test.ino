@@ -26,10 +26,16 @@ void setup(){
     while(!Serial){ delay(10); }
     Serial.println("=== ESP32 RTP-MIDI Test ===");
     
-    // Configuration du point d'accès Wi-Fi
-    const char* apSsid = "ESP32-RTP-MIDI";
+    // Lire le nom depuis NVS ou utiliser la valeur par défaut
+    Preferences preferences;
+    preferences.begin("esp32server", false);
+    String serverName = preferences.getString("mdns_name", "esp32rtpmidi");
+    preferences.end();
+    
+    // Utiliser le même nom pour l'AP et mDNS
+    const char* apSsid = serverName.c_str();
     const char* apPass = "esp32pass";
-    const char* host = "esp32rtpmidi";
+    const char* host = serverName.c_str();
     
     // Configuration du réseau STA
     const char* staSsid = "manca";

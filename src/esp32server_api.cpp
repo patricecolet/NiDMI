@@ -193,6 +193,38 @@ void setupHttp(AsyncWebServer& server, AsyncWebSocket& ws) {
 		json += "}";
 		request->send(200, "application/json", json);
 	});
+	
+	// API - Configuration mDNS
+	server.on("/api/mdns", HTTP_POST, [](AsyncWebServerRequest *request){
+		if(request->hasParam("name", true)){
+			String name = request->getParam("name", true)->value();
+			
+			Serial.println("mDNS config - name: " + name);
+			
+			// Sauvegarder en NVS
+			preferences.begin("esp32server", false);
+			preferences.putString("mdns_name", name);
+			preferences.end();
+			
+			Serial.println("Nom mDNS sauvegardé: " + name);
+			Serial.println("Redémarrage nécessaire pour appliquer le nouveau nom");
+			
+			request->send(200, "application/json", "{\"status\":\"ok\"}");
+		} else {
+			request->send(400, "application/json", "{\"error\":\"name required\"}");
+		}
+	});
+	
+	// API - Statut mDNS
+	server.on("/api/mdns/status", HTTP_GET, [](AsyncWebServerRequest *request){
+		preferences.begin("esp32server", false);
+		String name = preferences.getString("mdns_name", "esp32rtpmidi");
+		preferences.end();
+		String json = "{";
+		json += "\"name\":\"" + name + "\"";
+		json += "}";
+		request->send(200, "application/json", json);
+	});
 
 	// API - Capacités des pins (C3)
 	server.on("/api/pins/caps", HTTP_GET, [](AsyncWebServerRequest *request){
