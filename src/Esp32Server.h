@@ -2,40 +2,37 @@
 #define ESP32SERVER_H
 
 #include <Arduino.h>
-#include <WiFi.h>
-#include <ESPAsyncWebServer.h>
-#include <AsyncWebSocket.h>
-#include <IPAddress.h>
-#include "RtpMidi.h"
 
-class Esp32Server {
-private:
-    AsyncWebServer server;
-    AsyncWebSocket ws;
-    RtpMidi rtpMidiInstance;
-    bool useStaticSta = false;
-    IPAddress staIp, staGw, staSn;
-    
-public:
-    Esp32Server();
-    void begin(const char* apSsid, const char* apPass, const char* hostname);
-    void connectSta(const char* staSsid, const char* staPass);
-    void setStaticStaIp(IPAddress ip, IPAddress gateway, IPAddress subnet);
-    
-    AsyncWebServer& web();
-    AsyncWebSocket& websocket();
-    RtpMidi& rtpMidi();
-};
+/**
+ * @brief Interface publique ESP32Server (style midimap)
+ * 
+ * Cette interface fournit une API simple style midimap :
+ * - Objet global esp32server avec begin()/loop()
+ * - Gestion automatique des composants
+ * - Configuration via interface web
+ * 
+ * Usage :
+ * ```cpp
+ * #include "Esp32Server.h"
+ * 
+ * void setup() {
+ *     esp32server.begin();
+ * }
+ * 
+ * void loop() {
+ *     esp32server.loop();
+ * }
+ * ```
+ */
 
 // API style midimap: objet global avec begin()/loop()
-struct Esp32ServerAPI {
+struct Esp32Server {
     void begin();
     void loop();
 };
 
 // Instance globale exposée
-extern Esp32Server esp32Server;
-extern Esp32ServerAPI esp32server;
+extern Esp32Server esp32server;
 
 // Fonction legacy (optionnelle): init unique
 void esp32server_begin();

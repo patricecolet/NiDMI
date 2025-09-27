@@ -1,33 +1,62 @@
-#include <Esp32Server.h>
+/*
+ * ESP32Server Basic - Sketch minimal
+ * 
+ * Ce sketch utilise l'architecture optimisée avec ComponentManager.
+ * 
+ * Fonctionnalités :
+ * - Détection automatique du MCU (ESP32-C3/S3)
+ * - Interface web pour configuration des pins
+ * - RTP-MIDI automatique
+ * - Gestion optimisée des composants
+ * 
+ * Usage :
+ * 1. Uploader ce sketch
+ * 2. Se connecter au WiFi "esp32rtpmidi" (mot de passe: "esp32pass")
+ * 3. Ouvrir http://192.168.4.1
+ * 4. Configurer les pins via l'interface web
+ * 5. Les composants envoient automatiquement du MIDI
+ * 
+ * Option NVS Clear :
+ * - Décommentez la ligne CLEAR_NVS ci-dessous pour forcer le reset
+ * - Utile si des anciens réglages persistent
+ */
 
-Esp32Server srv;
-Esp32Server& esp32Server = srv; // Pour l'accès depuis esp32server_api.cpp
+#include "Esp32Server.h"
+#include <Preferences.h>
 
-void setup(){
-	Serial.begin(115200);
-	while(!Serial){ delay(10); }
-	const char* apSsid = "ESP32-Server";
-	const char* apPass = "esp32pass";
-	const char* host = "esp32server"; // accès via http://esp32server.local/
-	srv.begin(apSsid, apPass, host);
-	Serial.print("AP SSID: "); Serial.println(apSsid);
-	Serial.print("AP PASS: "); Serial.println(apPass);
-	Serial.print("AP IP: "); Serial.println(WiFi.softAPIP());
-	Serial.print("mDNS: http://"); Serial.print(host); Serial.println(".local/");
+// Décommentez la ligne suivante pour forcer le nettoyage NVS
+// #define CLEAR_NVS
 
-	// Configurer le réseau STA si souhaité
-	const char* staSsid = "manca";
-	const char* staPass = "manca2022";
-	// Optionnel: IP statique
-	// srv.setStaticStaIp(IPAddress(192,168,1,50), IPAddress(192,168,1,1), IPAddress(255,255,255,0));
-	srv.connectSta(staSsid, staPass);
+void setup() {
+    Serial.begin(115200);
+    delay(100);
+    
+    #ifdef CLEAR_NVS
+    Serial.println("[ESP32Server] Clearing NVS...");
+    Preferences preferences;
+    preferences.begin("esp32server", false);
+    preferences.clear();
+    preferences.end();
+    Serial.println("[ESP32Server] NVS cleared!");
+    #endif
+    
+    // Initialisation automatique
+    esp32server.begin();
+    
+    // Le système est maintenant prêt :
+    // - WiFi AP "esp32rtpmidi" actif
+    // - Interface web sur http://192.168.4.1
+    // - RTP-MIDI initialisé automatiquement
+    // - ComponentManager prêt à recevoir des configurations
 }
 
-void loop(){
-	static uint32_t last=0; uint32_t now=millis();
-	if(now-last>3000){
-		last=now;
-		Serial.print("AP IP: "); Serial.print(WiFi.softAPIP());
-		Serial.print("  STA IP: "); Serial.println(WiFi.localIP());
-	}
+void loop() {
+    // Traitement automatique
+    esp32server.loop();
+    
+    // Le ComponentManager gère :
+    // - Lecture des potentiomètres
+    // - Anti-rebond des boutons
+    // - Envoi MIDI automatique
+    // - Rechargement des configurations
 }

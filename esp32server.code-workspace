@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../wvr"
+		},
+		{
+			"path": "../midimap"
+		}
+	],
+	"settings": {}
+}

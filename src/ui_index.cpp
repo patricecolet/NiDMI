@@ -57,6 +57,72 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  async function loadMdns(){ const r=await fetch('/api/mdns/status'); const d=await r.json(); $('#mdnsName').value=d.name; }
  
  async function loadCaps(){ const r=await fetch('/api/pins/caps'); caps=await r.json(); drawBoard(); }
+
+// Gestionnaires de formulaires
+function initForms(){
+    // Formulaire mDNS
+    $('#mdns').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData();
+        formData.append('name', $('#mdnsName').value);
+        try {
+            const r = await fetch('/api/mdns', { method: 'POST', body: formData });
+            const d = await r.json();
+            $('#mdnsMsg').textContent = d.status === 'ok' ? 'Nom enregistré' : 'Erreur: ' + d.error;
+            $('#mdnsMsg').style.color = d.status === 'ok' ? '#059669' : '#dc2626';
+        } catch (err) {
+            $('#mdnsMsg').textContent = 'Erreur de connexion';
+            $('#mdnsMsg').style.color = '#dc2626';
+        }
+    });
+    
+    // Formulaire STA
+    $('#sta').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData();
+        formData.append('ssid', $('#ssid').value);
+        formData.append('pass', $('#pass').value);
+        try {
+            const r = await fetch('/api/sta', { method: 'POST', body: formData });
+            const d = await r.json();
+            $('#staMsg').textContent = d.status === 'ok' ? 'Configuration enregistrée, redémarrage...' : 'Erreur: ' + d.error;
+            $('#staMsg').style.color = d.status === 'ok' ? '#059669' : '#dc2626';
+            if (d.status === 'ok') {
+                setTimeout(() => location.reload(), 2000);
+            }
+        } catch (err) {
+            $('#staMsg').textContent = 'Erreur de connexion';
+            $('#staMsg').style.color = '#dc2626';
+        }
+    });
+    
+    // Formulaire OSC
+    $('#osc').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData();
+        formData.append('target', $('#oscTarget').value);
+        formData.append('port', $('#oscPort').value);
+        try {
+            const r = await fetch('/api/osc', { method: 'POST', body: formData });
+            const d = await r.json();
+            $('#oscMsg').textContent = d.status === 'ok' ? 'Configuration OSC enregistrée' : 'Erreur: ' + d.error;
+            $('#oscMsg').style.color = d.status === 'ok' ? '#059669' : '#dc2626';
+        } catch (err) {
+            $('#oscMsg').textContent = 'Erreur de connexion';
+            $('#oscMsg').style.color = '#dc2626';
+        }
+    });
+}
+
+// Initialisation
+document.addEventListener('DOMContentLoaded', () => {
+    initTabs();
+    initForms();
+    loadStatus();
+    loadMdns();
+    loadCaps();
+    setInterval(loadStatus, 5000);
+});
  
  function drawBoard(){ const L=$('#pinsLeft'),R=$('#pinsRight'); if(!L||!R)return; L.innerHTML=''; R.innerHTML=''; const RH=28; const COL={c1:20,c2:68,c4:238,c5:286}; const W=44,H=20;
  const mk=(x,y,w,h,fill,stroke,label,clk=true)=>{ const g=document.createElementNS('http://www.w3.org/2000/svg','g'); const r=document.createElementNS('http://www.w3.org/2000/svg','rect'); r.setAttribute('x',x); r.setAttribute('y',y); r.setAttribute('width',w); r.setAttribute('height',h); r.setAttribute('rx','4'); r.setAttribute('fill',fill); r.setAttribute('stroke',stroke); g.appendChild(r); const t=document.createElementNS('http://www.w3.org/2000/svg','text'); t.setAttribute('x',x+w/2); t.setAttribute('y',y+h/2+1); t.setAttribute('text-anchor','middle'); t.setAttribute('class','svg-t'); t.textContent=label; g.appendChild(t); if(clk){ g.style.cursor='pointer'; r.dataset.label=label; prect[label]=r; r.addEventListener('click',()=>{ if(window._selRect) window._selRect.classList.remove('selectedSquare'); window._selRect=r; r.classList.add('selectedSquare'); cur=label; $('#selPin').textContent=label; handlePinClick(label); updFunc(label); if(pcfg[cur]) applyCfg(pcfg[cur]); }); } return g; };

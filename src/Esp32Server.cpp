@@ -1,17 +1,44 @@
 #include "Esp32Server.h"
+#include "ServerCore.h"
+#include "ComponentManager.h"
+#include "PinMapper.h"
+#include "midi/MidiRouter.h"
 #include <Preferences.h>
 
-Esp32Server esp32Server;            // noyau serveur (web, rtp)
-Esp32ServerAPI esp32server;         // façade style midimap
+// Variables globales pour la gestion des composants
+MidiRouter g_midiRouter;
+ComponentManager g_componentManager;
 
 // Demande de rechargement des configs pins depuis l'API
 static bool g_requestReloadPins = false;
 extern "C" void esp32server_requestReloadPins(){ g_requestReloadPins = true; }
 
+// Le mapping GPIO est maintenant géré par PinMapper
+
+// Charger configuration pins depuis NVS
+void loadPinConfigs() {
+    // Le ComponentManager gère maintenant le chargement des configurations
+    g_componentManager.reloadConfigs();
+}
+
+// Traitement des composants dans la boucle
+void processComponents() {
+    // Le ComponentManager gère maintenant tous les composants
+    g_componentManager.update();
+}
+
 void esp32server_begin() {
     // Logs
     Serial.begin(115200);
     delay(50);
+
+    // Détecter et afficher le MCU
+    PinMapper::detectMcu();
+    PinMapper::printMappings();
+
+    // Nettoyer les anciens réglages NVS si nécessaire
+    // (décommentez la ligne suivante pour forcer le reset)
+    // Preferences::clear("esp32server");
 
     // Lire nom serveur + STA depuis NVS
     Preferences preferences;
@@ -23,6 +50,23 @@ void esp32server_begin() {
     String staGwStr   = preferences.getString("sta_gw",  "");
     String staSnStr   = preferences.getString("sta_sn",  "");
     preferences.end();
+    
+    // Nettoyer le nom serveur (enlever caractères spéciaux)
+    serverName.replace(" ", "");
+    serverName.replace("-", "");
+    serverName.replace("_", "");
+    if (serverName.length() == 0) serverName = "esp32rtpmidi";
+    
+    // Sauvegarder le nom mDNS dans NVS pour RTP-MIDI
+    preferences.begin("esp32server", false);
+    preferences.putString("mdns_name", serverName);
+    preferences.putString("rtp_name", serverName);  // Même nom pour RTP-MIDI
+    preferences.end();
+    
+    Serial.println("[ESP32Server] Names synchronized:");
+    Serial.print("  SSID: "); Serial.println(serverName);
+    Serial.print("  mDNS: "); Serial.print(serverName); Serial.println(".local");
+    Serial.print("  RTP-MIDI: "); Serial.println(serverName);
     
     // Debug: afficher ce qui est lu depuis NVS
     Serial.println("[ESP32Server] NVS Debug:");
@@ -37,186 +81,67 @@ void esp32server_begin() {
     const char* apPass = "esp32pass";
     const char* host   = serverName.c_str();
 
-    // Démarre web + mDNS + AP
-    esp32Server.begin(apSsid, apPass, host);
-
-    // Tente STA si configurée
+    // Tente STA si configurée (AVANT de démarrer le serveur)
     if (staSsid.length() > 0) {
+        Serial.printf("[ESP32Server] Attempting STA connection to: %s\n", staSsid.c_str());
+        
         if (staIpStr.length() > 0 && staGwStr.length() > 0 && staSnStr.length() > 0) {
             IPAddress ip, gw, sn;
             if (ip.fromString(staIpStr) && gw.fromString(staGwStr) && sn.fromString(staSnStr)) {
-                esp32Server.setStaticStaIp(ip, gw, sn);
+                serverCore.setStaticStaIp(ip, gw, sn);
                 Serial.print("[ESP32Server] STA static IP: "); Serial.print(staIpStr);
                 Serial.print(" GW: "); Serial.print(staGwStr);
                 Serial.print(" SN: "); Serial.println(staSnStr);
             }
         }
-        esp32Server.connectSta(staSsid.c_str(), staPass.c_str());
-        Serial.print("[ESP32Server] Connecting STA SSID: "); Serial.println(staSsid);
+        serverCore.connectSta(staSsid.c_str(), staPass.length() > 0 ? staPass.c_str() : nullptr);
     } else {
-        Serial.println("[ESP32Server] No STA credentials in NVS");
+        Serial.println("[ESP32Server] No STA configuration found");
     }
+
+    // Démarre web + mDNS + AP (après connexion STA)
+    serverCore.begin(apSsid, apPass, host);
+    
+    // Initialiser MidiRouter
+    g_midiRouter.begin();
+    
+    // Initialiser RTP-MIDI
+    serverCore.rtpMidi().begin(serverName.c_str());
+    
+    // Initialiser ComponentManager
+    g_componentManager.begin(&g_midiRouter);
+    
+    Serial.println("[ESP32Server] Ready");
+    Serial.print("  AP SSID: "); Serial.println(apSsid);
+    Serial.print("  AP PASS: "); Serial.println(apPass);
+    Serial.print("  AP IP: "); Serial.println(WiFi.softAPIP());
+    Serial.print("  mDNS: http://"); Serial.print(host); Serial.println(".local/");
+    Serial.print("  RTP-MIDI: "); Serial.println(serverCore.rtpMidi().isInitialized() ? "Initialized" : "Failed");
+    Serial.println();
 }
 
-void Esp32ServerAPI::begin() {
+void esp32server_loop() {
+    // Mise à jour du serveur
+    serverCore.update();
+    
+    // Recharger pins si demandé
+    if (g_requestReloadPins) {
+        g_requestReloadPins = false;
+        g_componentManager.reloadConfigs();
+    }
+    
+    // Traitement des composants
+    processComponents();
+}
+
+// Instance globale
+Esp32Server esp32server;
+
+// Implémentation de l'interface publique
+void Esp32Server::begin() {
     esp32server_begin();
 }
 
-void Esp32ServerAPI::loop() {
-    // Tâches périodiques minimales
-    esp32Server.rtpMidi().update();
-
-    // Initialiser RTP-MIDI automatiquement dès que la STA est connectée
-    static bool rtpInitialized = false;
-    if (!rtpInitialized && WiFi.status() == WL_CONNECTED) {
-        Preferences preferences;
-        preferences.begin("esp32server", true);
-        String serverName = preferences.getString("mdns_name", "esp32rtpmidi");
-        preferences.end();
-        esp32Server.rtpMidi().begin(serverName);
-        Serial.print("[ESP32Server] RTP-MIDI initialized (STA up) with name: ");
-        Serial.println(serverName);
-        rtpInitialized = true;
-    }
-
-    // Exécution basique des rôles Pins (démo)
-    struct PinRuntimeCfg { bool valid=false; String role; bool rtpEnabled=false; String rtpType; int rtpNote=60; int rtpCc=7; int rtpChan=1; int gpio=-1; };
-    static bool pinCfgLoaded = false;
-    static PinRuntimeCfg pinCfg[11]; // D0..D10 indexés par numéro
-    auto indexToGpio = [](int idx)->int{
-        // Basé sur pincaps_c3.cpp
-        switch(idx){
-            case 0: return 2;  case 1: return 3;  case 2: return 4;  case 3: return 5;
-            case 4: return 6;  case 5: return 7;  case 6: return 21; case 7: return 20;
-            case 8: return 8;  case 9: return 9;  case 10: return 10; default: return -1;
-        }
-    };
-    auto extractInt = [](const String& src, const char* key, int def)->int{
-        String pat = String("\"") + key + "\":"; int p = src.indexOf(pat); if(p<0) return def; p += pat.length();
-        while(p < (int)src.length() && (src[p]==' ')) p++;
-        int end = p; while(end < (int)src.length() && isdigit(src[end])) end++;
-        if(end>p) return src.substring(p,end).toInt();
-        return def;
-    };
-    auto extractBool = [](const String& src, const char* key, bool def)->bool{
-        String pat = String("\"") + key + "\":"; int p = src.indexOf(pat); if(p<0) return def; p += pat.length();
-        while(p < (int)src.length() && (src[p]==' ')) p++;
-        if(src.startsWith("true", p)) return true; if(src.startsWith("false", p)) return false; return def;
-    };
-    auto extractStr = [](const String& src, const char* key, String def)->String{
-        String pat = String("\"") + key + "\":\""; int p = src.indexOf(pat); if(p<0) return def; p += pat.length();
-        int end = src.indexOf('"', p); if(end<0) return def; return src.substring(p,end);
-    };
-    if(g_requestReloadPins){ pinCfgLoaded = false; g_requestReloadPins = false; }
-    if(!pinCfgLoaded){
-        Preferences preferences;
-        preferences.begin("esp32server", true);
-        for(int i=0;i<=10;i++){
-            String key = String("pin_D") + String(i);
-            String json = preferences.getString(key.c_str(), "");
-            if(json.length()==0) continue;
-            PinRuntimeCfg c; c.valid = true;
-            c.role = extractStr(json, "role", "");
-            c.rtpEnabled = extractBool(json, "rtpEnabled", false);
-            c.rtpType = extractStr(json, "rtpType", "");
-            c.rtpNote = extractInt(json, "rtpNote", 60);
-            c.rtpCc   = extractInt(json, "rtpCc", 7);
-            c.rtpChan = extractInt(json, "rtpChan", 1);
-            c.gpio = indexToGpio(i);
-            if(c.gpio>=0){ pinCfg[i] = c; Serial.printf("[Pins] Loaded D%d role=%s type=%s chan=%d\n", i, c.role.c_str(), c.rtpType.c_str(), c.rtpChan); }
-        }
-        preferences.end();
-        // Prépare GPIO modes
-        for(int i=0;i<=10;i++) if(pinCfg[i].valid){
-            if(pinCfg[i].role == "Potentiomètre"){
-                // ADC auto
-            } else if(pinCfg[i].role == "Bouton"){
-                pinMode(pinCfg[i].gpio, INPUT_PULLUP);
-            } else if(pinCfg[i].role == "LED"){
-                pinMode(pinCfg[i].gpio, OUTPUT);
-                digitalWrite(pinCfg[i].gpio, LOW);
-            }
-        }
-        pinCfgLoaded = true;
-    }
-    static int lastCcVal[11]; static bool lastBtnOn[11]; static uint32_t lastDebounceMs[11]; static bool debounceState[11]; static bool initStates=false;
-    if(!initStates){ for(int i=0;i<=10;i++){ lastCcVal[i] = -1; lastBtnOn[i]=false; lastDebounceMs[i]=0; debounceState[i]=false; } initStates=true; }
-    uint32_t nowMs = millis();
-    for(int i=0;i<=10;i++){
-        if(!pinCfg[i].valid || !pinCfg[i].rtpEnabled || pinCfg[i].gpio<0) continue;
-        // Potentiomètre → CC
-        if(pinCfg[i].role=="Potentiomètre" && (pinCfg[i].rtpType=="Control Change")){
-            int raw = analogRead(pinCfg[i].gpio);
-            int val = map(raw, 0, 4095, 0, 127);
-            if(val<0) val=0; if(val>127) val=127;
-            if(lastCcVal[i] < 0 || abs(val - lastCcVal[i]) >= 2){
-                esp32Server.rtpMidi().sendControlChange((uint8_t)pinCfg[i].rtpChan, (uint8_t)pinCfg[i].rtpCc, (uint8_t)val);
-                lastCcVal[i] = val;
-            }
-        }
-        // Bouton → Note
-        else if(pinCfg[i].role=="Bouton" && pinCfg[i].rtpType=="Note"){
-            int readV = digitalRead(pinCfg[i].gpio); // INPUT_PULLUP: 0 = press
-            bool pressed = (readV == LOW);
-            if(pressed != debounceState[i]){ lastDebounceMs[i] = nowMs; debounceState[i] = pressed; }
-            if(nowMs - lastDebounceMs[i] > 30){
-                if(pressed && !lastBtnOn[i]){
-                    esp32Server.rtpMidi().sendNoteOn((uint8_t)pinCfg[i].rtpChan, (uint8_t)pinCfg[i].rtpNote, 127);
-                    lastBtnOn[i] = true;
-                } else if(!pressed && lastBtnOn[i]){
-                    esp32Server.rtpMidi().sendNoteOff((uint8_t)pinCfg[i].rtpChan, (uint8_t)pinCfg[i].rtpNote, 0);
-                    lastBtnOn[i] = false;
-                }
-            }
-        }
-        // LED: à implémenter (suivi MIDI entrant)
-    }
+void Esp32Server::loop() {
+    esp32server_loop();
 }
-
-#include "Esp32Server.h"
-#include <ESPmDNS.h>
-#include <Preferences.h>
-
-// Déclaration de la fonction setupHttp définie dans esp32server_api.cpp
-void setupHttp(AsyncWebServer& server, AsyncWebSocket& ws);
-
-Esp32Server::Esp32Server()
-	: server(80), ws("/ws") {}
-
-void Esp32Server::begin(const char* apSsid, const char* apPass, const char* hostname) {
-	WiFi.mode(WIFI_MODE_APSTA);
-	WiFi.softAP(apSsid, apPass);
-	IPAddress apIp = WiFi.softAPIP();
-	Serial.begin(115200);
-	Serial.println();
-	Serial.println("[ESP32Server] AP up");
-	Serial.print("  SSID: "); Serial.println(apSsid);
-	Serial.print("  PASS: "); Serial.println(apPass);
-	Serial.print("  AP IP: "); Serial.println(apIp);
-
-	bool mdnsOk = MDNS.begin(hostname);
-	if (mdnsOk) {
-		MDNS.addService("http", "tcp", 80);
-		Serial.print("[ESP32Server] mDNS: http://"); Serial.print(hostname); Serial.println(".local/");
-	} else {
-		Serial.println("[ESP32Server] mDNS init failed");
-	}
-	setupHttp(server, ws);
-	server.begin();
-	Serial.println("[ESP32Server] HTTP server started on / (Async)");
-}
-
-void Esp32Server::connectSta(const char* staSsid, const char* staPass) {
-	if (useStaticSta) {
-		WiFi.config(staIp, staGw, staSn);
-	}
-	WiFi.begin(staSsid, staPass);
-}
-
-void Esp32Server::setStaticStaIp(IPAddress ip, IPAddress gateway, IPAddress subnet) {
-	useStaticSta = true; staIp = ip; staGw = gateway; staSn = subnet;
-}
-
-AsyncWebServer& Esp32Server::web() { return server; }
-AsyncWebSocket& Esp32Server::websocket() { return ws; }
-RtpMidi& Esp32Server::rtpMidi() { return rtpMidiInstance; }

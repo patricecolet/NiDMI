@@ -23,6 +23,11 @@ public:
     void setOscPort(uint16_t port);
 
     void setMidiChannel(uint8_t channel); // défaut 1
+    
+    // Réception MIDI pour piloter les LEDs
+    void handleMidiNoteOn(uint8_t channel, uint8_t note, uint8_t velocity);
+    void handleMidiNoteOff(uint8_t channel, uint8_t note, uint8_t velocity);
+    void handleMidiControlChange(uint8_t channel, uint8_t control, uint8_t value);
 
 private:
     bool rtpEnabled;

@@ -1,10 +1,11 @@
 #include "MidiRouter.h"
 #include <Arduino.h>
 
-// Dépendances vers le serveur existant
-#include "../Esp32Server.h"
+// Dépendances vers le serveur core
+#include "../ServerCore.h"
+#include "../ComponentManager.h"
 
-extern Esp32Server esp32Server;
+extern ServerCore serverCore;
 
 MidiRouter::MidiRouter()
     : rtpEnabled(true), oscEnabled(true), oscToSta(true), oscPort(8000), defaultChannel(1) {}
@@ -17,19 +18,19 @@ void MidiRouter::begin() {
 
 void MidiRouter::update() {
     // Mise à jour RTP si nécessaire
-    esp32Server.rtpMidi().update();
+    serverCore.rtpMidi().update();
 }
 
 void MidiRouter::sendNoteOn(uint8_t channel, uint8_t note, uint8_t velocity) {
     const uint8_t ch = channel ? channel : defaultChannel;
     if (rtpEnabled) {
-        esp32Server.rtpMidi().sendNoteOn(ch, note, velocity);
+        serverCore.rtpMidi().sendNoteOn(ch, note, velocity);
     }
     // Optionnel: route OSC si disponible côté serveur
     // Activez avec -DESP32SERVER_ENABLE_OSC_ROUTER et implémentez les wrappers dans Esp32Server
     #ifdef ESP32SERVER_ENABLE_OSC_ROUTER
     if (oscEnabled) {
-        esp32Server.sendOscNote(ch, note, velocity, oscToSta, oscPort);
+        serverCore.sendOscNote(ch, note, velocity, oscToSta, oscPort);
     }
     #endif
 }
@@ -37,11 +38,11 @@ void MidiRouter::sendNoteOn(uint8_t channel, uint8_t note, uint8_t velocity) {
 void MidiRouter::sendNoteOff(uint8_t channel, uint8_t note, uint8_t velocity) {
     const uint8_t ch = channel ? channel : defaultChannel;
     if (rtpEnabled) {
-        esp32Server.rtpMidi().sendNoteOff(ch, note, velocity);
+        serverCore.rtpMidi().sendNoteOff(ch, note, velocity);
     }
     #ifdef ESP32SERVER_ENABLE_OSC_ROUTER
     if (oscEnabled) {
-        esp32Server.sendOscNoteOff(ch, note, velocity, oscToSta, oscPort);
+        serverCore.sendOscNoteOff(ch, note, velocity, oscToSta, oscPort);
     }
     #endif
 }
@@ -49,11 +50,11 @@ void MidiRouter::sendNoteOff(uint8_t channel, uint8_t note, uint8_t velocity) {
 void MidiRouter::sendControlChange(uint8_t channel, uint8_t control, uint8_t value) {
     const uint8_t ch = channel ? channel : defaultChannel;
     if (rtpEnabled) {
-        esp32Server.rtpMidi().sendControlChange(ch, control, value);
+        serverCore.rtpMidi().sendControlChange(ch, control, value);
     }
     #ifdef ESP32SERVER_ENABLE_OSC_ROUTER
     if (oscEnabled) {
-        esp32Server.sendOscCC(ch, control, value, oscToSta, oscPort);
+        serverCore.sendOscCC(ch, control, value, oscToSta, oscPort);
     }
     #endif
 }
@@ -63,5 +64,23 @@ void MidiRouter::enableOsc(bool enabled) { oscEnabled = enabled; }
 void MidiRouter::setOscTargetSta(bool sta) { oscToSta = sta; }
 void MidiRouter::setOscPort(uint16_t port) { oscPort = port; }
 void MidiRouter::setMidiChannel(uint8_t channel) { defaultChannel = channel; }
+
+void MidiRouter::handleMidiNoteOn(uint8_t channel, uint8_t note, uint8_t velocity) {
+    // Transmettre au ComponentManager pour piloter les LEDs
+    extern ComponentManager g_componentManager;
+    g_componentManager.handleMidiNoteOn(channel, note, velocity);
+}
+
+void MidiRouter::handleMidiNoteOff(uint8_t channel, uint8_t note, uint8_t velocity) {
+    // Transmettre au ComponentManager pour piloter les LEDs
+    extern ComponentManager g_componentManager;
+    g_componentManager.handleMidiNoteOff(channel, note, velocity);
+}
+
+void MidiRouter::handleMidiControlChange(uint8_t channel, uint8_t control, uint8_t value) {
+    // Transmettre au ComponentManager pour piloter les LEDs
+    extern ComponentManager g_componentManager;
+    g_componentManager.handleMidiControlChange(channel, control, value);
+}
 
 
