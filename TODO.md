@@ -1,45 +1,175 @@
-# TODO – Plan d’implémentation (Pins, Démo par défaut, MIDI/OSC)
+# TODO – Plan d'implémentation ESP32Server
 
-## 1) Config par défaut (démo au boot)
-- A0/A1/A2/A3: Potentiomètres → MIDI CC 1/5/7/71 (canal 1) + OSC /ctl/mod, /ctl/vol, /ctl/porta, /ctl/cutoff
-- D4/D5/D6: Boutons poussoirs → Notes 60/65/67 (Note On 127 / Note Off 0) + OSC /note 60/65/67
-- D7/D8/D9: LED (digital) → s’allume Note On 60/65/67, s’éteint Note Off + idem OSC
-- D10: LED PWM → luminosité = MIDI CC7 (volume)
+## 🎯 **Priorités de Développement**
 
-## 2) Persistance (NVS)
-- Schéma de données: par pin (gpio), rôle (pot, bouton, led, led_pwm, i2c, spi, uart, power, gnd), params (chan, cc/note, osc_path, etc.)
-- Chargement au boot (si NVS vide → config par défaut). Sauvegarde via API.
+### **1. WebSocket Pin Synchronization** ✅ **TERMINÉ**
+- **Status** : ✅ Implémenté
+- **Objectif** : Synchronisation temps réel des configurations de pins
+- **Fonctionnalités** :
+  - ✅ Messages WebSocket `PIN_CLICKED` / `PIN_CONFIG`
+  - ✅ Valeurs par défaut uniques par pin (A0→CC#1, A1→CC#2, D0→Note 60, etc.)
+  - ✅ Gestion des conflits pins (A0↔D0, SDA↔D4, MOSI↔D8)
+  - ✅ Grisage automatique des pins de bus (I2C/SPI)
+  - ✅ Configuration OSC/Debug par défaut
+  - ✅ Compatible avec système NVS existant
 
-## 3) API HTTP
-- GET /api/pins/config → renvoie la configuration complète
-- POST /api/pins/set → gpio, role, params (json ou x-www-form-urlencoded)
-- POST /api/pins/save → persiste en NVS
+### **2. OSC (Open Sound Control)**
+- **Status** : 🔄 En développement
+- **Objectif** : Support complet OSC pour communication réseau
+- **Fonctionnalités** :
+  - Envoi OSC (CC, Note, Program Change)
+  - Réception OSC (contrôle des LEDs)
+  - ✅ Configuration via interface web (intégré WebSocket)
+  - Mapping OSC ↔ MIDI
 
-## 4) UI (onglet Pins)
-- Menu « Fonction du pin » avec rôles réels: Potentiomètre, Bouton, LED, LED PWM, I2C (SDA/SCL), SPI (MOSI/MISO/SCK), UART (TX/RX), Power, GND
-- Clic sur carrés:
-  - Dn → fixe type Digital (rôle selon menu)
-  - Ax → fixe type Analog (rôle Potentiomètre)
-  - SDA active SCL; MOSI active MISO+SCK; TX/RX non couplés obligatoirement
-- Sélection visuelle stable (highlight) et synchronisation de #selPin + menu
-- Quand rôle = Potentiomètre (A0–A3): afficher paramètres:
-  - MIDI: Min/Max (0–127)
-  - OSC: Min/Max (ex: 0.0–1.0)
-  - Filtre: moving average (une seule valeur « filtre » = fenêtre ou alpha)
-  (Pas d’inversion, pas de deadzone/seuil séparés)
+### **3. DEBUG (Système de Logs)**
+- **Status** : 🔄 En développement  
+- **Objectif** : Système de debug avancé et monitoring
+- **Fonctionnalités** :
+  - Logs détaillés (MIDI, OSC, pins, erreurs)
+  - Interface web de monitoring
+  - Niveaux de log configurables
+  - Export des logs
 
-## 5) Runtime MIDI/OSC
-- Entrées analogiques (A0..A3): lecture avec moving average (paramètre « filtre ») → map linéaire sur Min/Max MIDI et Min/Max OSC; émettre sur changement (implémenter un delta minimal implicite issu du filtre)
-- Boutons (D4..D6): debouncing → MIDI Note On/Off + OSC /note
-- Sorties LED (D7..D9): état sur Note On/Off (MIDI & OSC)
-- Sortie PWM (D10): CC7 → duty cycle
-- Canal MIDI par défaut = 1; adresse OSC paramétrable
+### **4. ESP32-S3 (Support Complet)**
+- **Status** : 🔄 En développement
+- **Objectif** : Support complet de l'ESP32-S3
+- **Fonctionnalités** :
+  - Interface web adaptée ESP32-S3
+  - Mapping des pins ESP32-S3
+  - Optimisations spécifiques S3
+  - Tests de compatibilité
 
-## 6) Démo auto au boot
-- Active les pipelines ci-dessus
-- Expose l’état dans /api/status
+### **4. USB-MIDI**
+- **Status** : 📋 Planifié
+- **Objectif** : Connexion USB directe MIDI
+- **Fonctionnalités** :
+  - Support USB-MIDI natif
+  - Configuration via interface web
+  - Routage USB ↔ RTP-MIDI
+  - Compatibilité macOS/Windows/Linux
 
-## 7) Documentation
-- README: « Démo par défaut » et « Mapper un pin » (exemples rapides)
-- Avertissements timing (ADC, debouncing, PWM)
+### **5. TOUCH PINS (ESP32-S3)**
+- **Status** : 📋 Planifié
+- **Objectif** : Support des touch pins ESP32-S3
+- **Fonctionnalités** :
+  - ComponentType::TOUCH
+  - Interface tactile intuitive
+  - Configuration seuils
+  - MIDI Note On/Off via touch
 
+## 📋 **Fonctionnalités Actuelles**
+
+### **✅ Implémenté**
+- **Serveur web** : Interface de configuration
+- **RTP-MIDI** : Communication sans fil
+- **Pins configurables** : Potentiomètres, boutons, LEDs
+- **API REST** : Configuration via HTTP
+- **Stockage NVS** : Configuration persistante
+- **ESP32-C3** : Support complet
+
+### **🔄 En Développement**
+- **OSC** : Open Sound Control
+- **DEBUG** : Système de logs avancé
+- **ESP32-S3** : Support complet
+
+### **📋 Planifié**
+- **USB-MIDI** : Connexion USB directe
+- **Touch pins** : Support ESP32-S3
+- **Interface améliorée** : Multi-cartes
+
+## 🐛 **Bugs Connus**
+
+### **Écho MIDI RTP-MIDI**
+- **Problème** : Retransmission des messages MIDI
+- **Impact** : Boucles potentielles dans le DAW
+- **Workaround** : Router sur un autre contrôleur
+- **Status** : Bug connu, investigation en cours
+
+## 🔧 **Corrections Interface**
+
+### **Cohérence Types MIDI - Interface Web**
+- **Problème** : Incohérence dans l'affichage des types de messages MIDI
+- **Détails** :
+  - ✅ **Analog (Potentiomètres)** : Affiche correctement le type MIDI (CC, Note, etc.)
+  - ❌ **Digital (Boutons/LEDs)** : N'affiche pas le type de message MIDI
+- **Impact** : Interface confuse, manque de cohérence visuelle
+- **Solution** :
+  - Afficher le type MIDI pour les boutons (Note On/Off, CC, etc.)
+  - Afficher le type MIDI pour les LEDs (Note On/Off, CC, etc.)
+  - Uniformiser l'affichage entre analog et digital
+- **Status** : 🔄 À corriger (priorité haute)
+
+## 📊 **Roadmap des Versions**
+
+### **v0.2.0** - OSC Support
+- Implémentation OSC complète
+- Interface web OSC
+- Mapping OSC ↔ MIDI
+
+### **v0.3.0** - Debug & Monitoring  
+- Système de logs avancé
+- Interface de monitoring
+- Export des logs
+
+### **v0.4.0** - ESP32-S3 Complet
+- Support complet ESP32-S3
+- Interface adaptée S3
+- Touch pins ESP32-S3
+
+### **v0.5.0** - USB-MIDI
+- Support USB-MIDI natif
+- Configuration USB
+- Routage USB ↔ RTP-MIDI
+
+## 🔧 **Développement Technique**
+
+### **Architecture Actuelle**
+```
+src/
+├── Esp32Server.cpp/h          # Classe principale
+├── ComponentManager.cpp/h      # Gestion des composants
+├── PinMapper.cpp/h            # Mapping des pins
+├── RtpMidi.cpp/h             # RTP-MIDI
+├── WebAPI.cpp                 # API REST
+├── ServerCore.cpp/h           # Cœur du serveur
+└── ui_index.cpp/h             # Interface web intégrée
+```
+
+### **Nouvelles Classes à Développper**
+- **`OscManager`** : Gestion OSC
+- **`DebugManager`** : Système de logs
+- **`UsbMidiManager`** : USB-MIDI
+- **`TouchManager`** : Touch pins ESP32-S3
+
+## 📝 **Notes de Développement**
+
+### **OSC (Priorité 1)**
+- Utiliser la bibliothèque OSC standard
+- Interface web pour configuration
+- Mapping bidirectionnel OSC ↔ MIDI
+
+### **DEBUG (Priorité 2)**
+- Système de logs avec niveaux
+- Interface web de monitoring
+- Export et rotation des logs
+
+### **ESP32-S3 (Priorité 3)**
+- Adapter l'interface web
+- Tester la compatibilité
+- Optimiser les performances
+
+### **USB-MIDI (Priorité 4)**
+- Bibliothèque USB-MIDI
+- Configuration via interface
+- Routage intelligent
+
+### **Touch Pins (Priorité 5)**
+- ComponentType::TOUCH
+- Interface tactile
+- Configuration seuils
+
+---
+
+*Document mis à jour le : $(date)*
+*Ordre de priorité : OSC → DEBUG → S3 → USBMIDI → TOUCH*

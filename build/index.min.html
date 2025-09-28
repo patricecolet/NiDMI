@@ -56,6 +56,62 @@
  
  async function loadCaps(){ const r=await fetch('/api/pins/caps'); caps=await r.json(); drawBoard(); }
  
+ // Gestionnaires de formulaires
+ function initForms(){
+ // Formulaire mDNS
+ $('#mdns').addEventListener('submit', async (e) => {
+ e.preventDefault();
+ const formData = new FormData();
+ formData.append('name', $('#mdnsName').value);
+ try {
+ const r = await fetch('/api/mdns', { method: 'POST', body: formData });
+ const d = await r.json();
+ $('#mdnsMsg').textContent = d.status === 'ok' ? 'Nom enregistré' : 'Erreur: ' + d.error;
+ $('#mdnsMsg').style.color = d.status === 'ok' ? '#059669' : '#dc2626';
+ } catch (err) {
+ $('#mdnsMsg').textContent = 'Erreur de connexion';
+ $('#mdnsMsg').style.color = '#dc2626';
+ }
+ });
+ 
+ // Formulaire STA
+ $('#sta').addEventListener('submit', async (e) => {
+ e.preventDefault();
+ const formData = new FormData();
+ formData.append('ssid', $('#ssid').value);
+ formData.append('pass', $('#pass').value);
+ try {
+ const r = await fetch('/api/sta', { method: 'POST', body: formData });
+ const d = await r.json();
+ $('#staMsg').textContent = d.status === 'ok' ? 'Configuration enregistrée, redémarrage...' : 'Erreur: ' + d.error;
+ $('#staMsg').style.color = d.status === 'ok' ? '#059669' : '#dc2626';
+ if (d.status === 'ok') {
+ setTimeout(() => location.reload(), 2000);
+ }
+ } catch (err) {
+ $('#staMsg').textContent = 'Erreur de connexion';
+ $('#staMsg').style.color = '#dc2626';
+ }
+ });
+ 
+ // Formulaire OSC
+ $('#osc').addEventListener('submit', async (e) => {
+ e.preventDefault();
+ const formData = new FormData();
+ formData.append('target', $('#oscTarget').value);
+ formData.append('port', $('#oscPort').value);
+ try {
+ const r = await fetch('/api/osc', { method: 'POST', body: formData });
+ const d = await r.json();
+ $('#oscMsg').textContent = d.status === 'ok' ? 'Configuration OSC enregistrée' : 'Erreur: ' + d.error;
+ $('#oscMsg').style.color = d.status === 'ok' ? '#059669' : '#dc2626';
+ } catch (err) {
+ $('#oscMsg').textContent = 'Erreur de connexion';
+ $('#oscMsg').style.color = '#dc2626';
+ }
+ });
+ }
+ 
  function drawBoard(){ const L=$('#pinsLeft'),R=$('#pinsRight'); if(!L||!R)return; L.innerHTML=''; R.innerHTML=''; const RH=28; const COL={c1:20,c2:68,c4:238,c5:286}; const W=44,H=20;
  const mk=(x,y,w,h,fill,stroke,label,clk=true)=>{ const g=document.createElementNS('http://www.w3.org/2000/svg','g'); const r=document.createElementNS('http://www.w3.org/2000/svg','rect'); r.setAttribute('x',x); r.setAttribute('y',y); r.setAttribute('width',w); r.setAttribute('height',h); r.setAttribute('rx','4'); r.setAttribute('fill',fill); r.setAttribute('stroke',stroke); g.appendChild(r); const t=document.createElementNS('http://www.w3.org/2000/svg','text'); t.setAttribute('x',x+w/2); t.setAttribute('y',y+h/2+1); t.setAttribute('text-anchor','middle'); t.setAttribute('class','svg-t'); t.textContent=label; g.appendChild(t); if(clk){ g.style.cursor='pointer'; r.dataset.label=label; prect[label]=r; r.addEventListener('click',()=>{ if(window._selRect) window._selRect.classList.remove('selectedSquare'); window._selRect=r; r.classList.add('selectedSquare'); cur=label; $('#selPin').textContent=label; handlePinClick(label); updFunc(label); if(pcfg[cur]) applyCfg(pcfg[cur]); }); } return g; };
  const left=(row,tl,tc,dl)=>{ const y=30+row*RH; const f=document.createDocumentFragment(); f.appendChild(mk(COL.c1,y-10,W,H,tc,'#9ca3af',tl,true)); f.appendChild(mk(COL.c2,y-10,W,H,FC.DIGITAL,'#9ca3af',dl,true)); L.appendChild(f); };
@@ -92,7 +148,7 @@
  r.classList.remove('busDisabled');
  });
  
- // I2C : griser SDA, SCL, D4, D5 quand I2C est actif
+ // I2C : griser SDA, SCL, D4, D5 quand ligne I2C existe
  if(pcfg['I2C']){
  ['SDA','SCL','D4','D5'].forEach(lbl=>{
  const r = prect[lbl];
@@ -101,7 +157,7 @@
  });
  }
  
- // SPI : griser MOSI, MISO, SCK, D8, D9, D10 quand SPI est actif
+ // SPI : griser MOSI, MISO, SCK, D8, D9, D10 quand ligne SPI existe
  if(pcfg['SPI']){
  ['MOSI','MISO','SCK','D8','D9','D10'].forEach(lbl=>{
  const r = prect[lbl];
@@ -187,12 +243,130 @@
 
  function updFunc(lbl){ const sel=$('#funcSelect'); if(!sel) return; const isI2C=(lbl==='SDA'||lbl==='SCL'); const isSPI=(lbl==='MOSI'||lbl==='MISO'||lbl==='SCK'); const isUART=(lbl==='TX'||lbl==='RX'); if(/^A\d+$/.test(lbl)){ setOptions(sel,['Potentiomètre','Analog in (raw)'],0); } else if(/^D\d+$/.test(lbl) && !isI2C && !isSPI && !isUART){ setOptions(sel,['Bouton','LED','Digital in/out'],0); } else if(isI2C){ setOptions(sel,['I2C'],0); } else if(isSPI){ setOptions(sel,['SPI'],0); } else if(isUART){ setOptions(sel,['UART'],0); } else { setOptions(sel,[],0); } showRoleCards(sel.value||''); updateRtpForRole(sel.value||''); sel.onchange=()=>{ showRoleCards(sel.value||''); updateRtpForRole(sel.value||''); if(cur){ pcfg[cur]=readCfg(); updatePinsList(); updateBusVisuals(); } }; }
  
+ // WebSocket pour synchronisation avec C++
+ let websocket = null;
+ 
+ // Fonction pour appliquer la logique de remplacement
+ function applyPinReplacementLogic(pin) {
+ // Pins analogiques
+ if (pin.startsWith('A')) {
+ // Supprimer le pin digital correspondant seulement s'il existe
+ const dLabel = pin.replace('A', 'D');
+ if (pcfg[dLabel]) delete pcfg[dLabel];
+ }
+ // Pins digitales normales
+ else if (['D0','D1','D2','D3'].includes(pin)) {
+ // Supprimer le pin analogique correspondant seulement s'il existe
+ const aLabel = pin.replace('D', 'A');
+ if (pcfg[aLabel]) delete pcfg[aLabel];
+ }
+ // Bus I2C - griser SDA,SCL,D4,D5 et supprimer les configs individuelles
+ else if (['SDA','SCL'].includes(pin)) {
+ // Supprimer les pins digitales individuelles pour libérer D4,D5
+ if (pcfg['D4']) delete pcfg['D4'];
+ if (pcfg['D5']) delete pcfg['D5'];
+ // Supprimer les configs SDA/SCL individuelles
+ if (pcfg['SDA']) delete pcfg['SDA'];
+ if (pcfg['SCL']) delete pcfg['SCL'];
+ }
+ // Bus SPI - griser MOSI,MISO,SCK,D8,D9,D10 et supprimer les configs individuelles
+ else if (['MOSI','MISO','SCK'].includes(pin)) {
+ // Supprimer les pins digitales individuelles pour libérer D8,D9,D10
+ if (pcfg['D8']) delete pcfg['D8'];
+ if (pcfg['D9']) delete pcfg['D9'];
+ if (pcfg['D10']) delete pcfg['D10'];
+ // Supprimer les configs MOSI/MISO/SCK individuelles
+ if (pcfg['MOSI']) delete pcfg['MOSI'];
+ if (pcfg['MISO']) delete pcfg['MISO'];
+ if (pcfg['SCK']) delete pcfg['SCK'];
+ }
+ // UART TX
+ else if (pin === 'TX') {
+ if (pcfg['D6']) delete pcfg['D6'];
+ }
+ // UART RX
+ else if (pin === 'RX') {
+ if (pcfg['D7']) delete pcfg['D7'];
+ }
+ // Pins digitales de bus I2C
+ else if (['D4','D5'].includes(pin)) {
+ if (pcfg['I2C']) delete pcfg['I2C'];
+ }
+ // Pins digitales de bus SPI
+ else if (['D8','D9','D10'].includes(pin)) {
+ if (pcfg['SPI']) delete pcfg['SPI'];
+ }
+ // Pins digitales UART - remplacement simple
+ else if (pin === 'D6') {
+ if (pcfg['TX']) delete pcfg['TX'];
+ }
+ else if (pin === 'D7') {
+ if (pcfg['RX']) delete pcfg['RX'];
+ }
+ }
+ 
+ function initWebSocket() {
+ const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+ const wsUrl = `${protocol}//${window.location.host}/ws`;
+ websocket = new WebSocket(wsUrl);
+ 
+ websocket.onopen = function() {
+ console.log('WebSocket connected');
+ };
+ 
+ websocket.onmessage = function(event) {
+ const message = event.data;
+ if (message.startsWith('PIN_CONFIG:')) {
+ const parts = message.split(':');
+ if (parts.length >= 3) {
+ const pin = parts[1];
+ const config = JSON.parse(parts.slice(2).join(':'));
+ 
+ // Appliquer la logique de remplacement AVANT d'ajouter la config
+ applyPinReplacementLogic(pin);
+ 
+ // Appliquer la configuration reçue avec les bonnes clés
+ if (['SDA','SCL'].includes(pin) && config.role === 'I2C') {
+ pcfg['I2C'] = config; // Créer clé I2C pour le grisage
+ } else if (['MOSI','MISO','SCK'].includes(pin) && config.role === 'SPI') {
+ pcfg['SPI'] = config; // Créer clé SPI pour le grisage
+ } else {
+ pcfg[pin] = config; // Clé normale pour les autres pins
+ }
+ updatePinsList();
+ updateBusVisuals();
+ 
+ // Si c'est la pin actuellement sélectionnée, mettre à jour l'interface
+ if (cur === pin) {
+ applyCfg(config);
+ }
+ }
+ }
+ };
+ 
+ websocket.onclose = function() {
+ console.log('WebSocket disconnected');
+ // Tentative de reconnexion après 3 secondes
+ setTimeout(initWebSocket, 3000);
+ };
+ }
+ 
  function handlePinClick(label){
  // Vérifier si la pin est bloquée
  if(prect[label] && prect[label].classList.contains('busDisabled')){
  return;
  }
  
+ // Envoyer message WebSocket au C++
+ if (websocket && websocket.readyState === WebSocket.OPEN) {
+ websocket.send(`PIN_CLICKED:${label}`);
+ } else {
+ // Fallback: logique locale si WebSocket pas disponible
+ handlePinClickLocal(label);
+ }
+ }
+ 
+ function handlePinClickLocal(label){
  // Pins analogiques
  if(label.startsWith('A')){
  pcfg[label] = {role: 'Potentiomètre', cfg: {}};
@@ -259,7 +433,15 @@
  
  async function saveAll(){ const msg=$('#saveAllMsg'); msg.textContent='Enregistrement...'; try{ const ps=Object.keys(pcfg).map(async lbl=>{ const c=pcfg[lbl]; if(!c||!c.role) return; const p=new URLSearchParams(); p.set('pinLabel',lbl); p.set('role',c.role); if(c.rtpEnabled) p.set('rtpEnabled','true'); if(c.rtpType) p.set('rtpType',c.rtpType); if(c.rtpNote) p.set('rtpNote',c.rtpNote); if(c.rtpCc) p.set('rtpCc',c.rtpCc); if(c.rtpChan) p.set('rtpChan',c.rtpChan); if(c.ledMode) p.set('ledMode',c.ledMode); return fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}); }); await Promise.all(ps); msg.textContent='Toutes les configurations enregistrées'; msg.style.color='#10b981'; }catch(e){ msg.textContent='Erreur lors de l\'enregistrement'; msg.style.color='#ef4444'; } }
  
- window.addEventListener('load',()=>{ initTabs(); loadStatus(); loadMdns(); loadCaps(); const btn=$('#saveAllBtn'); if(btn) btn.onclick=saveAll; 
+ document.addEventListener('DOMContentLoaded', () => {
+ initTabs();
+ initForms();
+ initWebSocket();
+ loadStatus();
+ loadMdns();
+ loadCaps();
+ setInterval(loadStatus, 5000);
+ const btn=$('#saveAllBtn'); if(btn) btn.onclick=saveAll; 
  
  const fieldsToWatch=['funcSelect','btnMode','ledMode','potFilter','rtpEnabled2','rtpMsgType','rtpNote','rtpCc','rtpPc','rtpChan','rtpCcOn','rtpCcOff','rtpVel','rtpCcMin','rtpCcMax','rtpNoteMin','rtpNoteMax','rtpNoteVelFix','oscEnabled2','oscAddress','dbgEnabled','dbgHeader'];
  fieldsToWatch.forEach(id=>{

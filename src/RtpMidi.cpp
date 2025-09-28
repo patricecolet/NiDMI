@@ -70,8 +70,24 @@ bool RtpMidi::begin(const String& name) {
         Serial.println("RTP-MIDI: Déconnexion reçue");
     });
     
-    // Note: Les callbacks MIDI entrant ne sont pas supportés par AppleMIDI
-    // Le pilotage des LEDs se fera via une autre méthode
+    // Configurer les callbacks MIDI standard pour éviter l'écho
+    MIDI.setHandleNoteOn([](byte channel, byte note, byte velocity) {
+        Serial.printf("Note On: ch%d note%d vel%d\n", channel, note, velocity);
+        extern ComponentManager g_componentManager;
+        g_componentManager.handleMidiNoteOn(channel, note, velocity);
+    });
+
+    MIDI.setHandleNoteOff([](byte channel, byte note, byte velocity) {
+        Serial.printf("Note Off: ch%d note%d vel%d\n", channel, note, velocity);
+        extern ComponentManager g_componentManager;
+        g_componentManager.handleMidiNoteOff(channel, note, velocity);
+    });
+
+    MIDI.setHandleControlChange([](byte channel, byte control, byte value) {
+        Serial.printf("CC: ch%d cc%d val%d\n", channel, control, value);
+        extern ComponentManager g_componentManager;
+        g_componentManager.handleMidiControlChange(channel, control, value);
+    });
     
     isStarted = true;
     Serial.println("RTP-MIDI: Prêt à recevoir des connexions");
@@ -92,50 +108,9 @@ void RtpMidi::stop() {
 void RtpMidi::update() {
     if (!isStarted) return;
     
-    // Traiter les messages MIDI entrants avec MIDI.read()
-    if (MIDI.read()) {
-        uint8_t type = MIDI.getType();
-        uint8_t channel = MIDI.getChannel();
-        
-        switch (type) {
-            case midi::NoteOn:
-                {
-                    uint8_t note = MIDI.getData1();
-                    uint8_t velocity = MIDI.getData2();
-                    Serial.printf("RTP-MIDI: Note On ch%d note%d vel%d\n", channel, note, velocity);
-                    // Transmettre au ComponentManager pour piloter les LEDs
-                    extern ComponentManager g_componentManager;
-                    g_componentManager.handleMidiNoteOn(channel, note, velocity);
-                }
-                break;
-                
-            case midi::NoteOff:
-                {
-                    uint8_t note = MIDI.getData1();
-                    uint8_t velocity = MIDI.getData2();
-                    Serial.printf("RTP-MIDI: Note Off ch%d note%d vel%d\n", channel, note, velocity);
-                    // Transmettre au ComponentManager pour piloter les LEDs
-                    extern ComponentManager g_componentManager;
-                    g_componentManager.handleMidiNoteOff(channel, note, velocity);
-                }
-                break;
-                
-            case midi::ControlChange:
-                {
-                    uint8_t control = MIDI.getData1();
-                    uint8_t value = MIDI.getData2();
-                    Serial.printf("RTP-MIDI: CC ch%d cc%d val%d\n", channel, control, value);
-                    // Transmettre au ComponentManager pour piloter les LEDs
-                    extern ComponentManager g_componentManager;
-                    g_componentManager.handleMidiControlChange(channel, control, value);
-                }
-                break;
-                
-            default:
-                // Ignorer les autres types de messages
-                break;
-        }
-    }
+    // Nécessaire pour que les callbacks MIDI soient appelés
+    // Les callbacks évitent l'écho en traitant directement les messages
+    MIDI.read();
 }
 
 void RtpMidi::sendNoteOn(uint8_t channel, uint8_t note, uint8_t velocity) {

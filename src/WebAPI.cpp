@@ -10,11 +10,61 @@ Preferences preferences;
 // Signale au runtime de recharger les configs pins
 extern "C" void esp32server_requestReloadPins();
 
+// Fonction pour obtenir la configuration par défaut d'une pin
+String getDefaultConfig(String pin) {
+    if (pin == "A0") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":1,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "A1") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":2,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "A2") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":3,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "A3") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":4,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    
+    if (pin == "D0") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":60,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D1") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":61,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D2") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":62,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D3") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":63,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    
+    // LEDs spéciales
+    if (pin == "D7") return "{\"role\":\"LED\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":36,\"rtpChan\":1,\"ledMode\":\"onoff\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D8") return "{\"role\":\"LED\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":37,\"rtpChan\":1,\"ledMode\":\"onoff\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D9") return "{\"role\":\"LED\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":38,\"rtpChan\":1,\"ledMode\":\"onoff\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D10") return "{\"role\":\"LED\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":10,\"rtpChan\":1,\"ledMode\":\"pwm\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    
+    // Bus
+    if (pin == "SDA" || pin == "SCL") return "{\"role\":\"I2C\",\"rtpEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "MOSI" || pin == "MISO" || pin == "SCK") return "{\"role\":\"SPI\",\"rtpEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "TX" || pin == "RX") return "{\"role\":\"UART\",\"rtpEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    
+    // Défaut
+    return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":60,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+}
+
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
     if (type == WS_EVT_CONNECT) {
         Serial.println("WebSocket client connected");
     } else if (type == WS_EVT_DISCONNECT) {
         Serial.println("WebSocket client disconnected");
+    } else if (type == WS_EVT_DATA) {
+        String message = String((char*)data);
+        
+        if (message.startsWith("PIN_CLICKED:")) {
+            String pin = message.substring(12);
+            
+            // Vérifier NVS (compatible avec système existant)
+            preferences.begin("esp32server", true);
+            String key = "pin_" + pin;
+            String config = preferences.getString(key.c_str(), "");
+            preferences.end();
+            
+            if (config.length() > 0) {
+                // Config trouvée → Envoyer config NVS
+                String msg = "PIN_CONFIG:" + pin + ":" + config;
+                client->text(msg);
+            } else {
+                // Pas de config → Envoyer valeurs par défaut complètes
+                String defaultConfig = getDefaultConfig(pin);
+                String msg = "PIN_CONFIG:" + pin + ":" + defaultConfig;
+                client->text(msg);
+            }
+        }
     }
 }
 

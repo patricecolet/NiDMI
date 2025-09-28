@@ -7,7 +7,7 @@ Serveur web simple (HTTP + WebSocket) pour ESP32‑C3/S3, destiné à des atelie
 ## Installation (macOS / Windows / Linux)
 
 ### Option A — IDE Arduino (recommandé pour débuter)
-1. Ouvrir l’IDE Arduino 2.x.
+1. Ouvrir l'IDE Arduino 2.x.
 2. Installer le core ESP32: Outils > Type de carte > Gestionnaire de cartes… → chercher « esp32 » (Espressif Systems) → Installer.
 3. Installer les dépendances via le Gestionnaire de bibliothèques:
    - « ESP Async WebServer »
@@ -18,184 +18,235 @@ Serveur web simple (HTTP + WebSocket) pour ESP32‑C3/S3, destiné à des atelie
 5. Ouvrir: Fichier > Exemples > ESP32Server > esp32server_basic → Téléverser.
 
 Notes:
-- L’IDE 2.x sait proposer l’installation des dépendances si la librairie est installée via le Library Manager. Pour une librairie locale/ZIP, installez les 2 libs ci‑dessus manuellement (étape 3) ou utilisez l’option B.
+- L'IDE 2.x sait proposer l'installation des dépendances si la librairie est installée via le Library Manager. Pour une librairie locale/ZIP, installez les 2 libs ci‑dessus manuellement (étape 3) ou utilisez l'option B.
 
 ### Option B — Automatique avec arduino-cli (avancé)
 - macOS/Linux: `bash scripts/install_deps.sh`
 - Windows: `PowerShell -ExecutionPolicy Bypass -File scripts/install_deps.ps1`
 Ces scripts installent le core `esp32:esp32` et les librairies « ESP Async WebServer » et « AsyncTCP ».
 
+## Fonctionnalités
+
+### 🔄 **Synchronisation WebSocket** (Nouveau !)
+- **Configuration temps réel** des pins via WebSocket
+- **Valeurs par défaut intelligentes** : A0→CC#1, A1→CC#2, D0→Note 60, D1→Note 61, etc.
+- **Gestion automatique des conflits** : A0↔D0, SDA↔D4, MOSI↔D8
+- **Grisage des pins de bus** : I2C/SPI bloquent automatiquement les pins associées
+- **Configuration OSC/Debug** intégrée par défaut
+
+### 🎵 **MIDI & OSC**
+- Support RTP-MIDI complet
+- Configuration OSC intégrée
+- Interface web intuitive
+- Sauvegarde NVS automatique
+
 ## Utilisation
 
 ### Exemple de base
-- La classe `Esp32Server` démarre un point d'accès WiFi et un serveur HTTP/WS.
-- Exemple fourni: `examples/esp32server_basic/esp32server_basic.ino`
-  - SSID par défaut: `ESP32-Server`, mot de passe: `esp32pass`
-  - Page: `http://192.168.4.1/`
-  - API: `GET /api/info`, `GET /api/ip`
-  - WebSocket: `ws://192.168.4.1/ws`
 
-Personnaliser les identifiants dans l'exemple:
 ```cpp
-srv.begin("MonSSID","MonMotDePasse");
+#include <ESP32Server.h>
+
+void setup() {
+  Serial.begin(115200);
+  
+  // Démarrer le serveur avec nom personnalisé
+  ESP32Server.begin("MonServeur");
+  
+  // Attendre la connexion WiFi
+  while (!ESP32Server.isConnected()) {
+    delay(100);
+  }
+  
+  Serial.println("Serveur prêt !");
+  Serial.print("IP: ");
+  Serial.println(ESP32Server.getIP());
+}
+
+void loop() {
+  ESP32Server.update();
+}
 ```
 
-### Exemple RTP-MIDI avancé
-- Exemple complet: `examples/rtpmidi/rtpmidi_test/rtpmidi_test.ino`
-- Interface web avancée avec onglets (Statut, Connection, Pins)
-- Configuration RTP-MIDI, OSC, mDNS
-- Gestion des pins ESP32-C3 avec interface graphique
-- API endpoints: `/api/status`, `/api/rtp/status`, `/api/osc/status`, `/api/mdns`, `/api/pins/caps`
+### Configuration via interface web
 
-## Interface web avancée
+1. **Connexion** : L'ESP32 crée un point d'accès WiFi `ESP32Server-XXXX`
+2. **Interface** : Ouvrir `http://192.168.4.1` dans un navigateur
+3. **Configuration** :
+   - **WiFi** : Nom du réseau et mot de passe
+   - **MIDI** : Nom du périphérique RTP-MIDI
+   - **Pins** : Configuration des entrées/sorties
+4. **Sauvegarde** : Les paramètres sont stockés en mémoire
 
-### Onglets disponibles
-- **Statut** : Informations réseau (AP/STA), connexions
-- **Connection** : Configuration serveur, OSC, Wi-Fi STA
-- **Pins** : Interface graphique ESP32-C3, configuration des pins
+### Fonctionnalités principales
 
-### Configuration des pins
-- **Interface graphique** : Diagramme ESP32-C3 cliquable
-- **Rôles** : Potentiomètre, Bouton, LED, I2C, SPI, UART
-- **RTP-MIDI** : Configuration par pin (Note, CC, Program Change, etc.)
-- **OSC** : Adresses personnalisées par pin
-- **Debug** : Console de débogage configurable
+- **🌐 Serveur web** : Interface de configuration intuitive
+- **📡 RTP-MIDI** : Connexion sans fil avec macOS/Logic
+- **🔌 Pins configurables** : Entrées analogiques, boutons, LEDs
+- **👆 Touch pins** : Support des touch pins ESP32-S3 (en développement)
+- **⚡ Temps réel** : Latence optimisée pour la musique
+- **💾 Stockage** : Configuration persistante
 
-### API endpoints
-- `GET /api/status` : Statut réseau
-- `GET /api/osc/status` : Configuration OSC
-- `POST /api/osc` : Configurer OSC
-- `GET /api/mdns/status` : Nom du serveur
-- `POST /api/mdns` : Changer le nom du serveur
-- `GET /api/pins/caps` : Capacités des pins
-- `POST /api/pins/set` : Configuration d'un pin
+## Architecture
 
-## Guide AP/STA (débutants)
-Objectif: garder un **AP** (point d’accès) pour l’accès direct ET connecter la carte à votre **Wi‑Fi domestique (STA)**.
+### Composants principaux
 
-1) Démarrer l’AP (déjà fait par défaut dans l’exemple):
+- **`Esp32Server`** : Classe principale, gestion WiFi et serveur web
+- **`ComponentManager`** : Gestion des pins et composants
+- **`PinMapper`** : Mapping des pins ESP32-C3/S3
+- **`RtpMidi`** : Communication MIDI sans fil
+- **`WebAPI`** : Interface REST pour la configuration
+
+### Structure des fichiers
+
+```
+src/
+├── Esp32Server.cpp/h          # Classe principale
+├── ComponentManager.cpp/h      # Gestion des composants
+├── PinMapper.cpp/h            # Mapping des pins
+├── RtpMidi.cpp/h             # RTP-MIDI
+├── WebAPI.cpp                 # API REST
+├── ServerCore.cpp/h           # Cœur du serveur
+└── ui_index.cpp/h             # Interface web intégrée
+```
+
+## Configuration des pins
+
+### ESP32-C3 (XIAO_ESP32C3)
+
 ```cpp
-const char* apSsid = "ESP32-Server";
-const char* apPass = "esp32pass";
-srv.begin(apSsid, apPass);
+// Pins disponibles
+const uint8_t ANALOG_PINS[] = {A0, A1, A2, A3};
+const uint8_t DIGITAL_PINS[] = {2, 3, 4, 5, 6, 7, 8, 9, 10};
 ```
-- Connectez votre ordinateur/smartphone à ce réseau pour accéder à `http://192.168.4.1/`.
 
-2) (Optionnel) Configurer une IP statique pour le mode STA:
+### ESP32-S3
+
 ```cpp
-// IP fixe sur votre réseau local (adapter aux valeurs de votre LAN)
-srv.setStaticStaIp(IPAddress(192,168,1,50), IPAddress(192,168,1,1), IPAddress(255,255,255,0));
+// Pins disponibles (à configurer selon votre carte)
+const uint8_t ANALOG_PINS[] = {A0, A1, A2, A3, A4, A5};
+const uint8_t DIGITAL_PINS[] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
+
+// Touch pins ESP32-S3 (fonctionnalité en développement)
+const uint8_t TOUCH_PINS[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}; // GPIO1-10
 ```
 
-3) Se connecter à votre Wi‑Fi (STA):
-```cpp
-const char* staSsid = "VotreSSID";
-const char* staPass = "VotrePass";
-srv.connectSta(staSsid, staPass);
+### Types de composants supportés
+
+- **Potentiomètres** : Entrées analogiques (ADC)
+- **Boutons** : Entrées digitales avec anti-rebond
+- **LEDs** : Sorties digitales (PWM)
+- **Touch pins** : Capteurs tactiles ESP32-S3 (en développement)
+
+## API REST
+
+### Endpoints disponibles
+
+- **`GET /api/status`** : État du système
+- **`GET /api/pins`** : Configuration des pins
+- **`POST /api/pins`** : Modifier la configuration
+- **`GET /api/midi`** : Configuration MIDI
+- **`POST /api/midi`** : Modifier la configuration MIDI
+
+### Exemple d'utilisation
+
+```javascript
+// Récupérer la configuration
+fetch('/api/pins')
+  .then(response => response.json())
+  .then(data => console.log(data));
+
+// Modifier une pin
+fetch('/api/pins', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({
+    pin: 2,
+    type: 'button',
+    midiChannel: 1,
+    midiNote: 60
+  })
+});
 ```
 
-4) Vérifier les adresses IP (AP et STA):
-- Moniteur série: l’exemple affiche périodiquement les IP.
-- HTTP: `GET /api/ip` renvoie un JSON avec les IP AP et STA, par ex:
-```json
-{"ap":"192.168.4.1","sta":"192.168.1.50"}
-```
+## Développement
 
-Conseils:
-- Commencez avec AP seul (accès garanti à `192.168.4.1`), puis ajoutez la STA.
-- En STA, l’IP peut être `0.0.0.0` tant que la connexion n’est pas établie.
+### Compilation
 
-## Navigateurs (Chrome/Brave vs Firefox)
-- Chrome/Brave peuvent bloquer l’accès HTTP non‑sécurisé à des IP locales (ou appliquer des politiques strictes) → la page peut être inaccessible alors que le ping répond.
-- Recommandation: utiliser **Firefox** pour un accès direct par IP locale.
-- Alternatives:
-  - mDNS: accéder via `http://esp32server.local/` (macOS/Windows OK; Linux nécessite `avahi-daemon`).
-  - Dans Brave/Chrome: désactiver temporairement Shields/“Insecure content” pour l’IP concernée (paramètres du site).
-  - Utiliser l’AP `http://192.168.4.1/` pour la configuration initiale, puis repasser en STA.
-
-## OTA (mise à jour de firmware par WiFi)
-1. Compiler et exporter le binaire (`.bin`) dans l’IDE: Croquis > Exporter les binaires compilés.
-2. Envoyer le binaire à l’ESP32 (carte en AP, IP par défaut `192.168.4.1`):
-   - macOS/Linux:
-     ```bash
-     curl -X POST --data-binary @firmware.bin http://192.168.4.1/update
-     ```
-   - Windows (PowerShell):
-     ```powershell
-     Invoke-WebRequest -Uri http://192.168.4.1/update -Method POST -InFile "C:\\chemin\\firmware.bin" -ContentType application/octet-stream
-     ```
-3. La carte renvoie `204` et redémarre sur le nouveau firmware.
-
-Conseil: gardez un firmware qui inclut l’endpoint `/update` pour pouvoir ré‑flasher à distance.
-
-## Compatibilité cartes
-- ESP32‑C3: « ESP32C3 Dev Module »
-- ESP32‑S3: « ESP32S3 Dev Module »
-
-## Rôles et messages RTP‑MIDI / OSC
-
-### Potentiomètre (A0–A3) [émission]
-- CC: CC# configurable; canal.
-- Pitch Bend: plage standard; canal.
-- Aftertouch (Channel): 0–127; canal.
-- Note + vélocité (note fixe): note configurable; vélocité issue du potard; canal.
-- Note (balayage): note min/max; vélocité fixe; envoi seulement si la note change; canal.
-
-### Bouton (D0..D6) [émission]
-- Note (On/Off): note configurable; canal; vélocité configurable.
-- CC (0/127): CC# configurable; canal; valeurs ON/OFF configurables.
-- Program Change: PC configurable; canal.
-- Clock: impulsion → tick 24 ppq; pas de canal.
-- Tap Tempo: impulsions → calcul BPM; envoi Clock (Start/Stop/Continue) selon logique; pas de canal.
-
-### LED (D7–D10) [réception]
-- Mode LED On/Off (suivi MIDI/OSC selon config).
-- Mode LED PWM (intensité via CC ou vélocité de note selon mapping).
-
-Notes:
-- Clock et Tap Tempo n’ont pas de canal MIDI.
-- Les réglages sont spécifiques à chaque rôle.
-
-## Dépendances
-- Core ESP32 (Espressif Systems)
-- Bibliothèques: « ESP Async WebServer », « AsyncTCP »
-- Déclarées aussi dans `library.properties` (clé `depends`) pour le Library Manager.
-
-## Publication au Library Manager (optionnel)
-- Préparer un dépôt public (GitHub) avec `library.properties`, `src/`, `examples/`.
-- Versionner (tags sémantiques: v0.0.1, v0.0.2, …).
-- Soumettre la librairie au registre: dépôt `arduino/library-registry` (ouvrir une issue avec l’URL du repo).
-- Après intégration, l’IDE proposera l’installation automatique des dépendances.
-
-## UI HTML externe, injectée et minifiée (idée)
-- Maintenir la page UI en dehors du C++ (ex: `web/index.html`).
-- Un script de build transforme ce HTML en chaîne C++ compacte pour `ui_index.cpp`:
-  - supprime commentaires, logs/debug, espaces inutiles/minifie
-  - échappe correctement les guillemets et backticks
-  - génère un header/source (ex: `ui_index.h/.cpp`) avec `const char INDEX_HTML[] PROGMEM = R"(... )";`
-
-### Workflow de développement UI
-
-**Structure des fichiers** :
-- `web/index.html` : Interface utilisateur complète (HTML, CSS, JavaScript)
-- `src/ui_index.cpp` : Version minifiée injectée dans le firmware
-- `scripts/minify_safe.sh` : Script de minification automatique
-
-**Workflow** :
-1. **Modifier l'interface** : Éditer `web/index.html`
-2. **Minifier et injecter** : `./scripts/minify_safe.sh`
-3. **Compiler** : Le firmware utilise la version minifiée
-
-**Minification automatique** :
 ```bash
-# Minifier l'interface
+# Installation des dépendances
+./scripts/install_deps.sh
+
+# Compilation
+arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32C3 examples/esp32server_basic/esp32server_basic.ino
+```
+
+### Tests
+
+```bash
+# Tests de l'interface web
+./scripts/minify_test.sh
+
+# Tests de compilation
+arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32C3 examples/esp32server_basic/esp32server_basic.ino
+```
+
+## Bugs connus et limitations
+
+### 🐛 Écho MIDI RTP-MIDI
+
+**Problème** : L'ESP32 retransmet les messages MIDI reçus, créant des boucles potentielles.
+
+**Impact** : 
+- Boucles MIDI dans le DAW (ex: CC7 → LED → CC7 → LED...)
+- Obligation de router sur un autre contrôleur pour éviter la boucle
+- Workflow de contrôle dégradé
+
+**Workaround** : 
+- Router le contrôleur MIDI sur un autre numéro dans le DAW
+- Utiliser des délais dans le routage DAW
+- Éviter les connexions directes CC → LED
+
+**Status** : Bug connu, investigation en cours. L'écho semble provenir de la bibliothèque AppleMIDI ou du protocole RTP-MIDI lui-même.
+
+### 🔧 Limitations actuelles
+
+- **OSC** : Non implémenté (en développement)
+- **USB-MIDI** : Non implémenté (en développement)  
+- **ESP32-S3** : Interface web à adapter
+- **Touch pins** : Support ESP32-S3 en développement
+- **Debug** : Logs limités (en développement)
+
+## Roadmap
+
+### 🚀 Fonctionnalités en développement
+
+- **OSC** : Support Open Sound Control
+- **USB-MIDI** : Connexion USB directe
+- **ESP32-S3** : Support complet de l'ESP32-S3
+- **Touch pins** : Support des touch pins ESP32-S3
+- **Debug avancé** : Logs détaillés et monitoring
+- **Interface améliorée** : Support multi-cartes
+
+### 📋 Prochaines versions
+
+- **v0.2.0** : Support OSC
+- **v0.3.0** : USB-MIDI
+- **v0.4.0** : ESP32-S3 complet + Touch pins
+- **v0.5.0** : Debug et monitoring
+
+## Optimisation de l'interface web
+
+### Minification automatique
+
+L'interface web est automatiquement minifiée pour optimiser l'utilisation de la mémoire flash :
+
+```bash
+# Minification de l'interface
 ./scripts/minify_safe.sh
 
-# Résultat
-# 📊 Résultats:
-#   Taille HTML:      46589 bytes
-#   Taille C++:       31110 bytes
-#   Réduction:        31%
+# Test de la minification
+./scripts/minify_test.sh
 ```
 
 **Optimisations appliquées** :
@@ -216,18 +267,36 @@ Notes:
 1. **Éditer** `web/index.html` avec votre éditeur préféré
 2. **Tester** les modifications dans un navigateur (fichier local)
 3. **Minifier** avec `./scripts/minify_safe.sh`
-4. **Compiler** le firmware pour tester
+4. **Synchroniser** la bibliothèque : `cp src/ui_index.cpp ~/Documents/Arduino/libraries/esp32server/src/`
+5. **Compiler** le firmware pour tester : `arduino-cli compile --fqbn esp32:esp32:esp32c3 examples/esp32server_basic/esp32server_basic.ino`
 
 **Structure de l'interface** :
 - **HTML** : Structure des onglets et formulaires
 - **CSS** : Styles pour l'interface ESP32-C3 et les pins
 - **JavaScript** : Logique des onglets, API calls, gestion des pins
 
+**Workflow de développement complet** :
+```bash
+# 1. Éditer l'interface
+# Modifier web/index.html avec votre éditeur
+
+# 2. Minifier et intégrer
+./scripts/minify_safe.sh
+
+# 3. Synchroniser la bibliothèque
+cp src/ui_index.cpp ~/Documents/Arduino/libraries/esp32server/src/
+
+# 4. Tester la compilation
+arduino-cli compile --fqbn esp32:esp32:esp32c3 examples/esp32server_basic/esp32server_basic.ino
+```
+
 **Conseils de développement** :
 - **Utilisez des commentaires** `/* */` en JavaScript (supprimés automatiquement)
 - **Évitez les commentaires** `//` (peuvent casser la minification)
 - **Testez** toujours après minification
 - **Sauvegardez** `web/index.html` avant modifications importantes
+- **Éditez toujours** `web/index.html` (pas `src/ui_index.cpp` directement)
 
 ---
-Questions, retours ou idées d’amélioration: issues bienvenues.
+
+Questions, retours ou idées d'amélioration: issues bienvenues.
