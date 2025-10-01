@@ -12,15 +12,15 @@ extern "C" void esp32server_requestReloadPins();
 
 // Fonction pour obtenir la configuration par défaut d'une pin
 String getDefaultConfig(String pin) {
-    if (pin == "A0") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":1,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "A1") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":2,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "A2") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":3,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "A3") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":4,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "A0") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":1,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "A1") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":2,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "A2") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":3,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "A3") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":4,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
     
-    if (pin == "D0") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":60,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "D1") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":61,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "D2") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":62,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "D3") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":63,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D0") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":60,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D1") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":61,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D2") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":62,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D3") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":63,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
     
     // LEDs spéciales
     if (pin == "D7") return "{\"role\":\"LED\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":36,\"rtpChan\":1,\"ledMode\":\"onoff\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
@@ -92,10 +92,10 @@ void sendRtpStatus(AsyncWebSocket& ws) {
 }
 
 void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
-    Serial.println("[WebAPI] Starting setup...");
+    // Serial.println("[WebAPI] Starting setup...");
     
     // Page principale
-    Serial.println("[WebAPI] Setting up main page...");
+    // Serial.println("[WebAPI] Setting up main page...");
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
         request->send(200, "text/html", INDEX_HTML);
     });
@@ -280,11 +280,22 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         if(request->hasParam("target", true) && request->hasParam("port", true)){
             String target = request->getParam("target", true)->value();
             int port = request->getParam("port", true)->value().toInt();
+            
+            // Nouveaux paramètres OSC
+            String ip = request->hasParam("ip", true) ? request->getParam("ip", true)->value() : "";
+            String broadcast = request->hasParam("broadcast", true) ? request->getParam("broadcast", true)->value() : "false";
+            
             // Sauvegarder en NVS
             preferences.begin("esp32server", false);
             preferences.putString("osc_target", target);
             preferences.putInt("osc_port", port);
+            if(ip.length() > 0) preferences.putString("osc_ip", ip);
+            preferences.putBool("osc_broadcast", broadcast == "true");
             preferences.end();
+            
+            Serial.printf("[WebAPI/OSC] Config: target=%s, port=%d, ip=%s, broadcast=%s\n", 
+                         target.c_str(), port, ip.c_str(), broadcast.c_str());
+            
             request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
             request->send(400, "application/json", "{\"error\":\"target and port required\"}");
@@ -296,10 +307,14 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         preferences.begin("esp32server", false);
         String target = preferences.getString("osc_target", "sta");
         int port = preferences.getInt("osc_port", 8000);
+        String ip = preferences.getString("osc_ip", "");
+        bool broadcast = preferences.getBool("osc_broadcast", false);
         preferences.end();
         String json = "{";
         json += "\"target\":\"" + target + "\",";
         json += "\"port\":" + String(port);
+        if(ip.length() > 0) json += ",\"ip\":\"" + ip + "\"";
+        json += ",\"broadcast\":" + String(broadcast ? "true" : "false");
         json += "}";
         request->send(200, "application/json", json);
     });
@@ -424,7 +439,19 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         String rtpCcOn    = getOpt("rtpCcOn");
         String rtpCcOff   = getOpt("rtpCcOff");
         String rtpVel     = getOpt("rtpVel");
+        String rtpCcMin   = getOpt("rtpCcMin");
+        String rtpCcMax   = getOpt("rtpCcMax");
+        String rtpNoteMin = getOpt("rtpNoteMin");
+        String rtpNoteMax = getOpt("rtpNoteMax");
+        String rtpNoteVelFix = getOpt("rtpNoteVelFix");
         String ledMode    = getOpt("ledMode");
+        String btnMode    = getOpt("btnMode");
+        String potFilter  = getOpt("potFilter");
+        String oscEnabled = getOpt("oscEnabled");
+        String oscAddress = getOpt("oscAddress");
+        String oscFormat  = getOpt("oscFormat");
+        String dbgEnabled = getOpt("dbgEnabled");
+        String dbgHeader  = getOpt("dbgHeader");
 
         // Construire un JSON compact à stocker
         String json = "{";
@@ -439,7 +466,19 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         if(rtpCcOn.length())    json += ",\"rtpCcOn\":" + rtpCcOn;
         if(rtpCcOff.length())   json += ",\"rtpCcOff\":" + rtpCcOff;
         if(rtpVel.length())     json += ",\"rtpVel\":" + rtpVel;
+        if(rtpCcMin.length())   json += ",\"rtpCcMin\":" + rtpCcMin;
+        if(rtpCcMax.length())   json += ",\"rtpCcMax\":" + rtpCcMax;
+        if(rtpNoteMin.length()) json += ",\"rtpNoteMin\":" + rtpNoteMin;
+        if(rtpNoteMax.length()) json += ",\"rtpNoteMax\":" + rtpNoteMax;
+        if(rtpNoteVelFix.length()) json += ",\"rtpNoteVelFix\":" + rtpNoteVelFix;
         if(ledMode.length())    json += ",\"ledMode\":\"" + ledMode + "\"";
+        if(btnMode.length())    json += ",\"btnMode\":\"" + btnMode + "\"";
+        if(potFilter.length())  json += ",\"potFilter\":\"" + potFilter + "\"";
+        if(oscEnabled.length()) json += ",\"oscEnabled\":" + String((oscEnabled=="true")?"true":"false");
+        if(oscAddress.length()) json += ",\"oscAddress\":\"" + oscAddress + "\"";
+        if(oscFormat.length())  json += ",\"oscFormat\":\"" + oscFormat + "\"";
+        if(dbgEnabled.length()) json += ",\"dbgEnabled\":" + String((dbgEnabled=="true")?"true":"false");
+        if(dbgHeader.length())  json += ",\"dbgHeader\":\"" + dbgHeader + "\"";
         json += "}";
 
         // Stocker en NVS sous une clé par pin
@@ -455,11 +494,69 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         }
         else   request->send(500, "application/json", "{\"error\":\"store failed\"}");
     });
+
+    // API - Récupérer toutes les pins configurées
+    server.on("/api/pins/list", HTTP_GET, [](AsyncWebServerRequest *request){
+        preferences.begin("esp32server", false);
+        
+        String json = "{";
+        json += "\"pins\":[";
+        
+        bool first = true;
+        // Parcourir toutes les clés de pins stockées
+        for(int i = 0; i < 50; i++) { // Limite raisonnable
+            String key = String("pin_") + i;
+            if(preferences.isKey(key.c_str())) {
+                String pinData = preferences.getString(key.c_str(), "");
+                if(pinData.length() > 0) {
+                    if(!first) json += ",";
+                    json += pinData;
+                    first = false;
+                }
+            }
+        }
+        
+        // Vérifier aussi les pins nommées (A0, D0, etc.)
+        String pinNames[] = {"A0","A1","A2","A3","D0","D1","D2","D3","D4","D5","D6","D7","D8","D9","D10","SDA","SCL","MOSI","MISO","SCK","TX","RX","I2C","SPI","UART"};
+        for(String pinName : pinNames) {
+            String key = String("pin_") + pinName;
+            if(preferences.isKey(key.c_str())) {
+                String pinData = preferences.getString(key.c_str(), "");
+                if(pinData.length() > 0) {
+                    if(!first) json += ",";
+                    json += pinData;
+                    first = false;
+                }
+            }
+        }
+        
+        json += "]";
+        json += "}";
+        
+        preferences.end();
+        request->send(200, "application/json", json);
+    });
     
     // WebSocket
-    Serial.println("[WebAPI] Setting up WebSocket...");
-    ws.onEvent(onWsEvent);
+    // Serial.println("[WebAPI] Setting up WebSocket...");
+    ws.onEvent([](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
+        if (type == WS_EVT_CONNECT) {
+            Serial.printf("[WebSocket] Client connected: %u\n", client->id());
+        } else if (type == WS_EVT_DISCONNECT) {
+            Serial.printf("[WebSocket] Client disconnected: %u\n", client->id());
+        } else if (type == WS_EVT_DATA) {
+            String message = String((char*)data, len);
+            Serial.printf("[WebSocket] Received: %s\n", message.c_str());
+            
+            // Traiter les messages PIN_CLICKED
+            if (message.startsWith("PIN_CLICKED:")) {
+                String pin = message.substring(12);
+                Serial.printf("[WebSocket] Pin clicked: %s\n", pin.c_str());
+                // Ici on pourrait déclencher la configuration de la pin
+            }
+        }
+    });
     server.addHandler(&ws);
     
-    Serial.println("[WebAPI] Setup complete!");
+    // Serial.println("[WebAPI] Setup complete!");
 }

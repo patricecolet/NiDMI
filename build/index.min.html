@@ -56,9 +56,48 @@
  
  async function loadCaps(){ const r=await fetch('/api/pins/caps'); caps=await r.json(); drawBoard(); }
  
- // Gestionnaires de formulaires
+ async function loadConfiguredPins(){ 
+ try {
+ const r=await fetch('/api/pins/list'); 
+ const d=await r.json(); 
+ if(d.pins && Array.isArray(d.pins)) {
+ d.pins.forEach(pinData => {
+ if(pinData.pinLabel && pinData.role) {
+ pcfg[pinData.pinLabel] = pinData;
+ }
+ });
+ updatePinsList(); 
+ updateBusVisuals(); 
+ }
+ } catch(err) {
+ console.log('Erreur chargement pins:', err);
+ }
+ }
+ 
+ 
  function initForms(){
- // Formulaire mDNS
+ 
+ const oscTarget = $('#oscTarget');
+ const oscIpRow = $('#oscIpRow');
+ const oscBroadcast = $('#oscBroadcast');
+ 
+ function updateOscForm() {
+ const target = oscTarget.value;
+ if (target === 'ip') {
+ oscIpRow.style.display = 'block';
+ oscBroadcast.checked = false;
+ } else {
+ oscIpRow.style.display = 'none';
+ oscBroadcast.checked = true;
+ }
+ }
+ 
+ if (oscTarget) {
+ oscTarget.addEventListener('change', updateOscForm);
+ updateOscForm();
+ }
+ 
+ 
  $('#mdns').addEventListener('submit', async (e) => {
  e.preventDefault();
  const formData = new FormData();
@@ -74,7 +113,7 @@
  }
  });
  
- // Formulaire STA
+ 
  $('#sta').addEventListener('submit', async (e) => {
  e.preventDefault();
  const formData = new FormData();
@@ -94,12 +133,24 @@
  }
  });
  
- // Formulaire OSC
+ 
  $('#osc').addEventListener('submit', async (e) => {
  e.preventDefault();
  const formData = new FormData();
- formData.append('target', $('#oscTarget').value);
+ const target = $('#oscTarget').value;
+ formData.append('target', target);
  formData.append('port', $('#oscPort').value);
+ 
+ 
+ if (target === 'ip' && $('#oscIp').value) {
+ formData.append('ip', $('#oscIp').value);
+ }
+ 
+ 
+ if ($('#oscBroadcast')) {
+ formData.append('broadcast', $('#oscBroadcast').checked ? 'true' : 'false');
+ }
+ 
  try {
  const r = await fetch('/api/osc', { method: 'POST', body: formData });
  const d = await r.json();
@@ -141,14 +192,14 @@
  function updatePinsList(){ const pl=$('#pinsList'); if(!pl) return; pl.innerHTML=''; Object.keys(pcfg).forEach(lbl=>{ const cfg=pcfg[lbl]; if(!cfg||!cfg.role) return; const it=document.createElement('div'); it.className=`item ${pType(lbl)}`; it.innerHTML=`<span class="lbl">${lbl}</span><span class="role">${cfg.role}</span><span class="stat">${stat(cfg, lbl)}</span><button class="del-btn">×</button>`; it.onclick=()=>{ const r=prect[lbl]; if(r) r.dispatchEvent(new Event('click')); }; const delBtn=it.querySelector('.del-btn'); delBtn.onclick=(e)=>{ e.stopPropagation(); delete pcfg[lbl]; updatePinsList(); updateBusVisuals(); }; pl.appendChild(it); }); }
  
  function updateBusVisuals(){
- // Réinitialiser tous les états visuels
+ 
  Object.keys(prect).forEach(lbl=>{
  const r = prect[lbl];
  if(!r) return;
  r.classList.remove('busDisabled');
  });
  
- // I2C : griser SDA, SCL, D4, D5 quand ligne I2C existe
+ 
  if(pcfg['I2C']){
  ['SDA','SCL','D4','D5'].forEach(lbl=>{
  const r = prect[lbl];
@@ -157,7 +208,7 @@
  });
  }
  
- // SPI : griser MOSI, MISO, SCK, D8, D9, D10 quand ligne SPI existe
+ 
  if(pcfg['SPI']){
  ['MOSI','MISO','SCK','D8','D9','D10'].forEach(lbl=>{
  const r = prect[lbl];
@@ -243,60 +294,60 @@
 
  function updFunc(lbl){ const sel=$('#funcSelect'); if(!sel) return; const isI2C=(lbl==='SDA'||lbl==='SCL'); const isSPI=(lbl==='MOSI'||lbl==='MISO'||lbl==='SCK'); const isUART=(lbl==='TX'||lbl==='RX'); if(/^A\d+$/.test(lbl)){ setOptions(sel,['Potentiomètre','Analog in (raw)'],0); } else if(/^D\d+$/.test(lbl) && !isI2C && !isSPI && !isUART){ setOptions(sel,['Bouton','LED','Digital in/out'],0); } else if(isI2C){ setOptions(sel,['I2C'],0); } else if(isSPI){ setOptions(sel,['SPI'],0); } else if(isUART){ setOptions(sel,['UART'],0); } else { setOptions(sel,[],0); } showRoleCards(sel.value||''); updateRtpForRole(sel.value||''); sel.onchange=()=>{ showRoleCards(sel.value||''); updateRtpForRole(sel.value||''); if(cur){ pcfg[cur]=readCfg(); updatePinsList(); updateBusVisuals(); } }; }
  
- // WebSocket pour synchronisation avec C++
+ 
  let websocket = null;
  
- // Fonction pour appliquer la logique de remplacement
+ 
  function applyPinReplacementLogic(pin) {
- // Pins analogiques
+ 
  if (pin.startsWith('A')) {
- // Supprimer le pin digital correspondant seulement s'il existe
+ 
  const dLabel = pin.replace('A', 'D');
  if (pcfg[dLabel]) delete pcfg[dLabel];
  }
- // Pins digitales normales
+ 
  else if (['D0','D1','D2','D3'].includes(pin)) {
- // Supprimer le pin analogique correspondant seulement s'il existe
+ 
  const aLabel = pin.replace('D', 'A');
  if (pcfg[aLabel]) delete pcfg[aLabel];
  }
- // Bus I2C - griser SDA,SCL,D4,D5 et supprimer les configs individuelles
+ 
  else if (['SDA','SCL'].includes(pin)) {
- // Supprimer les pins digitales individuelles pour libérer D4,D5
+ 
  if (pcfg['D4']) delete pcfg['D4'];
  if (pcfg['D5']) delete pcfg['D5'];
- // Supprimer les configs SDA/SCL individuelles
+ 
  if (pcfg['SDA']) delete pcfg['SDA'];
  if (pcfg['SCL']) delete pcfg['SCL'];
  }
- // Bus SPI - griser MOSI,MISO,SCK,D8,D9,D10 et supprimer les configs individuelles
+ 
  else if (['MOSI','MISO','SCK'].includes(pin)) {
- // Supprimer les pins digitales individuelles pour libérer D8,D9,D10
+ 
  if (pcfg['D8']) delete pcfg['D8'];
  if (pcfg['D9']) delete pcfg['D9'];
  if (pcfg['D10']) delete pcfg['D10'];
- // Supprimer les configs MOSI/MISO/SCK individuelles
+ 
  if (pcfg['MOSI']) delete pcfg['MOSI'];
  if (pcfg['MISO']) delete pcfg['MISO'];
  if (pcfg['SCK']) delete pcfg['SCK'];
  }
- // UART TX
+ 
  else if (pin === 'TX') {
  if (pcfg['D6']) delete pcfg['D6'];
  }
- // UART RX
+ 
  else if (pin === 'RX') {
  if (pcfg['D7']) delete pcfg['D7'];
  }
- // Pins digitales de bus I2C
+ 
  else if (['D4','D5'].includes(pin)) {
  if (pcfg['I2C']) delete pcfg['I2C'];
  }
- // Pins digitales de bus SPI
+ 
  else if (['D8','D9','D10'].includes(pin)) {
  if (pcfg['SPI']) delete pcfg['SPI'];
  }
- // Pins digitales UART - remplacement simple
+ 
  else if (pin === 'D6') {
  if (pcfg['TX']) delete pcfg['TX'];
  }
@@ -322,10 +373,10 @@
  const pin = parts[1];
  const config = JSON.parse(parts.slice(2).join(':'));
  
- // Appliquer la logique de remplacement AVANT d'ajouter la config
+ 
  applyPinReplacementLogic(pin);
  
- // Appliquer la configuration reçue avec les bonnes clés
+ 
  if (['SDA','SCL'].includes(pin) && config.role === 'I2C') {
  pcfg['I2C'] = config; // Créer clé I2C pour le grisage
  } else if (['MOSI','MISO','SCK'].includes(pin) && config.role === 'SPI') {
@@ -336,7 +387,7 @@
  updatePinsList();
  updateBusVisuals();
  
- // Si c'est la pin actuellement sélectionnée, mettre à jour l'interface
+ 
  if (cur === pin) {
  applyCfg(config);
  }
@@ -346,79 +397,79 @@
  
  websocket.onclose = function() {
  console.log('WebSocket disconnected');
- // Tentative de reconnexion après 3 secondes
+ 
  setTimeout(initWebSocket, 3000);
  };
  }
  
  function handlePinClick(label){
- // Vérifier si la pin est bloquée
+ 
  if(prect[label] && prect[label].classList.contains('busDisabled')){
  return;
  }
  
- // Envoyer message WebSocket au C++
+ 
  if (websocket && websocket.readyState === WebSocket.OPEN) {
  websocket.send(`PIN_CLICKED:${label}`);
  } else {
- // Fallback: logique locale si WebSocket pas disponible
+ 
  handlePinClickLocal(label);
  }
  }
  
  function handlePinClickLocal(label){
- // Pins analogiques
+ 
  if(label.startsWith('A')){
  pcfg[label] = {role: 'Potentiomètre', cfg: {}};
- // Supprimer le pin digital correspondant seulement s'il existe
+ 
  const dLabel = label.replace('A', 'D');
  if(pcfg[dLabel]) delete pcfg[dLabel];
  }
- // Pins digitales normales
+ 
  else if(['D0','D1','D2','D3'].includes(label)){
  pcfg[label] = {role: 'Bouton', cfg: {}};
- // Supprimer le pin analogique correspondant seulement s'il existe
+ 
  const aLabel = label.replace('D', 'A');
  if(pcfg[aLabel]) delete pcfg[aLabel];
  }
- // Bus I2C
+ 
  else if(['SDA','SCL'].includes(label)){
  pcfg['I2C'] = {role: 'I2C', cfg: {}};
- // Supprimer les pins digitales seulement si elles existent
+ 
  if(pcfg['D4']) delete pcfg['D4'];
  if(pcfg['D5']) delete pcfg['D5'];
  }
- // Bus SPI
+ 
  else if(['MOSI','MISO','SCK'].includes(label)){
  pcfg['SPI'] = {role: 'SPI', cfg: {}};
- // Supprimer les pins digitales seulement si elles existent
+ 
  if(pcfg['D8']) delete pcfg['D8'];
  if(pcfg['D9']) delete pcfg['D9'];
  if(pcfg['D10']) delete pcfg['D10'];
  }
- // UART TX
+ 
  else if(label === 'TX'){
  pcfg['TX'] = {role: 'UART', cfg: {}};
  if(pcfg['D6']) delete pcfg['D6'];
  }
- // UART RX
+ 
  else if(label === 'RX'){
  pcfg['RX'] = {role: 'UART', cfg: {}};
  if(pcfg['D7']) delete pcfg['D7'];
  }
- // Pins digitales de bus I2C
+ 
  else if(['D4','D5'].includes(label)){
  if(pcfg['I2C']) delete pcfg['I2C'];
  pcfg[label] = {role: 'Bouton', cfg: {}};
  }
- // Pins digitales de bus SPI
+ 
  else if(['D8','D9','D10'].includes(label)){
  if(pcfg['SPI']) delete pcfg['SPI'];
  pcfg[label] = {role: 'Bouton', cfg: {}};
  }
- // Pins digitales UART (indépendantes)
+ 
  else if(['D6','D7'].includes(label)){
- // D6 supprime TX, D7 supprime RX
+ 
  if(label === 'D6' && pcfg['TX']) delete pcfg['TX'];
  if(label === 'D7' && pcfg['RX']) delete pcfg['RX'];
  pcfg[label] = {role: 'Bouton', cfg: {}};
@@ -428,10 +479,10 @@
  updateBusVisuals();
  }
  
- function readCfg(){ const c={}; c.role=$('#funcSelect')?.value||''; c.btnMode=$('#btnMode')?.value||''; c.ledMode=$('#ledMode')?.value||''; c.potFilter=$('#potFilter')?.value||''; c.rtpEnabled=!!$('#rtpEnabled2')?.checked; c.rtpType=$('#rtpMsgType')?.value||''; c.rtpNote=$('#rtpNote')?.value||''; c.rtpCc=$('#rtpCc')?.value||''; c.rtpPc=$('#rtpPc')?.value||''; c.rtpChan=$('#rtpChan')?.value||''; c.rtpCcOn=$('#rtpCcOn')?.value||''; c.rtpCcOff=$('#rtpCcOff')?.value||''; c.rtpVel=$('#rtpVel')?.value||''; c.rtpCcMin=$('#rtpCcMin')?.value||''; c.rtpCcMax=$('#rtpCcMax')?.value||''; c.rtpNoteMin=$('#rtpNoteMin')?.value||''; c.rtpNoteMax=$('#rtpNoteMax')?.value||''; c.rtpNoteVelFix=$('#rtpNoteVelFix')?.value||''; c.oscEnabled=!!$('#oscEnabled2')?.checked; c.oscAddress=$('#oscAddress')?.value||''; c.dbgEnabled=!!$('#dbgEnabled')?.checked; c.dbgHeader=$('#dbgHeader')?.value||''; return c; }
- function applyCfg(c){ if(!c) return; const setV=(id,v)=>{ const el=$(id); if(el&&v!=null) el.value=v; }; const setC=(id,b)=>{ const el=$(id); if(el) el.checked=!!b; }; setV('funcSelect',c.role); showRoleCards(c.role); updateRtpForRole(c.role); setV('btnMode',c.btnMode); setV('ledMode',c.ledMode); setV('potFilter',c.potFilter); setC('rtpEnabled2',c.rtpEnabled); setV('rtpMsgType',c.rtpType); setV('rtpNote',c.rtpNote); setV('rtpCc',c.rtpCc); setV('rtpPc',c.rtpPc); setV('rtpChan',c.rtpChan); setV('rtpCcOn',c.rtpCcOn); setV('rtpCcOff',c.rtpCcOff); setV('rtpVel',c.rtpVel); setV('rtpCcMin',c.rtpCcMin); setV('rtpCcMax',c.rtpCcMax); setV('rtpNoteMin',c.rtpNoteMin); setV('rtpNoteMax',c.rtpNoteMax); setV('rtpNoteVelFix',c.rtpNoteVelFix); setC('oscEnabled2',c.oscEnabled); setV('oscAddress',c.oscAddress); setC('dbgEnabled',c.dbgEnabled); setV('dbgHeader',c.dbgHeader); updateRtpParamsVisibility(); }
+ function readCfg(){ const c={}; c.role=$('#funcSelect')?.value||''; c.btnMode=$('#btnMode')?.value||''; c.ledMode=$('#ledMode')?.value||''; c.potFilter=$('#potFilter')?.value||''; c.rtpEnabled=!!$('#rtpEnabled2')?.checked; c.rtpType=$('#rtpMsgType')?.value||''; c.rtpNote=$('#rtpNote')?.value||''; c.rtpCc=$('#rtpCc')?.value||''; c.rtpPc=$('#rtpPc')?.value||''; c.rtpChan=$('#rtpChan')?.value||''; c.rtpCcOn=$('#rtpCcOn')?.value||''; c.rtpCcOff=$('#rtpCcOff')?.value||''; c.rtpVel=$('#rtpVel')?.value||''; c.rtpCcMin=$('#rtpCcMin')?.value||''; c.rtpCcMax=$('#rtpCcMax')?.value||''; c.rtpNoteMin=$('#rtpNoteMin')?.value||''; c.rtpNoteMax=$('#rtpNoteMax')?.value||''; c.rtpNoteVelFix=$('#rtpNoteVelFix')?.value||''; c.oscEnabled=!!$('#oscEnabled2')?.checked; c.oscAddress=$('#oscAddress')?.value||''; c.oscFormat=$('#oscFormat')?.value||'float'; c.dbgEnabled=!!$('#dbgEnabled')?.checked; c.dbgHeader=$('#dbgHeader')?.value||''; return c; }
+ function applyCfg(c){ if(!c) return; const setV=(id,v)=>{ const el=$(id); if(el&&v!=null) el.value=v; }; const setC=(id,b)=>{ const el=$(id); if(el) el.checked=!!b; }; setV('funcSelect',c.role); showRoleCards(c.role); updateRtpForRole(c.role); setV('btnMode',c.btnMode); setV('ledMode',c.ledMode); setV('potFilter',c.potFilter); setC('rtpEnabled2',c.rtpEnabled); setV('rtpMsgType',c.rtpType); setV('rtpNote',c.rtpNote); setV('rtpCc',c.rtpCc); setV('rtpPc',c.rtpPc); setV('rtpChan',c.rtpChan); setV('rtpCcOn',c.rtpCcOn); setV('rtpCcOff',c.rtpCcOff); setV('rtpVel',c.rtpVel); setV('rtpCcMin',c.rtpCcMin); setV('rtpCcMax',c.rtpCcMax); setV('rtpNoteMin',c.rtpNoteMin); setV('rtpNoteMax',c.rtpNoteMax); setV('rtpNoteVelFix',c.rtpNoteVelFix); setC('oscEnabled2',c.oscEnabled); setV('oscAddress',c.oscAddress); setV('oscFormat',c.oscFormat); setC('dbgEnabled',c.dbgEnabled); setV('dbgHeader',c.dbgHeader); updateRtpParamsVisibility(); }
  
- async function saveAll(){ const msg=$('#saveAllMsg'); msg.textContent='Enregistrement...'; try{ const ps=Object.keys(pcfg).map(async lbl=>{ const c=pcfg[lbl]; if(!c||!c.role) return; const p=new URLSearchParams(); p.set('pinLabel',lbl); p.set('role',c.role); if(c.rtpEnabled) p.set('rtpEnabled','true'); if(c.rtpType) p.set('rtpType',c.rtpType); if(c.rtpNote) p.set('rtpNote',c.rtpNote); if(c.rtpCc) p.set('rtpCc',c.rtpCc); if(c.rtpChan) p.set('rtpChan',c.rtpChan); if(c.ledMode) p.set('ledMode',c.ledMode); return fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}); }); await Promise.all(ps); msg.textContent='Toutes les configurations enregistrées'; msg.style.color='#10b981'; }catch(e){ msg.textContent='Erreur lors de l\'enregistrement'; msg.style.color='#ef4444'; } }
+ async function saveAll(){ const msg=$('#saveAllMsg'); msg.textContent='Enregistrement...'; try{ const ps=Object.keys(pcfg).map(async lbl=>{ const c=pcfg[lbl]; if(!c||!c.role) return; const p=new URLSearchParams(); p.set('pinLabel',lbl); p.set('role',c.role); if(c.rtpEnabled) p.set('rtpEnabled','true'); if(c.rtpType) p.set('rtpType',c.rtpType); if(c.rtpNote) p.set('rtpNote',c.rtpNote); if(c.rtpCc) p.set('rtpCc',c.rtpCc); if(c.rtpPc) p.set('rtpPc',c.rtpPc); if(c.rtpChan) p.set('rtpChan',c.rtpChan); if(c.rtpCcOn) p.set('rtpCcOn',c.rtpCcOn); if(c.rtpCcOff) p.set('rtpCcOff',c.rtpCcOff); if(c.rtpVel) p.set('rtpVel',c.rtpVel); if(c.rtpCcMin) p.set('rtpCcMin',c.rtpCcMin); if(c.rtpCcMax) p.set('rtpCcMax',c.rtpCcMax); if(c.rtpNoteMin) p.set('rtpNoteMin',c.rtpNoteMin); if(c.rtpNoteMax) p.set('rtpNoteMax',c.rtpNoteMax); if(c.rtpNoteVelFix) p.set('rtpNoteVelFix',c.rtpNoteVelFix); if(c.ledMode) p.set('ledMode',c.ledMode); if(c.btnMode) p.set('btnMode',c.btnMode); if(c.potFilter) p.set('potFilter',c.potFilter); if(c.oscEnabled) p.set('oscEnabled','true'); if(c.oscAddress) p.set('oscAddress',c.oscAddress); if(c.oscFormat) p.set('oscFormat',c.oscFormat); if(c.dbgEnabled) p.set('dbgEnabled','true'); if(c.dbgHeader) p.set('dbgHeader',c.dbgHeader); return fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}); }); await Promise.all(ps); msg.textContent='Toutes les configurations enregistrées'; msg.style.color='#10b981'; }catch(e){ msg.textContent='Erreur lors de l\'enregistrement'; msg.style.color='#ef4444'; } }
  
  document.addEventListener('DOMContentLoaded', () => {
  initTabs();
@@ -440,10 +491,11 @@
  loadStatus();
  loadMdns();
  loadCaps();
+ loadConfiguredPins();
  setInterval(loadStatus, 5000);
  const btn=$('#saveAllBtn'); if(btn) btn.onclick=saveAll; 
  
- const fieldsToWatch=['funcSelect','btnMode','ledMode','potFilter','rtpEnabled2','rtpMsgType','rtpNote','rtpCc','rtpPc','rtpChan','rtpCcOn','rtpCcOff','rtpVel','rtpCcMin','rtpCcMax','rtpNoteMin','rtpNoteMax','rtpNoteVelFix','oscEnabled2','oscAddress','dbgEnabled','dbgHeader'];
+ const fieldsToWatch=['funcSelect','btnMode','ledMode','potFilter','rtpEnabled2','rtpMsgType','rtpNote','rtpCc','rtpPc','rtpChan','rtpCcOn','rtpCcOff','rtpVel','rtpCcMin','rtpCcMax','rtpNoteMin','rtpNoteMax','rtpNoteVelFix','oscEnabled2','oscAddress','oscFormat','dbgEnabled','dbgHeader'];
  fieldsToWatch.forEach(id=>{
  const el=document.getElementById(id);
  if(el){
@@ -479,7 +531,7 @@
  </div>
  <div class="p" id="panel-connection">
  <div class="f"><h3>Serveur</h3><form id="mdns"><div class="f"><label for="mdnsName">Nom du serveur</label><input type="text" id="mdnsName" placeholder="esp32rtpmidi" required><div class="hint"><small>Ce nom sera utilisé pour l'AP Wi‑Fi et http://nom.local</small></div></div><button type="submit" class="btn">Enregistrer</button><div class="hint" id="mdnsMsg"></div></form></div>
- <div class="f"><h3>OSC</h3><form id="osc"><div class="f"><label for="oscTarget">Destination</label><select id="oscTarget"><option value="ap">AP (192.168.4.1)</option><option value="sta" id="oscStaOption">STA</option></select></div><div class="f"><label for="oscPort">Port</label><input type="number" id="oscPort" value="8000" min="1024" max="65535" required></div><button type="submit" class="btn">Enregistrer</button><div class="hint" id="oscMsg"></div></form></div>
+ <div class="f"><h3>OSC</h3><form id="osc"><div class="f"><label for="oscTarget">Destination</label><select id="oscTarget"><option value="ip">IP spécifique</option><option value="ap">Broadcast AP (192.168.4.255)</option><option value="sta" id="oscStaOption">Broadcast STA</option></select></div><div class="f" id="oscIpRow"><label for="oscIp">Adresse IP</label><input type="text" id="oscIp" placeholder="192.168.1.100" pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"></div><div class="f"><label for="oscPort">Port</label><input type="number" id="oscPort" value="8000" min="1024" max="65535" required></div><div class="f"><label><input type="checkbox" id="oscBroadcast"> Mode broadcast</label><div class="hint">Diffusion vers tous les appareils du réseau</div></div><button type="submit" class="btn">Enregistrer</button><div class="hint" id="oscMsg"></div></form></div>
  <div class="f"><h3>Wi‑Fi Station</h3><form id="sta"><div class="f"><label for="ssid">SSID</label><input type="text" id="ssid" placeholder="Nom du réseau" required></div><div class="f"><label for="pass">Mot de passe</label><input type="password" id="pass" placeholder="Mot de passe"></div><button type="submit" class="btn">Connecter</button><div class="hint" id="staMsg"></div></form></div>
  </div>
  <div class="p" id="panel-pins">
@@ -511,6 +563,7 @@
  </div>
  <h4>OSC</h4>
  <div class="r switch"><input type="checkbox" id="oscEnabled2"><label for="oscEnabled2">Activer</label><label>Addr:</label><input type="text" id="oscAddress" placeholder="/ctl"></div>
+ <div class="r"><label>Format:</label><select id="oscFormat"><option value="float">Float (0-1)</option><option value="midi">MIDI (3 int)</option></select></div>
  <h4>Debug</h4>
  <div class="r switch"><input type="checkbox" id="dbgEnabled"><label for="dbgEnabled">Activer</label><label>Hdr:</label><input type="text" id="dbgHeader" placeholder="[DBG]"></div>
  </div></div>

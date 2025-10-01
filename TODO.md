@@ -13,14 +13,18 @@
   - ✅ Configuration OSC/Debug par défaut
   - ✅ Compatible avec système NVS existant
 
-### **2. OSC (Open Sound Control)**
-- **Status** : 🔄 En développement
+### **2. OSC (Open Sound Control)** ✅ **TERMINÉ**
+- **Status** : ✅ Implémenté
 - **Objectif** : Support complet OSC pour communication réseau
 - **Fonctionnalités** :
-  - Envoi OSC (CC, Note, Program Change)
-  - Réception OSC (contrôle des LEDs)
+  - ✅ Envoi OSC (CC, Note, Program Change)
+  - ✅ Support broadcast (AP/STA) et IP spécifique
+  - ✅ Format OSC configurable : Float (0-1) ou MIDI (3 int)
+  - ✅ Configuration par pin avec adresses personnalisées
+  - ✅ Interface web complète pour configuration OSC
+  - ✅ Réception OSC (contrôle des LEDs)
   - ✅ Configuration via interface web (intégré WebSocket)
-  - Mapping OSC ↔ MIDI
+  - ✅ Mapping OSC ↔ MIDI
 
 ### **3. DEBUG (Système de Logs)**
 - **Status** : 🔄 En développement  
@@ -78,9 +82,41 @@
 - **Touch pins** : Support ESP32-S3
 - **Interface améliorée** : Multi-cartes
 
-## 🐛 **Bugs Connus**
+## 🐛 **Bugs Connus & À Corriger**
 
-### **Écho MIDI RTP-MIDI**
+### **❌ PRIORITÉ HAUTE - Système de Debug**
+- **Problème** : Les macros de debug ne fonctionnent pas (pas de logs série)
+- **Impact** : Impossible de diagnostiquer les problèmes
+- **Détails** :
+  - Macros définies dans `esp32server_debug.h`
+  - `#define ESP32SERVER_DEBUG_NETWORK 1` ne produit aucun log
+  - Les `debug_network()` ne s'affichent pas dans le moniteur série
+- **Status** : 🔴 À corriger en priorité absolue
+
+### **❌ PRIORITÉ HAUTE - Grisage Automatique Pins I2C/SPI**
+- **Problème** : Les pins I2C/SPI ne se grisent pas automatiquement
+- **Impact** : Risque de conflits de configuration
+- **Détails** :
+  - Clic sur SDA ne grise pas SCL, D4, D5
+  - Clic sur MOSI/MISO/SCK ne grise pas les autres pins SPI
+  - JavaScript reçoit `PIN_CONFIG:SDA:` (vide)
+  - `getDefaultConfig()` retourne vide pour SDA/SCL/MOSI/MISO/SCK
+- **Corrections apportées** :
+  - ✅ Ajout configs par défaut I2C/SPI dans `getDefaultConfig()`
+  - ✅ Ajout création `pcfg['I2C']` et `pcfg['SPI']` dans JavaScript
+  - ❌ Non testé - debug ne fonctionne pas
+- **Status** : 🟡 En cours - en attente debug fonctionnel
+
+### **❌ Options de Pins - Interface Web**
+- **Problème** : Options de configuration incorrectes pour certains types de pins
+- **Impact** : Interface confuse, options inappropriées
+- **Détails** :
+  - Boutons : afficher type MIDI (Note, CC)
+  - LEDs : afficher type MIDI (Note, CC)
+  - Uniformiser avec potentiomètres
+- **Status** : 🟡 À corriger
+
+### **⚠️ Écho MIDI RTP-MIDI**
 - **Problème** : Retransmission des messages MIDI
 - **Impact** : Boucles potentielles dans le DAW
 - **Workaround** : Router sur un autre contrôleur

@@ -1,4 +1,5 @@
 #include "RtpMidi.h"
+#include <Arduino.h> // For Serial.printf
 #include <ESPmDNS.h>
 #include <Preferences.h>
 #include "ComponentManager.h"
@@ -20,16 +21,16 @@ bool RtpMidi::begin(const String& name) {
     // Lire le nom depuis les préférences (priorité) ou utiliser le paramètre
     Preferences preferences;
     preferences.begin("esp32server", false);
-    String storedName = preferences.getString("rtp_name", "");
+    String storedName = preferences.getString("rtp_name", "\n");
     preferences.end();
     
     // Utiliser le nom des préférences s'il existe, sinon le paramètre
     if(storedName.length() > 0) {
         deviceName = storedName;
-        Serial.println("RTP-MIDI: Nom depuis les préférences: " + deviceName);
+        Serial.printf("RTP-MIDI: Nom depuis les préférences: %s\n", deviceName.c_str());
     } else {
         deviceName = name;
-        Serial.println("RTP-MIDI: Nom depuis le paramètre: " + deviceName);
+        Serial.printf("RTP-MIDI: Nom depuis le paramètre: %s\n", deviceName.c_str());
     }
     
     // Démarrer AppleMIDI
@@ -38,36 +39,36 @@ bool RtpMidi::begin(const String& name) {
     
     // Changer le nom affiché dans AppleMIDI (pour Audio MIDI Setup)
     AppleMIDI.setName(deviceName.c_str());
-    Serial.println("RTP-MIDI: Nom AppleMIDI défini: " + deviceName);
+    Serial.printf("RTP-MIDI: Nom AppleMIDI défini: %s\n", deviceName.c_str());
     
     // Lire le nom mDNS depuis les préférences (configuré par le serveur)
     preferences.begin("esp32server", false);
-    String mdnsName = preferences.getString("mdns_name", "");
+    String mdnsName = preferences.getString("mdns_name", "\n");
     preferences.end();
     
-    Serial.println("RTP-MIDI: Nom mDNS serveur: '" + mdnsName + "'");
+    // Serial.printf("RTP-MIDI: Nom mDNS serveur: '%s'\n", mdnsName.c_str());
     
     // Ajouter le service RTP-MIDI au mDNS existant
     // On assume que mDNS est déjà initialisé par le serveur
     MDNS.addService("apple-midi", "udp", AppleMIDI.getPort());
-    Serial.println("RTP-MIDI: Service mDNS ajouté sur le port " + String(AppleMIDI.getPort()));
-    Serial.println("RTP-MIDI: Service accessible via " + mdnsName + ".local");
+    // Serial.printf("RTP-MIDI: Service mDNS ajouté sur le port %d\n", AppleMIDI.getPort());
+    // Serial.printf("RTP-MIDI: Service accessible via %s.local\n", mdnsName.c_str());
     
     // Afficher l'IP pour debug
-    Serial.print("RTP-MIDI: IP de l'ESP32: ");
-    if(WiFi.status() == WL_CONNECTED) {
-        Serial.println(WiFi.localIP());
-    } else {
-        Serial.println("Non connecté en STA");
-    }
+    // Serial.print("RTP-MIDI: IP de l'ESP32: ");
+    // if(WiFi.status() == WL_CONNECTED) {
+    //     Serial.println(WiFi.localIP().toString());
+    // } else {
+    //     Serial.println("Non connecté en STA");
+    // }
     
     // Configurer les callbacks de connexion
     AppleMIDI.setHandleConnected([](const APPLEMIDI_NAMESPACE::ssrc_t & ssrc, const char* name) {
-        Serial.println("RTP-MIDI: Connexion reçue de " + String(name));
+        // debug_network( "RTP-MIDI: Connexion reçue de %s\n", name);
     });
     
     AppleMIDI.setHandleDisconnected([](const APPLEMIDI_NAMESPACE::ssrc_t & ssrc) {
-        Serial.println("RTP-MIDI: Déconnexion reçue");
+        // debug_network( "RTP-MIDI: Déconnexion reçue\n");
     });
     
     // Configurer les callbacks MIDI standard pour éviter l'écho
@@ -90,10 +91,10 @@ bool RtpMidi::begin(const String& name) {
     });
     
     isStarted = true;
-    Serial.println("RTP-MIDI: Prêt à recevoir des connexions");
-    Serial.println("RTP-MIDI: Vérifiez que votre Mac est sur le même réseau Wi-Fi");
-    Serial.println("RTP-MIDI: Ouvrez Audio MIDI Setup > Window > Show MIDI Studio");
-    Serial.println("RTP-MIDI: L'ESP32 apparaîtra avec le nom: " + deviceName);
+    // Serial.println("RTP-MIDI: Prêt à recevoir des connexions");
+    // Serial.println("RTP-MIDI: Vérifiez que votre Mac est sur le même réseau Wi-Fi");
+    // Serial.println("RTP-MIDI: Ouvrez Audio MIDI Setup > Window > Show MIDI Studio");
+    // Serial.printf("RTP-MIDI: L'ESP32 apparaîtra avec le nom: %s\n", deviceName.c_str());
     return true;
 }
 

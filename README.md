@@ -34,11 +34,12 @@ Ces scripts installent le core `esp32:esp32` et les librairies « ESP Async WebS
 - **Grisage des pins de bus** : I2C/SPI bloquent automatiquement les pins associées
 - **Configuration OSC/Debug** intégrée par défaut
 
-### 🎵 **MIDI & OSC**
-- Support RTP-MIDI complet
-- Configuration OSC intégrée
-- Interface web intuitive
-- Sauvegarde NVS automatique
+### 🎵 **MIDI & OSC** (Amélioré !)
+- **Support RTP-MIDI complet** avec configuration par pin
+- **OSC avancé** : Format configurable (Float 0-1 ou MIDI 3 int)
+- **Broadcast OSC** : Support AP/STA et IP spécifique
+- **Interface web intuitive** avec synchronisation temps réel
+- **Sauvegarde NVS automatique** de toutes les configurations
 
 ## Utilisation
 
@@ -75,13 +76,15 @@ void loop() {
 3. **Configuration** :
    - **WiFi** : Nom du réseau et mot de passe
    - **MIDI** : Nom du périphérique RTP-MIDI
-   - **Pins** : Configuration des entrées/sorties
+   - **OSC** : Format (Float/MIDI), broadcast, adresses personnalisées
+   - **Pins** : Configuration des entrées/sorties avec OSC
 4. **Sauvegarde** : Les paramètres sont stockés en mémoire
 
 ### Fonctionnalités principales
 
 - **🌐 Serveur web** : Interface de configuration intuitive
 - **📡 RTP-MIDI** : Connexion sans fil avec macOS/Logic
+- **🎛️ OSC avancé** : Format configurable, broadcast, adresses personnalisées
 - **🔌 Pins configurables** : Entrées analogiques, boutons, LEDs
 - **👆 Touch pins** : Support des touch pins ESP32-S3 (en développement)
 - **⚡ Temps réel** : Latence optimisée pour la musique

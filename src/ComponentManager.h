@@ -4,6 +4,7 @@
 #include <Preferences.h>
 #include "PinMapper.h"
 #include "midi/MidiSender.h"
+#include "OSCManager.h"
 
 // Types de composants supportés
 enum class ComponentType : uint8_t {
@@ -48,6 +49,7 @@ private:
     ComponentState states[MAX_COMPONENTS];
     uint8_t component_count;
     MidiSender* midi_sender;
+    OSCManager osc_manager;
     
     // Filtre analogique optimisé (selon ARCHITECTURE_MIDI.md)
     struct AnalogFilter {

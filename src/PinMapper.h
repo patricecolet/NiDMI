@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "DebugManager.h"
 
 // Types de MCU supportés
 enum class McuType : uint8_t {

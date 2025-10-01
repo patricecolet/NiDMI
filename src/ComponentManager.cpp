@@ -1,4 +1,5 @@
 #include "ComponentManager.h"
+#include <Arduino.h> // For Serial.printf
 #include "ServerCore.h"
 
 extern ServerCore serverCore;
@@ -20,9 +21,14 @@ void ComponentManager::begin(MidiSender* sender) {
     midi_sender = sender;
     loadConfigFromNVS();
     
-    Serial.print("[ComponentManager] Loaded ");
-    Serial.print(component_count);
-    Serial.println(" components");
+    // Initialiser OSC après que le réseau/serveur soit prêt
+    // Valeurs par défaut (peuvent être remplacées par la config NVS côté WebAPI)
+    osc_manager.begin("255.255.255.255", 8000, 8001);
+    osc_manager.setBroadcast(true);
+    osc_manager.setInterface(1); // STA
+    osc_manager.setEnabled(true);
+    
+    Serial.printf("[ComponentManager] Loaded %d components\n", component_count);
     
     printStats();
 }
@@ -39,21 +45,21 @@ void ComponentManager::update() {
     
     // Log périodique du nombre de composants
     static unsigned long lastComponentLog = 0;
-    if (millis() - lastComponentLog > 30000) { // Log toutes les 30s
-        Serial.printf("[ComponentManager] Processing %d components\n", component_count);
-        for (uint8_t i = 0; i < component_count; i++) {
-            const ComponentConfig& config = configs[i];
-            const char* typeName = "Unknown";
-            switch (config.type) {
-                case ComponentType::POTENTIOMETER: typeName = "Potentiometer"; break;
-                case ComponentType::BUTTON: typeName = "Button"; break;
-                case ComponentType::LED: typeName = "LED"; break;
-            }
-            Serial.printf("  [%d] %s on GPIO%d, MIDI ch%d param%d\n", 
-                         i, typeName, config.gpio, config.midi_channel, config.midi_param);
-        }
-        lastComponentLog = millis();
-    }
+    // if (millis() - lastComponentLog > 30000) { // Log toutes les 30s
+    //     Serial.printf("[ComponentManager] Processing %d components\n", component_count);
+    //     for (uint8_t i = 0; i < component_count; i++) {
+    //         const ComponentConfig& config = configs[i];
+    //         const char* typeName = "Unknown";
+    //         switch (config.type) {
+    //             case ComponentType::POTENTIOMETER: typeName = "Potentiometer"; break;
+    //             case ComponentType::BUTTON: typeName = "Button"; break;
+    //             case ComponentType::LED: typeName = "LED"; break;
+    //         }
+    //         Serial.printf("  [%d] %s on GPIO%d, MIDI ch%d param%d\n", 
+    //                      i, typeName, config.gpio, config.midi_channel, config.midi_param);
+    //     }
+    //     lastComponentLog = millis();
+    // }
     
     for (uint8_t i = 0; i < component_count; i++) {
         switch (configs[i].type) {
@@ -94,9 +100,30 @@ void ComponentManager::processPotentiometer(uint8_t index) {
     
     // Envoyer seulement si changement significatif (seuil de 2)
     if (abs((int)midi_value - (int)state.last_value) >= 2) {
-        Serial.printf("[ComponentManager] Potentiometer GPIO%d -> CC ch%d cc%d val%d\n", 
-                     config.gpio, config.midi_channel, config.midi_param, midi_value);
+        // Serial.printf("[ComponentManager] Potentiometer GPIO%d -> CC ch%d cc%d val%d\n", 
+        //              config.gpio, config.midi_channel, config.midi_param, midi_value);
         midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
+        
+        // Envoyer OSC si activé
+        if (config.flags & 0x02) { // Bit OSC enabled
+            String oscAddress = "/ctl"; // Adresse par défaut
+            bool oscSent = false;
+            
+            if (config.flags & 0x04) { // Format MIDI
+                // Envoyer 3 valeurs MIDI : valeur, numéro CC, canal
+                oscSent = osc_manager.sendMidiMessage(oscAddress, midi_value, config.midi_param, config.midi_channel);
+                if (oscSent) {
+                    Serial.printf("[ComponentManager] OSC MIDI envoyé: %s [%d,%d,%d]\n", 
+                                 oscAddress.c_str(), midi_value, config.midi_param, config.midi_channel);
+                }
+            } else { // Format float
+                oscSent = osc_manager.sendFloat(oscAddress, midi_value / 127.0f);
+                if (oscSent) {
+                    Serial.printf("[ComponentManager] OSC float envoyé: %s %.3f\n", oscAddress.c_str(), midi_value / 127.0f);
+                }
+            }
+        }
+        
         state.last_value = midi_value;
         state.last_time = millis();
     }
@@ -120,15 +147,57 @@ void ComponentManager::processButton(uint8_t index) {
     if (now - state.last_time > 30) {
         if (pressed && state.last_value == 0) {
             // Note On
-            Serial.printf("[ComponentManager] Button GPIO%d pressed -> Note On ch%d note%d\n", 
-                         config.gpio, config.midi_channel, config.midi_param);
+            // Serial.printf("[ComponentManager] Button GPIO%d pressed -> Note On ch%d note%d\n", 
+            //              config.gpio, config.midi_channel, config.midi_param);
             midi_sender->sendNoteOn(config.midi_channel, config.midi_param, 127);
+            
+            // Envoyer OSC si activé
+            if (config.flags & 0x02) { // Bit OSC enabled
+                String oscAddress = "/note"; // Adresse par défaut pour boutons
+                bool oscSent = false;
+                
+                if (config.flags & 0x04) { // Format MIDI
+                    // Envoyer 3 valeurs MIDI : note, vélocité, canal
+                    oscSent = osc_manager.sendMidiMessage(oscAddress, config.midi_param, 127, config.midi_channel);
+                    if (oscSent) {
+                        Serial.printf("[ComponentManager] OSC MIDI envoyé: %s [%d,%d,%d] (bouton pressé)\n", 
+                                     oscAddress.c_str(), config.midi_param, 127, config.midi_channel);
+                    }
+                } else { // Format float
+                    oscSent = osc_manager.sendFloat(oscAddress, 1.0f); // 1.0 = pressed
+                    if (oscSent) {
+                        Serial.printf("[ComponentManager] OSC float envoyé: %s %.3f (bouton pressé)\n", oscAddress.c_str(), 1.0f);
+                    }
+                }
+            }
+            
             state.last_value = 127;
         } else if (!pressed && state.last_value == 127) {
             // Note Off
-            Serial.printf("[ComponentManager] Button GPIO%d released -> Note Off ch%d note%d\n", 
-                         config.gpio, config.midi_channel, config.midi_param);
+            // Serial.printf("[ComponentManager] Button GPIO%d released -> Note Off ch%d note%d\n", 
+            //              config.gpio, config.midi_channel, config.midi_param);
             midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
+            
+            // Envoyer OSC si activé
+            if (config.flags & 0x02) { // Bit OSC enabled
+                String oscAddress = "/note"; // Adresse par défaut pour boutons
+                bool oscSent = false;
+                
+                if (config.flags & 0x04) { // Format MIDI
+                    // Envoyer 3 valeurs MIDI : note, vélocité, canal
+                    oscSent = osc_manager.sendMidiMessage(oscAddress, config.midi_param, 0, config.midi_channel);
+                    if (oscSent) {
+                        Serial.printf("[ComponentManager] OSC MIDI envoyé: %s [%d,%d,%d] (bouton relâché)\n", 
+                                     oscAddress.c_str(), config.midi_param, 0, config.midi_channel);
+                    }
+                } else { // Format float
+                    oscSent = osc_manager.sendFloat(oscAddress, 0.0f); // 0.0 = released
+                    if (oscSent) {
+                        Serial.printf("[ComponentManager] OSC float envoyé: %s %.3f (bouton relâché)\n", oscAddress.c_str(), 0.0f);
+                    }
+                }
+            }
+            
             state.last_value = 0;
         }
     }
@@ -207,7 +276,7 @@ void ComponentManager::loadConfigFromNVS() {
     Preferences preferences;
     preferences.begin("esp32server", true);
     
-    Serial.println("[ComponentManager] Loading configs from NVS...");
+    // Serial.println("[ComponentManager] Loading configs from NVS...");
     
     // Charger les configurations depuis NVS
     // Les clés sont sauvegardées comme "pin_A0", "pin_D2", etc.
@@ -223,14 +292,14 @@ void ComponentManager::loadConfigFromNVS() {
         
         String pinConfig = preferences.getString(key.c_str(), "");
         if (pinConfig.length() == 0) {
-            Serial.printf("[ComponentManager] Empty config for pin: %s\n", pinLabel.c_str());
+            // Serial.printf("[ComponentManager] Empty config for pin: %s\n", pinLabel.c_str());
             continue;
         }
         
-        Serial.printf("[ComponentManager] Found pin: %s -> %s\n", pinLabel.c_str(), pinConfig.c_str());
+        // Serial.printf("[ComponentManager] Found pin: %s -> %s\n", pinLabel.c_str(), pinConfig.c_str());
         
         // Parser JSON simple
-        String role = extractStr(pinConfig, "role", "");
+        String role = extractStr(pinConfig, "role", "\n");
         if (role.length() == 0) continue;
         
         // Utiliser PinMapper pour obtenir le GPIO
@@ -258,12 +327,38 @@ void ComponentManager::loadConfigFromNVS() {
         else if (role == "LED") type = ComponentType::LED;
         
         bool success = addComponent(gpio, type, midi_param, channel);
-        Serial.printf("[ComponentManager] Added component: %s on GPIO%d -> %s\n", 
-                     pinLabel.c_str(), gpio, success ? "OK" : "FAILED");
+        
+        // Configurer les flags OSC si le composant a été ajouté avec succès
+        if (success) {
+            // Trouver l'index du composant ajouté
+            uint8_t index = findComponentByGpio(gpio);
+            if (index != 255) {
+                // Lire oscEnabled et oscFormat depuis la config
+                bool oscEnabled = extractBool(pinConfig, "oscEnabled", false);
+                String oscFormat = extractStr(pinConfig, "oscFormat", "float");
+                
+                // Configurer les flags (bit 0x02 pour OSC, bit 0x04 pour format MIDI)
+                if (oscEnabled) {
+                    configs[index].flags |= 0x02; // Activer OSC
+                    if (oscFormat == "midi") {
+                        configs[index].flags |= 0x04; // Format MIDI
+                    } else {
+                        configs[index].flags &= ~0x04; // Format float
+                    }
+                } else {
+                    configs[index].flags &= ~0x02; // Désactiver OSC
+                }
+                
+                Serial.printf("[ComponentManager] OSC %s (%s) pour %s (GPIO%d)\n", 
+                             oscEnabled ? "activé" : "désactivé", oscFormat.c_str(), pinLabel.c_str(), gpio);
+            }
+        }
+        // Serial.printf("[ComponentManager] Added component: %s on GPIO%d -> %s\n", 
+        //              pinLabel.c_str(), gpio, success ? "OK" : "FAILED");
     }
     
     preferences.end();
-    Serial.printf("[ComponentManager] Loaded %d components from NVS\n", component_count);
+    // Serial.printf("[ComponentManager] Loaded %d components from NVS\n", component_count);
 }
 
 void ComponentManager::saveConfigToNVS() {
@@ -351,8 +446,8 @@ void ComponentManager::handleMidiNoteOn(uint8_t channel, uint8_t note, uint8_t v
             
             // Allumer la LED
             digitalWrite(config.gpio, HIGH);
-            Serial.printf("[ComponentManager] LED GPIO%d ON (Note %d ch%d)\n", 
-                         config.gpio, note, channel);
+            // Serial.printf("[ComponentManager] LED GPIO%d ON (Note %d ch%d)\n", 
+            //              config.gpio, note, channel);
         }
     }
 }
@@ -367,8 +462,8 @@ void ComponentManager::handleMidiNoteOff(uint8_t channel, uint8_t note, uint8_t 
             
             // Éteindre la LED
             digitalWrite(config.gpio, LOW);
-            Serial.printf("[ComponentManager] LED GPIO%d OFF (Note %d ch%d)\n", 
-                         config.gpio, note, channel);
+            // Serial.printf("[ComponentManager] LED GPIO%d OFF (Note %d ch%d)\n", 
+            //              config.gpio, note, channel);
         }
     }
 }
@@ -384,8 +479,8 @@ void ComponentManager::handleMidiControlChange(uint8_t channel, uint8_t control,
             // Allumer/éteindre selon la valeur
             bool ledState = (value > 63); // Seuil à 50%
             digitalWrite(config.gpio, ledState ? HIGH : LOW);
-            Serial.printf("[ComponentManager] LED GPIO%d %s (CC %d ch%d val%d)\n", 
-                         config.gpio, ledState ? "ON" : "OFF", control, channel, value);
+            // Serial.printf("[ComponentManager] LED GPIO%d %s (CC %d ch%d val%d)\n", 
+            //              config.gpio, ledState ? "ON" : "OFF", control, channel, value);
         }
     }
 }

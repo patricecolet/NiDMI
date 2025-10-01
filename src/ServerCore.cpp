@@ -1,6 +1,7 @@
 #include "ServerCore.h"
 #include <ESPmDNS.h>
 #include <Preferences.h>
+// setupWebAPI est déclaré plus bas et défini dans WebAPI.cpp
 
 // Déclaration de la fonction setupHttp définie dans WebAPI.cpp
 void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws);
@@ -73,8 +74,8 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
         } else {
             Serial.printf("[ServerCore] Access via: http://%s.local/ or http://%s/\n", workingName.c_str(), WiFi.softAPIP().toString().c_str());
         }
-        Serial.println("[ServerCore] Note: mDNS resolution may take a few seconds to propagate");
-        Serial.println("[ServerCore] If .local doesn't work, use direct IP address");
+        // Serial.println("[ServerCore] Note: mDNS resolution may take a few seconds to propagate");
+        // Serial.println("[ServerCore] If .local doesn't work, use direct IP address");
     } else {
         Serial.println("[ServerCore] All mDNS attempts failed - using direct IP only");
         if (staConnected) {
@@ -85,12 +86,12 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
     }
     
     // Configuration des endpoints HTTP
-    Serial.println("[ServerCore] Setting up WebAPI...");
+    // Serial.println("[ServerCore] Setting up WebAPI...");
     setupWebAPI(server, ws);
-    Serial.println("[ServerCore] Starting HTTP server...");
+    // Serial.println("[ServerCore] Starting HTTP server...");
     server.begin();
-    Serial.println("[ServerCore] HTTP server started on / (Async)");
-    Serial.println("[ServerCore] ServerCore initialization complete!");
+    // Serial.println("[ServerCore] HTTP server started on / (Async)");
+    // Serial.println("[ServerCore] ServerCore initialization complete!");
 }
 
 void ServerCore::connectSta(const char* staSsid, const char* staPass) {
@@ -110,11 +111,12 @@ void ServerCore::connectSta(const char* staSsid, const char* staPass) {
         attempts++;
         Serial.print(".");
     }
+    Serial.println();
     
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("\n[ServerCore] STA connected! IP: %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("[ServerCore] STA connected! IP: %s\n", WiFi.localIP().toString().c_str());
     } else {
-        Serial.printf("\n[ServerCore] STA connection failed after %d attempts\n", attempts);
+        Serial.printf("[ServerCore] STA connection failed after %d attempts\n", attempts);
         Serial.printf("[ServerCore] WiFi status: %d\n", WiFi.status());
     }
 }
@@ -182,7 +184,7 @@ void ServerCore::reconfigureMdns(const char* hostname) {
         } else {
             Serial.printf("[ServerCore] Access via: http://%s.local/ or http://%s/\n", workingName.c_str(), WiFi.softAPIP().toString().c_str());
         }
-        Serial.println("[ServerCore] Note: mDNS resolution may take a few seconds to propagate");
+        // Serial.println("[ServerCore] Note: mDNS resolution may take a few seconds to propagate");
     } else {
         Serial.println("[ServerCore] All mDNS attempts failed - using direct IP only");
         if (staConnected) {

@@ -21,6 +21,12 @@
  * - Utile si des anciens réglages persistent
  */
 
+// ============================================================================
+// ACTIVATION DU DEBUG (DOIT ÊTRE AVANT LES INCLUDES!)
+// ============================================================================
+// Décommentez les lignes suivantes pour activer le debug
+// Debug désactivé (système de logs retiré)
+
 #include "Esp32Server.h"
 #include <Preferences.h>
 

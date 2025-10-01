@@ -66,12 +66,18 @@ McuType PinMapper::detectMcu() {
     // Détection basée sur les macros de compilation
     #ifdef CONFIG_IDF_TARGET_ESP32C3
         detected_mcu = McuType::ESP32_C3;
+        Serial.println("[PinMapper] MCU détecté: ESP32-C3 (via CONFIG_IDF_TARGET_ESP32C3)");
     #elif defined(CONFIG_IDF_TARGET_ESP32S3)
         detected_mcu = McuType::ESP32_S3;
+        Serial.println("[PinMapper] MCU détecté: ESP32-S3 (via CONFIG_IDF_TARGET_ESP32S3)");
+    #elif defined(ARDUINO_ESP32C3_DEV) || defined(ARDUINO_ESP32C3)
+        detected_mcu = McuType::ESP32_C3;
+        Serial.println("[PinMapper] MCU détecté: ESP32-C3 (via ARDUINO_ESP32C3)");
+    #elif defined(ARDUINO_ESP32S3_DEV) || defined(ARDUINO_ESP32S3)
+        detected_mcu = McuType::ESP32_S3;
+        Serial.println("[PinMapper] MCU détecté: ESP32-S3 (via ARDUINO_ESP32S3)");
     #else
-        // Détection par test de pins spécifiques
-        // ESP32-C3: GPIO21 existe, GPIO43 n'existe pas
-        // ESP32-S3: GPIO43 existe, GPIO21 n'existe pas
+        Serial.println("[PinMapper] Aucune macro détectée, test des pins...");
         pinMode(21, INPUT);
         pinMode(43, INPUT);
         
@@ -79,16 +85,15 @@ McuType PinMapper::detectMcu() {
         // Si GPIO43 fonctionne mais pas GPIO21 → S3
         if (digitalRead(21) != digitalRead(43)) {
             detected_mcu = McuType::ESP32_C3; // GPIO21 existe
+            Serial.println("[PinMapper] MCU détecté: ESP32-C3 (via test pins)");
         } else {
             detected_mcu = McuType::ESP32_S3; // GPIO43 existe
+            Serial.println("[PinMapper] MCU détecté: ESP32-S3 (via test pins)");
         }
     #endif
     
     mcu_detected = true;
-    
-    Serial.print("[PinMapper] Detected MCU: ");
-    Serial.println(getMcuName());
-    
+    Serial.printf("[PinMapper] MCU final: %d\n", (int)detected_mcu);
     return detected_mcu;
 }
 
@@ -266,15 +271,14 @@ size_t PinMapper::getMappingCount() {
 
 void PinMapper::printMappings() {
     detectMcu();
-    
-    Serial.print("[PinMapper] MCU: ");
-    Serial.println(getMcuName());
+    Serial.println("[PinMapper] MCU: ");
+    Serial.printf("[PinMapper] MCU: %s\n", getMcuName());
     
     const PinMapping* mappings = getAllMappings();
     size_t count = getMappingCount();
     
     for (size_t i = 0; i < count; i++) {
-        Serial.printf("  %s → GPIO%d (ADC:%s PWM:%s Touch:%s)\n",
+        Serial.printf( "  %s → GPIO%d ADC:%s PWM:%s Touch:%s)\n",
             mappings[i].label,
             mappings[i].gpio,
             mappings[i].has_adc ? "✓" : "✗",

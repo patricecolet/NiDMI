@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "Esp32Server.h"
 #include "ServerCore.h"
 #include "ComponentManager.h"
@@ -38,23 +39,23 @@ void esp32server_begin() {
 
     // Nettoyer les anciens réglages NVS si nécessaire
     // (décommentez la ligne suivante pour forcer le reset)
-    // Preferences::clear("esp32server");
+    // Preferences::clear("esp32server\n\n");
 
     // Lire nom serveur + STA depuis NVS
     Preferences preferences;
     preferences.begin("esp32server", false);
-    String serverName = preferences.getString("mdns_name", "esp32rtpmidi");
-    String staSsid    = preferences.getString("sta_ssid", "");
-    String staPass    = preferences.getString("sta_pass", "");
-    String staIpStr   = preferences.getString("sta_ip",  "");
-    String staGwStr   = preferences.getString("sta_gw",  "");
-    String staSnStr   = preferences.getString("sta_sn",  "");
+    String serverName = preferences.getString("mdns_name", "esp32rtpmidi\n\n");
+    String staSsid    = preferences.getString("sta_ssid", "\n\n");
+    String staPass    = preferences.getString("sta_pass", "\n\n");
+    String staIpStr   = preferences.getString("sta_ip",  "\n\n");
+    String staGwStr   = preferences.getString("sta_gw",  "\n\n");
+    String staSnStr   = preferences.getString("sta_sn",  "\n\n");
     preferences.end();
     
     // Nettoyer le nom serveur (enlever caractères spéciaux)
-    serverName.replace(" ", "");
-    serverName.replace("-", "");
-    serverName.replace("_", "");
+    serverName.replace(" ", "\n\n");
+    serverName.replace("-", "\n\n");
+    serverName.replace("_", "\n\n");
     if (serverName.length() == 0) serverName = "esp32rtpmidi";
     
     // Sauvegarder le nom mDNS dans NVS pour RTP-MIDI
@@ -64,9 +65,9 @@ void esp32server_begin() {
     preferences.end();
     
     Serial.println("[ESP32Server] Names synchronized:");
-    Serial.print("  SSID: "); Serial.println(serverName);
-    Serial.print("  mDNS: "); Serial.print(serverName); Serial.println(".local");
-    Serial.print("  RTP-MIDI: "); Serial.println(serverName);
+    Serial.printf("  SSID: %s\n", serverName.c_str());
+    Serial.printf("  mDNS: %s.local\n", serverName.c_str());
+
     
     // Debug: afficher ce qui est lu depuis NVS
     Serial.println("[ESP32Server] NVS Debug:");
@@ -89,9 +90,7 @@ void esp32server_begin() {
             IPAddress ip, gw, sn;
             if (ip.fromString(staIpStr) && gw.fromString(staGwStr) && sn.fromString(staSnStr)) {
                 serverCore.setStaticStaIp(ip, gw, sn);
-                Serial.print("[ESP32Server] STA static IP: "); Serial.print(staIpStr);
-                Serial.print(" GW: "); Serial.print(staGwStr);
-                Serial.print(" SN: "); Serial.println(staSnStr);
+                Serial.printf("[ESP32Server] STA static IP: %s GW: %s SN: %s\n", staIpStr.c_str(), staGwStr.c_str(), staSnStr.c_str());
             }
         }
         serverCore.connectSta(staSsid.c_str(), staPass.length() > 0 ? staPass.c_str() : nullptr);
@@ -100,6 +99,10 @@ void esp32server_begin() {
     }
 
     // Démarre web + mDNS + AP (après connexion STA)
+    serverCore.begin(apSsid, apPass, host);
+    
+    // Démarre web + mDNS + AP (après connexion STA)
+    
     serverCore.begin(apSsid, apPass, host);
     
     // Initialiser MidiRouter
