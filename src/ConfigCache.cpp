@@ -1,6 +1,7 @@
 #include "ConfigCache.h"
 
 /* Forward declarations */
+String mergeConfigWithDefaults(const String& nvsConfig, const String& defaultConfig);
 // Preferences utilisées localement dans chaque fonction
 String getDefaultConfig(String pin);
 extern "C" {
@@ -44,9 +45,13 @@ String ConfigCache::getConfig(const String& pin) {
     preferences.end();
     
     if (!config.isEmpty()) {
+        /* Compléter la config NVS avec les valeurs par défaut manquantes */
+        String defaultConfig = getDefaultConfig(pin);
+        String mergedConfig = mergeConfigWithDefaults(config, defaultConfig);
+        
         /* Mettre en cache pour prochaine fois */
-        setConfigClean(pin, config);
-        return config;
+        setConfigClean(pin, mergedConfig);
+        return mergedConfig;
     }
     
     /* Défaut */
@@ -128,4 +133,17 @@ void ConfigCache::setConfigClean(const String& pin, const String& config) {
     if (index != -1) {
         cache[index] = config;
     }
+}
+
+/* Fusionner la config NVS avec les valeurs par défaut manquantes */
+String mergeConfigWithDefaults(const String& nvsConfig, const String& defaultConfig) {
+    // Vérifier si oscFormat est présent dans la config NVS
+    if (nvsConfig.indexOf("\"oscFormat\"") != -1) {
+        // La config NVS contient déjà oscFormat, la retourner telle quelle
+        return nvsConfig;
+    }
+    
+    // La config NVS ne contient pas oscFormat, utiliser la config par défaut
+    // qui contient tous les champs nécessaires
+    return defaultConfig;
 }
