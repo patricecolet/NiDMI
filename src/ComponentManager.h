@@ -5,6 +5,7 @@
 #include "PinMapper.h"
 #include "midi/MidiSender.h"
 #include "OSCManager.h"
+#include "OSCQueue.h"
 
 // Types de composants supportés
 enum class ComponentType : uint8_t {
@@ -29,6 +30,10 @@ struct ComponentState {
     uint32_t last_time;     // Dernière mise à jour
     uint8_t debounce_state; // État anti-rebond
     uint8_t reserved;       // Padding
+    
+    // Champs pour debouncing simple et fiable
+    bool last_button_state; // État précédent du bouton
+    uint32_t last_change_time; // Temps du dernier changement
 };
 
 /**
@@ -50,6 +55,7 @@ private:
     uint8_t component_count;
     MidiSender* midi_sender;
     OSCManager osc_manager;
+    OSCQueue osc_queue;
     
     // Filtre analogique optimisé (selon ARCHITECTURE_MIDI.md)
     struct AnalogFilter {

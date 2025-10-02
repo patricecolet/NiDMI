@@ -212,9 +212,25 @@ arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32C3 examples/esp32server_basic/e
 
 **Status** : Bug connu, investigation en cours. L'écho semble provenir de la bibliothèque AppleMIDI ou du protocole RTP-MIDI lui-même.
 
+### 🐛 Limitations OSC (Open Sound Control)
+
+**Problème** : Perte de paquets OSC sur les boutons en WiFi, particulièrement sur les transitions rapides.
+
+**Impact** : 
+- Les boutons peuvent ne pas envoyer tous les messages OSC
+- Les potentiomètres fonctionnent mieux que les boutons
+- RTP-MIDI reste la solution la plus fiable
+
+**Workaround** : 
+- Privilégier RTP-MIDI pour les boutons
+- Utiliser OSC principalement pour les potentiomètres
+- Tester avec des transitions plus lentes
+
+**Status** : Limitation connue, RTP-MIDI recommandé pour la fiabilité.
+
 ### 🔧 Limitations actuelles
 
-- **OSC** : Non implémenté (en développement)
+- **OSC** : Implémenté avec limitations connues (perte de paquets sur boutons WiFi)
 - **USB-MIDI** : Non implémenté (en développement)  
 - **ESP32-S3** : Interface web à adapter
 - **Touch pins** : Support ESP32-S3 en développement

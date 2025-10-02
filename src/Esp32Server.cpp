@@ -74,9 +74,9 @@ void esp32server_begin() {
     Serial.print("  mdns_name: \""); Serial.print(serverName); Serial.println("\"");
     Serial.print("  sta_ssid: \""); Serial.print(staSsid); Serial.println("\"");
     Serial.print("  sta_pass length: "); Serial.println(staPass.length());
-    Serial.print("  sta_ip: \""); Serial.print(staIpStr); Serial.println("\"");
-    Serial.print("  sta_gw: \""); Serial.print(staGwStr); Serial.println("\"");
-    Serial.print("  sta_sn: \""); Serial.print(staSnStr); Serial.println("\"");
+    // Serial.print("  sta_ip: \""); Serial.print(staIpStr); Serial.println("\"");
+    // Serial.print("  sta_gw: \""); Serial.print(staGwStr); Serial.println("\"");
+    // Serial.print("  sta_sn: \""); Serial.print(staSnStr); Serial.println("\"");
 
     const char* apSsid = serverName.c_str();
     const char* apPass = "esp32pass";
@@ -84,7 +84,7 @@ void esp32server_begin() {
 
     // Tente STA si configurée (AVANT de démarrer le serveur)
     if (staSsid.length() > 0) {
-        Serial.printf("[ESP32Server] Attempting STA connection to: %s\n", staSsid.c_str());
+        // Serial.printf("[ESP32Server] Attempting STA connection to: %s\n", staSsid.c_str());
         
         if (staIpStr.length() > 0 && staGwStr.length() > 0 && staSnStr.length() > 0) {
             IPAddress ip, gw, sn;
@@ -99,10 +99,6 @@ void esp32server_begin() {
     }
 
     // Démarre web + mDNS + AP (après connexion STA)
-    serverCore.begin(apSsid, apPass, host);
-    
-    // Démarre web + mDNS + AP (après connexion STA)
-    
     serverCore.begin(apSsid, apPass, host);
     
     // Initialiser MidiRouter

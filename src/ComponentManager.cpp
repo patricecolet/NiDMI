@@ -1,6 +1,7 @@
 #include "ComponentManager.h"
 #include <Arduino.h> // For Serial.printf
 #include "ServerCore.h"
+#include "OSCQueue.h"
 
 extern ServerCore serverCore;
 
@@ -28,7 +29,9 @@ void ComponentManager::begin(MidiSender* sender) {
     osc_manager.setInterface(1); // STA
     osc_manager.setEnabled(true);
     
-    Serial.printf("[ComponentManager] Loaded %d components\n", component_count);
+    // Configuration OSC optimisée (système direct)
+    
+    // Serial.printf("[ComponentManager] Loaded %d components\n", component_count);
     
     printStats();
 }
@@ -41,6 +44,15 @@ void ComponentManager::update() {
             lastLog = millis();
         }
         return;
+    }
+    
+    // Diagnostic WiFi (toutes les 30 secondes)
+    static unsigned long lastDiagnostic = 0;
+    if (millis() - lastDiagnostic > 30000) {
+        if (WiFi.status() == WL_CONNECTED) {
+            Serial.printf("[WiFi] Signal: %d dBm\n", WiFi.RSSI());
+        }
+        lastDiagnostic = millis();
     }
     
     // Log périodique du nombre de composants
@@ -98,8 +110,8 @@ void ComponentManager::processPotentiometer(uint8_t index) {
     // Conversion 0-4095 → 0-127
     uint8_t midi_value = map(filtered_value, 0, 4095, 0, 127);
     
-    // Envoyer seulement si changement significatif (seuil de 2)
-    if (abs((int)midi_value - (int)state.last_value) >= 2) {
+    // Envoyer seulement si changement significatif (seuil de 3 pour XIAO_ESP32C3)
+    if (abs((int)midi_value - (int)state.last_value) >= 3) {
         // Serial.printf("[ComponentManager] Potentiometer GPIO%d -> CC ch%d cc%d val%d\n", 
         //              config.gpio, config.midi_channel, config.midi_param, midi_value);
         midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
@@ -107,20 +119,11 @@ void ComponentManager::processPotentiometer(uint8_t index) {
         // Envoyer OSC si activé
         if (config.flags & 0x02) { // Bit OSC enabled
             String oscAddress = "/ctl"; // Adresse par défaut
-            bool oscSent = false;
             
             if (config.flags & 0x04) { // Format MIDI
-                // Envoyer 3 valeurs MIDI : valeur, numéro CC, canal
-                oscSent = osc_manager.sendMidiMessage(oscAddress, midi_value, config.midi_param, config.midi_channel);
-                if (oscSent) {
-                    Serial.printf("[ComponentManager] OSC MIDI envoyé: %s [%d,%d,%d]\n", 
-                                 oscAddress.c_str(), midi_value, config.midi_param, config.midi_channel);
-                }
+                osc_manager.sendMidiMessage(oscAddress, midi_value, config.midi_param, config.midi_channel);
             } else { // Format float
-                oscSent = osc_manager.sendFloat(oscAddress, midi_value / 127.0f);
-                if (oscSent) {
-                    Serial.printf("[ComponentManager] OSC float envoyé: %s %.3f\n", oscAddress.c_str(), midi_value / 127.0f);
-                }
+                osc_manager.sendFloat(oscAddress, midi_value / 127.0f);
             }
         }
         
@@ -137,68 +140,52 @@ void ComponentManager::processButton(uint8_t index) {
     bool pressed = !digitalRead(config.gpio); // INPUT_PULLUP: LOW = pressed
     uint32_t now = millis();
     
-    // Anti-rebond simple (30ms)
-    if (pressed != (bool)state.debounce_state) {
-        state.last_time = now;
-        state.debounce_state = pressed;
+    // Debouncing simple et fiable
+    static const unsigned long DEBOUNCE_TIME = 50; // 50ms
+    
+    // Détecter changement d'état
+    if (pressed != state.last_button_state) {
+        state.last_change_time = now;
+        state.last_button_state = pressed;
     }
     
-    // Délai anti-rebond
-    if (now - state.last_time > 30) {
-        if (pressed && state.last_value == 0) {
-            // Note On
-            // Serial.printf("[ComponentManager] Button GPIO%d pressed -> Note On ch%d note%d\n", 
-            //              config.gpio, config.midi_channel, config.midi_param);
-            midi_sender->sendNoteOn(config.midi_channel, config.midi_param, 127);
-            
-            // Envoyer OSC si activé
-            if (config.flags & 0x02) { // Bit OSC enabled
-                String oscAddress = "/note"; // Adresse par défaut pour boutons
-                bool oscSent = false;
-                
-                if (config.flags & 0x04) { // Format MIDI
-                    // Envoyer 3 valeurs MIDI : note, vélocité, canal
-                    oscSent = osc_manager.sendMidiMessage(oscAddress, config.midi_param, 127, config.midi_channel);
-                    if (oscSent) {
-                        Serial.printf("[ComponentManager] OSC MIDI envoyé: %s [%d,%d,%d] (bouton pressé)\n", 
-                                     oscAddress.c_str(), config.midi_param, 127, config.midi_channel);
-                    }
-                } else { // Format float
-                    oscSent = osc_manager.sendFloat(oscAddress, 1.0f); // 1.0 = pressed
-                    if (oscSent) {
-                        Serial.printf("[ComponentManager] OSC float envoyé: %s %.3f (bouton pressé)\n", oscAddress.c_str(), 1.0f);
-                    }
-                }
+    // Attendre la fin du rebond
+    if ((now - state.last_change_time) < DEBOUNCE_TIME) {
+        return; // Pas encore stable
+    }
+    
+    // Détecter les transitions sur l'état stable
+    bool wasPressed = (state.last_value == 127);
+    bool isPressed = pressed;
+    
+        
+    if (isPressed && !wasPressed) {
+        // Transition: Released -> Pressed
+        midi_sender->sendNoteOn(config.midi_channel, config.midi_param, 127);
+        state.last_value = 127;
+        
+        // Envoyer OSC si activé
+        if (config.flags & 0x02) { // Bit OSC enabled
+            String oscAddress = "/note";
+            if (config.flags & 0x04) { // Format MIDI
+                osc_manager.sendMidiMessage(oscAddress, config.midi_param, 127, config.midi_channel);
+            } else { // Format float
+                osc_manager.sendFloat(oscAddress, 1.0f);
             }
-            
-            state.last_value = 127;
-        } else if (!pressed && state.last_value == 127) {
-            // Note Off
-            // Serial.printf("[ComponentManager] Button GPIO%d released -> Note Off ch%d note%d\n", 
-            //              config.gpio, config.midi_channel, config.midi_param);
-            midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
-            
-            // Envoyer OSC si activé
-            if (config.flags & 0x02) { // Bit OSC enabled
-                String oscAddress = "/note"; // Adresse par défaut pour boutons
-                bool oscSent = false;
-                
-                if (config.flags & 0x04) { // Format MIDI
-                    // Envoyer 3 valeurs MIDI : note, vélocité, canal
-                    oscSent = osc_manager.sendMidiMessage(oscAddress, config.midi_param, 0, config.midi_channel);
-                    if (oscSent) {
-                        Serial.printf("[ComponentManager] OSC MIDI envoyé: %s [%d,%d,%d] (bouton relâché)\n", 
-                                     oscAddress.c_str(), config.midi_param, 0, config.midi_channel);
-                    }
-                } else { // Format float
-                    oscSent = osc_manager.sendFloat(oscAddress, 0.0f); // 0.0 = released
-                    if (oscSent) {
-                        Serial.printf("[ComponentManager] OSC float envoyé: %s %.3f (bouton relâché)\n", oscAddress.c_str(), 0.0f);
-                    }
-                }
+        }
+    } else if (!isPressed && wasPressed) {
+        // Transition: Pressed -> Released
+        midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
+        state.last_value = 0;
+        
+        // Envoyer OSC si activé
+        if (config.flags & 0x02) { // Bit OSC enabled
+            String oscAddress = "/note";
+            if (config.flags & 0x04) { // Format MIDI
+                osc_manager.sendMidiMessage(oscAddress, config.midi_param, 0, config.midi_channel);
+            } else { // Format float
+                osc_manager.sendFloat(oscAddress, 0.0f);
             }
-            
-            state.last_value = 0;
         }
     }
 }
@@ -221,13 +208,17 @@ bool ComponentManager::addComponent(uint8_t gpio, ComponentType type, uint8_t mi
     config.type = type;
     config.midi_param = midi_param;
     config.midi_channel = channel;
-    config.flags = 0x01; // rtp_enabled par défaut
+    config.flags = 0x03; // rtp_enabled + osc_enabled par défaut
     
     // Initialiser l'état
     ComponentState& state = states[component_count];
     state.last_value = 0;
     state.last_time = 0;
     state.debounce_state = 0;
+    
+    // Initialiser les champs de debouncing simple
+    state.last_button_state = false;
+    state.last_change_time = 0;
     
     // Configurer le GPIO
     switch (type) {
@@ -349,8 +340,8 @@ void ComponentManager::loadConfigFromNVS() {
                     configs[index].flags &= ~0x02; // Désactiver OSC
                 }
                 
-                Serial.printf("[ComponentManager] OSC %s (%s) pour %s (GPIO%d)\n", 
-                             oscEnabled ? "activé" : "désactivé", oscFormat.c_str(), pinLabel.c_str(), gpio);
+                // Serial.printf("[ComponentManager] OSC %s (%s) pour %s (GPIO%d)\n", 
+                //              oscEnabled ? "activé" : "désactivé", oscFormat.c_str(), pinLabel.c_str(), gpio);
             }
         }
         // Serial.printf("[ComponentManager] Added component: %s on GPIO%d -> %s\n", 

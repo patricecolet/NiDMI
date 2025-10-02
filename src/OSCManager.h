@@ -42,11 +42,13 @@ public:
     void setBroadcast(bool enable);
     bool isBroadcastEnabled() const;
     void setInterface(uint8_t interface);
+    uint8_t getInterface() const;
 
     // Réception
     void setMessageCallback(OSCMessageCallback callback);
     void update();
     void printStatus() const;
+    void disconnect();
 
 private:
     bool sendOSCMessage(OSCMessage& msg);

@@ -8,6 +8,7 @@
  * - Interface web pour configuration des pins
  * - RTP-MIDI automatique
  * - Gestion optimisée des composants
+ * - OSC (Open Sound Control) avec limitations connues
  * 
  * Usage :
  * 1. Uploader ce sketch
@@ -15,6 +16,12 @@
  * 3. Ouvrir http://192.168.4.1
  * 4. Configurer les pins via l'interface web
  * 5. Les composants envoient automatiquement du MIDI
+ * 
+ * ⚠️ LIMITATIONS OSC CONNUES :
+ * - Les boutons en WiFi peuvent avoir des pertes de paquets OSC
+ * - Les potentiomètres fonctionnent mieux que les boutons
+ * - RTP-MIDI reste la solution la plus fiable
+ * - Pour OSC fiable, privilégier les potentiomètres
  * 
  * Option NVS Clear :
  * - Décommentez la ligne CLEAR_NVS ci-dessous pour forcer le reset

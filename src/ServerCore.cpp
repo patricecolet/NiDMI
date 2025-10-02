@@ -13,7 +13,12 @@ ServerCore::ServerCore()
     : server(80), ws("/ws") {}
 
 void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostname) {
+    // Optimisation WiFi pour XIAO_ESP32C3
     WiFi.mode(WIFI_MODE_APSTA);
+    
+    // Augmenter la puissance WiFi pour XIAO_ESP32C3
+    WiFi.setTxPower(WIFI_POWER_19_5dBm); // Puissance maximale
+    
     WiFi.softAP(apSsid, apPass);
     IPAddress apIp = WiFi.softAPIP();
     
@@ -26,11 +31,11 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
 
     // Configuration mDNS - Détecter le mode automatiquement
     bool staConnected = (WiFi.status() == WL_CONNECTED);
-    Serial.printf("[ServerCore] Starting mDNS for %s mode...\n", staConnected ? "STA" : "AP");
+    // Serial.printf("[ServerCore] Starting mDNS for %s mode...\n", staConnected ? "STA" : "AP");
     if (staConnected) {
-        Serial.printf("[ServerCore] STA IP: %s\n", WiFi.localIP().toString().c_str());
+        // Serial.printf("[ServerCore] STA IP: %s\n", WiFi.localIP().toString().c_str());
     }
-    Serial.print("[ServerCore] Starting mDNS with hostname: "); Serial.println(hostname);
+    // Serial.print("[ServerCore] Starting mDNS with hostname: "); Serial.println(hostname);
     
     // Essayer plusieurs noms mDNS
     String mdnsNames[] = {hostname, "esp32server", "esp32", "esp32rtpmidi"};
@@ -38,12 +43,12 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
     String workingName = "";
     
     for (int i = 0; i < 4; i++) {
-        Serial.print("[ServerCore] Trying mDNS name: "); Serial.println(mdnsNames[i]);
+        // Serial.print("[ServerCore] Trying mDNS name: "); Serial.println(mdnsNames[i]);
         if (MDNS.begin(mdnsNames[i].c_str())) {
             MDNS.addService("http", "tcp", 80);
             mdnsOk = true;
             workingName = mdnsNames[i];
-            Serial.print("[ServerCore] mDNS success: http://"); Serial.print(workingName); Serial.println(".local/");
+            // Serial.print("[ServerCore] mDNS success: http://"); Serial.print(workingName); Serial.println(".local/");
             break;
         } else {
             Serial.print("[ServerCore] mDNS failed for: "); Serial.println(mdnsNames[i]);
@@ -52,10 +57,10 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
     }
     
     if (mdnsOk) {
-        Serial.println("[ServerCore] HTTP service registered");
+        // Serial.println("[ServerCore] HTTP service registered");
         
         // mDNS configuré avec succès
-        Serial.println("[ServerCore] mDNS configuration complete");
+        // Serial.println("[ServerCore] mDNS configuration complete");
         
         // Debug mDNS
         Serial.println("[ServerCore] mDNS Debug Info:");
@@ -70,9 +75,9 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
         Serial.printf("  WiFi Mode: %d\n", WiFi.getMode());
         
         if (staConnected) {
-            Serial.printf("[ServerCore] Access via: http://%s.local/ or http://%s/\n", workingName.c_str(), WiFi.localIP().toString().c_str());
+            // Serial.printf("[ServerCore] Access via: http://%s.local/ or http://%s/\n", workingName.c_str(), WiFi.localIP().toString().c_str());
         } else {
-            Serial.printf("[ServerCore] Access via: http://%s.local/ or http://%s/\n", workingName.c_str(), WiFi.softAPIP().toString().c_str());
+            // Serial.printf("[ServerCore] Access via: http://%s.local/ or http://%s/\n", workingName.c_str(), WiFi.softAPIP().toString().c_str());
         }
         // Serial.println("[ServerCore] Note: mDNS resolution may take a few seconds to propagate");
         // Serial.println("[ServerCore] If .local doesn't work, use direct IP address");
@@ -160,12 +165,12 @@ void ServerCore::reconfigureMdns(const char* hostname) {
     String workingName = "";
     
     for (int i = 0; i < 4; i++) {
-        Serial.print("[ServerCore] Trying mDNS name: "); Serial.println(mdnsNames[i]);
+        // Serial.print("[ServerCore] Trying mDNS name: "); Serial.println(mdnsNames[i]);
         if (MDNS.begin(mdnsNames[i].c_str())) {
             MDNS.addService("http", "tcp", 80);
             mdnsOk = true;
             workingName = mdnsNames[i];
-            Serial.print("[ServerCore] mDNS success: http://"); Serial.print(workingName); Serial.println(".local/");
+            // Serial.print("[ServerCore] mDNS success: http://"); Serial.print(workingName); Serial.println(".local/");
             break;
         } else {
             Serial.print("[ServerCore] mDNS failed for: "); Serial.println(mdnsNames[i]);
@@ -174,15 +179,15 @@ void ServerCore::reconfigureMdns(const char* hostname) {
     }
     
     if (mdnsOk) {
-        Serial.println("[ServerCore] HTTP service registered");
+        // Serial.println("[ServerCore] HTTP service registered");
         Serial.printf("[ServerCore] mDNS service: %s.local:80\n", workingName.c_str());
         
         // mDNS configuré avec succès
-        Serial.println("[ServerCore] mDNS configuration complete");
+        // Serial.println("[ServerCore] mDNS configuration complete");
         if (staConnected) {
-            Serial.printf("[ServerCore] Access via: http://%s.local/ or http://%s/\n", workingName.c_str(), WiFi.localIP().toString().c_str());
+            // Serial.printf("[ServerCore] Access via: http://%s.local/ or http://%s/\n", workingName.c_str(), WiFi.localIP().toString().c_str());
         } else {
-            Serial.printf("[ServerCore] Access via: http://%s.local/ or http://%s/\n", workingName.c_str(), WiFi.softAPIP().toString().c_str());
+            // Serial.printf("[ServerCore] Access via: http://%s.local/ or http://%s/\n", workingName.c_str(), WiFi.softAPIP().toString().c_str());
         }
         // Serial.println("[ServerCore] Note: mDNS resolution may take a few seconds to propagate");
     } else {

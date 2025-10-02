@@ -27,7 +27,7 @@ bool RtpMidi::begin(const String& name) {
     // Utiliser le nom des préférences s'il existe, sinon le paramètre
     if(storedName.length() > 0) {
         deviceName = storedName;
-        Serial.printf("RTP-MIDI: Nom depuis les préférences: %s\n", deviceName.c_str());
+        // Serial.printf("RTP-MIDI: Nom depuis les préférences: %s\n", deviceName.c_str());
     } else {
         deviceName = name;
         Serial.printf("RTP-MIDI: Nom depuis le paramètre: %s\n", deviceName.c_str());
@@ -35,7 +35,7 @@ bool RtpMidi::begin(const String& name) {
     
     // Démarrer AppleMIDI
     AppleMIDI.begin();
-    Serial.println("RTP-MIDI: AppleMIDI démarré");
+    // Serial.println("RTP-MIDI: AppleMIDI démarré");
     
     // Changer le nom affiché dans AppleMIDI (pour Audio MIDI Setup)
     AppleMIDI.setName(deviceName.c_str());

@@ -546,12 +546,12 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
             Serial.printf("[WebSocket] Client disconnected: %u\n", client->id());
         } else if (type == WS_EVT_DATA) {
             String message = String((char*)data, len);
-            Serial.printf("[WebSocket] Received: %s\n", message.c_str());
+            // Serial.printf("[WebSocket] Received: %s\n", message.c_str());
             
             // Traiter les messages PIN_CLICKED
             if (message.startsWith("PIN_CLICKED:")) {
                 String pin = message.substring(12);
-                Serial.printf("[WebSocket] Pin clicked: %s\n", pin.c_str());
+                // Serial.printf("[WebSocket] Pin clicked: %s\n", pin.c_str());
                 // Ici on pourrait déclencher la configuration de la pin
             }
         }
