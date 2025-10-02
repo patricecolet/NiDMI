@@ -107,6 +107,9 @@ void esp32server_begin() {
     // Initialiser RTP-MIDI
     serverCore.rtpMidi().begin(serverName.c_str());
     
+    // Initialiser Bluetooth MIDI
+    serverCore.bluetooth().begin(serverName.c_str());
+    
     // Initialiser ComponentManager
     g_componentManager.begin(&g_midiRouter);
     
@@ -116,6 +119,7 @@ void esp32server_begin() {
     Serial.print("  AP IP: "); Serial.println(WiFi.softAPIP());
     Serial.print("  mDNS: http://"); Serial.print(host); Serial.println(".local/");
     Serial.print("  RTP-MIDI: "); Serial.println(serverCore.rtpMidi().isInitialized() ? "Initialized" : "Failed");
+    Serial.print("  Bluetooth: "); Serial.println(serverCore.bluetooth().isInitialized() ? "Initialized" : "Failed");
     Serial.println();
 }
 

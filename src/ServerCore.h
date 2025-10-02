@@ -7,6 +7,7 @@
 #include <AsyncWebSocket.h>
 #include <IPAddress.h>
 #include "RtpMidi.h"
+#include "BluetoothManager.h"
 
 /**
  * @brief Infrastructure serveur (WiFi, mDNS, RTP-MIDI, Web)
@@ -18,12 +19,14 @@
  * - Serveur HTTP asynchrone
  * - WebSocket
  * - RTP-MIDI
+ * - Bluetooth MIDI
  */
 class ServerCore {
 private:
     AsyncWebServer server;
     AsyncWebSocket ws;
     RtpMidi rtpMidiInstance;
+    BluetoothManager bluetoothInstance;
     bool useStaticSta = false;
     IPAddress staIp, staGw, staSn;
     
@@ -40,6 +43,7 @@ public:
     AsyncWebServer& web();
     AsyncWebSocket& websocket();
     RtpMidi& rtpMidi();
+    BluetoothManager& bluetooth();
     
     // Mise à jour périodique
     void update();

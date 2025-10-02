@@ -18,6 +18,7 @@ public:
 
     void enableRtpMidi(bool enabled);
     void enableOsc(bool enabled);
+    void enableBluetooth(bool enabled);
 
     void setOscTargetSta(bool sta);
     void setOscPort(uint16_t port);
@@ -32,6 +33,7 @@ public:
 private:
     bool rtpEnabled;
     bool oscEnabled;
+    bool bluetoothEnabled;
     bool oscToSta;
     uint16_t oscPort;
     uint8_t defaultChannel;

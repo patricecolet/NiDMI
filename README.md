@@ -86,6 +86,7 @@ void loop() {
 - **📡 RTP-MIDI** : Connexion sans fil avec macOS/Logic
 - **🎛️ OSC avancé** : Format configurable, broadcast, adresses personnalisées
 - **🔌 Pins configurables** : Entrées analogiques, boutons, LEDs
+- **📱 BLE MIDI** : Support Bluetooth Low Energy MIDI (optionnel)
 - **👆 Touch pins** : Support des touch pins ESP32-S3 (en développement)
 - **⚡ Temps réel** : Latence optimisée pour la musique
 - **💾 Stockage** : Configuration persistante
@@ -171,6 +172,58 @@ fetch('/api/pins', {
   })
 });
 ```
+
+## BLE MIDI (Bluetooth Low Energy)
+
+### Activation
+
+Pour activer le support BLE MIDI, ajoutez cette ligne au début de votre sketch :
+
+```cpp
+#define ESP32SERVER_ENABLE_BLE_MIDI
+#include <esp32server.h>
+```
+
+### Utilisation
+
+```cpp
+void setup() {
+    esp32server_setup();
+    
+    // Configuration normale
+    esp32server_addButton(2, 1, 60, 1);
+    esp32server_addPotentiometer(6, 1, 1, 1);
+}
+
+void loop() {
+    esp32server_loop();
+}
+```
+
+### Connexion
+
+1. **Rechercher** "ESP32-MIDI" dans les paramètres Bluetooth de votre appareil
+2. **Se connecter** (pas de code PIN requis)
+3. **Utiliser** avec des apps de terminal Bluetooth ou des apps MIDI
+
+### Communication BLE
+
+Le BLE fonctionne comme une communication série bidirectionnelle :
+
+```cpp
+// Données envoyées automatiquement quand vous appuyez sur un bouton
+// Format : [status, data1, data2] (ex: [0x90, 60, 127] pour Note On)
+
+// Données reçues via BLE (affichées dans le Serial Monitor)
+// Vous pouvez envoyer des commandes depuis votre ordinateur/phone
+```
+
+### Limitations
+
+- **Taille** : BLE augmente la taille du binaire (~200KB)
+- **Compatibilité** : Fonctionne avec tous les appareils Bluetooth
+- **Latence** : Légèrement plus élevée que RTP-MIDI
+- **Format** : Communication série simple, pas MIDI standard
 
 ## Développement
 

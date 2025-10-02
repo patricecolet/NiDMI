@@ -139,6 +139,9 @@ void ServerCore::update() {
     
     // Mise à jour RTP-MIDI
     rtpMidiInstance.update();
+    
+    // Mise à jour Bluetooth
+    bluetoothInstance.update();
 }
 
 void ServerCore::reconfigureMdns(const char* hostname) {
@@ -210,4 +213,8 @@ AsyncWebSocket& ServerCore::websocket() {
 
 RtpMidi& ServerCore::rtpMidi() { 
     return rtpMidiInstance; 
+}
+
+BluetoothManager& ServerCore::bluetooth() { 
+    return bluetoothInstance; 
 }
