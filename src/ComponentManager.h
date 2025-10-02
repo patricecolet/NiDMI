@@ -96,7 +96,7 @@ public:
     void begin(MidiSender* sender);
     void update();
     void reloadConfigs();
-    
+    void syncOSCConfig();
     // Gestion des composants
     bool addComponent(uint8_t gpio, ComponentType type, uint8_t midi_param, uint8_t channel);
     bool removeComponent(uint8_t gpio);

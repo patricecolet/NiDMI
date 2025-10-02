@@ -1,5 +1,6 @@
 #include "ComponentManager.h"
 #include <Arduino.h> // For Serial.printf
+#include <Preferences.h>
 #include "ServerCore.h"
 #include "OSCQueue.h"
 
@@ -22,18 +23,46 @@ void ComponentManager::begin(MidiSender* sender) {
     midi_sender = sender;
     loadConfigFromNVS();
     
-    // Initialiser OSC après que le réseau/serveur soit prêt
-    // Valeurs par défaut (peuvent être remplacées par la config NVS côté WebAPI)
-    osc_manager.begin("255.255.255.255", 8000, 8001);
-    osc_manager.setBroadcast(true);
-    osc_manager.setInterface(1); // STA
+    // Charger la configuration OSC depuis NVS
+    Preferences prefs;
+    prefs.begin("esp32server", true);
+    String osc_target = prefs.getString("osc_target", "sta");
+    int osc_port = prefs.getInt("osc_port", 8001);
+    String osc_ip = prefs.getString("osc_ip", "255.255.255.255");
+    bool osc_broadcast = prefs.getBool("osc_broadcast", true);
+    prefs.end();
+
+    // Initialiser osc_manager avec la config NVS
+    osc_manager.begin(osc_ip, osc_port, 8001);
+    osc_manager.setBroadcast(osc_broadcast);
+    osc_manager.setInterface(1);
     osc_manager.setEnabled(true);
+    
+    // Initialiser osc_queue avec la même config
+    osc_queue.begin();
+    osc_queue.setTarget(osc_ip, osc_port);
+    osc_queue.setBroadcast(osc_broadcast);
+    osc_queue.setInterface(1);
+
+    Serial.printf("[ComponentManager] OSC Config: %s:%d (broadcast=%d)\n", 
+                 osc_ip.c_str(), osc_port, osc_broadcast);
     
     // Configuration OSC optimisée (système direct)
     
     // Serial.printf("[ComponentManager] Loaded %d components\n", component_count);
     
     printStats();
+}
+
+void ComponentManager::syncOSCConfig() {
+    // Récupérer la config de osc_manager
+    String target = osc_manager.getTargetIP();
+    int port = osc_manager.getTargetPort();
+    bool broadcast = osc_manager.isBroadcastEnabled();
+    
+    // Appliquer à osc_queue
+    osc_queue.setTarget(target, port);
+    osc_queue.setBroadcast(broadcast);
 }
 
 void ComponentManager::update() {
@@ -72,6 +101,10 @@ void ComponentManager::update() {
     //     }
     //     lastComponentLog = millis();
     // }
+
+    syncOSCConfig();
+    // Traiter OSC en priorité (avec queue FreeRTOS)
+    osc_queue.update();
     
     for (uint8_t i = 0; i < component_count; i++) {
         switch (configs[i].type) {
@@ -116,14 +149,14 @@ void ComponentManager::processPotentiometer(uint8_t index) {
         //              config.gpio, config.midi_channel, config.midi_param, midi_value);
         midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
         
-        // Envoyer OSC si activé
+        // Envoyer OSC si activé (via queue prioritaire)
         if (config.flags & 0x02) { // Bit OSC enabled
             String oscAddress = "/ctl"; // Adresse par défaut
             
             if (config.flags & 0x04) { // Format MIDI
-                osc_manager.sendMidiMessage(oscAddress, midi_value, config.midi_param, config.midi_channel);
+                osc_queue.enqueueMidi(oscAddress, midi_value, config.midi_param, config.midi_channel);
             } else { // Format float
-                osc_manager.sendFloat(oscAddress, midi_value / 127.0f);
+                osc_queue.enqueueFloat(oscAddress, midi_value / 127.0f);
             }
         }
         
@@ -164,13 +197,13 @@ void ComponentManager::processButton(uint8_t index) {
         midi_sender->sendNoteOn(config.midi_channel, config.midi_param, 127);
         state.last_value = 127;
         
-        // Envoyer OSC si activé
+        // Envoyer OSC si activé (via queue prioritaire)
         if (config.flags & 0x02) { // Bit OSC enabled
             String oscAddress = "/note";
             if (config.flags & 0x04) { // Format MIDI
-                osc_manager.sendMidiMessage(oscAddress, config.midi_param, 127, config.midi_channel);
+                osc_queue.enqueueMidi(oscAddress, config.midi_param, 127, config.midi_channel);
             } else { // Format float
-                osc_manager.sendFloat(oscAddress, 1.0f);
+                osc_queue.enqueueFloat(oscAddress, 1.0f);
             }
         }
     } else if (!isPressed && wasPressed) {
@@ -178,13 +211,13 @@ void ComponentManager::processButton(uint8_t index) {
         midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
         state.last_value = 0;
         
-        // Envoyer OSC si activé
+        // Envoyer OSC si activé (via queue prioritaire)
         if (config.flags & 0x02) { // Bit OSC enabled
             String oscAddress = "/note";
             if (config.flags & 0x04) { // Format MIDI
-                osc_manager.sendMidiMessage(oscAddress, config.midi_param, 0, config.midi_channel);
+                osc_queue.enqueueMidi(oscAddress, config.midi_param, 0, config.midi_channel);
             } else { // Format float
-                osc_manager.sendFloat(oscAddress, 0.0f);
+                osc_queue.enqueueFloat(oscAddress, 0.0f);
             }
         }
     }

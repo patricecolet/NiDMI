@@ -24,7 +24,6 @@ bool OSCQueue::begin() {
     
     // Configuration UDP optimisée pour la fiabilité
     udp.setTimeout(1000); // Timeout 1s pour éviter les blocages
-    
     // Démarrer UDP avec port différent pour éviter les conflits
     if (!udp.begin(4001)) { // Port différent de OSCManager (4000)
         Serial.println("[OSCQueue] Erreur: Impossible de démarrer UDP");
