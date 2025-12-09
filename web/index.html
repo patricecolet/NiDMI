@@ -180,8 +180,27 @@
         }
         
         function stat(cfg, pinLabel){ 
-            if(cfg.role==='Potentiomètre') return cfg.rtpEnabled ? `CC#${cfg.rtpCc||7}` : 'Raw';
-            if(cfg.role==='Bouton') return cfg.rtpEnabled ? `Note ${cfg.rtpNote||60}` : 'Digital';
+            if(cfg.role==='Potentiomètre') {
+                if(!cfg.rtpEnabled) return 'Raw';
+                // Afficher le type de message si disponible
+                if(cfg.rtpType === 'Control Change') return `CC#${cfg.rtpCc||7}`;
+                if(cfg.rtpType === 'Program Change') return `PC#${cfg.rtpPc||0}`;
+                if(cfg.rtpType === 'Pitch Bend') return 'Pitch Bend';
+                if(cfg.rtpType === 'Aftertouch (Channel)') return 'Aftertouch';
+                return cfg.rtpType || `CC#${cfg.rtpCc||7}`;
+            }
+            if(cfg.role==='Bouton') {
+                if(!cfg.rtpEnabled) return 'Digital';
+                // Afficher le type de message si disponible
+                if(cfg.rtpType === 'Note') return `Note ${cfg.rtpNote||60}`;
+                if(cfg.rtpType === 'Control Change') return `CC#${cfg.rtpCc||7}`;
+                if(cfg.rtpType === 'Program Change') return `PC#${cfg.rtpPc||0}`;
+                if(cfg.rtpType === 'Note + vélocité') return `Note ${cfg.rtpNote||60} +vel`;
+                if(cfg.rtpType === 'Note (balayage)') return `Note ${cfg.rtpNote||60} scan`;
+                if(cfg.rtpType === 'Clock') return 'Clock';
+                if(cfg.rtpType === 'Tap Tempo') return 'Tap Tempo';
+                return cfg.rtpType || `Note ${cfg.rtpNote||60}`;
+            }
             if(cfg.role==='LED') return cfg.ledMode==='pwm' ? 'PWM' : 'On/Off';
             if(cfg.role==='I2C') return 'I2C';
             if(cfg.role==='SPI') return 'SPI';
@@ -246,6 +265,12 @@
             if(enabled) updateRtpParamsVisibility();
         }
 
+        function updateBtnPulseTimingVisibility(){
+            const btnMode = $('#btnMode');
+            const pulseTimingRow = $('#btnPulseTimingRow');
+            if(!btnMode || !pulseTimingRow) return;
+            pulseTimingRow.style.display = (btnMode.value === 'pulse') ? 'flex' : 'none';
+        }
         function updateRtpParamsVisibility(){
             const typeSel = $('#rtpMsgType');
             const params = $('#rtpParams');
@@ -479,10 +504,42 @@
             updateBusVisuals();
         }
         
-        function readCfg(){ const c={}; c.role=$('#funcSelect')?.value||''; c.btnMode=$('#btnMode')?.value||''; c.ledMode=$('#ledMode')?.value||''; c.potFilter=$('#potFilter')?.value||''; c.rtpEnabled=!!$('#rtpEnabled2')?.checked; c.rtpType=$('#rtpMsgType')?.value||''; c.rtpNote=$('#rtpNote')?.value||''; c.rtpCc=$('#rtpCc')?.value||''; c.rtpPc=$('#rtpPc')?.value||''; c.rtpChan=$('#rtpChan')?.value||''; c.rtpCcOn=$('#rtpCcOn')?.value||''; c.rtpCcOff=$('#rtpCcOff')?.value||''; c.rtpVel=$('#rtpVel')?.value||''; c.rtpCcMin=$('#rtpCcMin')?.value||''; c.rtpCcMax=$('#rtpCcMax')?.value||''; c.rtpNoteMin=$('#rtpNoteMin')?.value||''; c.rtpNoteMax=$('#rtpNoteMax')?.value||''; c.rtpNoteVelFix=$('#rtpNoteVelFix')?.value||''; c.oscEnabled=!!$('#oscEnabled2')?.checked; c.oscAddress=$('#oscAddress')?.value||''; c.oscFormat=$('#oscFormat')?.value||'float'; c.dbgEnabled=!!$('#dbgEnabled')?.checked; c.dbgHeader=$('#dbgHeader')?.value||''; return c; }
-        function applyCfg(c){ if(!c) return; const setV=(id,v)=>{ const el=$(id); if(el&&v!=null) el.value=v; }; const setC=(id,b)=>{ const el=$(id); if(el) el.checked=!!b; }; setV('funcSelect',c.role); showRoleCards(c.role); updateRtpForRole(c.role); setV('btnMode',c.btnMode); setV('ledMode',c.ledMode); setV('potFilter',c.potFilter); setC('rtpEnabled2',c.rtpEnabled); setV('rtpMsgType',c.rtpType); setV('rtpNote',c.rtpNote); setV('rtpCc',c.rtpCc); setV('rtpPc',c.rtpPc); setV('rtpChan',c.rtpChan); setV('rtpCcOn',c.rtpCcOn); setV('rtpCcOff',c.rtpCcOff); setV('rtpVel',c.rtpVel); setV('rtpCcMin',c.rtpCcMin); setV('rtpCcMax',c.rtpCcMax); setV('rtpNoteMin',c.rtpNoteMin); setV('rtpNoteMax',c.rtpNoteMax); setV('rtpNoteVelFix',c.rtpNoteVelFix); setC('oscEnabled2',c.oscEnabled); setV('oscAddress',c.oscAddress); setV('oscFormat',c.oscFormat); setC('dbgEnabled',c.dbgEnabled); setV('dbgHeader',c.dbgHeader); updateRtpParamsVisibility(); }
+        function readCfg(){ const c={}; c.role=$('#funcSelect')?.value||''; c.btnMode=$('#btnMode')?.value||''; c.btnPulseTiming=$('#btnPulseTiming')?.value||''; c.ledMode=$('#ledMode')?.value||''; c.potFilter=$('#potFilter')?.value||''; c.rtpEnabled=!!$('#rtpEnabled2')?.checked; c.rtpType=$('#rtpMsgType')?.value||''; c.rtpNote=$('#rtpNote')?.value||''; c.rtpCc=$('#rtpCc')?.value||''; c.rtpPc=$('#rtpPc')?.value||''; c.rtpChan=$('#rtpChan')?.value||''; c.rtpCcOn=$('#rtpCcOn')?.value||''; c.rtpCcOff=$('#rtpCcOff')?.value||''; c.rtpVel=$('#rtpVel')?.value||''; c.rtpCcMin=$('#rtpCcMin')?.value||''; c.rtpCcMax=$('#rtpCcMax')?.value||''; c.rtpNoteMin=$('#rtpNoteMin')?.value||''; c.rtpNoteMax=$('#rtpNoteMax')?.value||''; c.rtpNoteVelFix=$('#rtpNoteVelFix')?.value||''; c.rtpNoteSweepAutoOffDelay=$('#rtpNoteSweepAutoOffDelay')?.value||''; c.oscEnabled=!!$('#oscEnabled2')?.checked; c.oscAddress=$('#oscAddress')?.value||''; c.oscFormat=$('#oscFormat')?.value||'float'; c.dbgEnabled=!!$('#dbgEnabled')?.checked; c.dbgHeader=$('#dbgHeader')?.value||''; return c; }
+        function applyCfg(c){ if(!c) return; const setV=(id,v)=>{ const el=$(id); if(el&&v!=null) el.value=v; }; const setC=(id,b)=>{ const el=$(id); if(el) el.checked=!!b; }; setV('funcSelect',c.role); showRoleCards(c.role); updateRtpForRole(c.role); setV('btnMode',c.btnMode); setV('ledMode',c.ledMode); setV('potFilter',c.potFilter); setC('rtpEnabled2',c.rtpEnabled); setV('rtpMsgType',c.rtpType); setV('rtpNote',c.rtpNote); setV('rtpCc',c.rtpCc); setV('rtpPc',c.rtpPc); setV('rtpChan',c.rtpChan); setV('rtpCcOn',c.rtpCcOn); setV('rtpCcOff',c.rtpCcOff); setV('rtpVel',c.rtpVel); setV('rtpCcMin',c.rtpCcMin); setV('rtpCcMax',c.rtpCcMax); setV('rtpNoteMin',c.rtpNoteMin); setV('rtpNoteMax',c.rtpNoteMax); setV('rtpNoteVelFix',c.rtpNoteVelFix); setV('rtpNoteSweepAutoOffDelay',c.rtpNoteSweepAutoOffDelay); setC('oscEnabled2',c.oscEnabled); setV('oscAddress',c.oscAddress); setV('oscFormat',c.oscFormat); setC('dbgEnabled',c.dbgEnabled); setV('dbgHeader',c.dbgHeader); updateRtpParamsVisibility(); }
         
-        async function saveAll(){ const msg=$('#saveAllMsg'); msg.textContent='Enregistrement...'; try{ const ps=Object.keys(pcfg).map(async lbl=>{ const c=pcfg[lbl]; if(!c||!c.role) return; const p=new URLSearchParams(); p.set('pinLabel',lbl); p.set('role',c.role); if(c.rtpEnabled) p.set('rtpEnabled','true'); if(c.rtpType) p.set('rtpType',c.rtpType); if(c.rtpNote) p.set('rtpNote',c.rtpNote); if(c.rtpCc) p.set('rtpCc',c.rtpCc); if(c.rtpPc) p.set('rtpPc',c.rtpPc); if(c.rtpChan) p.set('rtpChan',c.rtpChan); if(c.rtpCcOn) p.set('rtpCcOn',c.rtpCcOn); if(c.rtpCcOff) p.set('rtpCcOff',c.rtpCcOff); if(c.rtpVel) p.set('rtpVel',c.rtpVel); if(c.rtpCcMin) p.set('rtpCcMin',c.rtpCcMin); if(c.rtpCcMax) p.set('rtpCcMax',c.rtpCcMax); if(c.rtpNoteMin) p.set('rtpNoteMin',c.rtpNoteMin); if(c.rtpNoteMax) p.set('rtpNoteMax',c.rtpNoteMax); if(c.rtpNoteVelFix) p.set('rtpNoteVelFix',c.rtpNoteVelFix); if(c.ledMode) p.set('ledMode',c.ledMode); if(c.btnMode) p.set('btnMode',c.btnMode); if(c.potFilter) p.set('potFilter',c.potFilter); if(c.oscEnabled) p.set('oscEnabled','true'); if(c.oscAddress) p.set('oscAddress',c.oscAddress); if(c.oscFormat) p.set('oscFormat',c.oscFormat); if(c.dbgEnabled) p.set('dbgEnabled','true'); if(c.dbgHeader) p.set('dbgHeader',c.dbgHeader); return fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}); }); await Promise.all(ps); msg.textContent='Toutes les configurations enregistrées'; msg.style.color='#10b981'; }catch(e){ msg.textContent='Erreur lors de l\'enregistrement'; msg.style.color='#ef4444'; } }
+        async function saveAll(){ const msg=$('#saveAllMsg'); msg.textContent='Enregistrement...'; try{ 
+            /* Sauvegarder toutes les pins dans pcfg */
+            const ps=Object.keys(pcfg).map(async lbl=>{ const c=pcfg[lbl]; if(!c||!c.role) return; const p=new URLSearchParams(); p.set('pinLabel',lbl); p.set('role',c.role); if(c.rtpEnabled) p.set('rtpEnabled','true'); if(c.rtpType) p.set('rtpType',c.rtpType); if(c.rtpNote) p.set('rtpNote',c.rtpNote); if(c.rtpCc) p.set('rtpCc',c.rtpCc); if(c.rtpPc) p.set('rtpPc',c.rtpPc); if(c.rtpChan) p.set('rtpChan',c.rtpChan); if(c.rtpCcOn) p.set('rtpCcOn',c.rtpCcOn); if(c.rtpCcOff) p.set('rtpCcOff',c.rtpCcOff); if(c.rtpVel) p.set('rtpVel',c.rtpVel); if(c.rtpCcMin) p.set('rtpCcMin',c.rtpCcMin); if(c.rtpCcMax) p.set('rtpCcMax',c.rtpCcMax); if(c.rtpNoteMin) p.set('rtpNoteMin',c.rtpNoteMin); if(c.rtpNoteMax) p.set('rtpNoteMax',c.rtpNoteMax); if(c.rtpNoteVelFix) p.set('rtpNoteVelFix',c.rtpNoteVelFix); if(c.rtpNoteSweepAutoOffDelay) p.set('rtpNoteSweepAutoOffDelay',c.rtpNoteSweepAutoOffDelay); if(c.ledMode) p.set('ledMode',c.ledMode); if(c.btnMode) p.set('btnMode',c.btnMode); if(c.btnPulseTiming) p.set('btnPulseTiming',c.btnPulseTiming); if(c.potFilter) p.set('potFilter',c.potFilter); if(c.oscEnabled) p.set('oscEnabled','true'); if(c.oscAddress) p.set('oscAddress',c.oscAddress); if(c.oscFormat) p.set('oscFormat',c.oscFormat); if(c.dbgEnabled) p.set('dbgEnabled','true'); if(c.dbgHeader) p.set('dbgHeader',c.dbgHeader); return fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}); }); 
+            await Promise.all(ps); 
+            
+            /* Récupérer la liste de toutes les pins configurées sur le serveur */
+            const listRes=await fetch('/api/pins/list'); 
+            const listData=await listRes.json(); 
+            const serverPins=new Set(); 
+            if(listData.pins && Array.isArray(listData.pins)){ 
+                listData.pins.forEach(p=>{ 
+                    if(p.pinLabel) serverPins.add(p.pinLabel); 
+                }); 
+            } 
+            
+            /* Supprimer les pins qui ne sont plus dans pcfg */
+            const localPins=new Set(Object.keys(pcfg)); 
+            const toDelete=Array.from(serverPins).filter(p=>!localPins.has(p)); 
+            const deletePromises=toDelete.map(async pinLabel=>{ 
+                const p=new URLSearchParams(); 
+                p.set('pin',pinLabel); 
+                return fetch('/api/pins/delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}); 
+            }); 
+            await Promise.all(deletePromises); 
+            
+            msg.textContent='Toutes les configurations enregistrées'; 
+            msg.style.color='#10b981'; 
+        }catch(e){ 
+            msg.textContent='Erreur lors de l\'enregistrement'; 
+            msg.style.color='#ef4444'; 
+            console.error('Erreur saveAll:',e); 
+        } 
+        }
         
         document.addEventListener('DOMContentLoaded', () => {
             initTabs();
@@ -495,7 +552,7 @@
             setInterval(loadStatus, 5000);
             const btn=$('#saveAllBtn'); if(btn) btn.onclick=saveAll; 
             /* Brancher les changements pour mise à jour liste */
-            const fieldsToWatch=['funcSelect','btnMode','ledMode','potFilter','rtpEnabled2','rtpMsgType','rtpNote','rtpCc','rtpPc','rtpChan','rtpCcOn','rtpCcOff','rtpVel','rtpCcMin','rtpCcMax','rtpNoteMin','rtpNoteMax','rtpNoteVelFix','oscEnabled2','oscAddress','oscFormat','dbgEnabled','dbgHeader'];
+            const fieldsToWatch=['funcSelect','btnMode','btnPulseTiming','ledMode','potFilter','rtpEnabled2','rtpMsgType','rtpNote','rtpCc','rtpPc','rtpChan','rtpCcOn','rtpCcOff','rtpVel','rtpCcMin','rtpCcMax','rtpNoteMin','rtpNoteMax','rtpNoteVelFix','rtpNoteSweepAutoOffDelay','oscEnabled2','oscAddress','oscFormat','dbgEnabled','dbgHeader'];
             fieldsToWatch.forEach(id=>{
                 const el=document.getElementById(id);
                 if(el){
@@ -518,7 +575,31 @@
             
             /* Event listener pour changement de type MIDI */
             const rtpType = $('#rtpMsgType');
-            if(rtpType){ rtpType.onchange = updateRtpParamsVisibility; }
+            if(rtpType){ 
+                rtpType.onchange = function() {
+                    updateRtpParamsVisibility();
+                    // Sauvegarder dans pcfg et mettre à jour la liste
+                    if(cur){ 
+                        pcfg[cur]=readCfg(); 
+                        updatePinsList(); 
+                        updateBusVisuals();
+                    }
+                };
+            }
+            
+            /* Event listener pour changement de mode bouton */
+            const btnMode = $('#btnMode');
+            if(btnMode){ 
+                btnMode.onchange = function() {
+                    updateBtnPulseTimingVisibility();
+                    // Sauvegarder dans pcfg et mettre à jour la liste
+                    if(cur){ 
+                        pcfg[cur]=readCfg(); 
+                        updatePinsList(); 
+                        updateBusVisuals();
+                    }
+                };
+            }
         });
     </script>
 </head>
@@ -545,7 +626,7 @@
                 <div class="rp"><div class="cp">
                     <h4>Fonction du pin</h4>
                     <div class="r"><label>Pin:</label><span id="selPin">-</span><select id="funcSelect"></select></div>
-                    <div id="cardBtn" class="subcard" style="display:none;"><div class="r"><label>Mode bouton:</label><select id="btnMode"><option value="pulse">Push</option><option value="press_release">Press/Release</option><option value="toggle">Toggle</option></select></div></div>
+                    <div id="cardBtn" class="subcard" style="display:none;"><div class="r"><label>Mode bouton:</label><select id="btnMode"><option value="pulse">Push</option><option value="press_release">Press/Release</option><option value="toggle">Toggle</option></select></div><div class="r" id="btnPulseTimingRow" style="display:none;"><label>Timing Push:</label><select id="btnPulseTiming"><option value="press">Au press</option><option value="release">Au release</option></select></div></div>
                     <div id="cardLed" class="subcard" style="display:none;"><div class="r"><label>LED:</label><select id="ledMode"><option value="onoff">On/Off</option><option value="pwm">PWM</option></select></div></div>
                     <div id="cardPot" class="subcard" style="display:none;"><div class="r"><label>Filtre:</label><select id="potFilter"><option value="none">Aucun</option><option value="lowpass">Passe-bas</option><option value="median">Médiane</option></select></div></div>
                     <h4>RTP‑MIDI</h4>
@@ -559,7 +640,7 @@
                         <div class="r" id="rtpCcRangeRow" style="display:none;"><label>Plage MIDI:</label><input type="number" id="rtpCcMin" min="0" max="127" placeholder="0" style="width:90px;"><span>→</span><input type="number" id="rtpCcMax" min="0" max="127" placeholder="127" style="width:90px;"></div>
                         <div class="r" id="rtpChanRow" style="display:none;"><label>Canal:</label><input type="number" id="rtpChan" min="1" max="16" placeholder="1" style="width:90px;"></div>
                         <div class="r" id="rtpClockHint" style="display:none; color:#6b7280;"><span>Clock / Tap Tempo: pas de canal.</span></div>
-                        <div class="r" id="rtpNoteSweepRow" style="display:none;"><label>Balayage:</label><input type="number" id="rtpNoteMin" min="0" max="127" placeholder="48" style="width:90px;"><span>→</span><input type="number" id="rtpNoteMax" min="0" max="127" placeholder="72" style="width:90px;"><label style="margin-left:8px;">Vélocité fixe:</label><input type="number" id="rtpNoteVelFix" min="1" max="127" placeholder="100" style="width:90px;"></div>
+                        <div class="r" id="rtpNoteSweepRow" style="display:none;"><label>Balayage:</label><input type="number" id="rtpNoteMin" min="0" max="127" placeholder="48" style="width:90px;"><span>→</span><input type="number" id="rtpNoteMax" min="0" max="127" placeholder="72" style="width:90px;"><label style="margin-left:8px;">Vélocité fixe:</label><input type="number" id="rtpNoteVelFix" min="1" max="127" placeholder="100" style="width:90px;"><label style="margin-left:8px;">Auto-off (ms):</label><input type="number" id="rtpNoteSweepAutoOffDelay" min="0" max="65535" placeholder="0" style="width:90px;"></div>
                     </div>
                     <h4>OSC</h4>
                     <div class="r switch"><input type="checkbox" id="oscEnabled2"><label for="oscEnabled2">Activer</label><label>Addr:</label><input type="text" id="oscAddress" placeholder="/ctl"></div>

@@ -42,7 +42,7 @@ public:
     void sendNoteOff(uint8_t channel, uint8_t note, uint8_t velocity);
     void sendControlChange(uint8_t channel, uint8_t control, uint8_t value);
     void sendProgramChange(uint8_t channel, uint8_t program);
-    void sendPitchBend(uint8_t channel, uint16_t bend);
+    void sendPitchBend(uint8_t channel, int bend);
     
     // État de connexion
     bool isConnected() const;

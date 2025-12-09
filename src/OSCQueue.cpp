@@ -37,7 +37,7 @@ bool OSCQueue::begin() {
     WiFi.setAutoReconnect(true); // Reconnexion automatique
     
     initialized = true;
-    Serial.println("[OSCQueue] Initialisé avec succès (port 4001)");
+    // Serial.println("[OSCQueue] Initialisé avec succès (port 4001)");
     return true;
 }
 
@@ -48,7 +48,7 @@ void OSCQueue::end() {
     }
     udp.stop();
     initialized = false;
-    Serial.println("[OSCQueue] Arrêté");
+    // Serial.println("[OSCQueue] Arrêté");
 }
 
 bool OSCQueue::enqueueFloat(const String& address, float value) {
@@ -67,8 +67,8 @@ bool OSCQueue::enqueueFloat(const String& address, float value) {
     
     BaseType_t result = xQueueSend(messageQueue, &item, 0); // Non-bloquant
     if (result != pdTRUE) {
-        Serial.printf("[OSCQueue] Queue pleine, message float perdu: %s=%.3f\n", 
-                     address.c_str(), value);
+        // Serial.printf("[OSCQueue] Queue pleine, message float perdu: %s=%.3f\n", 
+        //              address.c_str(), value);
         return false;
     }
     
@@ -91,8 +91,8 @@ bool OSCQueue::enqueueMidi(const String& address, uint8_t data1, uint8_t data2, 
     
     BaseType_t result = xQueueSend(messageQueue, &item, 0); // Non-bloquant
     if (result != pdTRUE) {
-        Serial.printf("[OSCQueue] Queue pleine, message MIDI perdu: %s ch%d d1%d d2%d\n", 
-                     address.c_str(), channel, data1, data2);
+        // Serial.printf("[OSCQueue] Queue pleine, message MIDI perdu: %s ch%d d1%d d2%d\n", 
+        //              address.c_str(), channel, data1, data2);
         return false;
     }
     
@@ -135,17 +135,17 @@ void OSCQueue::update() {
 void OSCQueue::setTarget(const String& target_ip, uint16_t target_port) {
     targetIP = target_ip;
     targetPort = target_port;
-    Serial.printf("[OSCQueue] Cible: %s:%d\n", targetIP.c_str(), targetPort);
+    // Serial.printf("[OSCQueue] Cible: %s:%d\n", targetIP.c_str(), targetPort);
 }
 
 void OSCQueue::setBroadcast(bool enable) {
     broadcastEnabled = enable;
-    Serial.printf("[OSCQueue] Broadcast: %s\n", enable ? "activé" : "désactivé");
+    // Serial.printf("[OSCQueue] Broadcast: %s\n", enable ? "activé" : "désactivé");
 }
 
 void OSCQueue::setInterface(uint8_t interface) {
     networkInterface = interface;
-    Serial.printf("[OSCQueue] Interface: %d\n", interface);
+    // Serial.printf("[OSCQueue] Interface: %d\n", interface);
 }
 
 uint32_t OSCQueue::getQueueSize() const {
@@ -202,7 +202,7 @@ bool OSCQueue::sendOSCMessage(OSCMessage& msg) {
     
     // Vérifier l'état WiFi avant l'envoi
     if (WiFi.status() != WL_CONNECTED && networkInterface != 0) {
-        Serial.printf("[OSCQueue] WiFi déconnecté, statut: %d\n", WiFi.status());
+        // Serial.printf("[OSCQueue] WiFi déconnecté, statut: %d\n", WiFi.status());
         return false;
     }
     
@@ -214,12 +214,12 @@ bool OSCQueue::sendOSCMessage(OSCMessage& msg) {
                     msg.send(udp);
                     if (udp.endPacket()) {
                         success = true;
-                        Serial.printf("[OSCQueue] Broadcast AP réussi (tentative %d)\n", retryCount + 1);
+                        // Serial.printf("[OSCQueue] Broadcast AP réussi (tentative %d)\n", retryCount + 1);
                     } else {
-                        Serial.printf("[OSCQueue] Échec endPacket AP (tentative %d)\n", retryCount + 1);
+                        // Serial.printf("[OSCQueue] Échec endPacket AP (tentative %d)\n", retryCount + 1);
                     }
                 } else {
-                    Serial.printf("[OSCQueue] Échec beginPacket AP (tentative %d)\n", retryCount + 1);
+                    // Serial.printf("[OSCQueue] Échec beginPacket AP (tentative %d)\n", retryCount + 1);
                 }
                 retryCount++;
                 if (!success && retryCount <= maxRetries) {
@@ -243,12 +243,12 @@ bool OSCQueue::sendOSCMessage(OSCMessage& msg) {
                     msg.send(udp);
                     if (udp.endPacket()) {
                         success = true;
-                        Serial.printf("[OSCQueue] Broadcast STA réussi (tentative %d)\n", retryCount + 1);
+                        // Serial.printf("[OSCQueue] Broadcast STA réussi (tentative %d)\n", retryCount + 1);
                     } else {
-                        Serial.printf("[OSCQueue] Échec endPacket STA (tentative %d)\n", retryCount + 1);
+                        // Serial.printf("[OSCQueue] Échec endPacket STA (tentative %d)\n", retryCount + 1);
                     }
                 } else {
-                    Serial.printf("[OSCQueue] Échec beginPacket STA (tentative %d)\n", retryCount + 1);
+                    // Serial.printf("[OSCQueue] Échec beginPacket STA (tentative %d)\n", retryCount + 1);
                 }
                 retryCount++;
                 if (!success && retryCount <= maxRetries) {
@@ -264,12 +264,12 @@ bool OSCQueue::sendOSCMessage(OSCMessage& msg) {
                     msg.send(udp);
                     if (udp.endPacket()) {
                         success = true;
-                        Serial.printf("[OSCQueue] Unicast réussi (tentative %d)\n", retryCount + 1);
+                        // Serial.printf("[OSCQueue] Unicast réussi (tentative %d)\n", retryCount + 1);
                     } else {
-                        Serial.printf("[OSCQueue] Échec endPacket unicast (tentative %d)\n", retryCount + 1);
+                        // Serial.printf("[OSCQueue] Échec endPacket unicast (tentative %d)\n", retryCount + 1);
                     }
                 } else {
-                    Serial.printf("[OSCQueue] Échec beginPacket unicast (tentative %d)\n", retryCount + 1);
+                    // Serial.printf("[OSCQueue] Échec beginPacket unicast (tentative %d)\n", retryCount + 1);
                 }
                 retryCount++;
                 if (!success && retryCount <= maxRetries) {
@@ -280,7 +280,7 @@ bool OSCQueue::sendOSCMessage(OSCMessage& msg) {
     }
     
     if (!success) {
-        Serial.printf("[OSCQueue] Échec définitif après %d tentatives\n", maxRetries + 1);
+        // Serial.printf("[OSCQueue] Échec définitif après %d tentatives\n", maxRetries + 1);
     }
     
     return success;

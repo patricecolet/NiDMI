@@ -68,6 +68,72 @@ void MidiRouter::sendControlChange(uint8_t channel, uint8_t control, uint8_t val
     #endif
 }
 
+void MidiRouter::sendProgramChange(uint8_t channel, uint8_t program) {
+    const uint8_t ch = channel ? channel : defaultChannel;
+    if (rtpEnabled) {
+        serverCore.rtpMidi().sendProgramChange(ch, program);
+    }
+    if (bluetoothEnabled) {
+        serverCore.bluetooth().sendProgramChange(ch, program);
+    }
+}
+
+void MidiRouter::sendPitchBend(uint8_t channel, int bend) {
+    const uint8_t ch = channel ? channel : defaultChannel;
+    if (rtpEnabled) {
+        serverCore.rtpMidi().sendPitchBend(ch, bend);
+    }
+    if (bluetoothEnabled) {
+        serverCore.bluetooth().sendPitchBend(ch, bend);
+    }
+}
+
+void MidiRouter::sendAftertouch(uint8_t channel, uint8_t pressure) {
+    const uint8_t ch = channel ? channel : defaultChannel;
+    if (rtpEnabled) {
+        serverCore.rtpMidi().sendAftertouch(ch, pressure);
+    }
+    if (bluetoothEnabled) {
+        // BluetoothManager n'a pas sendAftertouch, on peut l'ignorer ou l'implémenter plus tard
+    }
+}
+
+void MidiRouter::sendClock() {
+    if (rtpEnabled) {
+        serverCore.rtpMidi().sendClock();
+    }
+    if (bluetoothEnabled) {
+        // BluetoothManager n'a pas sendClock, on peut l'ignorer ou l'implémenter plus tard
+    }
+}
+
+void MidiRouter::sendStart() {
+    if (rtpEnabled) {
+        serverCore.rtpMidi().sendStart();
+    }
+    if (bluetoothEnabled) {
+        // BluetoothManager n'a pas sendStart, on peut l'ignorer ou l'implémenter plus tard
+    }
+}
+
+void MidiRouter::sendStop() {
+    if (rtpEnabled) {
+        serverCore.rtpMidi().sendStop();
+    }
+    if (bluetoothEnabled) {
+        // BluetoothManager n'a pas sendStop, on peut l'ignorer ou l'implémenter plus tard
+    }
+}
+
+void MidiRouter::sendContinue() {
+    if (rtpEnabled) {
+        serverCore.rtpMidi().sendContinue();
+    }
+    if (bluetoothEnabled) {
+        // BluetoothManager n'a pas sendContinue, on peut l'ignorer ou l'implémenter plus tard
+    }
+}
+
 void MidiRouter::enableRtpMidi(bool enabled) { rtpEnabled = enabled; }
 void MidiRouter::enableOsc(bool enabled) { oscEnabled = enabled; }
 void MidiRouter::enableBluetooth(bool enabled) { bluetoothEnabled = enabled; }

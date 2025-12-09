@@ -3,6 +3,7 @@
 #include <Preferences.h>
 #include "ServerCore.h"
 #include "OSCQueue.h"
+#include "midi/MidiMessageType.h"
 
 extern ServerCore serverCore;
 
@@ -107,9 +108,19 @@ void ComponentManager::update() {
     osc_queue.update();
     
     for (uint8_t i = 0; i < component_count; i++) {
-        switch (configs[i].type) {
+        // Vérifier que le composant est valide avant de le traiter
+        const ComponentConfig& config = configs[i];
+        if (config.gpio >= 255 || config.gpio > 48) {
+            // GPIO invalide, ignorer ce composant
+            continue;
+        }
+        
+        switch (config.type) {
             case ComponentType::POTENTIOMETER:
-                processPotentiometer(i);
+                // Vérifier ADC avant de traiter
+                if (PinMapper::hasAdc(config.gpio)) {
+                    processPotentiometer(i);
+                }
                 break;
             case ComponentType::BUTTON:
                 processButton(i);
@@ -122,14 +133,26 @@ void ComponentManager::update() {
 }
 
 void ComponentManager::reloadConfigs() {
+    // Serial.println("[ComponentManager] Reloading configs...");
     clearAll();
     loadConfigFromNVS();
-    Serial.println("[ComponentManager] Configs reloaded");
+    // Serial.println("[ComponentManager] Configs reloaded");
 }
 
 void ComponentManager::processPotentiometer(uint8_t index) {
     const ComponentConfig& config = configs[index];
     ComponentState& state = states[index];
+    
+    // Vérifier que le GPIO est valide et a un ADC (SILENCIEUX pour éviter le spam)
+    if (config.gpio >= 255 || config.gpio > 48) {
+        // GPIO invalide, ne pas traiter (pas de log pour éviter le spam)
+        return;
+    }
+    
+    if (!PinMapper::hasAdc(config.gpio)) {
+        // Pas d'ADC, ne pas traiter (pas de log pour éviter le spam)
+        return;
+    }
     
     // Lecture analogique
     uint16_t raw_value = analogRead(config.gpio);
@@ -137,21 +160,131 @@ void ComponentManager::processPotentiometer(uint8_t index) {
     // Adaptation du filtre selon la vitesse de changement
     filters[index].adaptFilter(raw_value, state.last_value);
     
-    // Filtrage
-    uint16_t filtered_value = filters[index].process(raw_value);
+    // Filtrage : médian + passe-bas agressif pour NOTE_SWEEP, sinon filtre normal
+    uint16_t filtered_value;
+    if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
+        filtered_value = filters[index].processMedianAndLowpass(raw_value);
+    } else {
+        filtered_value = filters[index].process(raw_value);
+    }
     
     // Conversion 0-4095 → 0-127
     uint8_t midi_value = map(filtered_value, 0, 4095, 0, 127);
     
+    // ===== TRAITEMENT SPÉCIAL NOTE_SWEEP =====
+    // Utilise l'hystérésis pour éviter les oscillations
+    if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
+        
+        // 1. Vérifier l'auto-off AVANT tout (éteint la note si délai écoulé)
+        if (config.rtpNoteSweepAutoOffDelay > 0 && 
+            state.last_note != 255 && 
+            state.note_on_time > 0) {
+            uint32_t elapsed = millis() - state.note_on_time;
+            if (elapsed >= config.rtpNoteSweepAutoOffDelay) {
+                // Délai écoulé, éteindre la note
+                midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
+                state.last_note = 255;
+                state.note_on_time = 0;
+            }
+        }
+        
+        // 2. Appliquer l'hystérésis sur midi_value
+        // Si pas de changement significatif, on s'arrête là
+        if (!state.hysteresis.update(midi_value)) {
+            return; // Valeur stable, rien à faire
+        }
+        
+        // 3. L'hystérésis a détecté un changement réel
+        // Utiliser la valeur stabilisée par l'hystérésis
+        uint8_t stable_midi_value = state.hysteresis.getValue();
+        
+        // 4. Calculer la nouvelle note
+        uint8_t noteMin = config.rtpNoteMin;
+        uint8_t noteMax = config.rtpNoteMax;
+        uint8_t newNote;
+        
+        if (stable_midi_value == 0) {
+            newNote = 255; // Pas de note (potentiomètre à zéro)
+        } else {
+            newNote = map(stable_midi_value, 1, 127, noteMin, noteMax);
+        }
+        
+        // 5. Si la note est identique à la précédente, ne rien faire
+        if (newNote == state.last_note) {
+            return;
+        }
+        
+        // 6. Éteindre l'ancienne note si elle existe
+        if (state.last_note != 255) {
+            midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
+        }
+        
+        // 7. Jouer la nouvelle note (sauf si 255)
+        if (newNote != 255) {
+            midi_sender->sendNoteOn(config.midi_channel, newNote, config.rtpNoteVelFix);
+            state.note_on_time = (config.rtpNoteSweepAutoOffDelay > 0) ? millis() : 0;
+        } else {
+            state.note_on_time = 0;
+        }
+        
+        // 8. Mettre à jour l'état
+        state.last_note = newNote;
+        state.last_value = stable_midi_value;
+        state.last_time = millis();
+        
+        // 9. OSC si activé
+        if (config.flags & 0x02) {
+            String oscAddress = (config.osc_address[0] != '\0') ? String(config.osc_address) : "/note";
+            if (config.flags & 0x04) {
+                osc_queue.enqueueMidi(oscAddress, stable_midi_value, config.midi_param, config.midi_channel);
+            } else {
+                osc_queue.enqueueFloat(oscAddress, stable_midi_value / 127.0f);
+            }
+        }
+        
+        return; // Traitement NOTE_SWEEP terminé
+    }
+    
+    // ===== TRAITEMENT STANDARD (autres types) =====
     // Envoyer seulement si changement significatif (seuil de 3 pour XIAO_ESP32C3)
     if (abs((int)midi_value - (int)state.last_value) >= 3) {
-        // Serial.printf("[ComponentManager] Potentiometer GPIO%d -> CC ch%d cc%d val%d\n", 
-        //              config.gpio, config.midi_channel, config.midi_param, midi_value);
-        midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
+        // Envoyer le message MIDI selon le type configuré
+        switch (config.msg_type) {
+            case MidiMessageType::CONTROL_CHANGE:
+                midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
+                break;
+            case MidiMessageType::PITCH_BEND: {
+                // Pitch Bend: 0-127 → -8192 à +8191 (signé, centre=0)
+                int pitchBend = map(midi_value, 0, 127, -8192, 8191);
+                midi_sender->sendPitchBend(config.midi_channel, pitchBend);
+                break;
+            }
+            case MidiMessageType::AFTERTOUCH:
+                midi_sender->sendAftertouch(config.midi_channel, midi_value);
+                break;
+            case MidiMessageType::NOTE_VELOCITY:
+                // Note + vélocité: envoyer Note On avec vélocité variable
+                if (midi_value > 0) {
+                    midi_sender->sendNoteOn(config.midi_channel, config.midi_param, midi_value);
+                } else {
+                    midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
+                }
+                break;
+            // NOTE_SWEEP est traité avant le switch et fait return, jamais atteint ici
+            case MidiMessageType::PROGRAM_CHANGE:
+                // Program Change: envoyer seulement si changement significatif
+                midi_sender->sendProgramChange(config.midi_channel, midi_value);
+                break;
+            default:
+                // Par défaut: Control Change
+                midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
+                break;
+        }
         
         // Envoyer OSC si activé (via queue prioritaire)
         if (config.flags & 0x02) { // Bit OSC enabled
-            String oscAddress = "/ctl"; // Adresse par défaut
+            // Utiliser l'adresse OSC configurée (ou défaut si vide)
+            String oscAddress = (config.osc_address[0] != '\0') ? String(config.osc_address) : "/ctl";
             
             if (config.flags & 0x04) { // Format MIDI
                 osc_queue.enqueueMidi(oscAddress, midi_value, config.midi_param, config.midi_channel);
@@ -160,6 +293,7 @@ void ComponentManager::processPotentiometer(uint8_t index) {
             }
         }
         
+        // Mettre à jour last_value (NOTE_SWEEP est traité avant et fait return)
         state.last_value = midi_value;
         state.last_time = millis();
     }
@@ -187,39 +321,151 @@ void ComponentManager::processButton(uint8_t index) {
         return; // Pas encore stable
     }
     
-    // Détecter les transitions sur l'état stable
-    bool wasPressed = (state.last_value == 127);
-    bool isPressed = pressed;
+    // État stable actuel (après debounce)
+    // Avec INPUT_PULLUP : pressed = true quand bouton pressé (LOW), false quand relâché (HIGH)
+    bool currentStableState = pressed;
+    bool prevStableState = state.prev_stable_state;
     
-        
-    if (isPressed && !wasPressed) {
-        // Transition: Released -> Pressed
-        midi_sender->sendNoteOn(config.midi_channel, config.midi_param, 127);
-        state.last_value = 127;
-        
-        // Envoyer OSC si activé (via queue prioritaire)
-        if (config.flags & 0x02) { // Bit OSC enabled
-            String oscAddress = "/note";
-            if (config.flags & 0x04) { // Format MIDI
-                osc_queue.enqueueMidi(oscAddress, config.midi_param, 127, config.midi_channel);
-            } else { // Format float
-                osc_queue.enqueueFloat(oscAddress, 1.0f);
+    // Détecter Falling (HIGH → LOW, press) et Rising (LOW → HIGH, release)
+    // Falling = transition de released (false) à pressed (true)
+    // Rising = transition de pressed (true) à released (false)
+    bool falling = currentStableState && !prevStableState;  // false → true = press
+    bool rising = !currentStableState && prevStableState;   // true → false = release
+    
+    // Mettre à jour l'état stable précédent pour la prochaine itération
+    state.prev_stable_state = currentStableState;
+    
+    // Si pas de transition, on s'arrête là
+    if (!falling && !rising) {
+        return;
+    }
+    
+    // Fonction helper pour envoyer Note On
+    auto sendNoteOn = [&]() {
+        switch (config.msg_type) {
+            case MidiMessageType::NOTE:
+            case MidiMessageType::NOTE_VELOCITY:
+            case MidiMessageType::NOTE_SWEEP:
+                midi_sender->sendNoteOn(config.midi_channel, config.midi_param, 127);
+                break;
+            case MidiMessageType::CONTROL_CHANGE:
+                midi_sender->sendControlChange(config.midi_channel, config.midi_param, 127);
+                break;
+            case MidiMessageType::PROGRAM_CHANGE:
+                midi_sender->sendProgramChange(config.midi_channel, config.midi_param);
+                break;
+            case MidiMessageType::CLOCK:
+                midi_sender->sendClock();
+                break;
+            case MidiMessageType::TAP_TEMPO:
+                midi_sender->sendClock();
+                break;
+            default:
+                midi_sender->sendNoteOn(config.midi_channel, config.midi_param, 127);
+                break;
+        }
+    };
+    
+    // Fonction helper pour envoyer Note Off
+    auto sendNoteOff = [&]() {
+        switch (config.msg_type) {
+            case MidiMessageType::NOTE:
+            case MidiMessageType::NOTE_VELOCITY:
+            case MidiMessageType::NOTE_SWEEP:
+                midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
+                break;
+            case MidiMessageType::CONTROL_CHANGE:
+                midi_sender->sendControlChange(config.midi_channel, config.midi_param, 0);
+                break;
+            case MidiMessageType::PROGRAM_CHANGE:
+            case MidiMessageType::CLOCK:
+            case MidiMessageType::TAP_TEMPO:
+                // Pas de "off" pour ces types
+                break;
+            default:
+                midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
+                break;
+        }
+    };
+    
+    // Fonction helper pour envoyer OSC
+    auto sendOSC = [&](uint8_t value) {
+        if (config.flags & 0x02) {
+            String oscAddress = (config.osc_address[0] != '\0') ? String(config.osc_address) : "/note";
+            if (config.flags & 0x04) {
+                osc_queue.enqueueMidi(oscAddress, config.midi_param, value, config.midi_channel);
+            } else {
+                osc_queue.enqueueFloat(oscAddress, value / 127.0f);
             }
         }
-    } else if (!isPressed && wasPressed) {
-        // Transition: Pressed -> Released
-        midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
-        state.last_value = 0;
-        
-        // Envoyer OSC si activé (via queue prioritaire)
-        if (config.flags & 0x02) { // Bit OSC enabled
-            String oscAddress = "/note";
-            if (config.flags & 0x04) { // Format MIDI
-                osc_queue.enqueueMidi(oscAddress, config.midi_param, 0, config.midi_channel);
-            } else { // Format float
-                osc_queue.enqueueFloat(oscAddress, 0.0f);
+    };
+    
+    // Déterminer le mode (défaut: press_release)
+    String btnMode = String(config.btnMode);
+    if (btnMode.length() == 0) {
+        btnMode = "press_release";
+    }
+    
+    // Déterminer le timing pour mode pulse (défaut: release)
+    String btnPulseTiming = String(config.btnPulseTiming);
+    if (btnPulseTiming.length() == 0) {
+        btnPulseTiming = "release";
+    }
+    
+    // Implémenter les 3 modes
+    if (falling) {
+        // Falling edge (press détecté)
+        if (btnMode == "pulse") {
+            // Mode pulse: selon le timing configuré
+            if (btnPulseTiming == "press") {
+                // Au press: envoyer Note On + Note Off immédiatement
+                sendNoteOn();
+                sendNoteOff();
+                sendOSC(127);
+                sendOSC(0);
+            } else {
+                // Au release (défaut): mémoriser qu'on a été pressé, on enverra au Rising
+                state.pulse_pending = true;
             }
+        } else if (btnMode == "toggle") {
+            // Mode toggle: basculer l'état à chaque Falling edge
+            if (!state.toggle_state) {
+                // État OFF → ON
+                sendNoteOn();
+                sendOSC(127);
+                state.toggle_state = true;
+                state.last_value = 127;
+            } else {
+                // État ON → OFF
+                sendNoteOff();
+                sendOSC(0);
+                state.toggle_state = false;
+                state.last_value = 0;
+            }
+        } else {
+            // Mode press_release (défaut): Note On au Falling
+            sendNoteOn();
+            sendOSC(127);
+            state.last_value = 127;
         }
+    } else if (rising) {
+        // Rising edge (release détecté)
+        if (btnMode == "pulse") {
+            // Mode pulse: envoyer Note On + Note Off seulement si on avait été pressé
+            if (state.pulse_pending) {
+                sendNoteOn();
+                sendNoteOff();
+                sendOSC(127);
+                sendOSC(0);
+                state.pulse_pending = false;
+            }
+        } else if (btnMode == "press_release") {
+            // Mode press_release: Note Off au Rising
+            sendNoteOff();
+            sendOSC(0);
+            state.last_value = 0;
+        }
+        // Pour toggle, on ne fait rien au Rising
     }
 }
 
@@ -229,11 +475,29 @@ void ComponentManager::processLed(uint8_t index) {
     // Le pilotage se fait via handleMidiNoteOn/Off
 }
 
-bool ComponentManager::addComponent(uint8_t gpio, ComponentType type, uint8_t midi_param, uint8_t channel) {
-    if (component_count >= MAX_COMPONENTS) return false;
+bool ComponentManager::addComponent(uint8_t gpio, ComponentType type, uint8_t midi_param, uint8_t channel, MidiMessageType msg_type) {
+    if (component_count >= MAX_COMPONENTS) {
+        Serial.printf("[ComponentManager] ERROR: Max components reached (%d)\n", MAX_COMPONENTS);
+        return false;
+    }
+    
+    // Vérifier que le GPIO est valide (0-48 pour ESP32-C3/S3)
+    if (gpio >= 255 || gpio > 48) {
+        Serial.printf("[ComponentManager] ERROR: Invalid GPIO %d (must be 0-48)\n", gpio);
+        return false;
+    }
     
     // Vérifier si le GPIO existe déjà
-    if (findComponentByGpio(gpio) != 255) return false;
+    if (findComponentByGpio(gpio) != 255) {
+        Serial.printf("[ComponentManager] WARNING: GPIO %d already exists, skipping\n", gpio);
+        return false;
+    }
+    
+    // Vérifier que la pin a un ADC si c'est un potentiomètre
+    if (type == ComponentType::POTENTIOMETER && !PinMapper::hasAdc(gpio)) {
+        Serial.printf("[ComponentManager] ERROR: GPIO %d does not have ADC for potentiometer\n", gpio);
+        return false;
+    }
     
     // Ajouter le composant
     ComponentConfig& config = configs[component_count];
@@ -241,13 +505,34 @@ bool ComponentManager::addComponent(uint8_t gpio, ComponentType type, uint8_t mi
     config.type = type;
     config.midi_param = midi_param;
     config.midi_channel = channel;
+    config.msg_type = msg_type;
     config.flags = 0x03; // rtp_enabled + osc_enabled par défaut
+    strncpy(config.osc_address, "/ctl", sizeof(config.osc_address));
+    config.osc_address[sizeof(config.osc_address)-1] = '\0';
+    // Initialiser les champs pour NOTE_SWEEP
+    config.rtpNoteMin = 48;  // Défaut: C3
+    config.rtpNoteMax = 72;  // Défaut: C5
+    config.rtpNoteVelFix = 100; // Défaut: vélocité fixe
+    config.rtpNoteSweepAutoOffDelay = 0; // Défaut: désactivé
+    strncpy(config.btnMode, "press_release", sizeof(config.btnMode)); // Défaut: press/release
+    config.btnMode[sizeof(config.btnMode)-1] = '\0';
+    strncpy(config.btnPulseTiming, "release", sizeof(config.btnPulseTiming)); // Défaut: release
+    config.btnPulseTiming[sizeof(config.btnPulseTiming)-1] = '\0';
+    
+    // Serial.printf("[ComponentManager] Added component: GPIO%d, type=%d, param=%d, channel=%d, msg_type=%d\n",
+    //               gpio, (int)type, midi_param, channel, (int)msg_type);
     
     // Initialiser l'état
     ComponentState& state = states[component_count];
     state.last_value = 0;
     state.last_time = 0;
     state.debounce_state = 0;
+    state.last_note = 255; // Aucune note jouée initialement
+    state.note_on_time = 0; // Pas de note jouée initialement
+    state.hysteresis.reset(0); // Hystérésis initialisée à 0
+    state.toggle_state = false; // État toggle initialisé à false (note off)
+    state.prev_stable_state = false; // État stable précédent (released par défaut)
+    state.pulse_pending = false; // Pas de pulse en attente
     
     // Initialiser les champs de debouncing simple
     state.last_button_state = false;
@@ -275,10 +560,18 @@ bool ComponentManager::removeComponent(uint8_t gpio) {
     uint8_t index = findComponentByGpio(gpio);
     if (index == 255) return false;
     
+    // Éteindre la note si c'est un NOTE_SWEEP avec une note active
+    if (configs[index].msg_type == MidiMessageType::NOTE_SWEEP && states[index].last_note != 255) {
+        if (midi_sender) {
+            midi_sender->sendNoteOff(configs[index].midi_channel, states[index].last_note, 0);
+        }
+    }
+    
     // Déplacer les éléments suivants
     for (uint8_t i = index; i < component_count - 1; i++) {
         configs[i] = configs[i + 1];
         states[i] = states[i + 1];
+        filters[i] = filters[i + 1];
     }
     
     component_count--;
@@ -286,7 +579,19 @@ bool ComponentManager::removeComponent(uint8_t gpio) {
 }
 
 void ComponentManager::clearAll() {
+    // Éteindre toutes les notes actives avant de tout effacer
+    for (uint8_t i = 0; i < component_count; i++) {
+        if (configs[i].msg_type == MidiMessageType::NOTE_SWEEP && states[i].last_note != 255) {
+            if (midi_sender) {
+                midi_sender->sendNoteOff(configs[i].midi_channel, states[i].last_note, 0);
+            }
+        }
+    }
     component_count = 0;
+    // Réinitialiser les filtres
+    for (uint8_t i = 0; i < MAX_COMPONENTS; i++) {
+        filters[i].initialized = false;
+    }
 }
 
 uint8_t ComponentManager::findComponentByGpio(uint8_t gpio) const {
@@ -301,6 +606,7 @@ void ComponentManager::loadConfigFromNVS() {
     preferences.begin("esp32server", true);
     
     // Serial.println("[ComponentManager] Loading configs from NVS...");
+    // Serial.printf("[ComponentManager] Component count before: %d\n", component_count);
     
     // Charger les configurations depuis NVS
     // Les clés sont sauvegardées comme "pin_A0", "pin_D2", etc.
@@ -329,18 +635,60 @@ void ComponentManager::loadConfigFromNVS() {
         // Utiliser PinMapper pour obtenir le GPIO
         uint8_t gpio = PinMapper::labelToGpio(pinLabel);
         if (gpio == 255) {
-            Serial.printf("[ComponentManager] Invalid pin label: %s\n", pinLabel.c_str());
+            Serial.printf("[ComponentManager] Invalid pin label: %s (GPIO=255)\n", pinLabel.c_str());
             continue;
+        }
+        
+        // Vérifier que la pin a un ADC si c'est un potentiomètre
+        if (role == "Potentiomètre") {
+            if (!PinMapper::hasAdc(gpio)) {
+                Serial.printf("[ComponentManager] WARNING: Pin %s (GPIO%d) n'a pas d'ADC, ignorée\n", 
+                              pinLabel.c_str(), gpio);
+                continue;
+            }
+        }
+        
+        // Log pour debug AVANT d'ajouter (seulement si GPIO valide)
+        if (gpio < 255 && gpio <= 48) {
+            // Serial.printf("[ComponentManager] Loading pin: %s -> GPIO%d, role: %s\n", 
+            //               pinLabel.c_str(), gpio, role.c_str());
         }
         
         // Extraire paramètres MIDI
         uint8_t midi_param = 7; // défaut CC
         uint8_t channel = 1;    // défaut canal 1
+        MidiMessageType msg_type = MidiMessageType::NOTE; // défaut
         
+        // Lire rtpType depuis la config
+        String rtpTypeStr = extractStr(pinConfig, "rtpType", "");
+        if (rtpTypeStr.length() > 0) {
+            msg_type = stringToMidiMessageType(rtpTypeStr);
+        } else {
+            // Défaut selon le rôle si rtpType n'est pas spécifié
+            if (role == "Potentiomètre") {
+                msg_type = MidiMessageType::CONTROL_CHANGE;
+            } else if (role == "Bouton") {
+                msg_type = MidiMessageType::NOTE;
+            }
+        }
+        
+        // Extraire le paramètre MIDI selon le type de message
         if (role == "Potentiomètre") {
-            midi_param = extractInt(pinConfig, "rtpCc", 7);
+            if (msg_type == MidiMessageType::CONTROL_CHANGE) {
+                midi_param = extractInt(pinConfig, "rtpCc", 7);
+            } else if (msg_type == MidiMessageType::PROGRAM_CHANGE) {
+                midi_param = extractInt(pinConfig, "rtpPc", 0);
+            } else if (msg_type == MidiMessageType::NOTE || msg_type == MidiMessageType::NOTE_VELOCITY || msg_type == MidiMessageType::NOTE_SWEEP) {
+                midi_param = extractInt(pinConfig, "rtpNote", 60);
+            }
         } else if (role == "Bouton") {
-            midi_param = extractInt(pinConfig, "rtpNote", 60);
+            if (msg_type == MidiMessageType::NOTE || msg_type == MidiMessageType::NOTE_VELOCITY || msg_type == MidiMessageType::NOTE_SWEEP) {
+                midi_param = extractInt(pinConfig, "rtpNote", 60);
+            } else if (msg_type == MidiMessageType::CONTROL_CHANGE) {
+                midi_param = extractInt(pinConfig, "rtpCc", 7);
+            } else if (msg_type == MidiMessageType::PROGRAM_CHANGE) {
+                midi_param = extractInt(pinConfig, "rtpPc", 0);
+            }
         }
         
         channel = extractInt(pinConfig, "rtpChan", 1);
@@ -350,16 +698,22 @@ void ComponentManager::loadConfigFromNVS() {
         if (role == "Bouton") type = ComponentType::BUTTON;
         else if (role == "LED") type = ComponentType::LED;
         
-        bool success = addComponent(gpio, type, midi_param, channel);
+        bool success = addComponent(gpio, type, midi_param, channel, msg_type);
+        
+        if (!success) {
+            // Échec silencieux pour éviter le spam (les erreurs sont déjà loggées dans addComponent)
+            continue;
+        }
         
         // Configurer les flags OSC si le composant a été ajouté avec succès
         if (success) {
             // Trouver l'index du composant ajouté
             uint8_t index = findComponentByGpio(gpio);
             if (index != 255) {
-                // Lire oscEnabled et oscFormat depuis la config
+                // Lire oscEnabled, oscFormat et oscAddress depuis la config
                 bool oscEnabled = extractBool(pinConfig, "oscEnabled", false);
                 String oscFormat = extractStr(pinConfig, "oscFormat", "float");
+                String oscAddress = extractStr(pinConfig, "oscAddress", "");
                 
                 // Configurer les flags (bit 0x02 pour OSC, bit 0x04 pour format MIDI)
                 if (oscEnabled) {
@@ -373,8 +727,48 @@ void ComponentManager::loadConfigFromNVS() {
                     configs[index].flags &= ~0x02; // Désactiver OSC
                 }
                 
-                // Serial.printf("[ComponentManager] OSC %s (%s) pour %s (GPIO%d)\n", 
-                //              oscEnabled ? "activé" : "désactivé", oscFormat.c_str(), pinLabel.c_str(), gpio);
+                // Configurer l'adresse OSC (utiliser valeur par défaut si vide)
+                if (oscAddress.length() > 0) {
+                    strncpy(configs[index].osc_address, oscAddress.c_str(), sizeof(configs[index].osc_address) - 1);
+                    configs[index].osc_address[sizeof(configs[index].osc_address) - 1] = '\0';
+                    Serial.printf("[ComponentManager] OSC address from config: '%s' for %s\n", 
+                                  oscAddress.c_str(), pinLabel.c_str());
+                } else {
+                    Serial.printf("[ComponentManager] OSC address empty for %s, using default: '%s'\n", 
+                                  pinLabel.c_str(), configs[index].osc_address);
+                }
+                
+                // Lire btnMode pour les boutons
+                if (role == "Bouton") {
+                    String btnModeStr = extractStr(pinConfig, "btnMode", "press_release");
+                    if (btnModeStr.length() > 0) {
+                        strncpy(configs[index].btnMode, btnModeStr.c_str(), sizeof(configs[index].btnMode) - 1);
+                        configs[index].btnMode[sizeof(configs[index].btnMode) - 1] = '\0';
+                    }
+                    // Lire btnPulseTiming pour mode pulse
+                    String btnPulseTimingStr = extractStr(pinConfig, "btnPulseTiming", "release");
+                    if (btnPulseTimingStr.length() > 0) {
+                        strncpy(configs[index].btnPulseTiming, btnPulseTimingStr.c_str(), sizeof(configs[index].btnPulseTiming) - 1);
+                        configs[index].btnPulseTiming[sizeof(configs[index].btnPulseTiming) - 1] = '\0';
+                    }
+                }
+                
+                // Lire les paramètres pour NOTE_SWEEP (balayage)
+                if (msg_type == MidiMessageType::NOTE_SWEEP) {
+                    configs[index].rtpNoteMin = extractInt(pinConfig, "rtpNoteMin", 48);
+                    configs[index].rtpNoteMax = extractInt(pinConfig, "rtpNoteMax", 72);
+                    configs[index].rtpNoteVelFix = extractInt(pinConfig, "rtpNoteVelFix", 100);
+                    configs[index].rtpNoteSweepAutoOffDelay = extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 0);
+                    // S'assurer que min <= max
+                    if (configs[index].rtpNoteMin > configs[index].rtpNoteMax) {
+                        uint8_t temp = configs[index].rtpNoteMin;
+                        configs[index].rtpNoteMin = configs[index].rtpNoteMax;
+                        configs[index].rtpNoteMax = temp;
+                    }
+                }
+                
+                Serial.printf("[ComponentManager] Final OSC config: %s addr:%s for GPIO%d\n", 
+                             oscEnabled ? "enabled" : "disabled", configs[index].osc_address, gpio);
             }
         }
         // Serial.printf("[ComponentManager] Added component: %s on GPIO%d -> %s\n", 
@@ -508,3 +902,4 @@ void ComponentManager::handleMidiControlChange(uint8_t channel, uint8_t control,
         }
     }
 }
+

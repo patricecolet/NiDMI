@@ -22,7 +22,8 @@ void setupOSC_API(AsyncWebServer& server) {
             preferences.end();
             
             /* Demander le rechargement OSC */
-            esp32server_requestReloadOsc();
+            // TODO: Implémenter esp32server_requestReloadOsc() si nécessaire
+            // esp32server_requestReloadOsc();
             
             request->send(200, "application/json", "{\"status\":\"ok\"}\n");
         } else {

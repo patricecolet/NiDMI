@@ -1,5 +1,9 @@
 /*
- * ESP32Server Basic - Sketch minimal
+ * ESP32Server Basic - Sketch UNIQUE et PRINCIPAL
+ * 
+ * ⚠️ IMPORTANT : Ce sketch est le seul sketch recommandé.
+ * Les autres sketches de debug ne sont plus utilisés.
+ * Modifier ce sketch uniquement si nécessaire pour avancer.
  * 
  * Ce sketch utilise l'architecture optimisée avec ComponentManager.
  * 
@@ -8,20 +12,25 @@
  * - Interface web pour configuration des pins
  * - RTP-MIDI automatique
  * - Gestion optimisée des composants
- * - OSC (Open Sound Control) avec limitations connues
+ * - OSC (Open Sound Control)
  * 
  * Usage :
  * 1. Uploader ce sketch
  * 2. Se connecter au WiFi "esp32rtpmidi" (mot de passe: "esp32pass")
- * 3. Ouvrir http://192.168.4.1
+ * 3. Ouvrir http://192.168.4.1 dans Firefox (recommandé)
  * 4. Configurer les pins via l'interface web
  * 5. Les composants envoient automatiquement du MIDI
  * 
- * ⚠️ LIMITATIONS OSC CONNUES :
- * - Les boutons en WiFi peuvent avoir des pertes de paquets OSC
- * - Les potentiomètres fonctionnent mieux que les boutons
- * - RTP-MIDI reste la solution la plus fiable
- * - Pour OSC fiable, privilégier les potentiomètres
+ * 🌐 Navigateur recommandé : Firefox
+ * - Firefox fonctionne immédiatement sans configuration
+ * - Interface web compatible avec tous les navigateurs
+ * - Brave/Chrome fonctionnent aussi pour la configuration
+ * 
+ * 🎵 Web MIDI (à venir)
+ * - Web MIDI n'est pas encore implémenté dans l'interface actuelle
+ * - Une page de test Web MIDI sera disponible sur GitHub (HTTPS)
+ * - Cette page permettra de tester Web MIDI avec l'ESP32
+ * - Firefox sera recommandé pour cette fonctionnalité future
  * 
  * Option NVS Clear :
  * - Décommentez la ligne CLEAR_NVS ci-dessous pour forcer le reset

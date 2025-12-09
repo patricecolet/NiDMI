@@ -444,8 +444,10 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         String rtpNoteMin = getOpt("rtpNoteMin");
         String rtpNoteMax = getOpt("rtpNoteMax");
         String rtpNoteVelFix = getOpt("rtpNoteVelFix");
+        String rtpNoteSweepAutoOffDelay = getOpt("rtpNoteSweepAutoOffDelay");
         String ledMode    = getOpt("ledMode");
         String btnMode    = getOpt("btnMode");
+        String btnPulseTiming = getOpt("btnPulseTiming");
         String potFilter  = getOpt("potFilter");
         String oscEnabled = getOpt("oscEnabled");
         String oscAddress = getOpt("oscAddress");
@@ -471,8 +473,10 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         if(rtpNoteMin.length()) json += ",\"rtpNoteMin\":" + rtpNoteMin;
         if(rtpNoteMax.length()) json += ",\"rtpNoteMax\":" + rtpNoteMax;
         if(rtpNoteVelFix.length()) json += ",\"rtpNoteVelFix\":" + rtpNoteVelFix;
+        if(rtpNoteSweepAutoOffDelay.length()) json += ",\"rtpNoteSweepAutoOffDelay\":" + rtpNoteSweepAutoOffDelay;
         if(ledMode.length())    json += ",\"ledMode\":\"" + ledMode + "\"";
         if(btnMode.length())    json += ",\"btnMode\":\"" + btnMode + "\"";
+        if(btnPulseTiming.length()) json += ",\"btnPulseTiming\":\"" + btnPulseTiming + "\"";
         if(potFilter.length())  json += ",\"potFilter\":\"" + potFilter + "\"";
         if(oscEnabled.length()) json += ",\"oscEnabled\":" + String((oscEnabled=="true")?"true":"false");
         if(oscAddress.length()) json += ",\"oscAddress\":\"" + oscAddress + "\"";
@@ -539,23 +543,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     
     // WebSocket
     // Serial.println("[WebAPI] Setting up WebSocket...");
-    ws.onEvent([](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
-        if (type == WS_EVT_CONNECT) {
-            Serial.printf("[WebSocket] Client connected: %u\n", client->id());
-        } else if (type == WS_EVT_DISCONNECT) {
-            Serial.printf("[WebSocket] Client disconnected: %u\n", client->id());
-        } else if (type == WS_EVT_DATA) {
-            String message = String((char*)data, len);
-            // Serial.printf("[WebSocket] Received: %s\n", message.c_str());
-            
-            // Traiter les messages PIN_CLICKED
-            if (message.startsWith("PIN_CLICKED:")) {
-                String pin = message.substring(12);
-                // Serial.printf("[WebSocket] Pin clicked: %s\n", pin.c_str());
-                // Ici on pourrait déclencher la configuration de la pin
-            }
-        }
-    });
+    ws.onEvent(onWsEvent);
     server.addHandler(&ws);
     
     // Serial.println("[WebAPI] Setup complete!");

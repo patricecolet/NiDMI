@@ -148,13 +148,15 @@ void BluetoothManager::sendProgramChange(uint8_t channel, uint8_t program) {
     sendMidiMessage(0xC0 | (channel - 1), program, 0);
 }
 
-void BluetoothManager::sendPitchBend(uint8_t channel, uint16_t bend) {
+void BluetoothManager::sendPitchBend(uint8_t channel, int bend) {
     if (!connected || !pCharacteristic) {
         return;
     }
     
-    uint8_t lsb = bend & 0x7F;
-    uint8_t msb = (bend >> 7) & 0x7F;
+    // Convertir de signé (-8192 à +8191) vers non-signé (0-16383)
+    uint16_t bendValue = (uint16_t)(bend + 8192);
+    uint8_t lsb = bendValue & 0x7F;
+    uint8_t msb = (bendValue >> 7) & 0x7F;
     sendMidiMessage(0xE0 | (channel - 1), lsb, msb);
 }
 
@@ -267,7 +269,7 @@ void BluetoothManager::sendProgramChange(uint8_t channel, uint8_t program) {
     // Rien à faire
 }
 
-void BluetoothManager::sendPitchBend(uint8_t channel, uint16_t bend) {
+void BluetoothManager::sendPitchBend(uint8_t channel, int bend) {
     // Rien à faire
 }
 

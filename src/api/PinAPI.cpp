@@ -1,5 +1,6 @@
 #include "APICommon.h"
 #include "PinMapper.h"
+#include "Esp32Server.h" /* Pour esp32server_requestReloadPins */
 
 /* Forward declaration pour getDefaultConfig */
 String getDefaultConfig(String pin);
@@ -137,6 +138,9 @@ void setupPinAPI(AsyncWebServer& server) {
             String key = "pin_" + pin;
             preferences.remove(key.c_str());
             preferences.end();
+            
+            /* Recharger les configs pins */
+            esp32server_requestReloadPins();
             
             request->send(200, "application/json", "{\"status\":\"ok\"}\n");
         } else {

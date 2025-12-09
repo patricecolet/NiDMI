@@ -4,8 +4,16 @@ Ce dossier contient tous les exemples pour la bibliothèque ESP32Server.
 
 ## 📋 Organisation
 
-### 🚀 Exemples de base
-- **`esp32server_basic/`** - Exemple minimal (recommandé pour débuter)
+### 🚀 Sketch principal
+
+**`esp32server_basic/`** - Sketch UNIQUE et PRINCIPAL (recommandé pour tous les usages)
+- Sketch minimal et stable
+- Toutes les fonctionnalités disponibles
+- Pas de debug activé par défaut (silencieux)
+- Modifications uniquement si nécessaire pour avancer
+- ⚠️ **Ce sketch remplace tous les autres sketches de debug**
+
+### Autres exemples (optionnels)
 - **`components_basic/`** - Utilisation du ComponentManager
 
 ### 🎵 Exemples MIDI
@@ -23,14 +31,14 @@ Ce dossier contient tous les exemples pour la bibliothèque ESP32Server.
 ## 🎯 Usage rapide
 
 ```bash
-# Uploader un exemple
+# Uploader le sketch principal (recommandé)
 ./scripts/esp32server.sh upload esp32server_basic
 
-# Uploader avec un sketch personnalisé
-./scripts/esp32server.sh upload esp32server_osc
+# Ou simplement (esp32server_basic est le défaut)
+./scripts/esp32server.sh upload
 
-# Debug
-./scripts/esp32server.sh upload _debug/esp32server_debug
+# Uploader avec un sketch optionnel
+./scripts/esp32server.sh upload esp32server_osc
 ```
 
 ## 📝 Créer un nouvel exemple

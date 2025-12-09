@@ -129,6 +129,43 @@ void RtpMidi::sendControlChange(uint8_t channel, uint8_t control, uint8_t value)
     MIDI.sendControlChange(control, value, channel);
 }
 
+void RtpMidi::sendProgramChange(uint8_t channel, uint8_t program) {
+    if (!isStarted) return;
+    MIDI.sendProgramChange(program, channel);
+}
+
+void RtpMidi::sendPitchBend(uint8_t channel, int bend) {
+    if (!isStarted) return;
+    // Pitch Bend: -8192 à +8191, centre=0
+    // La bibliothèque MIDI attend une valeur signée
+    MIDI.sendPitchBend(bend, channel);
+}
+
+void RtpMidi::sendAftertouch(uint8_t channel, uint8_t pressure) {
+    if (!isStarted) return;
+    MIDI.sendAfterTouch(pressure, channel);
+}
+
+void RtpMidi::sendClock() {
+    if (!isStarted) return;
+    MIDI.sendRealTime(midi::Clock);
+}
+
+void RtpMidi::sendStart() {
+    if (!isStarted) return;
+    MIDI.sendRealTime(midi::Start);
+}
+
+void RtpMidi::sendStop() {
+    if (!isStarted) return;
+    MIDI.sendRealTime(midi::Stop);
+}
+
+void RtpMidi::sendContinue() {
+    if (!isStarted) return;
+    MIDI.sendRealTime(midi::Continue);
+}
+
 bool RtpMidi::isConnected() const {
     // Pour l'instant, on considère qu'on est connecté si RTP-MIDI est démarré
     // Dans un vrai projet, il faudrait implémenter un système de comptage des connexions

@@ -15,6 +15,15 @@ public:
     void sendNoteOn(uint8_t channel, uint8_t note, uint8_t velocity) override;
     void sendNoteOff(uint8_t channel, uint8_t note, uint8_t velocity) override;
     void sendControlChange(uint8_t channel, uint8_t control, uint8_t value) override;
+    
+    // Nouveaux messages MIDI
+    void sendProgramChange(uint8_t channel, uint8_t program) override;
+    void sendPitchBend(uint8_t channel, int bend) override;
+    void sendAftertouch(uint8_t channel, uint8_t pressure) override;
+    void sendClock() override;
+    void sendStart() override;
+    void sendStop() override;
+    void sendContinue() override;
 
     void enableRtpMidi(bool enabled);
     void enableOsc(bool enabled);

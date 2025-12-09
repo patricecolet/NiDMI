@@ -2,11 +2,12 @@
 
 ## Table des matières
 1. [Vue d'ensemble](#vue-densemble)
-2. [Capacités techniques](#capacités-techniques)
-3. [Projets pédagogiques](#projets-pédagogiques)
-4. [Budget et matériel](#budget-et-matériel)
-5. [Progression d'apprentissage](#progression-dapprentissage)
-6. [Exemples concrets](#exemples-concrets)
+2. [Configuration des navigateurs](#configuration-des-navigateurs)
+3. [Capacités techniques](#capacités-techniques)
+4. [Projets pédagogiques](#projets-pédagogiques)
+5. [Budget et matériel](#budget-et-matériel)
+6. [Progression d'apprentissage](#progression-dapprentissage)
+7. [Exemples concrets](#exemples-concrets)
 
 ---
 
@@ -21,6 +22,43 @@ L'ESP32Server MIDI est une plateforme éducative permettant de créer des contr�
 - ✅ **Interface web intuitive** (pas de programmation complexe)
 - ✅ **Budget maîtrisé** (23€ pour 16 potentiomètres)
 - ✅ **Collaboration** entre étudiants
+
+---
+
+## Configuration des navigateurs
+
+### Interface web et compatibilité navigateur
+
+**✅ Compatibilité** : L'interface web fonctionne avec tous les navigateurs (Firefox, Chrome, Brave, Safari).
+
+#### 🌐 Navigateurs recommandés
+- **Firefox** : Fonctionne immédiatement, recommandé pour les ateliers
+- **Chrome/Brave** : Fonctionnent aussi pour la configuration
+- **Safari** : Compatible mais peut avoir des limitations
+
+### 🎵 Web MIDI (Fonctionnalité future)
+
+**⚠️ Note** : Web MIDI n'est pas encore implémenté dans l'interface web actuelle.
+
+**Planifié pour plus tard** :
+- Une page de test Web MIDI sera créée sur GitHub (HTTPS)
+- Cette page permettra de tester Web MIDI avec l'ESP32
+- Firefox sera recommandé pour cette fonctionnalité
+- La page GitHub sera accessible via HTTPS, permettant l'utilisation de Web MIDI même avec Chrome/Brave
+
+**Actuellement disponible** :
+- Interface web complète pour configuration
+- RTP-MIDI (fonctionne avec macOS/Logic)
+- OSC (Open Sound Control)
+- Configuration des pins en temps réel
+
+### Accès à l'interface web
+
+1. **Connexion** : L'ESP32 crée un point d'accès WiFi `ESP32Server-XXXX`
+2. **Interface** : Ouvrir `http://192.168.4.1` ou `http://myesp32.local` dans un navigateur
+3. **Configuration** : Interface web complète pour configurer les pins, MIDI, OSC, etc.
+
+**Note** : L'interface web fonctionne avec tous les navigateurs. Firefox est recommandé pour une meilleure compatibilité.
 
 ---
 

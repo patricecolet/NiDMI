@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../midimap"
+		},
+		{
+			"path": "../Control-Surface"
 		}
 	],
 	"settings": {}
