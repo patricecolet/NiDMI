@@ -20,7 +20,7 @@ const PinMapping PinMapper::c3_mappings[] = {
     {"A0", 2,  true,  true,  false},  // D0 = A0
     {"A1", 3,  true,  true,  false},  // D1 = A1
     {"A2", 4,  true,  true,  false},  // D2 = A2
-    {"A3", 5,  true,  true,  false},  // D3 = A3
+    // A3 n'existe pas sur ESP32-C3 (XIAO)
     {"SDA", 6, false, true,  false},  // I2C SDA
     {"SCL", 7, false, true,  false},  // I2C SCL
     {"MOSI", 10, false, true,  false}, // SPI MOSI
