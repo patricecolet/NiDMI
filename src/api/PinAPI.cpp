@@ -31,7 +31,7 @@ void setupPinAPI(AsyncWebServer& server) {
             json += "\"out\":true,";
             json += "\"adc\":" + String(mappings[i].has_adc ? "true" : "false") + ",";
             json += "\"pwm\":" + String(mappings[i].has_pwm ? "true" : "false") + ",";
-            json += "\"touch\":" + String(mappings[i].has_touch ? "true" : "false\n");
+            json += "\"touch\":" + String(mappings[i].has_touch ? "true" : "false");
             json += "},";
             json += "\"sensitive\":false";
             json += "}";
@@ -40,31 +40,26 @@ void setupPinAPI(AsyncWebServer& server) {
         json += "],";
         json += "\"bus\":{";
         
-        /* Bus I2C */
+        /* Bus I2C - Utiliser PinMapper pour obtenir les GPIO dynamiquement */
         json += "\"i2c\":{";
-        if (PinMapper::getMcuType() == McuType::ESP32_C3) {
-            json += "\"sda\":6,\"scl\":7";
-        } else {
-            json += "\"sda\":21,\"scl\":22";
-        }
+        uint8_t sda_gpio = PinMapper::labelToGpio("SDA");
+        uint8_t scl_gpio = PinMapper::labelToGpio("SCL");
+        json += "\"sda\":" + String(sda_gpio) + ",\"scl\":" + String(scl_gpio);
         json += "},";
         
-        /* Bus SPI */
+        /* Bus SPI - Utiliser PinMapper pour obtenir les GPIO dynamiquement */
         json += "\"spi\":{";
-        if (PinMapper::getMcuType() == McuType::ESP32_C3) {
-            json += "\"mosi\":8,\"miso\":9,\"sck\":10";
-        } else {
-            json += "\"mosi\":23,\"miso\":19,\"sck\":18";
-        }
+        uint8_t mosi_gpio = PinMapper::labelToGpio("MOSI");
+        uint8_t miso_gpio = PinMapper::labelToGpio("MISO");
+        uint8_t sck_gpio = PinMapper::labelToGpio("SCK");
+        json += "\"mosi\":" + String(mosi_gpio) + ",\"miso\":" + String(miso_gpio) + ",\"sck\":" + String(sck_gpio);
         json += "},";
         
-        /* Bus UART */
+        /* Bus UART - Utiliser PinMapper pour obtenir les GPIO dynamiquement */
         json += "\"uart\":{";
-        if (PinMapper::getMcuType() == McuType::ESP32_C3) {
-            json += "\"tx\":21,\"rx\":20";
-        } else {
-            json += "\"tx\":1,\"rx\":3";
-        }
+        uint8_t tx_gpio = PinMapper::labelToGpio("TX");
+        uint8_t rx_gpio = PinMapper::labelToGpio("RX");
+        json += "\"tx\":" + String(tx_gpio) + ",\"rx\":" + String(rx_gpio);
         json += "}";
         
         json += "}";
@@ -82,18 +77,23 @@ void setupPinAPI(AsyncWebServer& server) {
         Preferences preferences;
         preferences.begin("esp32server", true);
         
-        /* Scanner toutes les clés pin_* */
+        /* Scanner toutes les clés pin_* - Utiliser PinMapper pour obtenir dynamiquement toutes les pins */
         bool first = true;
         int pinCount = 0;
-        String pins[] = {"A0","A1","A2","A3","D0","D1","D2","D3","D4","D5","D6","D7","D8","D9","D10","SDA","SCL","TX","RX","MOSI","MISO","SCK"};
         
-        for (int i = 0; i < 22; i++) {
-            String key = "pin_" + pins[i];
+        /* Obtenir toutes les pins disponibles pour ce MCU */
+        PinMapper::detectMcu();
+        const PinMapping* mappings = PinMapper::getAllMappings();
+        size_t mapping_count = PinMapper::getMappingCount();
+        
+        for (size_t i = 0; i < mapping_count; i++) {
+            String pinLabel = String(mappings[i].label);
+            String key = "pin_" + pinLabel;
             String config = preferences.getString(key.c_str(), "");
             if (!config.isEmpty()) {
-                debug_network( "[PinAPI] Pin trouvée: %s -> %s\n", pins[i].c_str(), config.c_str());
+                debug_network( "[PinAPI] Pin trouvée: %s -> %s\n", pinLabel.c_str(), config.c_str());
                 if (!first) json += ",";
-                json += "{\"pin\":\"" + pins[i] + "\",\"config\":" + config + "}";
+                json += "{\"pin\":\"" + pinLabel + "\",\"config\":" + config + "}";
                 first = false;
                 pinCount++;
             }

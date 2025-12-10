@@ -15,12 +15,21 @@ String getDefaultConfig(String pin) {
     if (pin == "A0") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":1,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
     if (pin == "A1") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":2,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
     if (pin == "A2") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":3,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "A3") return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":4,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    // A3 n'existe que sur ESP32-S3, filtrer pour C3
+    if (pin == "A3") {
+        // Vérifier si A3 existe sur ce MCU
+        PinMapper::detectMcu();
+        uint8_t gpio = PinMapper::labelToGpio("A3");
+        if (gpio != 255) {
+            return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":4,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+        }
+        // A3 n'existe pas sur ce MCU, retourner config par défaut
+    }
     
-    if (pin == "D0") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":60,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "D1") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":61,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "D2") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":62,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "D3") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":63,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D0") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":60,\"rtpChan\":1,\"btnMode\":\"pulse\",\"btnPulseTiming\":\"release\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D1") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":61,\"rtpChan\":1,\"btnMode\":\"pulse\",\"btnPulseTiming\":\"release\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D2") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":62,\"rtpChan\":1,\"btnMode\":\"pulse\",\"btnPulseTiming\":\"release\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "D3") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":63,\"rtpChan\":1,\"btnMode\":\"pulse\",\"btnPulseTiming\":\"release\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
     
     // LEDs spéciales
     if (pin == "D7") return "{\"role\":\"LED\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":36,\"rtpChan\":1,\"ledMode\":\"onoff\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
@@ -34,7 +43,7 @@ String getDefaultConfig(String pin) {
     if (pin == "TX" || pin == "RX") return "{\"role\":\"UART\",\"rtpEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
     
     // Défaut
-    return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":60,\"rtpChan\":1,\"btnMode\":\"pulse\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":60,\"rtpChan\":1,\"btnMode\":\"pulse\",\"btnPulseTiming\":\"release\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
 }
 
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
