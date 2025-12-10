@@ -121,6 +121,43 @@ int ConfigCache::findPinIndex(const String& pin) {
     return -1;
 }
 
+/* Supprimer une pin du cache et de la NVS */
+void ConfigCache::removeConfig(const String& pin) {
+    int index = findPinIndex(pin);
+    if (index != -1) {
+        // Supprimer de la NVS
+        Preferences preferences;
+        preferences.begin("esp32server", false);
+        String key = "pin_" + pin;
+        preferences.remove(key.c_str());
+        preferences.end();
+        
+        // Retirer du cache (décaler les éléments suivants)
+        for (int i = index; i < count - 1; i++) {
+            pinNames[i] = pinNames[i + 1];
+            cache[i] = cache[i + 1];
+            dirty[i] = dirty[i + 1];
+        }
+        count--;
+        
+        // Nettoyer le dernier élément
+        pinNames[count].clear();
+        cache[count].clear();
+        dirty[count] = false;
+        
+        debug_network("[ConfigCache] Pin %s supprimée du cache et NVS\n", pin.c_str());
+    } else {
+        // Pin pas dans le cache, mais supprimer quand même de la NVS
+        Preferences preferences;
+        preferences.begin("esp32server", false);
+        String key = "pin_" + pin;
+        preferences.remove(key.c_str());
+        preferences.end();
+        
+        debug_network("[ConfigCache] Pin %s supprimée de la NVS (pas en cache)\n", pin.c_str());
+    }
+}
+
 /* Mettre en cache sans marquer dirty (pour lecture NVS) */
 void ConfigCache::setConfigClean(const String& pin, const String& config) {
     int index = findPinIndex(pin);

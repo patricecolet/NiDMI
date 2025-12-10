@@ -28,6 +28,9 @@ public:
     /* Récupérer config depuis cache ou NVS */
     String getConfig(const String& pin);
     
+    /* Supprimer une pin du cache et de la NVS */
+    void removeConfig(const String& pin);
+    
     /* Auto-save si nécessaire (30 secondes) */
     void autoSave();
     

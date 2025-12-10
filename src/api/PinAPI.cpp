@@ -132,12 +132,8 @@ void setupPinAPI(AsyncWebServer& server) {
         if(request->hasParam("pin", true)){
             String pin = request->getParam("pin", true)->value();
             
-            /* Supprimer de la NVS */
-            Preferences preferences;
-            preferences.begin("esp32server", false);
-            String key = "pin_" + pin;
-            preferences.remove(key.c_str());
-            preferences.end();
+            /* Supprimer du cache ET de la NVS */
+            g_configCache.removeConfig(pin);
             
             /* Recharger les configs pins */
             esp32server_requestReloadPins();
