@@ -50,7 +50,7 @@
  
  function initTabs(){ document.querySelectorAll('.tab').forEach(t=>{ t.onclick=()=>{ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); document.querySelectorAll('.p').forEach(p=>p.classList.remove('active')); t.classList.add('active'); $(`panel-${t.dataset.t}`).classList.add('active'); }; }); }
  
- async function loadStatus(){ const r=await fetch('/api/status'); const d=await r.json(); $('#apSsid').textContent=d.ap_ssid; $('#apIp').textContent=d.ap_ip; $('#staSsid').textContent=d.sta_ssid; $('#staIp').textContent=d.sta_ip; const s=$('#staStatus'); s.textContent=d.sta_connected?'Connecté':'Déconnecté'; s.style.color=d.sta_connected?'#059669':'#dc2626'; }
+ async function loadStatus(){ const r=await fetch('/api/status'); const d=await r.json(); $('#apSsid').textContent=d.ap_ssid; $('#apIp').textContent=d.ap_ip; $('#staSsid').textContent=d.sta_ssid; $('#staIp').textContent=d.sta_ip; const s=$('#staStatus'); s.textContent=d.sta_connected?'Connecté':'Déconnecté'; s.style.color=d.sta_connected?'#059669':'#dc2626'; $('#mdnsAddress').textContent=d.mdns_address||'-'; let oscInfo=''; if(d.osc_target==='ip'&&d.osc_ip){ oscInfo=d.osc_ip+':'+d.osc_port; }else if(d.osc_target==='ap'){ oscInfo='Broadcast AP (192.168.4.255:'+d.osc_port+')'; }else{ oscInfo='Broadcast STA ('+(d.sta_ip||'0.0.0.0')+':'+d.osc_port+')'; } $('#oscConfig').textContent=oscInfo; }
  
  async function loadMdns(){ const r=await fetch('/api/mdns/status'); const d=await r.json(); $('#mdnsName').value=d.name; }
  
@@ -128,8 +128,10 @@
  setTimeout(() => location.reload(), 2000);
  }
  } catch (err) {
- $('#staMsg').textContent = 'Erreur de connexion';
- $('#staMsg').style.color = '#dc2626';
+ // L'erreur est normale : le serveur redémarre
+ $('#staMsg').textContent = 'Configuration enregistrée, redémarrage...';
+ $('#staMsg').style.color = '#059669';
+ setTimeout(() => location.reload(), 5000);
  }
  });
  
@@ -644,7 +646,7 @@
  <div class="h"><h1>ESP32 Server</h1><p>Configuration Wi‑Fi, RTP‑MIDI et OSC</p></div>
  <div class="t"><div class="tab active" data-t="status">Statut</div><div class="tab" data-t="connection">Connection</div><div class="tab" data-t="pins">Pins</div></div>
  <div class="p active" id="panel-status">
- <div class="g"><div class="card"><h3>Access Point</h3><p><strong>SSID:</strong> <span id="apSsid">-</span></p><p><strong>IP:</strong> <span id="apIp">-</span></p></div><div class="card"><h3>Station Wi‑Fi</h3><p><strong>SSID:</strong> <span id="staSsid">-</span></p><p><strong>IP:</strong> <span id="staIp">-</span></p><p><strong>Statut:</strong> <span id="staStatus">-</span></p></div></div>
+ <div class="g"><div class="card"><h3>Access Point</h3><p><strong>SSID:</strong> <span id="apSsid">-</span></p><p><strong>IP:</strong> <span id="apIp">-</span></p></div><div class="card"><h3>Station Wi‑Fi</h3><p><strong>SSID:</strong> <span id="staSsid">-</span></p><p><strong>IP:</strong> <span id="staIp">-</span></p><p><strong>Statut:</strong> <span id="staStatus">-</span></p></div><div class="card"><h3>mDNS</h3><p><strong>Adresse:</strong> <span id="mdnsAddress">-</span></p></div><div class="card"><h3>OSC</h3><p><strong>Configuration:</strong> <span id="oscConfig">-</span></p></div></div>
  </div>
  <div class="p" id="panel-connection">
  <div class="f"><h3>Serveur</h3><form id="mdns"><div class="f"><label for="mdnsName">Nom du serveur</label><input type="text" id="mdnsName" placeholder="esp32rtpmidi" required><div class="hint"><small>Ce nom sera utilisé pour l'AP Wi‑Fi et http://nom.local</small></div></div><button type="submit" class="btn">Enregistrer</button><div class="hint" id="mdnsMsg"></div></form></div>

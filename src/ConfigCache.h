@@ -37,14 +37,14 @@ public:
     /* Forcer la sauvegarde immédiate */
     void forceSave();
     
+    /* Mettre en cache sans marquer dirty (pour synchronisation avec NVS) */
+    void setConfigClean(const String& pin, const String& config);
+    
 private:
     /* Sauvegarder toutes les pins dirty en NVS */
     void saveAllDirty();
     
     int findPinIndex(const String& pin);
-    
-    /* Mettre en cache sans marquer dirty (pour lecture NVS) */
-    void setConfigClean(const String& pin, const String& config);
 };
 
 /* Instance globale */

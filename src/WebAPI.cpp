@@ -1,6 +1,7 @@
 #include "ServerCore.h"
 #include "ui_index.h"
 #include "PinMapper.h"
+#include "api/APICommon.h"
 #include <Preferences.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncWebSocket.h>
@@ -97,7 +98,6 @@ void sendRtpStatus(AsyncWebSocket& ws) {
     json += "}";
     
     ws.textAll(json);
-    Serial.println("RTP-MIDI status sent via WebSocket: " + json);
 }
 
 void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
@@ -111,33 +111,43 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     
     // API - Statut système
     server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request){
+        // Récupérer mDNS
+        preferences.begin("esp32server", true);
+        String mdnsName = preferences.getString("mdns_name", "esp32rtpmidi");
+        
+        // Récupérer OSC
+        String oscTarget = preferences.getString("osc_target", "sta");
+        int oscPort = preferences.getInt("osc_port", 8000);
+        String oscIp = preferences.getString("osc_ip", "");
+        bool oscBroadcast = preferences.getBool("osc_broadcast", false);
+        preferences.end();
+        
         String json = "{";
         json += "\"ap_ssid\":\"" + WiFi.softAPSSID() + "\",";
         json += "\"ap_ip\":\"" + WiFi.softAPIP().toString() + "\",";
         json += "\"sta_ssid\":\"" + WiFi.SSID() + "\",";
         json += "\"sta_ip\":\"" + WiFi.localIP().toString() + "\",";
-        json += "\"sta_connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false");
+        json += "\"sta_connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false") + ",";
+        json += "\"mdns_name\":\"" + mdnsName + "\",";
+        json += "\"mdns_address\":\"" + mdnsName + ".local\",";
+        json += "\"osc_target\":\"" + oscTarget + "\",";
+        json += "\"osc_port\":" + String(oscPort);
+        if(oscIp.length() > 0) {
+            json += ",\"osc_ip\":\"" + oscIp + "\"";
+        }
+        json += ",\"osc_broadcast\":" + String(oscBroadcast ? "true" : "false");
         json += "}";
         request->send(200, "application/json", json);
     });
     
     // API - Configuration Wi-Fi STA
     server.on("/api/sta", HTTP_POST, [](AsyncWebServerRequest *request){
-        Serial.println("[WebAPI/STA] Received STA configuration request");
-        
         if(request->hasParam("ssid", true) && request->hasParam("pass", true)){
             String ssid = request->getParam("ssid", true)->value();
             String pass = request->getParam("pass", true)->value();
             String ip = request->hasParam("ip", true) ? request->getParam("ip", true)->value() : String("");
             String gateway = request->hasParam("gw", true) ? request->getParam("gw", true)->value() : String("");
             String subnet = request->hasParam("sn", true) ? request->getParam("sn", true)->value() : String("");
-            
-            Serial.printf("[WebAPI/STA] Parsed values:\n");
-            Serial.printf("  ssid: '%s'\n", ssid.c_str());
-            Serial.printf("  pass: '%s' (len=%d)\n", pass.c_str(), pass.length());
-            Serial.printf("  ip: '%s'\n", ip.c_str());
-            Serial.printf("  gateway: '%s'\n", gateway.c_str());
-            Serial.printf("  subnet: '%s'\n", subnet.c_str());
             
             // Sauvegarder en NVS
             preferences.begin("esp32server", false);
@@ -149,34 +159,16 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
                 preferences.putString("sta_sn", subnet);
             }
             preferences.end();
-
-            // Vérification immédiate (lecture retour NVS)
-            preferences.begin("esp32server", true);
-            String chkSsid = preferences.getString("sta_ssid", "");
-            String chkPass = preferences.getString("sta_pass", "");
-            String chkIp   = preferences.getString("sta_ip",  "");
-            String chkGw   = preferences.getString("sta_gw",  "");
-            String chkSn   = preferences.getString("sta_sn",  "");
-            preferences.end();
-            Serial.println("[WebAPI/STA] Saved to NVS:");
-            Serial.print("  ssid=\""); Serial.print(chkSsid); Serial.println("\"");
-            Serial.print("  pass len="); Serial.println(chkPass.length());
-            if(chkIp.length()>0){
-                Serial.print("  ip="); Serial.print(chkIp);
-                Serial.print(" gw="); Serial.print(chkGw);
-                Serial.print(" sn="); Serial.println(chkSn);
-            }
             
-            // Connecter au Wi-Fi
-            extern ServerCore serverCore;
-            serverCore.connectSta(ssid.c_str(), pass.c_str());
-            
-            // Forcer un redémarrage pour appliquer les changements
+            // Envoyer la réponse HTTP AVANT le redémarrage
             request->send(200, "application/json", "{\"status\":\"ok\",\"reboot\":true}");
-            delay(1000);
+            
+            // Attendre que la réponse soit envoyée
+            delay(2000);
+            
+            // Redémarrer - connectSta() sera appelé au boot
             ESP.restart();
         } else {
-            Serial.println("[WebAPI/STA] Missing required parameters (ssid and pass)");
             request->send(400, "application/json", "{\"error\":\"ssid and pass required\"}");
         }
     });
@@ -211,8 +203,6 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
             String name = request->getParam("name", true)->value();
             String target = request->getParam("target", true)->value();
             
-            Serial.println("RTP-MIDI config - name: " + name + ", target: " + target);
-            
             // Sauvegarder en NVS
             preferences.begin("esp32server", false);
             preferences.putString("rtp_name", name);
@@ -232,10 +222,8 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     
     // API - Activation/Désactivation RTP-MIDI
     server.on("/api/rtp/enable", HTTP_POST, [](AsyncWebServerRequest *request){
-        Serial.println("RTP-MIDI enable request received");
         if(request->hasParam("enable", true)){
             String enabled = request->getParam("enable", true)->value();
-            Serial.println("Enable parameter: " + enabled);
             bool isEnabled = (enabled == "true");
             
             // Sauvegarder l'état en NVS
@@ -250,15 +238,12 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
                 String name = preferences.getString("rtp_name", "ESP32-Studio");
                 preferences.end();
                 serverCore.rtpMidi().begin(name);
-                Serial.println("RTP-MIDI activé avec le nom: " + name);
             } else {
                 serverCore.rtpMidi().stop();
-                Serial.println("RTP-MIDI désactivé");
             }
             
             request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            Serial.println("RTP-MIDI enable request missing 'enable' parameter");
             request->send(400, "application/json", "{\"error\":\"enable parameter required\"}");
         }
     });
@@ -302,9 +287,6 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
             preferences.putBool("osc_broadcast", broadcast == "true");
             preferences.end();
             
-            Serial.printf("[WebAPI/OSC] Config: target=%s, port=%d, ip=%s, broadcast=%s\n", 
-                         target.c_str(), port, ip.c_str(), broadcast.c_str());
-            
             request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
             request->send(400, "application/json", "{\"error\":\"target and port required\"}");
@@ -333,15 +315,10 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         if(request->hasParam("name", true)){
             String name = request->getParam("name", true)->value();
             
-            Serial.println("mDNS config - name: " + name);
-            
             // Sauvegarder en NVS
             preferences.begin("esp32server", false);
             preferences.putString("mdns_name", name);
             preferences.end();
-            
-            Serial.println("Nom mDNS sauvegardé: " + name);
-            Serial.println("Redémarrage nécessaire pour appliquer le nouveau nom");
             
             request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
@@ -500,43 +477,52 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         bool ok = preferences.putString(key.c_str(), json) > 0;
         preferences.end();
 
-        Serial.print("[WebAPI/PINS] Saved "); Serial.print(key); Serial.print(" = "); Serial.println(json);
-        if(ok) {
+        // Mettre à jour ConfigCache (sans marquer dirty car vient de NVS)
+        if (ok) {
+            g_configCache.setConfigClean(pinLabel, json);
             esp32server_requestReloadPins();
             request->send(200, "application/json", "{\"status\":\"ok\"}");
+        } else {
+            request->send(500, "application/json", "{\"error\":\"store failed\"}");
         }
-        else   request->send(500, "application/json", "{\"error\":\"store failed\"}");
     });
 
     // API - Récupérer toutes les pins configurées
     server.on("/api/pins/list", HTTP_GET, [](AsyncWebServerRequest *request){
-        preferences.begin("esp32server", false);
+        Preferences preferences;
+        preferences.begin("esp32server", true);
         
         String json = "{";
         json += "\"pins\":[";
         
         bool first = true;
-        // Parcourir toutes les clés de pins stockées
-        for(int i = 0; i < 50; i++) { // Limite raisonnable
-            String key = String("pin_") + i;
-            if(preferences.isKey(key.c_str())) {
+        
+        // Utiliser PinMapper pour scanner dynamiquement toutes les pins
+        PinMapper::detectMcu();
+        const PinMapping* mappings = PinMapper::getAllMappings();
+        size_t mapping_count = PinMapper::getMappingCount();
+        
+        for (size_t i = 0; i < mapping_count; i++) {
+            String pinLabel = String(mappings[i].label);
+            String key = "pin_" + pinLabel;
+            if (preferences.isKey(key.c_str())) {
                 String pinData = preferences.getString(key.c_str(), "");
-                if(pinData.length() > 0) {
-                    if(!first) json += ",";
+                if (pinData.length() > 0) {
+                    if (!first) json += ",";
                     json += pinData;
                     first = false;
                 }
             }
         }
         
-        // Vérifier aussi les pins nommées (A0, D0, etc.)
-        String pinNames[] = {"A0","A1","A2","A3","D0","D1","D2","D3","D4","D5","D6","D7","D8","D9","D10","SDA","SCL","MOSI","MISO","SCK","TX","RX","I2C","SPI","UART"};
-        for(String pinName : pinNames) {
-            String key = String("pin_") + pinName;
-            if(preferences.isKey(key.c_str())) {
+        // Vérifier aussi les alias de bus (I2C, SPI, UART) qui ne sont pas dans les mappings physiques
+        String busAliases[] = {"I2C", "SPI", "UART"};
+        for (String alias : busAliases) {
+            String key = "pin_" + alias;
+            if (preferences.isKey(key.c_str())) {
                 String pinData = preferences.getString(key.c_str(), "");
-                if(pinData.length() > 0) {
-                    if(!first) json += ",";
+                if (pinData.length() > 0) {
+                    if (!first) json += ",";
                     json += pinData;
                     first = false;
                 }
@@ -550,6 +536,18 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         request->send(200, "application/json", json);
     });
     
+    // API - Supprimer une configuration de pin
+    server.on("/api/pins/delete", HTTP_POST, [](AsyncWebServerRequest *request){
+        if(request->hasParam("pin", true)){
+            String pin = request->getParam("pin", true)->value();
+            g_configCache.removeConfig(pin);
+            esp32server_requestReloadPins();
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
+        } else {
+            request->send(400, "application/json", "{\"error\":\"pin required\"}");
+        }
+    });
+
     // WebSocket
     // Serial.println("[WebAPI] Setting up WebSocket...");
     ws.onEvent(onWsEvent);

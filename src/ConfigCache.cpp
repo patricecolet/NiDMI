@@ -124,15 +124,16 @@ int ConfigCache::findPinIndex(const String& pin) {
 /* Supprimer une pin du cache et de la NVS */
 void ConfigCache::removeConfig(const String& pin) {
     int index = findPinIndex(pin);
-    if (index != -1) {
-        // Supprimer de la NVS
-        Preferences preferences;
-        preferences.begin("esp32server", false);
-        String key = "pin_" + pin;
-        preferences.remove(key.c_str());
-        preferences.end();
-        
-        // Retirer du cache (décaler les éléments suivants)
+    
+    /* Supprimer de la NVS */
+    Preferences preferences;
+    preferences.begin("esp32server", false);
+    String key = "pin_" + pin;
+    preferences.remove(key.c_str());
+    preferences.end();
+    
+    /* Retirer du cache si présent */
+    if (index != -1 && index < count && count > 0) {
         for (int i = index; i < count - 1; i++) {
             pinNames[i] = pinNames[i + 1];
             cache[i] = cache[i + 1];
@@ -140,21 +141,11 @@ void ConfigCache::removeConfig(const String& pin) {
         }
         count--;
         
-        // Nettoyer le dernier élément
-        pinNames[count].clear();
-        cache[count].clear();
-        dirty[count] = false;
-        
-        debug_network("[ConfigCache] Pin %s supprimée du cache et NVS\n", pin.c_str());
-    } else {
-        // Pin pas dans le cache, mais supprimer quand même de la NVS
-        Preferences preferences;
-        preferences.begin("esp32server", false);
-        String key = "pin_" + pin;
-        preferences.remove(key.c_str());
-        preferences.end();
-        
-        debug_network("[ConfigCache] Pin %s supprimée de la NVS (pas en cache)\n", pin.c_str());
+        if (count >= 0 && count < MAX_PINS) {
+            pinNames[count].clear();
+            cache[count].clear();
+            dirty[count] = false;
+        }
     }
 }
 
@@ -184,3 +175,6 @@ String mergeConfigWithDefaults(const String& nvsConfig, const String& defaultCon
     // qui contient tous les champs nécessaires
     return defaultConfig;
 }
+
+/* Instance globale */
+ConfigCache g_configCache;

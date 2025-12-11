@@ -131,13 +131,7 @@ void setupPinAPI(AsyncWebServer& server) {
     server.on("/api/pins/delete", HTTP_POST, [](AsyncWebServerRequest *request){
         if(request->hasParam("pin", true)){
             String pin = request->getParam("pin", true)->value();
-            
-            /* Supprimer du cache ET de la NVS */
             g_configCache.removeConfig(pin);
-            
-            /* Recharger les configs pins */
-            esp32server_requestReloadPins();
-            
             request->send(200, "application/json", "{\"status\":\"ok\"}\n");
         } else {
             request->send(400, "application/json", "{\"error\":\"pin required\"}\n");
