@@ -1,0 +1,23 @@
+# Fichiers binaires de compilation
+bin/*.bin
+bin/*.elf
+bin/*.map
+bin/*.bootloader.bin
+bin/*.merged.bin
+bin/*.partitions.bin
+
+# Fichiers de build Arduino
+build/
+*.hex
+*.eep
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

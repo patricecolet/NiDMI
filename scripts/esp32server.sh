@@ -14,8 +14,8 @@
 set -e  # Arrêter en cas d'erreur
 
 # Variables
-REPO_DIR="/Users/patricecolet/repo/esp32server"
-ARDUINO_LIB_DIR="/Users/patricecolet/Documents/Arduino/libraries/esp32server"
+REPO_DIR="/Users/patricecolet/repo/NiDMI"
+ARDUINO_LIB_DIR="/Users/patricecolet/Documents/Arduino/libraries/NiDMI"
 ARDUINO_CACHE_DIR="/Users/patricecolet/Library/Caches/arduino/sketches"
 BOARD="esp32:esp32:XIAO_ESP32C3"
 DEFAULT_SKETCH="esp32server_basic"
