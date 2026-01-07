@@ -126,6 +126,27 @@ bool OSCQueue::enqueueMidi(const String& address, uint8_t data1, uint8_t data2, 
     return true;
 }
 
+bool OSCQueue::enqueueFloatArray(const String& address, const float* values, int count) {
+    if (!initialized || count <= 0 || count > 16 || !values) {
+        return false;
+    }
+    
+    // Créer un message avec toutes les valeurs et envoyer directement (pas de queue)
+    OSCMessage msg(address.c_str());
+    for (int i = 0; i < count; i++) {
+        msg.add(values[i]);
+    }
+    
+    // Envoyer directement (pas de queue pour les messages batch)
+    if (sendOSCMessage(msg)) {
+        sentCount++;
+        return true;
+    } else {
+        failedCount++;
+        return false;
+    }
+}
+
 void OSCQueue::update() {
     if (!initialized || !messageQueue) {
         return;

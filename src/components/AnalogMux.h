@@ -69,6 +69,25 @@ public:
     }
     
     /**
+     * @brief Lire tous les canaux en une seule passe (optimisé)
+     * @param values Tableau de sortie pour les 16 valeurs (0-4095)
+     * @return true si succès, false si erreur
+     */
+    bool readAll(uint16_t* values) {
+        if (!values) return false;
+        
+        // Lire tous les canaux en séquence optimisée
+        for (uint8_t ch = 0; ch < NUM_CHANNELS; ch++) {
+            prepareReading(ch);
+            if (discardFirstReading_)
+                (void)analogRead(sig);  // Jeter première lecture
+            values[ch] = analogRead(sig);
+            afterReading();
+        }
+        return true;
+    }
+    
+    /**
      * @brief Obtenir la pin SIG
      */
     uint8_t getSigPin() const { return sig; }

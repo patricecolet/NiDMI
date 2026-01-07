@@ -120,6 +120,72 @@ void ComponentManager::update() {
     // }
 
     syncOSCConfig();
+    
+    // OPTIMISATION: Mettre à jour tous les MUX en batch AVANT de traiter les composants
+    for (uint8_t mux_id = 0; mux_id < MAX_MUXES; mux_id++) {
+        if (muxes[mux_id] != nullptr && mux_configs[mux_id].enabled) {
+            updateMuxCache(mux_id);
+        }
+    }
+    
+    // OPTIMISATION: Envoyer les batches OSC pour tous les MUX qui ont changé
+    for (uint8_t mux_id = 0; mux_id < MAX_MUXES; mux_id++) {
+        if (muxes[mux_id] != nullptr && mux_configs[mux_id].enabled) {
+            MuxCache& cache = mux_cache[mux_id];
+            
+            // Envoyer le batch seulement si des valeurs ont changé
+            if (cache.valid && cache.values_changed) {
+                // Trouver l'adresse OSC de base (depuis le premier composant MUX configuré)
+                String oscBase = "/ctl"; // Défaut
+                
+                // Chercher un composant configuré sur ce MUX pour obtenir l'adresse OSC
+                for (uint8_t i = 0; i < component_count; i++) {
+                    if (isMuxGpio(configs[i].gpio)) {
+                        uint8_t offset = configs[i].gpio - MUX_GPIO_BASE;
+                        uint8_t comp_mux_id = offset / MUX_CHANNELS;
+                        if (comp_mux_id == mux_id && (configs[i].flags & 0x02)) {
+                            // Composant OSC activé sur ce MUX
+                            String oscAddress = (configs[i].osc_address[0] != '\0') ? 
+                                String(configs[i].osc_address) : "/ctl";
+                            
+                            // Extraire la base (sans numéro de canal)
+                            int lastSlash = oscAddress.lastIndexOf('/');
+                            if (lastSlash > 0) {
+                                String lastSegment = oscAddress.substring(lastSlash + 1);
+                                bool isNumber = true;
+                                for (int j = 0; j < lastSegment.length(); j++) {
+                                    if (!isdigit(lastSegment.charAt(j))) {
+                                        isNumber = false;
+                                        break;
+                                    }
+                                }
+                                if (isNumber) {
+                                    oscBase = oscAddress.substring(0, lastSlash);
+                                } else {
+                                    oscBase = oscAddress;
+                                }
+                            } else {
+                                oscBase = oscAddress;
+                            }
+                            break; // Utiliser la première adresse trouvée
+                        }
+                    }
+                }
+                
+                // Préparer le tableau de valeurs normalisées
+                float normalized_values[16];
+                for (uint8_t ch = 0; ch < 16; ch++) {
+                    uint8_t midi_val = map(cache.filtered_values[ch], 0, 4095, 0, 127);
+                    normalized_values[ch] = midi_val / 127.0f;
+                }
+                
+                // Envoyer en batch
+                osc_queue.enqueueFloatArray(oscBase, normalized_values, 16);
+                cache.values_changed = false; // Réinitialiser le flag
+            }
+        }
+    }
+    
     // Traiter OSC en priorité (avec queue FreeRTOS)
     osc_queue.update();
     
@@ -316,31 +382,12 @@ void ComponentManager::processPotentiometer(uint8_t index) {
             if (config.flags & 0x04) { // Format MIDI
                 osc_queue.enqueueMidi(oscAddress, midi_value, config.midi_param, config.midi_channel);
             } else { // Format float
-                // Si c'est un GPIO MUX, extraire le canal et envoyer [canal, valeur]
-                if (isMuxGpio(config.gpio)) {
-                    uint8_t offset = config.gpio - MUX_GPIO_BASE;
-                    uint8_t channel = offset % MUX_CHANNELS;
-                    // Extraire oscBase depuis oscAddress (enlever /0, /1, etc.)
-                    String oscBase = oscAddress;
-                    int lastSlash = oscBase.lastIndexOf('/');
-                    if (lastSlash > 0) {
-                        // Vérifier si le dernier segment est un nombre
-                        String lastSegment = oscBase.substring(lastSlash + 1);
-                        bool isNumber = true;
-                        for (int i = 0; i < lastSegment.length(); i++) {
-                            if (!isdigit(lastSegment.charAt(i))) {
-                                isNumber = false;
-                                break;
-                            }
-                        }
-                        if (isNumber) {
-                            oscBase = oscBase.substring(0, lastSlash);
-                        }
-                    }
-                    osc_queue.enqueueFloat2(oscBase, (float)channel, midi_value / 127.0f);
-                } else {
+                // Pour les MUX, l'envoi batch est géré dans update()
+                // On n'envoie que pour les pins normales
+                if (!isMuxGpio(config.gpio)) {
                     osc_queue.enqueueFloat(oscAddress, midi_value / 127.0f);
                 }
+                // Les MUX sont envoyés en batch dans update()
             }
         }
         
@@ -1207,6 +1254,53 @@ const MuxConfig* ComponentManager::getMuxConfig(uint8_t mux_id) const {
     return &mux_configs[mux_id];
 }
 
+void ComponentManager::updateMuxCache(uint8_t mux_id) {
+    if (mux_id >= MAX_MUXES || muxes[mux_id] == nullptr) {
+        return;
+    }
+    
+    MuxCache& cache = mux_cache[mux_id];
+    bool was_valid = cache.valid; // Sauvegarder l'état précédent
+    
+    // Lire tous les canaux en une seule passe
+    if (muxes[mux_id]->readAll(cache.raw_values)) {
+        // Filtrer chaque canal et détecter les changements
+        cache.values_changed = false;
+        for (uint8_t ch = 0; ch < 16; ch++) {
+            uint16_t old_value = cache.filtered_values[ch];
+            cache.filtered_values[ch] = cache.filters[ch].process(cache.raw_values[ch]);
+            // Détecter si une valeur a changé significativement (seuil de 3)
+            if (abs((int)cache.filtered_values[ch] - (int)old_value) >= 3) {
+                cache.values_changed = true;
+            }
+        }
+        cache.last_update = millis();
+        cache.valid = true;
+        
+        // Forcer l'envoi au premier appel (quand le cache devient valide)
+        if (!was_valid) {
+            cache.values_changed = true;
+        }
+    }
+}
+
+bool ComponentManager::readMuxAllChannels(uint8_t mux_id, uint16_t* values) {
+    if (mux_id >= MAX_MUXES || !values || muxes[mux_id] == nullptr) {
+        return false;
+    }
+    
+    // Mettre à jour le cache
+    updateMuxCache(mux_id);
+    
+    // Copier les valeurs filtrées
+    MuxCache& cache = mux_cache[mux_id];
+    for (uint8_t ch = 0; ch < 16; ch++) {
+        values[ch] = cache.filtered_values[ch];
+    }
+    
+    return true;
+}
+
 uint16_t ComponentManager::readMuxChannel(uint8_t gpio) {
     if (!isMuxGpio(gpio)) return 0xFFFF;
     
@@ -1219,7 +1313,16 @@ uint16_t ComponentManager::readMuxChannel(uint8_t gpio) {
         return 0xFFFF; // Mux non configure
     }
     
-    return muxes[mux_id]->read(channel);
+    // Utiliser le cache si disponible et récent (< 10ms)
+    MuxCache& cache = mux_cache[mux_id];
+    uint32_t now = millis();
+    
+    if (!cache.valid || (now - cache.last_update) > 10) {
+        // Cache invalide ou trop ancien, mettre à jour
+        updateMuxCache(mux_id);
+    }
+    
+    return cache.filtered_values[channel];
 }
 
 void ComponentManager::loadMuxConfigFromNVS() {

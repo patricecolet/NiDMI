@@ -32,6 +32,9 @@ public:
     bool enqueueFloat2(const String& address, float value1, float value2);
     bool enqueueMidi(const String& address, uint8_t data1, uint8_t data2, uint8_t channel);
     
+    // Envoyer un tableau de valeurs (pour MUX batch, envoi direct sans queue)
+    bool enqueueFloatArray(const String& address, const float* values, int count);
+    
     // Traiter la queue (à appeler dans loop())
     void update();
     

@@ -213,6 +213,46 @@ private:
     
     AnalogFilter filters[MAX_COMPONENTS];
     
+    // Filtres analogiques par canal MUX (inspiré de FilteredAnalog)
+    struct MuxChannelFilter {
+        float alpha;
+        float filtered;
+        bool initialized;
+        
+        uint16_t process(uint16_t raw) {
+            if (!initialized) {
+                filtered = raw;
+                initialized = true;
+                return raw;
+            }
+            filtered = alpha * raw + (1.0f - alpha) * filtered;
+            return (uint16_t)filtered;
+        }
+        
+        void reset() {
+            initialized = false;
+        }
+    };
+    
+    // Cache des valeurs MUX lues en batch
+    struct MuxCache {
+        uint16_t raw_values[16];      // Valeurs brutes
+        uint16_t filtered_values[16]; // Valeurs filtrées
+        MuxChannelFilter filters[16]; // Filtres par canal
+        uint32_t last_update;         // Dernière mise à jour
+        bool valid;                    // Cache valide
+        bool values_changed;           // Flag pour détecter les changements
+        
+        MuxCache() : last_update(0), valid(false), values_changed(false) {
+            for (int i = 0; i < 16; i++) {
+                filters[i].alpha = 0.1f;
+                filters[i].initialized = false;
+            }
+        }
+    };
+    
+    MuxCache mux_cache[MAX_MUXES]; // Cache pour chaque MUX
+    
 public:
     ComponentManager();
     ~ComponentManager();
@@ -243,6 +283,10 @@ public:
     const MuxConfig* getMuxConfig(uint8_t mux_id) const;
     bool isMuxGpio(uint8_t gpio) const { return gpio >= MUX_GPIO_BASE && gpio < MUX_GPIO_BASE + MAX_MUXES * MUX_CHANNELS; }
     uint16_t readMuxChannel(uint8_t gpio);
+    
+    // Lecture batch optimisée de tous les canaux d'un MUX
+    bool readMuxAllChannels(uint8_t mux_id, uint16_t* values);
+    void updateMuxCache(uint8_t mux_id); // Mettre à jour le cache MUX
     
     // Debug
     void printStats();
