@@ -1,9 +1,11 @@
 #include "APICommon.h"
 #include "PinMapper.h"
+#include "ComponentManager.h"
 #include "Esp32Server.h" /* Pour esp32server_requestReloadPins */
 
-/* Forward declaration pour getDefaultConfig */
+/* Forward declarations */
 String getDefaultConfig(String pin);
+extern ComponentManager g_componentManager;
 
 void setupPinAPI(AsyncWebServer& server) {
     /* API - Capacités des pins (dynamique selon MCU) */
@@ -135,6 +137,213 @@ void setupPinAPI(AsyncWebServer& server) {
             request->send(200, "application/json", "{\"status\":\"ok\"}\n");
         } else {
             request->send(400, "application/json", "{\"error\":\"pin required\"}\n");
+        }
+    });
+    
+    // ========================================================================
+    // API - Multiplexeurs analogiques
+    // ========================================================================
+    
+    /* API - Liste des multiplexeurs configurés */
+    server.on("/api/mux/list", HTTP_GET, [](AsyncWebServerRequest *request){
+        String json = "{\"muxes\":[";
+        bool first = true;
+        
+        Preferences prefs;
+        prefs.begin("esp32server", true);
+        
+        for (uint8_t i = 0; i < MAX_MUXES; i++) {
+            const MuxConfig* cfg = g_componentManager.getMuxConfig(i);
+            if (cfg && cfg->enabled) {
+                if (!first) json += ",";
+                json += "{";
+                json += "\"id\":" + String(i) + ",";
+                json += "\"sig\":" + String(cfg->sig_pin) + ",";
+                json += "\"s0\":" + String(cfg->s0) + ",";
+                json += "\"s1\":" + String(cfg->s1) + ",";
+                json += "\"s2\":" + String(cfg->s2) + ",";
+                json += "\"s3\":" + String(cfg->s3) + ",";
+                json += "\"en\":" + String(cfg->en_pin);
+                
+                /* Extraire oscBase, ccBase, midiChan depuis la première pin MUX (M0_0, M1_0) */
+                String pinLabel = "M" + String(i) + "_0";
+                String pinKey = "pin_" + pinLabel;
+                if (prefs.isKey(pinKey.c_str())) {
+                    String pinConfig = prefs.getString(pinKey.c_str(), "");
+                    if (pinConfig.length() > 0) {
+                        /* Extraire oscAddress et reconstruire oscBase */
+                        int oscAddrStart = pinConfig.indexOf("\"oscAddress\":\"");
+                        if (oscAddrStart >= 0) {
+                            oscAddrStart += 14; /* Longueur de "oscAddress":" */
+                            int oscAddrEnd = pinConfig.indexOf("\"", oscAddrStart);
+                            if (oscAddrEnd > oscAddrStart) {
+                                String oscAddr = pinConfig.substring(oscAddrStart, oscAddrEnd);
+                                /* Reconstruire oscBase : enlever /0 ou /ch à la fin */
+                                String oscBase = oscAddr;
+                                /* Chercher le dernier / et enlever tout ce qui suit */
+                                int lastSlash = oscBase.lastIndexOf('/');
+                                if (lastSlash > 0) {
+                                    oscBase = oscBase.substring(0, lastSlash);
+                                } else if (oscBase.endsWith("0")) {
+                                    /* Si c'est /mux0 sans slash final, enlever le 0 */
+                                    oscBase = oscBase.substring(0, oscBase.length() - 1);
+                                }
+                                /* Si oscBase est /mux, reconstruire avec le numéro du MUX */
+                                if (oscBase == "/mux") {
+                                    oscBase = "/mux" + String(i);
+                                }
+                                json += ",\"oscBase\":\"" + oscBase + "\"";
+                            }
+                        }
+                        
+                        /* Extraire rtpCc pour ccBase */
+                        int ccStart = pinConfig.indexOf("\"rtpCc\":");
+                        if (ccStart >= 0) {
+                            ccStart += 8;
+                            int ccEnd = pinConfig.indexOf(",", ccStart);
+                            if (ccEnd < 0) ccEnd = pinConfig.indexOf("}", ccStart);
+                            if (ccEnd > ccStart) {
+                                String ccStr = pinConfig.substring(ccStart, ccEnd);
+                                json += ",\"ccBase\":" + ccStr;
+                            }
+                        }
+                        
+                        /* Extraire rtpChan pour midiChan */
+                        int chanStart = pinConfig.indexOf("\"rtpChan\":");
+                        if (chanStart >= 0) {
+                            chanStart += 10;
+                            int chanEnd = pinConfig.indexOf(",", chanStart);
+                            if (chanEnd < 0) chanEnd = pinConfig.indexOf("}", chanStart);
+                            if (chanEnd > chanStart) {
+                                String chanStr = pinConfig.substring(chanStart, chanEnd);
+                                json += ",\"midiChan\":" + chanStr;
+                            }
+                        }
+                    }
+                }
+                
+                json += "}";
+                first = false;
+            }
+        }
+        
+        prefs.end();
+        
+        json += "],\"count\":" + String(g_componentManager.getMuxCount()) + "}";
+        request->send(200, "application/json", json);
+    });
+    
+    /* API - Ajouter/modifier un multiplexeur */
+    server.on("/api/mux/add", HTTP_POST, [](AsyncWebServerRequest *request){
+        if (!request->hasParam("id", true) || !request->hasParam("sig", true) ||
+            !request->hasParam("s0", true) || !request->hasParam("s1", true) ||
+            !request->hasParam("s2", true) || !request->hasParam("s3", true)) {
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Missing parameters\"}\n");
+            return;
+        }
+        
+        uint8_t mux_id = request->getParam("id", true)->value().toInt();
+        uint8_t sig = request->getParam("sig", true)->value().toInt();
+        uint8_t s0 = request->getParam("s0", true)->value().toInt();
+        uint8_t s1 = request->getParam("s1", true)->value().toInt();
+        uint8_t s2 = request->getParam("s2", true)->value().toInt();
+        uint8_t s3 = request->getParam("s3", true)->value().toInt();
+        uint8_t en = request->hasParam("en", true) ? request->getParam("en", true)->value().toInt() : 255;
+        
+        // Nouveaux paramètres MIDI/OSC (optionnels avec valeurs par défaut)
+        uint8_t ccBase = request->hasParam("ccBase", true) ? request->getParam("ccBase", true)->value().toInt() : 1;
+        uint8_t midiChan = request->hasParam("midiChan", true) ? request->getParam("midiChan", true)->value().toInt() : 1;
+        String oscBase = request->hasParam("oscBase", true) ? request->getParam("oscBase", true)->value() : "/mux" + String(mux_id);
+        
+        // Valider les valeurs
+        if (mux_id >= MAX_MUXES) {
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid mux ID (0-" + String(MAX_MUXES - 1) + ")\"}\n");
+            return;
+        }
+        
+        if (ccBase > 127) ccBase = 127;
+        if (midiChan < 1 || midiChan > 16) midiChan = 1;
+        
+        if (g_componentManager.addMux(mux_id, sig, s0, s1, s2, s3, en)) {
+            // Sauvegarder en NVS
+            Preferences prefs;
+            prefs.begin("esp32server", false);
+            String key = "mux_" + String(mux_id);
+            String config = String(sig) + "," + String(s0) + "," + String(s1) + "," + 
+                           String(s2) + "," + String(s3) + "," + String(en);
+            prefs.putString(key.c_str(), config);
+            
+            // Générer et sauvegarder les 16 configurations de pins MUX
+            for (uint8_t ch = 0; ch < 16; ch++) {
+                String pinLabel = "M" + String(mux_id) + "_" + String(ch);
+                uint8_t cc = ccBase + ch;
+                if (cc > 127) cc = 127; // Limiter à 127
+                
+                // Construire l'adresse OSC : utiliser oscBase directement (sans ajouter le canal)
+                // Le canal sera envoyé comme float dans le message OSC
+                String oscAddr = oscBase;
+                
+                // Construire la configuration JSON
+                String pinConfig = "{";
+                pinConfig += "\"role\":\"Potentiomètre\",";
+                pinConfig += "\"rtpEnabled\":true,";
+                pinConfig += "\"rtpType\":\"Control Change\",";
+                pinConfig += "\"rtpCc\":" + String(cc) + ",";
+                pinConfig += "\"rtpChan\":" + String(midiChan) + ",";
+                pinConfig += "\"potFilter\":\"lowpass\",";
+                pinConfig += "\"oscEnabled\":true,";
+                pinConfig += "\"oscAddress\":\"" + oscAddr + "\",";
+                pinConfig += "\"oscFormat\":\"float\",";
+                pinConfig += "\"dbgEnabled\":false,";
+                pinConfig += "\"dbgHeader\":\"\"";
+                pinConfig += "}";
+                
+                // Sauvegarder en NVS
+                String pinKey = "pin_" + pinLabel;
+                prefs.putString(pinKey.c_str(), pinConfig);
+                
+                // Mettre en cache (sans marquer dirty car vient de NVS)
+                g_configCache.setConfigClean(pinLabel, pinConfig);
+            }
+            
+            prefs.end();
+            
+            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+        } else {
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Failed to add mux\"}\n");
+        }
+    });
+    
+    /* API - Supprimer un multiplexeur */
+    server.on("/api/mux/delete", HTTP_POST, [](AsyncWebServerRequest *request){
+        if (!request->hasParam("id", true)) {
+            request->send(400, "application/json", "{\"error\":\"id required\"}\n");
+            return;
+        }
+        
+        uint8_t mux_id = request->getParam("id", true)->value().toInt();
+        
+        if (g_componentManager.removeMux(mux_id)) {
+            // Supprimer de NVS
+            Preferences prefs;
+            prefs.begin("esp32server", false);
+            String key = "mux_" + String(mux_id);
+            prefs.remove(key.c_str());
+            
+            // Supprimer les 16 configurations de pins MUX
+            for (uint8_t ch = 0; ch < 16; ch++) {
+                String pinLabel = "M" + String(mux_id) + "_" + String(ch);
+                String pinKey = "pin_" + pinLabel;
+                prefs.remove(pinKey.c_str());
+                // Supprimer aussi du cache
+                g_configCache.removeConfig(pinLabel);
+            }
+            
+            prefs.end();
+            
+            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+        } else {
+            request->send(400, "application/json", "{\"error\":\"Failed to remove mux\"}\n");
         }
     });
 }

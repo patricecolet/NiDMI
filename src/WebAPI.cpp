@@ -6,6 +6,11 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncWebSocket.h>
 
+// Forward declarations pour les APIs
+void setupPinAPI(AsyncWebServer& server);
+void setupOSC_API(AsyncWebServer& server);
+void setupCacheAPI(AsyncWebServer& server);
+
 Preferences preferences;
 
 // Signale au runtime de recharger les configs pins
@@ -25,6 +30,25 @@ String getDefaultConfig(String pin) {
             return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":4,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
         }
         // A3 n'existe pas sur ce MCU, retourner config par défaut
+    }
+    
+    // Pins MUX (M0_0 à M1_15) - traiter comme potentiomètres
+    if (pin.startsWith("M")) {
+        // Extraire le numéro de mux et canal : M0_0 -> mux=0, ch=0
+        int underscore_pos = pin.indexOf('_');
+        if (underscore_pos > 0 && underscore_pos < pin.length() - 1) {
+            int mux_id = pin.substring(1, underscore_pos).toInt();
+            int channel = pin.substring(underscore_pos + 1).toInt();
+            // CC par défaut : 1 + (mux_id * 16) + channel
+            int default_cc = 1 + (mux_id * 16) + channel;
+            if (default_cc > 127) default_cc = 127; // Limiter à 127
+            
+            String config = "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",";
+            config += "\"rtpCc\":" + String(default_cc) + ",\"rtpChan\":1,";
+            config += "\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",";
+            config += "\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+            return config;
+        }
     }
     
     if (pin == "D0") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":60,\"rtpChan\":1,\"btnMode\":\"pulse\",\"btnPulseTiming\":\"release\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
@@ -552,6 +576,12 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     // Serial.println("[WebAPI] Setting up WebSocket...");
     ws.onEvent(onWsEvent);
     server.addHandler(&ws);
+    
+    // Configurer les autres APIs
+    setupPinAPI(server);
+    setupOSC_API(server);
+    setupCacheAPI(server);
+    // Note: setupNetworkAPI n'est pas appelé car les routes sont déjà définies dans setupWebAPI
     
     // Serial.println("[WebAPI] Setup complete!");
 }

@@ -4,24 +4,40 @@
 #include "ServerCore.h"
 #include "OSCQueue.h"
 #include "midi/MidiMessageType.h"
+#include "ConfigCache.h"
 
 extern ServerCore serverCore;
 
 ComponentManager::ComponentManager() 
-    : component_count(0), midi_sender(nullptr) {
+    : component_count(0), midi_sender(nullptr), mux_count(0) {
     // Initialiser les filtres
     for (int i = 0; i < MAX_COMPONENTS; i++) {
         filters[i].alpha = 0.1f;
         filters[i].initialized = false;
     }
+    // Initialiser les multiplexeurs
+    for (int i = 0; i < MAX_MUXES; i++) {
+        muxes[i] = nullptr;
+        mux_configs[i].enabled = false;
+    }
 }
 
 ComponentManager::~ComponentManager() {
     clearAll();
+    // Libérer les multiplexeurs
+    for (int i = 0; i < MAX_MUXES; i++) {
+        if (muxes[i] != nullptr) {
+            delete muxes[i];
+            muxes[i] = nullptr;
+        }
+    }
 }
 
 void ComponentManager::begin(MidiSender* sender) {
     midi_sender = sender;
+    /* Charger d'abord les MUX pour enregistrer les pins virtuelles dans PinMapper */
+    loadMuxConfigFromNVS();
+    /* Puis charger les configs des pins (y compris les pins MUX) */
     loadConfigFromNVS();
     
     // Charger la configuration OSC depuis NVS
@@ -110,14 +126,16 @@ void ComponentManager::update() {
     for (uint8_t i = 0; i < component_count; i++) {
         // Vérifier que le composant est valide avant de le traiter
         const ComponentConfig& config = configs[i];
-        if (config.gpio >= 255 || config.gpio > 48) {
+        /* Vérifier GPIO valide : 0-48 pour pins normales OU 200-247 pour MUX */
+        bool is_mux_gpio = isMuxGpio(config.gpio);
+        if (config.gpio >= 255 || (!is_mux_gpio && config.gpio > 48)) {
             // GPIO invalide, ignorer ce composant
             continue;
         }
         
         switch (config.type) {
             case ComponentType::POTENTIOMETER:
-                // Vérifier ADC avant de traiter
+                // Vérifier ADC avant de traiter (les pins MUX ont toujours ADC)
                 if (PinMapper::hasAdc(config.gpio)) {
                     processPotentiometer(i);
                 }
@@ -143,19 +161,28 @@ void ComponentManager::processPotentiometer(uint8_t index) {
     const ComponentConfig& config = configs[index];
     ComponentState& state = states[index];
     
-    // Vérifier que le GPIO est valide et a un ADC (SILENCIEUX pour éviter le spam)
-    if (config.gpio >= 255 || config.gpio > 48) {
-        // GPIO invalide, ne pas traiter (pas de log pour éviter le spam)
-        return;
-    }
+    uint16_t raw_value;
     
-    if (!PinMapper::hasAdc(config.gpio)) {
-        // Pas d'ADC, ne pas traiter (pas de log pour éviter le spam)
-        return;
+    // Vérifier si c'est un GPIO virtuel de multiplexeur
+    if (isMuxGpio(config.gpio)) {
+        raw_value = readMuxChannel(config.gpio);
+        if (raw_value == 0xFFFF) {
+            // Multiplexeur non configuré, ne pas traiter
+            return;
+        }
+    } else {
+        // GPIO normal : vérifier qu'il est valide et a un ADC
+        if (config.gpio >= 255 || config.gpio > 48) {
+            return;
+        }
+        
+        if (!PinMapper::hasAdc(config.gpio)) {
+            return;
+        }
+        
+        // Lecture analogique directe
+        raw_value = analogRead(config.gpio);
     }
-    
-    // Lecture analogique
-    uint16_t raw_value = analogRead(config.gpio);
     
     // Adaptation du filtre selon la vitesse de changement
     filters[index].adaptFilter(raw_value, state.last_value);
@@ -289,7 +316,31 @@ void ComponentManager::processPotentiometer(uint8_t index) {
             if (config.flags & 0x04) { // Format MIDI
                 osc_queue.enqueueMidi(oscAddress, midi_value, config.midi_param, config.midi_channel);
             } else { // Format float
-                osc_queue.enqueueFloat(oscAddress, midi_value / 127.0f);
+                // Si c'est un GPIO MUX, extraire le canal et envoyer [canal, valeur]
+                if (isMuxGpio(config.gpio)) {
+                    uint8_t offset = config.gpio - MUX_GPIO_BASE;
+                    uint8_t channel = offset % MUX_CHANNELS;
+                    // Extraire oscBase depuis oscAddress (enlever /0, /1, etc.)
+                    String oscBase = oscAddress;
+                    int lastSlash = oscBase.lastIndexOf('/');
+                    if (lastSlash > 0) {
+                        // Vérifier si le dernier segment est un nombre
+                        String lastSegment = oscBase.substring(lastSlash + 1);
+                        bool isNumber = true;
+                        for (int i = 0; i < lastSegment.length(); i++) {
+                            if (!isdigit(lastSegment.charAt(i))) {
+                                isNumber = false;
+                                break;
+                            }
+                        }
+                        if (isNumber) {
+                            oscBase = oscBase.substring(0, lastSlash);
+                        }
+                    }
+                    osc_queue.enqueueFloat2(oscBase, (float)channel, midi_value / 127.0f);
+                } else {
+                    osc_queue.enqueueFloat(oscAddress, midi_value / 127.0f);
+                }
             }
         }
         
@@ -481,9 +532,10 @@ bool ComponentManager::addComponent(uint8_t gpio, ComponentType type, uint8_t mi
         return false;
     }
     
-    // Vérifier que le GPIO est valide (0-48 pour ESP32-C3/S3)
-    if (gpio >= 255 || gpio > 48) {
-        Serial.printf("[ComponentManager] ERROR: Invalid GPIO %d (must be 0-48)\n", gpio);
+    // Vérifier que le GPIO est valide (0-48 pour ESP32-C3/S3 OU 200-247 pour MUX)
+    bool is_mux_gpio = isMuxGpio(gpio);
+    if (gpio >= 255 || (!is_mux_gpio && gpio > 48)) {
+        Serial.printf("[ComponentManager] ERROR: Invalid GPIO %d (must be 0-48 or 200-247 for MUX)\n", gpio);
         return false;
     }
     
@@ -494,9 +546,13 @@ bool ComponentManager::addComponent(uint8_t gpio, ComponentType type, uint8_t mi
     }
     
     // Vérifier que la pin a un ADC si c'est un potentiomètre
-    if (type == ComponentType::POTENTIOMETER && !PinMapper::hasAdc(gpio)) {
-        Serial.printf("[ComponentManager] ERROR: GPIO %d does not have ADC for potentiometer\n", gpio);
-        return false;
+    if (type == ComponentType::POTENTIOMETER) {
+        if (is_mux_gpio) {
+            // Les pins MUX ont toujours ADC (vérifié dans hasAdc)
+        } else if (!PinMapper::hasAdc(gpio)) {
+            Serial.printf("[ComponentManager] ERROR: GPIO %d does not have ADC for potentiometer\n", gpio);
+            return false;
+        }
     }
     
     // Ajouter le composant
@@ -775,6 +831,137 @@ void ComponentManager::loadConfigFromNVS() {
         //              pinLabel.c_str(), gpio, success ? "OK" : "FAILED");
     }
     
+    // Charger les pins MUX (M0_0 à M1_15)
+    /* Ne charger que les pins MUX pour les MUX qui sont configurés */
+    for (uint8_t mux_id = 0; mux_id < MAX_MUXES; mux_id++) {
+        /* Vérifier si ce MUX est configuré avant de charger ses pins */
+        if (!mux_configs[mux_id].enabled) {
+            continue; /* MUX non configuré, ignorer ses pins */
+        }
+        
+        for (uint8_t ch = 0; ch < MUX_CHANNELS; ch++) {
+            String pinLabel = "M" + String(mux_id) + "_" + String(ch);
+            String key = "pin_" + pinLabel;
+            
+            if (!preferences.isKey(key.c_str())) {
+                continue;
+            }
+            
+            String pinConfig = preferences.getString(key.c_str(), "");
+            if (pinConfig.length() == 0) {
+                continue;
+            }
+            
+            // Parser JSON simple
+            String role = extractStr(pinConfig, "role", "\n");
+            if (role.length() == 0) continue;
+            
+            // Utiliser PinMapper pour obtenir le GPIO virtuel
+            uint8_t gpio = PinMapper::labelToGpio(pinLabel);
+            if (gpio == 255) {
+                Serial.printf("[ComponentManager] Invalid MUX pin label: %s (GPIO=255)\n", pinLabel.c_str());
+                continue;
+            }
+            
+            // Vérifier que la pin a un ADC si c'est un potentiomètre
+            if (role == "Potentiomètre") {
+                if (!PinMapper::hasAdc(gpio)) {
+                    Serial.printf("[ComponentManager] WARNING: MUX pin %s (GPIO%d) n'a pas d'ADC, ignorée\n", 
+                                  pinLabel.c_str(), gpio);
+                    continue;
+                }
+            }
+            
+            // Extraire paramètres MIDI
+            uint8_t midi_param = 7; // défaut CC
+            uint8_t channel = 1;    // défaut canal 1
+            MidiMessageType msg_type = MidiMessageType::NOTE; // défaut
+            
+            // Lire rtpType depuis la config
+            String rtpTypeStr = extractStr(pinConfig, "rtpType", "");
+            if (rtpTypeStr.length() > 0) {
+                msg_type = stringToMidiMessageType(rtpTypeStr);
+            } else {
+                // Défaut selon le rôle si rtpType n'est pas spécifié
+                if (role == "Potentiomètre") {
+                    msg_type = MidiMessageType::CONTROL_CHANGE;
+                } else if (role == "Bouton") {
+                    msg_type = MidiMessageType::NOTE;
+                }
+            }
+            
+            // Extraire le paramètre MIDI selon le type de message
+            if (role == "Potentiomètre") {
+                if (msg_type == MidiMessageType::CONTROL_CHANGE) {
+                    midi_param = extractInt(pinConfig, "rtpCc", 7);
+                } else if (msg_type == MidiMessageType::PROGRAM_CHANGE) {
+                    midi_param = extractInt(pinConfig, "rtpPc", 0);
+                } else if (msg_type == MidiMessageType::NOTE || msg_type == MidiMessageType::NOTE_VELOCITY || msg_type == MidiMessageType::NOTE_SWEEP) {
+                    midi_param = extractInt(pinConfig, "rtpNote", 60);
+                }
+            } else if (role == "Bouton") {
+                if (msg_type == MidiMessageType::NOTE || msg_type == MidiMessageType::NOTE_VELOCITY || msg_type == MidiMessageType::NOTE_SWEEP) {
+                    midi_param = extractInt(pinConfig, "rtpNote", 60);
+                } else if (msg_type == MidiMessageType::CONTROL_CHANGE) {
+                    midi_param = extractInt(pinConfig, "rtpCc", 7);
+                } else if (msg_type == MidiMessageType::PROGRAM_CHANGE) {
+                    midi_param = extractInt(pinConfig, "rtpPc", 0);
+                }
+            }
+            
+            channel = extractInt(pinConfig, "rtpChan", 1);
+            
+            // Ajouter le composant
+            ComponentType type = ComponentType::POTENTIOMETER;
+            if (role == "Bouton") type = ComponentType::BUTTON;
+            else if (role == "LED") type = ComponentType::LED;
+            
+            bool success = addComponent(gpio, type, midi_param, channel, msg_type);
+            
+            if (!success) {
+                continue;
+            }
+            
+            // Configurer les flags OSC si le composant a été ajouté avec succès
+            if (success) {
+                // Trouver l'index du composant ajouté
+                uint8_t index = findComponentByGpio(gpio);
+                if (index != 255) {
+                    // Lire oscEnabled, oscFormat et oscAddress depuis la config
+                    bool oscEnabled = extractBool(pinConfig, "oscEnabled", false);
+                    String oscFormat = extractStr(pinConfig, "oscFormat", "float");
+                    String oscAddress = extractStr(pinConfig, "oscAddress", "");
+                    
+                    // Configurer les flags (bit 0x02 pour OSC, bit 0x04 pour format MIDI)
+                    if (oscEnabled) {
+                        configs[index].flags |= 0x02; // Activer OSC
+                        if (oscFormat == "midi") {
+                            configs[index].flags |= 0x04; // Format MIDI
+                        } else {
+                            configs[index].flags &= ~0x04; // Format float
+                        }
+                    } else {
+                        configs[index].flags &= ~0x02; // Désactiver OSC
+                    }
+                    
+                    // Configurer l'adresse OSC (utiliser valeur par défaut si vide)
+                    if (oscAddress.length() > 0) {
+                        strncpy(configs[index].osc_address, oscAddress.c_str(), sizeof(configs[index].osc_address) - 1);
+                        configs[index].osc_address[sizeof(configs[index].osc_address) - 1] = '\0';
+                        Serial.printf("[ComponentManager] OSC address from config: '%s' for %s\n", 
+                                      oscAddress.c_str(), pinLabel.c_str());
+                    } else {
+                        Serial.printf("[ComponentManager] OSC address empty for %s, using default: '%s'\n", 
+                                      pinLabel.c_str(), configs[index].osc_address);
+                    }
+                    
+                    Serial.printf("[ComponentManager] Final OSC config: %s addr:%s for MUX pin %s (GPIO%d)\n", 
+                                 oscEnabled ? "enabled" : "disabled", configs[index].osc_address, pinLabel.c_str(), gpio);
+                }
+            }
+        }
+    }
+    
     preferences.end();
     // Serial.printf("[ComponentManager] Loaded %d components from NVS\n", component_count);
 }
@@ -901,5 +1088,168 @@ void ComponentManager::handleMidiControlChange(uint8_t channel, uint8_t control,
             //              config.gpio, ledState ? "ON" : "OFF", control, channel, value);
         }
     }
+}
+
+// ============================================================================
+// Gestion des multiplexeurs analogiques
+// ============================================================================
+
+bool ComponentManager::addMux(uint8_t mux_id, uint8_t sig, uint8_t s0, uint8_t s1, uint8_t s2, uint8_t s3, uint8_t en) {
+    if (mux_id >= MAX_MUXES) {
+        Serial.printf("[ComponentManager] Mux ID %d invalide (max %d)\n", mux_id, MAX_MUXES - 1);
+        return false;
+    }
+    
+    // Valider les pins GPIO (0-48 pour ESP32-C3/S3)
+    if (sig > 48 || s0 > 48 || s1 > 48 || s2 > 48 || s3 > 48) {
+        Serial.printf("[ComponentManager] Pin GPIO invalide (max 48)\n");
+        return false;
+    }
+    if (en != 255 && en > 48) {
+        Serial.printf("[ComponentManager] Pin EN GPIO invalide (max 48)\n");
+        return false;
+    }
+    
+    // Vérifier que SIG a un ADC
+    if (!PinMapper::hasAdc(sig)) {
+        Serial.printf("[ComponentManager] Pin SIG %d n'a pas d'ADC\n", sig);
+        return false;
+    }
+    
+    // Fonction helper : supprimer composant et NVS pour une pin
+    auto removeComponentAndNVS = [this](uint8_t gpio, const char* role) {
+        if (this->removeComponent(gpio)) {
+            Serial.printf("[ComponentManager] Composant existant supprime de GPIO %d (utilise pour MUX %s)\n", gpio, role);
+            // Supprimer aussi la configuration NVS de cette pin
+            String pinLabel = PinMapper::gpioToLabel(gpio);
+            if (pinLabel.length() > 0) {
+                extern ConfigCache g_configCache;
+                g_configCache.removeConfig(pinLabel);
+            }
+        }
+    };
+    
+    // Supprimer les composants existants sur toutes les pins du multiplexeur
+    removeComponentAndNVS(sig, "SIG");
+    removeComponentAndNVS(s0, "S0");
+    removeComponentAndNVS(s1, "S1");
+    removeComponentAndNVS(s2, "S2");
+    removeComponentAndNVS(s3, "S3");
+    if (en != 255) {
+        removeComponentAndNVS(en, "EN");
+    }
+    
+    // Supprimer l'ancien si existe
+    if (muxes[mux_id] != nullptr) {
+        delete muxes[mux_id];
+        muxes[mux_id] = nullptr;
+    }
+    
+    // Créer le nouveau multiplexeur
+    muxes[mux_id] = new AnalogMux(sig, s0, s1, s2, s3, en);
+    if (muxes[mux_id] == nullptr) {
+        Serial.printf("[ComponentManager] Echec allocation memoire pour Mux %d\n", mux_id);
+        return false;
+    }
+    
+    // Initialiser le multiplexeur
+    muxes[mux_id]->begin();
+    
+    // Sauvegarder la config
+    mux_configs[mux_id].sig_pin = sig;
+    mux_configs[mux_id].s0 = s0;
+    mux_configs[mux_id].s1 = s1;
+    mux_configs[mux_id].s2 = s2;
+    mux_configs[mux_id].s3 = s3;
+    mux_configs[mux_id].en_pin = en;
+    mux_configs[mux_id].enabled = true;
+    
+    // Compter les mux actifs
+    mux_count = 0;
+    for (int i = 0; i < MAX_MUXES; i++) {
+        if (mux_configs[i].enabled) mux_count++;
+    }
+    
+    // Enregistrer les pins virtuelles dans PinMapper
+    PinMapper::registerMuxPins(mux_id);
+    
+    Serial.printf("[ComponentManager] Mux %d configure: SIG=%d, S0=%d, S1=%d, S2=%d, S3=%d, EN=%d\n",
+                 mux_id, sig, s0, s1, s2, s3, en);
+    
+    return true;
+}
+
+bool ComponentManager::removeMux(uint8_t mux_id) {
+    if (mux_id >= MAX_MUXES) return false;
+    
+    if (muxes[mux_id] != nullptr) {
+        delete muxes[mux_id];
+        muxes[mux_id] = nullptr;
+    }
+    
+    mux_configs[mux_id].enabled = false;
+    
+    // Désenregistrer les pins virtuelles dans PinMapper
+    PinMapper::unregisterMuxPins(mux_id);
+    
+    // Recompter les mux actifs
+    mux_count = 0;
+    for (int i = 0; i < MAX_MUXES; i++) {
+        if (mux_configs[i].enabled) mux_count++;
+    }
+    
+    Serial.printf("[ComponentManager] Mux %d supprime\n", mux_id);
+    return true;
+}
+
+const MuxConfig* ComponentManager::getMuxConfig(uint8_t mux_id) const {
+    if (mux_id >= MAX_MUXES) return nullptr;
+    return &mux_configs[mux_id];
+}
+
+uint16_t ComponentManager::readMuxChannel(uint8_t gpio) {
+    if (!isMuxGpio(gpio)) return 0xFFFF;
+    
+    // Calculer mux_id et channel depuis le GPIO virtuel
+    uint8_t offset = gpio - MUX_GPIO_BASE;
+    uint8_t mux_id = offset / MUX_CHANNELS;
+    uint8_t channel = offset % MUX_CHANNELS;
+    
+    if (mux_id >= MAX_MUXES || muxes[mux_id] == nullptr) {
+        return 0xFFFF; // Mux non configure
+    }
+    
+    return muxes[mux_id]->read(channel);
+}
+
+void ComponentManager::loadMuxConfigFromNVS() {
+    Preferences prefs;
+    prefs.begin("esp32server", true);
+    
+    for (uint8_t i = 0; i < MAX_MUXES; i++) {
+        String key = "mux_" + String(i);
+        String config = prefs.getString(key.c_str(), "");
+        
+        if (!config.isEmpty()) {
+            // Parser la config : "sig,s0,s1,s2,s3,en"
+            int vals[6] = {0, 0, 0, 0, 0, 255};
+            int idx = 0;
+            int start = 0;
+            
+            for (int j = 0; j <= (int)config.length() && idx < 6; j++) {
+                if (j == (int)config.length() || config[j] == ',') {
+                    vals[idx++] = config.substring(start, j).toInt();
+                    start = j + 1;
+                }
+            }
+            
+            if (idx >= 5) { // Au moins sig, s0, s1, s2, s3
+                addMux(i, vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
+                Serial.printf("[ComponentManager] Loaded mux %d from NVS\n", i);
+            }
+        }
+    }
+    
+    prefs.end();
 }
 

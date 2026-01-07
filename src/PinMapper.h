@@ -109,6 +109,18 @@ public:
     static const PinMapping* getAllMappings();
     static size_t getMappingCount();
     
+    // Gestion des pins virtuelles de multiplexeurs
+    static void registerMuxPins(uint8_t mux_id);
+    static void unregisterMuxPins(uint8_t mux_id);
+    static void clearMuxPins();
+    
     // Debug
     static void printMappings();
+    
+private:
+    // Pins virtuelles des multiplexeurs (max 2 mux * 16 canaux = 32 pins)
+    static constexpr uint8_t MAX_MUX_PINS = 32;
+    static PinMapping mux_pins[MAX_MUX_PINS];
+    static size_t mux_pin_count;
+    static char mux_labels[MAX_MUX_PINS][8]; // "M0_0" to "M1_15"
 };

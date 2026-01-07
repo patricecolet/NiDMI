@@ -7,6 +7,7 @@
 #include "midi/MidiMessageType.h"
 #include "OSCManager.h"
 #include "OSCQueue.h"
+#include "components/AnalogMux.h"
 
 // Types de composants supportés
 enum class ComponentType : uint8_t {
@@ -14,6 +15,22 @@ enum class ComponentType : uint8_t {
     BUTTON = 1,
     LED = 2
 };
+
+// Configuration d'un multiplexeur analogique
+struct MuxConfig {
+    uint8_t sig_pin;      // Pin analogique (SIG)
+    uint8_t s0, s1, s2, s3; // Pins de selection
+    uint8_t en_pin;       // Pin enable (255 = non connectee)
+    bool enabled;         // Multiplexeur actif
+};
+
+// Constantes pour les GPIO virtuels des multiplexeurs
+// GPIO 200-215 = MUX0 canaux 0-15
+// GPIO 216-231 = MUX1 canaux 0-15
+// Limité à 2 multiplexeurs pour éviter le manque de pins digitales
+static constexpr uint8_t MUX_GPIO_BASE = 200;
+static constexpr uint8_t MUX_CHANNELS = 16;
+static constexpr uint8_t MAX_MUXES = 2;
 
 // Configuration optimisée d'un composant
 struct ComponentConfig {
@@ -97,7 +114,8 @@ struct ComponentState {
  */
 class ComponentManager {
 private:
-    static constexpr uint8_t MAX_COMPONENTS = 32;
+    /* MAX_COMPONENTS doit supporter 2 MUX (32 pins) + autres composants */
+    static constexpr uint8_t MAX_COMPONENTS = 64;
     
     ComponentConfig configs[MAX_COMPONENTS];
     ComponentState states[MAX_COMPONENTS];
@@ -105,6 +123,11 @@ private:
     MidiSender* midi_sender;
     OSCManager osc_manager;
     OSCQueue osc_queue;
+    
+    // Multiplexeurs analogiques
+    MuxConfig mux_configs[MAX_MUXES];
+    AnalogMux* muxes[MAX_MUXES];  // Pointeurs (nullptr si non configure)
+    uint8_t mux_count;
     
     // Filtre analogique optimisé (selon ARCHITECTURE_MIDI.md)
     struct AnalogFilter {
@@ -213,6 +236,14 @@ public:
     const ComponentConfig* getConfig(uint8_t index) const;
     const ComponentState* getState(uint8_t index) const;
     
+    // Gestion des multiplexeurs
+    bool addMux(uint8_t mux_id, uint8_t sig, uint8_t s0, uint8_t s1, uint8_t s2, uint8_t s3, uint8_t en = 255);
+    bool removeMux(uint8_t mux_id);
+    uint8_t getMuxCount() const { return mux_count; }
+    const MuxConfig* getMuxConfig(uint8_t mux_id) const;
+    bool isMuxGpio(uint8_t gpio) const { return gpio >= MUX_GPIO_BASE && gpio < MUX_GPIO_BASE + MAX_MUXES * MUX_CHANNELS; }
+    uint16_t readMuxChannel(uint8_t gpio);
+    
     // Debug
     void printStats();
     
@@ -224,6 +255,7 @@ private:
     // Utilitaires
     uint8_t findComponentByGpio(uint8_t gpio) const;
     void loadConfigFromNVS();
+    void loadMuxConfigFromNVS();
     void saveConfigToNVS();
     
     // Parsing JSON optimisé

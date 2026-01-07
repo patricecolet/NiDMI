@@ -59,6 +59,7 @@ bool OSCQueue::enqueueFloat(const String& address, float value) {
     OSCMessageItem item;
     item.address = address;
     item.value = value;
+    item.value2 = 0.0f;
     item.data1 = 0;
     item.data2 = 0;
     item.channel = 0;
@@ -75,6 +76,31 @@ bool OSCQueue::enqueueFloat(const String& address, float value) {
     return true;
 }
 
+bool OSCQueue::enqueueFloat2(const String& address, float value1, float value2) {
+    if (!initialized || !messageQueue) {
+        return false;
+    }
+    
+    OSCMessageItem item;
+    item.address = address;
+    item.value = value1;
+    item.value2 = value2;
+    item.data1 = 0;
+    item.data2 = 0;
+    item.channel = 0;
+    item.messageType = 2; // Float2
+    item.timestamp = millis();
+    
+    BaseType_t result = xQueueSend(messageQueue, &item, 0); // Non-bloquant
+    if (result != pdTRUE) {
+        // Serial.printf("[OSCQueue] Queue pleine, message float2 perdu: %s=%.3f,%.3f\n", 
+        //              address.c_str(), value1, value2);
+        return false;
+    }
+    
+    return true;
+}
+
 bool OSCQueue::enqueueMidi(const String& address, uint8_t data1, uint8_t data2, uint8_t channel) {
     if (!initialized || !messageQueue) {
         return false;
@@ -83,6 +109,7 @@ bool OSCQueue::enqueueMidi(const String& address, uint8_t data1, uint8_t data2, 
     OSCMessageItem item;
     item.address = address;
     item.value = 0.0f;
+    item.value2 = 0.0f;
     item.data1 = data1;
     item.data2 = data2;
     item.channel = channel;
@@ -118,6 +145,9 @@ void OSCQueue::update() {
         
         if (item.messageType == 0) { // Float
             msg.add(item.value);
+        } else if (item.messageType == 2) { // Float2
+            msg.add(item.value);  // Canal
+            msg.add(item.value2); // Valeur
         } else { // MIDI
             msg.add((int32_t)item.data1);
             msg.add((int32_t)item.data2);
