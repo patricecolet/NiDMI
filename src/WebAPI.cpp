@@ -459,6 +459,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         String btnMode    = getOpt("btnMode");
         String btnPulseTiming = getOpt("btnPulseTiming");
         String potFilter  = getOpt("potFilter");
+        String filterIntensity = getOpt("filterIntensity");
         String oscEnabled = getOpt("oscEnabled");
         String oscAddress = getOpt("oscAddress");
         String oscFormat  = getOpt("oscFormat");
@@ -488,6 +489,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         if(btnMode.length())    json += ",\"btnMode\":\"" + btnMode + "\"";
         if(btnPulseTiming.length()) json += ",\"btnPulseTiming\":\"" + btnPulseTiming + "\"";
         if(potFilter.length())  json += ",\"potFilter\":\"" + potFilter + "\"";
+        if(filterIntensity.length()) json += ",\"filterIntensity\":" + filterIntensity;
         if(oscEnabled.length()) json += ",\"oscEnabled\":" + String((oscEnabled=="true")?"true":"false");
         if(oscAddress.length()) json += ",\"oscAddress\":\"" + oscAddress + "\"";
         if(oscFormat.length())  json += ",\"oscFormat\":\"" + oscFormat + "\"";

@@ -172,15 +172,34 @@ void ComponentManager::update() {
                     }
                 }
                 
-                // Préparer le tableau de valeurs normalisées
-                float normalized_values[16];
-                for (uint8_t ch = 0; ch < 16; ch++) {
-                    uint8_t midi_val = map(cache.filtered_values[ch], 0, 4095, 0, 127);
-                    normalized_values[ch] = midi_val / 127.0f;
+                // Envoyer en batch selon le format OSC configuré
+                // stable_values est déjà en 0-127 (méthode Control-Surface)
+                const MuxConfig& mux_config = mux_configs[mux_id];
+                switch (mux_config.osc_format) {
+                    case MuxOSCFormat::RAW: {
+                        // Données brutes (0-4095) - convertir depuis 0-127 avec formule précise
+                        uint16_t raw_values[16];
+                        for (uint8_t ch = 0; ch < 16; ch++) {
+                            raw_values[ch] = (uint16_t)cache.stable_values[ch] * 4095 / 127;  // Formule précise
+                        }
+                        osc_queue.enqueueIntArray(oscBase, raw_values, 16);
+                        break;
+                    }
+                    case MuxOSCFormat::FLOAT: {
+                        // Normalisé (0-1) - normaliser directement depuis 0-127
+                        float normalized_values[16];
+                        for (uint8_t ch = 0; ch < 16; ch++) {
+                            normalized_values[ch] = cache.stable_values[ch] / 127.0f;
+                        }
+                        osc_queue.enqueueFloatArray(oscBase, normalized_values, 16);
+                        break;
+                    }
+                    case MuxOSCFormat::MIDI: {
+                        // MIDI standard (0-127) - utiliser directement
+                        osc_queue.enqueueMidiArray(oscBase, cache.stable_values, 16);
+                        break;
+                    }
                 }
-                
-                // Envoyer en batch
-                osc_queue.enqueueFloatArray(oscBase, normalized_values, 16);
                 cache.values_changed = false; // Réinitialiser le flag
             }
         }
@@ -227,71 +246,47 @@ void ComponentManager::processPotentiometer(uint8_t index) {
     const ComponentConfig& config = configs[index];
     ComponentState& state = states[index];
     
-    uint16_t raw_value;
-    
     // Vérifier si c'est un GPIO virtuel de multiplexeur
     if (isMuxGpio(config.gpio)) {
-        raw_value = readMuxChannel(config.gpio);
-        if (raw_value == 0xFFFF) {
-            // Multiplexeur non configuré, ne pas traiter
-            return;
-        }
-    } else {
-        // GPIO normal : vérifier qu'il est valide et a un ADC
-        if (config.gpio >= 255 || config.gpio > 48) {
-            return;
-        }
+        // Pour les MUX, utiliser directement stable_values du cache (déjà 0-127)
+        // Éviter la double conversion via readMuxChannel()
+        uint8_t offset = config.gpio - MUX_GPIO_BASE;
+        uint8_t mux_id = offset / MUX_CHANNELS;
+        uint8_t channel = offset % MUX_CHANNELS;
         
-        if (!PinMapper::hasAdc(config.gpio)) {
-            return;
+        if (mux_id >= MAX_MUXES || muxes[mux_id] == nullptr) {
+            return; // Mux non configuré
         }
         
-        // Lecture analogique directe
-        raw_value = analogRead(config.gpio);
-    }
-    
-    // Adaptation du filtre selon la vitesse de changement
-    filters[index].adaptFilter(raw_value, state.last_value);
-    
-    // Filtrage : médian + passe-bas agressif pour NOTE_SWEEP, sinon filtre normal
-    uint16_t filtered_value;
-    if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
-        filtered_value = filters[index].processMedianAndLowpass(raw_value);
-    } else {
-        filtered_value = filters[index].process(raw_value);
-    }
-    
-    // Conversion 0-4095 → 0-127
-    uint8_t midi_value = map(filtered_value, 0, 4095, 0, 127);
-    
-    // ===== TRAITEMENT SPÉCIAL NOTE_SWEEP =====
-    // Utilise l'hystérésis pour éviter les oscillations
-    if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
+        // Mettre à jour le cache si nécessaire
+        MuxCache& cache = mux_cache[mux_id];
+        uint32_t now = millis();
+        if (!cache.valid || (now - cache.last_update) > 10) {
+            updateMuxCache(mux_id);
+        }
         
-        // 1. Vérifier l'auto-off AVANT tout (éteint la note si délai écoulé)
-        if (config.rtpNoteSweepAutoOffDelay > 0 && 
-            state.last_note != 255 && 
-            state.note_on_time > 0) {
-            uint32_t elapsed = millis() - state.note_on_time;
-            if (elapsed >= config.rtpNoteSweepAutoOffDelay) {
-                // Délai écoulé, éteindre la note
-                midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
-                state.last_note = 255;
-                state.note_on_time = 0;
+        // Utiliser directement stable_values (déjà 0-127)
+        uint8_t midi_value = cache.stable_values[channel];
+        
+        // ===== TRAITEMENT SPÉCIAL NOTE_SWEEP =====
+        if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
+            // 1. Vérifier l'auto-off AVANT tout
+            if (config.rtpNoteSweepAutoOffDelay > 0 && 
+                state.last_note != 255 && 
+                state.note_on_time > 0) {
+                uint32_t elapsed = millis() - state.note_on_time;
+                if (elapsed >= config.rtpNoteSweepAutoOffDelay) {
+                    midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
+                    state.last_note = 255;
+                    state.note_on_time = 0;
+                }
             }
-        }
+            
+            // 2. Pour NOTE_SWEEP, utiliser directement la valeur (déjà stable via hystérésis globale du MUX)
+            // Pas besoin d'hystérésis supplémentaire car stable_values est déjà stabilisé
+            uint8_t stable_midi_value = midi_value;
         
-        // 2. Appliquer l'hystérésis sur midi_value
-        // Si pas de changement significatif, on s'arrête là
-        if (!state.hysteresis.update(midi_value)) {
-            return; // Valeur stable, rien à faire
-        }
-        
-        // 3. L'hystérésis a détecté un changement réel
-        // Utiliser la valeur stabilisée par l'hystérésis
-        uint8_t stable_midi_value = state.hysteresis.getValue();
-        
-        // 4. Calculer la nouvelle note
+        // 3. Calculer la nouvelle note
         uint8_t noteMin = config.rtpNoteMin;
         uint8_t noteMax = config.rtpNoteMax;
         uint8_t newNote;
@@ -302,17 +297,17 @@ void ComponentManager::processPotentiometer(uint8_t index) {
             newNote = map(stable_midi_value, 1, 127, noteMin, noteMax);
         }
         
-        // 5. Si la note est identique à la précédente, ne rien faire
+        // 4. Si la note est identique à la précédente, ne rien faire
         if (newNote == state.last_note) {
             return;
         }
         
-        // 6. Éteindre l'ancienne note si elle existe
+        // 5. Éteindre l'ancienne note si elle existe
         if (state.last_note != 255) {
             midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
         }
         
-        // 7. Jouer la nouvelle note (sauf si 255)
+        // 6. Jouer la nouvelle note (sauf si 255)
         if (newNote != 255) {
             midi_sender->sendNoteOn(config.midi_channel, newNote, config.rtpNoteVelFix);
             state.note_on_time = (config.rtpNoteSweepAutoOffDelay > 0) ? millis() : 0;
@@ -320,12 +315,12 @@ void ComponentManager::processPotentiometer(uint8_t index) {
             state.note_on_time = 0;
         }
         
-        // 8. Mettre à jour l'état
+        // 7. Mettre à jour l'état
         state.last_note = newNote;
         state.last_value = stable_midi_value;
         state.last_time = millis();
         
-        // 9. OSC si activé
+        // 8. OSC si activé (même valeur que MIDI)
         if (config.flags & 0x02) {
             String oscAddress = (config.osc_address[0] != '\0') ? String(config.osc_address) : "/note";
             if (config.flags & 0x04) {
@@ -335,12 +330,15 @@ void ComponentManager::processPotentiometer(uint8_t index) {
             }
         }
         
-        return; // Traitement NOTE_SWEEP terminé
+        return; // Traitement NOTE_SWEEP MUX terminé
     }
     
-    // ===== TRAITEMENT STANDARD (autres types) =====
-    // Envoyer seulement si changement significatif (seuil de 3 pour XIAO_ESP32C3)
-    if (abs((int)midi_value - (int)state.last_value) >= 3) {
+    // ===== TRAITEMENT STANDARD pour MUX (autres types) =====
+    // Utiliser directement stable_values (déjà 0-127)
+    // midi_value est déjà déclaré à la ligne 269
+    // Envoyer seulement si changement significatif (seuil de 1 pour valeurs 0-127)
+    if (abs((int)midi_value - (int)state.last_value) >= 1) {
+        state.last_value = midi_value;  // Mettre à jour avant d'envoyer
         // Envoyer le message MIDI selon le type configuré
         switch (config.msg_type) {
             case MidiMessageType::CONTROL_CHANGE:
@@ -383,15 +381,171 @@ void ComponentManager::processPotentiometer(uint8_t index) {
                 osc_queue.enqueueMidi(oscAddress, midi_value, config.midi_param, config.midi_channel);
             } else { // Format float
                 // Pour les MUX, l'envoi batch est géré dans update()
-                // On n'envoie que pour les pins normales
-                if (!isMuxGpio(config.gpio)) {
-                    osc_queue.enqueueFloat(oscAddress, midi_value / 127.0f);
-                }
+                // On n'envoie pas d'OSC individuel pour les MUX (envoyé en batch)
                 // Les MUX sont envoyés en batch dans update()
             }
         }
         
-        // Mettre à jour last_value (NOTE_SWEEP est traité avant et fait return)
+        // Mettre à jour last_value
+        state.last_value = midi_value;
+        state.last_time = millis();
+    }
+    
+    return; // Traitement MUX terminé
+    }
+    
+    // ===== TRAITEMENT POUR GPIO NORMALES (non-MUX) =====
+    // GPIO normal : vérifier qu'il est valide et a un ADC
+    if (config.gpio >= 255 || config.gpio > 48) {
+        return;
+    }
+    
+    if (!PinMapper::hasAdc(config.gpio)) {
+        return;
+    }
+    
+    // Lecture analogique directe
+    uint16_t raw_value = analogRead(config.gpio);
+    
+    // Mettre à jour alpha du filtre selon filter_intensity (1-10)
+    uint8_t intensity = config.filter_intensity;
+    if (intensity == 0) intensity = 5; // Valeur par défaut si non configuré
+    filters[index].setAlphaFromIntensity(intensity);
+    
+    // Filtrage : médian + passe-bas agressif pour NOTE_SWEEP, sinon filtre normal
+    uint16_t filtered_value;
+    if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
+        filtered_value = filters[index].processMedianAndLowpass(raw_value);
+    } else {
+        filtered_value = filters[index].process(raw_value);
+    }
+    
+    // ===== TRAITEMENT SPÉCIAL NOTE_SWEEP (GPIO normales) =====
+    if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
+        // 1. Vérifier l'auto-off AVANT tout
+        if (config.rtpNoteSweepAutoOffDelay > 0 && 
+            state.last_note != 255 && 
+            state.note_on_time > 0) {
+            uint32_t elapsed = millis() - state.note_on_time;
+            if (elapsed >= config.rtpNoteSweepAutoOffDelay) {
+                midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
+                state.last_note = 255;
+                state.note_on_time = 0;
+            }
+        }
+        
+        // 2. Appliquer l'hystérésis directement sur filtered_value (0-4095)
+        // L'hystérésis réduit automatiquement vers 0-127
+        if (!state.hysteresis.update(filtered_value)) {
+            return; // Valeur stable, rien à faire
+        }
+        
+        // 3. Utiliser la valeur stabilisée par l'hystérésis (déjà 0-127)
+        uint8_t stable_midi_value = state.hysteresis.getValue();
+        
+        // 4. Calculer la nouvelle note
+        uint8_t noteMin = config.rtpNoteMin;
+        uint8_t noteMax = config.rtpNoteMax;
+        uint8_t newNote;
+        
+        if (stable_midi_value == 0) {
+            newNote = 255; // Pas de note (potentiomètre à zéro)
+        } else {
+            newNote = map(stable_midi_value, 1, 127, noteMin, noteMax);
+        }
+        
+        // 5. Si la note est identique à la précédente, ne rien faire
+        if (newNote == state.last_note) {
+            return;
+        }
+        
+        // 6. Éteindre l'ancienne note si elle existe
+        if (state.last_note != 255) {
+            midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
+        }
+        
+        // 7. Jouer la nouvelle note (sauf si 255)
+        if (newNote != 255) {
+            midi_sender->sendNoteOn(config.midi_channel, newNote, config.rtpNoteVelFix);
+            state.note_on_time = (config.rtpNoteSweepAutoOffDelay > 0) ? millis() : 0;
+        } else {
+            state.note_on_time = 0;
+        }
+        
+        // 8. Mettre à jour l'état
+        state.last_note = newNote;
+        state.last_value = stable_midi_value;
+        state.last_time = millis();
+        
+        // 9. OSC si activé (même valeur que MIDI)
+        if (config.flags & 0x02) {
+            String oscAddress = (config.osc_address[0] != '\0') ? String(config.osc_address) : "/note";
+            if (config.flags & 0x04) {
+                osc_queue.enqueueMidi(oscAddress, stable_midi_value, config.midi_param, config.midi_channel);
+            } else {
+                osc_queue.enqueueFloat(oscAddress, stable_midi_value / 127.0f);
+            }
+        }
+        
+        return; // Traitement NOTE_SWEEP GPIO normale terminé
+    }
+    
+    // ===== TRAITEMENT STANDARD pour GPIO normales (autres types) =====
+    // Appliquer l'hystérésis directement sur filtered_value (0-4095)
+    // L'hystérésis réduit automatiquement vers 0-127 (méthode Control-Surface)
+    if (!state.hysteresis.update(filtered_value)) {
+        return; // Valeur stable, rien à faire
+    }
+    
+    uint8_t midi_value = state.hysteresis.getValue();  // Déjà 0-127
+    
+    // Envoyer seulement si changement significatif (seuil de 1 pour valeurs 0-127)
+    if (abs((int)midi_value - (int)state.last_value) >= 1) {
+        state.last_value = midi_value;  // Mettre à jour avant d'envoyer
+        // Envoyer le message MIDI selon le type configuré
+        switch (config.msg_type) {
+            case MidiMessageType::CONTROL_CHANGE:
+                midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
+                break;
+            case MidiMessageType::PITCH_BEND: {
+                // Pitch Bend: 0-127 → -8192 à +8191 (signé, centre=0)
+                int pitchBend = map(midi_value, 0, 127, -8192, 8191);
+                midi_sender->sendPitchBend(config.midi_channel, pitchBend);
+                break;
+            }
+            case MidiMessageType::AFTERTOUCH:
+                midi_sender->sendAftertouch(config.midi_channel, midi_value);
+                break;
+            case MidiMessageType::NOTE_VELOCITY:
+                // Note + vélocité: envoyer Note On avec vélocité variable
+                if (midi_value > 0) {
+                    midi_sender->sendNoteOn(config.midi_channel, config.midi_param, midi_value);
+                } else {
+                    midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
+                }
+                break;
+            case MidiMessageType::PROGRAM_CHANGE:
+                midi_sender->sendProgramChange(config.midi_channel, midi_value);
+                break;
+            default:
+                // Par défaut: Control Change
+                midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
+                break;
+        }
+        
+        // Envoyer OSC si activé (via queue prioritaire)
+        if (config.flags & 0x02) { // Bit OSC enabled
+            // Utiliser l'adresse OSC configurée (ou défaut si vide)
+            String oscAddress = (config.osc_address[0] != '\0') ? String(config.osc_address) : "/ctl";
+            
+            if (config.flags & 0x04) { // Format MIDI
+                osc_queue.enqueueMidi(oscAddress, midi_value, config.midi_param, config.midi_channel);
+            } else { // Format float
+                osc_queue.enqueueFloat(oscAddress, midi_value / 127.0f);
+            }
+        }
+        
+        // Mettre à jour last_value
         state.last_value = midi_value;
         state.last_time = millis();
     }
@@ -621,6 +775,7 @@ bool ComponentManager::addComponent(uint8_t gpio, ComponentType type, uint8_t mi
     config.btnMode[sizeof(config.btnMode)-1] = '\0';
     strncpy(config.btnPulseTiming, "release", sizeof(config.btnPulseTiming)); // Défaut: release
     config.btnPulseTiming[sizeof(config.btnPulseTiming)-1] = '\0';
+    config.filter_intensity = 5; // Défaut: filtre modéré (bon compromis)
     
     // Serial.printf("[ComponentManager] Added component: GPIO%d, type=%d, param=%d, channel=%d, msg_type=%d\n",
     //               gpio, (int)type, midi_param, channel, (int)msg_type);
@@ -869,6 +1024,12 @@ void ComponentManager::loadConfigFromNVS() {
                         configs[index].rtpNoteMax = temp;
                     }
                 }
+                
+                // Lire filter_intensity (1-10, défaut: 5)
+                uint8_t filter_intensity = extractInt(pinConfig, "filterIntensity", 5);
+                if (filter_intensity < 1) filter_intensity = 1;
+                if (filter_intensity > 10) filter_intensity = 10;
+                configs[index].filter_intensity = filter_intensity;
                 
                 Serial.printf("[ComponentManager] Final OSC config: %s addr:%s for GPIO%d\n", 
                              oscEnabled ? "enabled" : "disabled", configs[index].osc_address, gpio);
@@ -1141,7 +1302,9 @@ void ComponentManager::handleMidiControlChange(uint8_t channel, uint8_t control,
 // Gestion des multiplexeurs analogiques
 // ============================================================================
 
-bool ComponentManager::addMux(uint8_t mux_id, uint8_t sig, uint8_t s0, uint8_t s1, uint8_t s2, uint8_t s3, uint8_t en) {
+bool ComponentManager::addMux(uint8_t mux_id, uint8_t sig, uint8_t s0, uint8_t s1, uint8_t s2, uint8_t s3, 
+                               uint8_t en, uint16_t analog_min, uint16_t analog_max, 
+                               bool hysteresis_enabled, MuxOSCFormat osc_format, uint8_t filter_intensity) {
     if (mux_id >= MAX_MUXES) {
         Serial.printf("[ComponentManager] Mux ID %d invalide (max %d)\n", mux_id, MAX_MUXES - 1);
         return false;
@@ -1154,6 +1317,16 @@ bool ComponentManager::addMux(uint8_t mux_id, uint8_t sig, uint8_t s0, uint8_t s
     }
     if (en != 255 && en > 48) {
         Serial.printf("[ComponentManager] Pin EN GPIO invalide (max 48)\n");
+        return false;
+    }
+    
+    // Valider les seuils
+    if (analog_min >= analog_max) {
+        Serial.printf("[ComponentManager] Seuils invalides: min (%d) >= max (%d)\n", analog_min, analog_max);
+        return false;
+    }
+    if (analog_max > 4095) {
+        Serial.printf("[ComponentManager] Seuil max invalide: %d (max 4095)\n", analog_max);
         return false;
     }
     
@@ -1210,6 +1383,11 @@ bool ComponentManager::addMux(uint8_t mux_id, uint8_t sig, uint8_t s0, uint8_t s
     mux_configs[mux_id].s3 = s3;
     mux_configs[mux_id].en_pin = en;
     mux_configs[mux_id].enabled = true;
+    mux_configs[mux_id].analog_min = analog_min;
+    mux_configs[mux_id].analog_max = analog_max;
+    mux_configs[mux_id].hysteresis_enabled = hysteresis_enabled;
+    mux_configs[mux_id].osc_format = osc_format;
+    mux_configs[mux_id].filter_intensity = filter_intensity;
     
     // Compter les mux actifs
     mux_count = 0;
@@ -1260,17 +1438,40 @@ void ComponentManager::updateMuxCache(uint8_t mux_id) {
     }
     
     MuxCache& cache = mux_cache[mux_id];
+    const MuxConfig& config = mux_configs[mux_id];
     bool was_valid = cache.valid; // Sauvegarder l'état précédent
     
     // Lire tous les canaux en une seule passe
     if (muxes[mux_id]->readAll(cache.raw_values)) {
-        // Filtrer chaque canal et détecter les changements
+        // Traiter chaque canal avec seuils, filtrage, hystérésis et mapping
         cache.values_changed = false;
         for (uint8_t ch = 0; ch < 16; ch++) {
-            uint16_t old_value = cache.filtered_values[ch];
-            cache.filtered_values[ch] = cache.filters[ch].process(cache.raw_values[ch]);
-            // Détecter si une valeur a changé significativement (seuil de 3)
-            if (abs((int)cache.filtered_values[ch] - (int)old_value) >= 3) {
+            // 1. Appliquer seuils min/max (clamp)
+            uint16_t clamped_value = cache.raw_values[ch];
+            if (clamped_value < config.analog_min) {
+                clamped_value = config.analog_min;
+            } else if (clamped_value > config.analog_max) {
+                clamped_value = config.analog_max;
+            }
+            
+            // 2. Filtrer avec MuxChannelFilter (mettre à jour alpha selon filter_intensity)
+            uint8_t intensity = config.filter_intensity;
+            if (intensity == 0) intensity = 5; // Valeur par défaut si non configuré
+            cache.filters[ch].setAlphaFromIntensity(intensity);
+            cache.filtered_values[ch] = cache.filters[ch].process(clamped_value);
+            
+            // 3. Appliquer hystérésis qui réduit directement vers 7 bits (méthode Control-Surface)
+            uint8_t old_stable = cache.stable_values[ch];
+            if (config.hysteresis_enabled) {
+                cache.hysteresis[ch].update(cache.filtered_values[ch]);
+                cache.stable_values[ch] = cache.hysteresis[ch].getValue();  // Déjà 0-127
+            } else {
+                // Sans hystérésis, réduire directement la résolution
+                cache.stable_values[ch] = cache.filtered_values[ch] >> 5;  // 12 bits → 7 bits
+            }
+            
+            // 4. Détecter changement sur valeur stable (pas sur filtered_value)
+            if (abs((int)cache.stable_values[ch] - (int)old_stable) >= 1) {
                 cache.values_changed = true;
             }
         }
@@ -1292,10 +1493,12 @@ bool ComponentManager::readMuxAllChannels(uint8_t mux_id, uint16_t* values) {
     // Mettre à jour le cache
     updateMuxCache(mux_id);
     
-    // Copier les valeurs filtrées
+    // Copier les valeurs stables (avec hystérésis)
+    // Convertir 0-127 vers 0-4095 pour compatibilité avec l'API
     MuxCache& cache = mux_cache[mux_id];
     for (uint8_t ch = 0; ch < 16; ch++) {
-        values[ch] = cache.filtered_values[ch];
+        // Convertir 7 bits → 12 bits avec formule précise : (value * 4095) / 127
+        values[ch] = (uint16_t)cache.stable_values[ch] * 4095 / 127;
     }
     
     return true;
@@ -1322,7 +1525,9 @@ uint16_t ComponentManager::readMuxChannel(uint8_t gpio) {
         updateMuxCache(mux_id);
     }
     
-    return cache.filtered_values[channel];
+    // Convertir 0-127 vers 0-4095 pour compatibilité (si utilisé ailleurs)
+    // Formule précise : (value * 4095) / 127
+    return (uint16_t)cache.stable_values[channel] * 4095 / 127;
 }
 
 void ComponentManager::loadMuxConfigFromNVS() {
@@ -1334,12 +1539,13 @@ void ComponentManager::loadMuxConfigFromNVS() {
         String config = prefs.getString(key.c_str(), "");
         
         if (!config.isEmpty()) {
-            // Parser la config : "sig,s0,s1,s2,s3,en"
-            int vals[6] = {0, 0, 0, 0, 0, 255};
+            // Parser la config : "sig,s0,s1,s2,s3,en,min,max,hysteresis,osc_format,filter_intensity" (format étendu)
+            // Rétrocompatible avec ancien format "sig,s0,s1,s2,s3,en"
+            int vals[11] = {0, 0, 0, 0, 0, 255, 0, 4095, 1, 1, 5}; // Défauts pour min, max, hysteresis, osc_format, filter_intensity
             int idx = 0;
             int start = 0;
             
-            for (int j = 0; j <= (int)config.length() && idx < 6; j++) {
+            for (int j = 0; j <= (int)config.length() && idx < 11; j++) {
                 if (j == (int)config.length() || config[j] == ',') {
                     vals[idx++] = config.substring(start, j).toInt();
                     start = j + 1;
@@ -1347,8 +1553,27 @@ void ComponentManager::loadMuxConfigFromNVS() {
             }
             
             if (idx >= 5) { // Au moins sig, s0, s1, s2, s3
-                addMux(i, vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
-                Serial.printf("[ComponentManager] Loaded mux %d from NVS\n", i);
+                // Utiliser valeurs par défaut si absentes (rétrocompatibilité)
+                uint16_t analog_min = (idx >= 7) ? vals[6] : 0;
+                uint16_t analog_max = (idx >= 8) ? vals[7] : 4095;
+                bool hysteresis_enabled = (idx >= 9) ? (vals[8] != 0) : true;
+                MuxOSCFormat osc_format = (idx >= 10) ? 
+                    static_cast<MuxOSCFormat>(vals[9]) : MuxOSCFormat::FLOAT;
+                uint8_t filter_intensity = (idx >= 11) ? vals[10] : 5;
+                
+                // Valider osc_format
+                if (osc_format > MuxOSCFormat::MIDI) {
+                    osc_format = MuxOSCFormat::FLOAT;
+                }
+                
+                // Valider filter_intensity
+                if (filter_intensity < 1) filter_intensity = 1;
+                if (filter_intensity > 10) filter_intensity = 10;
+                
+                addMux(i, vals[0], vals[1], vals[2], vals[3], vals[4], vals[5], 
+                       analog_min, analog_max, hysteresis_enabled, osc_format, filter_intensity);
+                Serial.printf("[ComponentManager] Loaded mux %d from NVS (min=%d, max=%d, hyst=%d, osc_fmt=%d)\n", 
+                              i, analog_min, analog_max, hysteresis_enabled, (int)osc_format);
             }
         }
     }

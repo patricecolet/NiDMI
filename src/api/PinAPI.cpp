@@ -163,7 +163,19 @@ void setupPinAPI(AsyncWebServer& server) {
                 json += "\"s1\":" + String(cfg->s1) + ",";
                 json += "\"s2\":" + String(cfg->s2) + ",";
                 json += "\"s3\":" + String(cfg->s3) + ",";
-                json += "\"en\":" + String(cfg->en_pin);
+                json += "\"en\":" + String(cfg->en_pin) + ",";
+                json += "\"min\":" + String(cfg->analog_min) + ",";
+                json += "\"max\":" + String(cfg->analog_max) + ",";
+                json += "\"hysteresis\":" + String(cfg->hysteresis_enabled ? 1 : 0) + ",";
+                json += "\"filterIntensity\":" + String(cfg->filter_intensity) + ",";
+                // Format OSC : "raw", "float", "midi"
+                String oscFormatStr = "float";
+                if (cfg->osc_format == MuxOSCFormat::RAW) {
+                    oscFormatStr = "raw";
+                } else if (cfg->osc_format == MuxOSCFormat::MIDI) {
+                    oscFormatStr = "midi";
+                }
+                json += "\"oscFormat\":\"" + oscFormatStr + "\"";
                 
                 /* Extraire oscBase, ccBase, midiChan depuis la première pin MUX (M0_0, M1_0) */
                 String pinLabel = "M" + String(i) + "_0";
@@ -255,6 +267,32 @@ void setupPinAPI(AsyncWebServer& server) {
         uint8_t midiChan = request->hasParam("midiChan", true) ? request->getParam("midiChan", true)->value().toInt() : 1;
         String oscBase = request->hasParam("oscBase", true) ? request->getParam("oscBase", true)->value() : "/mux" + String(mux_id);
         
+        // Paramètres seuils et hystérésis (optionnels avec valeurs par défaut)
+        uint16_t analog_min = request->hasParam("min", true) ? request->getParam("min", true)->value().toInt() : 0;
+        uint16_t analog_max = request->hasParam("max", true) ? request->getParam("max", true)->value().toInt() : 4095;
+        bool hysteresis_enabled = request->hasParam("hysteresis", true) ? 
+            (request->getParam("hysteresis", true)->value() == "true" || 
+             request->getParam("hysteresis", true)->value().toInt() != 0) : true;
+        
+        // Format OSC (optionnel, défaut: FLOAT)
+        MuxOSCFormat osc_format = MuxOSCFormat::FLOAT;
+        if (request->hasParam("oscFormat", true)) {
+            String oscFormatStr = request->getParam("oscFormat", true)->value();
+            if (oscFormatStr == "raw") {
+                osc_format = MuxOSCFormat::RAW;
+            } else if (oscFormatStr == "midi") {
+                osc_format = MuxOSCFormat::MIDI;
+            } else {
+                osc_format = MuxOSCFormat::FLOAT;
+            }
+        }
+        
+        // Intensité du filtrage (optionnel, défaut: 5)
+        uint8_t filter_intensity = request->hasParam("filterIntensity", true) ? 
+            request->getParam("filterIntensity", true)->value().toInt() : 5;
+        if (filter_intensity < 1) filter_intensity = 1;
+        if (filter_intensity > 10) filter_intensity = 10;
+        
         // Valider les valeurs
         if (mux_id >= MAX_MUXES) {
             request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid mux ID (0-" + String(MAX_MUXES - 1) + ")\"}\n");
@@ -264,13 +302,27 @@ void setupPinAPI(AsyncWebServer& server) {
         if (ccBase > 127) ccBase = 127;
         if (midiChan < 1 || midiChan > 16) midiChan = 1;
         
-        if (g_componentManager.addMux(mux_id, sig, s0, s1, s2, s3, en)) {
-            // Sauvegarder en NVS
+        // Valider les seuils
+        if (analog_min >= analog_max) {
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid thresholds: min >= max\"}\n");
+            return;
+        }
+        if (analog_max > 4095) {
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid max threshold (max 4095)\"}\n");
+            return;
+        }
+        
+        if (g_componentManager.addMux(mux_id, sig, s0, s1, s2, s3, en, analog_min, analog_max, 
+                                     hysteresis_enabled, osc_format, filter_intensity)) {
+            // Sauvegarder en NVS avec format étendu
             Preferences prefs;
             prefs.begin("esp32server", false);
             String key = "mux_" + String(mux_id);
             String config = String(sig) + "," + String(s0) + "," + String(s1) + "," + 
-                           String(s2) + "," + String(s3) + "," + String(en);
+                           String(s2) + "," + String(s3) + "," + String(en) + "," +
+                           String(analog_min) + "," + String(analog_max) + "," + 
+                           String(hysteresis_enabled ? 1 : 0) + "," + String((int)osc_format) + "," +
+                           String(filter_intensity);
             prefs.putString(key.c_str(), config);
             
             // Générer et sauvegarder les 16 configurations de pins MUX

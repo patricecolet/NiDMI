@@ -34,6 +34,8 @@ public:
     
     // Envoyer un tableau de valeurs (pour MUX batch, envoi direct sans queue)
     bool enqueueFloatArray(const String& address, const float* values, int count);
+    bool enqueueIntArray(const String& address, const uint16_t* values, int count);  // Raw (0-4095)
+    bool enqueueMidiArray(const String& address, const uint8_t* values, int count); // MIDI (0-127)
     
     // Traiter la queue (à appeler dans loop())
     void update();

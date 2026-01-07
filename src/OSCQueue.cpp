@@ -147,6 +147,48 @@ bool OSCQueue::enqueueFloatArray(const String& address, const float* values, int
     }
 }
 
+bool OSCQueue::enqueueIntArray(const String& address, const uint16_t* values, int count) {
+    if (!initialized || count <= 0 || count > 16 || !values) {
+        return false;
+    }
+    
+    // Créer un message avec toutes les valeurs brutes (0-4095) comme int32
+    OSCMessage msg(address.c_str());
+    for (int i = 0; i < count; i++) {
+        msg.add((int32_t)values[i]);
+    }
+    
+    // Envoyer directement (pas de queue pour les messages batch)
+    if (sendOSCMessage(msg)) {
+        sentCount++;
+        return true;
+    } else {
+        failedCount++;
+        return false;
+    }
+}
+
+bool OSCQueue::enqueueMidiArray(const String& address, const uint8_t* values, int count) {
+    if (!initialized || count <= 0 || count > 16 || !values) {
+        return false;
+    }
+    
+    // Créer un message avec toutes les valeurs MIDI (0-127) comme int32
+    OSCMessage msg(address.c_str());
+    for (int i = 0; i < count; i++) {
+        msg.add((int32_t)values[i]);
+    }
+    
+    // Envoyer directement (pas de queue pour les messages batch)
+    if (sendOSCMessage(msg)) {
+        sentCount++;
+        return true;
+    } else {
+        failedCount++;
+        return false;
+    }
+}
+
 void OSCQueue::update() {
     if (!initialized || !messageQueue) {
         return;

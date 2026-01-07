@@ -452,11 +452,11 @@
                         
                         /* Appliquer la configuration reçue avec les bonnes clés */
                         if (['SDA','SCL'].includes(pin) && config.role === 'I2C') {
-                            pcfg['I2C'] = config;  // Créer clé I2C pour le grisage
+                            pcfg['I2C'] = config;  /* Créer clé I2C pour le grisage */
                         } else if (['MOSI','MISO','SCK'].includes(pin) && config.role === 'SPI') {
-                            pcfg['SPI'] = config;  // Créer clé SPI pour le grisage
+                            pcfg['SPI'] = config;  /* Créer clé SPI pour le grisage */
                         } else {
-                            pcfg[pin] = config;    // Clé normale pour les autres pins
+                            pcfg[pin] = config;    /* Clé normale pour les autres pins */
                         }
                         updatePinsList();
                         updateBusVisuals();
@@ -555,8 +555,8 @@
             updateBusVisuals();
         }
         
-        function readCfg(){ const c={}; c.role=$('#funcSelect')?.value||''; c.btnMode=$('#btnMode')?.value||''; c.btnPulseTiming=$('#btnPulseTiming')?.value||''; c.ledMode=$('#ledMode')?.value||''; c.potFilter=$('#potFilter')?.value||''; c.rtpEnabled=!!$('#rtpEnabled2')?.checked; c.rtpType=$('#rtpMsgType')?.value||''; c.rtpNote=$('#rtpNote')?.value||''; c.rtpCc=$('#rtpCc')?.value||''; c.rtpPc=$('#rtpPc')?.value||''; c.rtpChan=$('#rtpChan')?.value||''; c.rtpCcOn=$('#rtpCcOn')?.value||''; c.rtpCcOff=$('#rtpCcOff')?.value||''; c.rtpVel=$('#rtpVel')?.value||''; c.rtpCcMin=$('#rtpCcMin')?.value||''; c.rtpCcMax=$('#rtpCcMax')?.value||''; c.rtpNoteMin=$('#rtpNoteMin')?.value||''; c.rtpNoteMax=$('#rtpNoteMax')?.value||''; c.rtpNoteVelFix=$('#rtpNoteVelFix')?.value||''; c.rtpNoteSweepAutoOffDelay=$('#rtpNoteSweepAutoOffDelay')?.value||''; c.oscEnabled=!!$('#oscEnabled2')?.checked; c.oscAddress=$('#oscAddress')?.value||''; c.oscFormat=$('#oscFormat')?.value||'float'; c.dbgEnabled=!!$('#dbgEnabled')?.checked; c.dbgHeader=$('#dbgHeader')?.value||''; return c; }
-        function applyCfg(c){ if(!c) return; const setV=(id,v)=>{ const el=$(id); if(el&&v!=null) el.value=v; }; const setC=(id,b)=>{ const el=$(id); if(el) el.checked=!!b; }; setV('funcSelect',c.role); showRoleCards(c.role); updateRtpForRole(c.role); setV('btnMode',c.btnMode); setV('btnPulseTiming',c.btnPulseTiming); updateBtnPulseTimingVisibility(); setV('ledMode',c.ledMode); setV('potFilter',c.potFilter); setC('rtpEnabled2',c.rtpEnabled); setV('rtpMsgType',c.rtpType); setV('rtpNote',c.rtpNote); setV('rtpCc',c.rtpCc); setV('rtpPc',c.rtpPc); setV('rtpChan',c.rtpChan); setV('rtpCcOn',c.rtpCcOn); setV('rtpCcOff',c.rtpCcOff); setV('rtpVel',c.rtpVel); setV('rtpCcMin',c.rtpCcMin); setV('rtpCcMax',c.rtpCcMax); setV('rtpNoteMin',c.rtpNoteMin); setV('rtpNoteMax',c.rtpNoteMax); setV('rtpNoteVelFix',c.rtpNoteVelFix); setV('rtpNoteSweepAutoOffDelay',c.rtpNoteSweepAutoOffDelay); setC('oscEnabled2',c.oscEnabled); setV('oscAddress',c.oscAddress); setV('oscFormat',c.oscFormat); setC('dbgEnabled',c.dbgEnabled); setV('dbgHeader',c.dbgHeader); updateRtpParamsVisibility(); }
+        function readCfg(){ const c={}; c.role=$('#funcSelect')?.value||''; c.btnMode=$('#btnMode')?.value||''; c.btnPulseTiming=$('#btnPulseTiming')?.value||''; c.ledMode=$('#ledMode')?.value||''; c.potFilter=$('#potFilter')?.value||''; c.filterIntensity=$('#filterIntensity')?.value||'5'; c.rtpEnabled=!!$('#rtpEnabled2')?.checked; c.rtpType=$('#rtpMsgType')?.value||''; c.rtpNote=$('#rtpNote')?.value||''; c.rtpCc=$('#rtpCc')?.value||''; c.rtpPc=$('#rtpPc')?.value||''; c.rtpChan=$('#rtpChan')?.value||''; c.rtpCcOn=$('#rtpCcOn')?.value||''; c.rtpCcOff=$('#rtpCcOff')?.value||''; c.rtpVel=$('#rtpVel')?.value||''; c.rtpCcMin=$('#rtpCcMin')?.value||''; c.rtpCcMax=$('#rtpCcMax')?.value||''; c.rtpNoteMin=$('#rtpNoteMin')?.value||''; c.rtpNoteMax=$('#rtpNoteMax')?.value||''; c.rtpNoteVelFix=$('#rtpNoteVelFix')?.value||''; c.rtpNoteSweepAutoOffDelay=$('#rtpNoteSweepAutoOffDelay')?.value||''; c.oscEnabled=!!$('#oscEnabled2')?.checked; c.oscAddress=$('#oscAddress')?.value||''; c.oscFormat=$('#oscFormat')?.value||'float'; c.dbgEnabled=!!$('#dbgEnabled')?.checked; c.dbgHeader=$('#dbgHeader')?.value||''; return c; }
+        function applyCfg(c){ if(!c) return; const setV=(id,v)=>{ const el=$(id); if(el&&v!=null) el.value=v; }; const setC=(id,b)=>{ const el=$(id); if(el) el.checked=!!b; }; setV('funcSelect',c.role); showRoleCards(c.role); updateRtpForRole(c.role); setV('btnMode',c.btnMode); setV('btnPulseTiming',c.btnPulseTiming); updateBtnPulseTimingVisibility(); setV('ledMode',c.ledMode); setV('potFilter',c.potFilter); setV('filterIntensity',c.filterIntensity||'5'); setC('rtpEnabled2',c.rtpEnabled); setV('rtpMsgType',c.rtpType); setV('rtpNote',c.rtpNote); setV('rtpCc',c.rtpCc); setV('rtpPc',c.rtpPc); setV('rtpChan',c.rtpChan); setV('rtpCcOn',c.rtpCcOn); setV('rtpCcOff',c.rtpCcOff); setV('rtpVel',c.rtpVel); setV('rtpCcMin',c.rtpCcMin); setV('rtpCcMax',c.rtpCcMax); setV('rtpNoteMin',c.rtpNoteMin); setV('rtpNoteMax',c.rtpNoteMax); setV('rtpNoteVelFix',c.rtpNoteVelFix); setV('rtpNoteSweepAutoOffDelay',c.rtpNoteSweepAutoOffDelay); setC('oscEnabled2',c.oscEnabled); setV('oscAddress',c.oscAddress); setV('oscFormat',c.oscFormat); setC('dbgEnabled',c.dbgEnabled); setV('dbgHeader',c.dbgHeader); updateRtpParamsVisibility(); }
         
         async function saveAll(){ const msg=$('#saveAllMsg'); msg.textContent='Enregistrement...'; try{ 
             /* Sauvegarder toutes les pins dans pcfg */
@@ -675,40 +675,53 @@
                 const pin = caps.pins.find(p => p.gpio === gpio && p.label && p.label.startsWith('D'));
                 return pin ? parseInt(pin.label.substring(1)) : null;
             };
-            
-            /* Si modification, charger les valeurs existantes AVANT de peupler les selects */
+
+            /* Si modification, charger les valeurs existantes */
             if (muxId !== null) {
                 const mux = muxList.find(m => m.id == muxId);
                 if (mux) {
-                    if ($('#muxSig')) $('#muxSig').value = mux.sig;
-                    /* Calculer le groupe depuis S0 (première pin du groupe) */
                     if ($('#muxPinGroup') && mux.s0 !== undefined) {
                         const firstD = getDFromGpio(mux.s0);
                         if (firstD !== null) $('#muxPinGroup').value = firstD;
                     }
                     if ($('#muxEn')) $('#muxEn').value = mux.en || 255;
-                    /* Charger les valeurs MIDI/OSC si disponibles */
                     if ($('#muxCcBase')) $('#muxCcBase').value = mux.ccBase || 1;
                     if ($('#muxMidiChan')) $('#muxMidiChan').value = mux.midiChan || 1;
                     if ($('#muxOscBase')) $('#muxOscBase').value = mux.oscBase || '/mux' + muxId;
+                    if ($('#muxMin')) $('#muxMin').value = mux.min !== undefined ? mux.min : 0;
+                    if ($('#muxMax')) $('#muxMax').value = mux.max !== undefined ? mux.max : 4095;
+                    if ($('#muxHysteresis')) $('#muxHysteresis').checked = mux.hysteresis !== undefined ? (mux.hysteresis === 1 || mux.hysteresis === true) : true;
+                    if ($('#muxOscFormat')) {
+                        const oscFormatValue = mux.oscFormat || 'float';
+                        $('#muxOscFormat').value = oscFormatValue;
+                    }
+                    if ($('#muxFilterIntensity')) $('#muxFilterIntensity').value = mux.filterIntensity !== undefined ? mux.filterIntensity : 5;
                 }
             } else {
                 /* Réinitialiser le formulaire pour nouveau mux */
                 if ($('#muxSig')) $('#muxSig').value = '';
                 if ($('#muxPinGroup')) $('#muxPinGroup').value = '';
                 if ($('#muxEn')) $('#muxEn').value = 255;
-                /* Valeurs par défaut pour MIDI/OSC */
                 if ($('#muxCcBase')) $('#muxCcBase').value = 1;
                 if ($('#muxMidiChan')) $('#muxMidiChan').value = 1;
-                /* Adresse OSC par défaut : /mux0 ou /mux1 selon le MUX ID sélectionné */
-                if ($('#muxOscBase')) {
-                    const selectedMuxId = idSel && idSel.value !== '' ? idSel.value : '0';
-                    $('#muxOscBase').value = '/mux' + selectedMuxId;
-                }
+                if ($('#muxOscBase')) $('#muxOscBase').value = '/mux' + (idSel ? idSel.value : '0');
+                if ($('#muxMin')) $('#muxMin').value = 0;
+                if ($('#muxMax')) $('#muxMax').value = 4095;
+                if ($('#muxHysteresis')) $('#muxHysteresis').checked = true;
+                if ($('#muxOscFormat')) $('#muxOscFormat').value = 'float';
+                if ($('#muxFilterIntensity')) $('#muxFilterIntensity').value = 5;
             }
-            
+
             /* Peupler les selects */
             populateMuxPinSelects();
+
+            /* Charger SIG apres avoir peuple les selects (mode modification uniquement) */
+            if (muxId !== null) {
+                const mux = muxList.find(m => m.id == muxId);
+                if (mux && $('#muxSig')) {
+                    $('#muxSig').value = mux.sig;
+                }
+            }
         }
         
         function hideMuxForm() {
@@ -802,21 +815,31 @@
             
             /* SIG : pins analogiques uniquement, avec sélection automatique selon MUX ID */
             const analogPins = caps.pins.filter(p => p.label && p.label.startsWith('A') && p.caps && p.caps.adc);
-            const availableSig = analogPins.filter(p => !usedGpiosForSigAndEn.has(p.gpio));
+            let availableSig = analogPins.filter(p => !usedGpiosForSigAndEn.has(p.gpio));
+            
+            /* Si on est en mode modification, ajouter la pin SIG actuelle du MUX meme si elle est utilisee */
+            if (currentMuxId !== null) {
+                const currentMux = muxList.find(m => m.id === currentMuxId);
+                if (currentMux && currentMux.sig !== undefined && currentMux.sig !== null) {
+                    const currentSigPin = analogPins.find(p => p.gpio === currentMux.sig);
+                    if (currentSigPin && !availableSig.find(p => p.gpio === currentMux.sig)) {
+                        availableSig.push(currentSigPin);
+                    }
+                }
+            }
+            
             const sigSel = $('#muxSig');
             if (sigSel) {
                 sigSel.innerHTML = availableSig.map(p => `<option value="${p.gpio}">${p.label} (GPIO${p.gpio})</option>`).join('');
-                /* Valeur par défaut selon MUX ID : A0 (GPIO2) pour MUX0, A1 (GPIO3) pour MUX1 */
-                if (!sigSel.value) {
-                    const selectedMuxId = idSel ? parseInt(idSel.value) : null;
-                    if (selectedMuxId === 0 && availableSig.find(p => p.gpio === 2)) {
-                        sigSel.value = 2; /* MUX0 : A0 */
-                    } else if (selectedMuxId === 1 && availableSig.find(p => p.gpio === 3)) {
-                        sigSel.value = 3; /* MUX1 : A1 */
-                    } else if (availableSig.length > 0) {
-                        /* Sinon, prendre la première disponible */
-                        sigSel.value = availableSig[0].gpio;
-                    }
+
+                /* Valeur par defaut selon MUX ID */
+                const selectedMuxId = idSel ? parseInt(idSel.value) : null;
+                if (selectedMuxId === 0 && availableSig.find(p => p.gpio === 2)) {
+                    sigSel.value = 2; /* MUX0 : A0 */
+                } else if (selectedMuxId === 1 && availableSig.find(p => p.gpio === 3)) {
+                    sigSel.value = 3; /* MUX1 : A1 */
+                } else if (availableSig.length > 0) {
+                    sigSel.value = availableSig[0].gpio;
                 }
             }
             
@@ -956,10 +979,6 @@
                     if ($('#muxPinGroup')) $('#muxPinGroup').value = '';
                     /* Réinitialiser SIG pour forcer la sélection automatique */
                     if ($('#muxSig')) $('#muxSig').value = '';
-                    /* Mettre à jour l'adresse OSC selon le MUX ID */
-                    if ($('#muxOscBase') && idSel.value !== '') {
-                        $('#muxOscBase').value = '/mux' + idSel.value;
-                    }
                     populateMuxPinSelects();
                 });
             }
@@ -993,6 +1012,12 @@
                 return;
             }
             
+            const min = parseInt($('#muxMin').value) || 0;
+            const max = parseInt($('#muxMax').value) || 4095;
+            const hysteresis = $('#muxHysteresis').checked;
+            const oscFormat = $('#muxOscFormat').value || 'float';
+            const filterIntensity = parseInt($('#muxFilterIntensity').value) || 5;
+            
             const formData = new URLSearchParams();
             formData.append('id', id);
             formData.append('sig', sig);
@@ -1004,6 +1029,11 @@
             formData.append('ccBase', ccBase);
             formData.append('midiChan', midiChan);
             formData.append('oscBase', oscBase);
+            formData.append('min', min);
+            formData.append('max', max);
+            formData.append('hysteresis', hysteresis ? 'true' : 'false');
+            formData.append('oscFormat', oscFormat);
+            formData.append('filterIntensity', filterIntensity);
             
             try {
                 const r = await fetch('/api/mux/add', { method: 'POST', body: formData });
@@ -1060,7 +1090,7 @@
             setInterval(loadStatus, 5000);
             const btn=$('#saveAllBtn'); if(btn) btn.onclick=saveAll; 
             /* Brancher les changements pour mise à jour liste */
-            const fieldsToWatch=['funcSelect','btnMode','btnPulseTiming','ledMode','potFilter','rtpEnabled2','rtpMsgType','rtpNote','rtpCc','rtpPc','rtpChan','rtpCcOn','rtpCcOff','rtpVel','rtpCcMin','rtpCcMax','rtpNoteMin','rtpNoteMax','rtpNoteVelFix','rtpNoteSweepAutoOffDelay','oscEnabled2','oscAddress','oscFormat','dbgEnabled','dbgHeader'];
+            const fieldsToWatch=['funcSelect','btnMode','btnPulseTiming','ledMode','potFilter','filterIntensity','rtpEnabled2','rtpMsgType','rtpNote','rtpCc','rtpPc','rtpChan','rtpCcOn','rtpCcOff','rtpVel','rtpCcMin','rtpCcMax','rtpNoteMin','rtpNoteMax','rtpNoteVelFix','rtpNoteSweepAutoOffDelay','oscEnabled2','oscAddress','oscFormat','dbgEnabled','dbgHeader'];
             fieldsToWatch.forEach(id=>{
                 const el=document.getElementById(id);
                 if(el){
@@ -1136,7 +1166,7 @@
                     <div class="r"><label>Pin:</label><span id="selPin">-</span><select id="funcSelect"></select></div>
                     <div id="cardBtn" class="subcard" style="display:none;"><div class="r"><label>Mode bouton:</label><select id="btnMode"><option value="pulse">Push</option><option value="press_release">Press/Release</option><option value="toggle">Toggle</option></select></div><div class="r" id="btnPulseTimingRow" style="display:none;"><label>Timing Push:</label><select id="btnPulseTiming"><option value="press">Au press</option><option value="release">Au release</option></select></div></div>
                     <div id="cardLed" class="subcard" style="display:none;"><div class="r"><label>LED:</label><select id="ledMode"><option value="onoff">On/Off</option><option value="pwm">PWM</option></select></div></div>
-                    <div id="cardPot" class="subcard" style="display:none;"><div class="r"><label>Filtre:</label><select id="potFilter"><option value="none">Aucun</option><option value="lowpass">Passe-bas</option><option value="median">Médiane</option></select></div></div>
+                    <div id="cardPot" class="subcard" style="display:none;"><div class="r"><label>Filtre:</label><select id="potFilter"><option value="none">Aucun</option><option value="lowpass">Passe-bas</option><option value="median">Médiane</option></select></div><div class="r"><label>Intensité filtrage (1-10):</label><input type="number" id="filterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">1=rapide, 10=stable</span></div></div>
                     <h4>RTP‑MIDI</h4>
                     <div class="r switch"><input type="checkbox" id="rtpEnabled2"><label for="rtpEnabled2">Activer</label><label>Type:</label><select id="rtpMsgType"><option>Note</option><option>Control Change</option><option>Program Change</option><option>Pitch Bend</option><option>Aftertouch (Channel)</option><option>Note + vélocité</option><option>Note (balayage)</option><option>Clock</option><option>Tap Tempo</option></select></div>
                     <div id="rtpParams" class="subcard" style="display:none;">
@@ -1181,6 +1211,12 @@
                 <div class="f"><label>CC de base:</label><input type="number" id="muxCcBase" min="0" max="127" value="1" style="width:100px;"></div>
                 <div class="f"><label>Canal MIDI:</label><input type="number" id="muxMidiChan" min="1" max="16" value="1" style="width:100px;"></div>
                 <div class="f"><label>Adresse OSC de base:</label><input type="text" id="muxOscBase" placeholder="/mux0" style="width:200px;"></div>
+                <h4 style="margin-top:20px;">Configuration analogique</h4>
+                <div class="f"><label>Seuil min (0-4095):</label><input type="number" id="muxMin" min="0" max="4095" value="0" style="width:100px;"></div>
+                <div class="f"><label>Seuil max (0-4095):</label><input type="number" id="muxMax" min="0" max="4095" value="4095" style="width:100px;"></div>
+                <div class="f"><label><input type="checkbox" id="muxHysteresis" checked> Hystérésis activée</label></div>
+                <div class="f"><label>Format OSC:</label><select id="muxOscFormat"><option value="float">Float (0-1)</option><option value="raw">Raw (0-4095)</option><option value="midi">MIDI (0-127)</option></select></div>
+                <div class="f"><label>Intensité filtrage (1-10):</label><input type="number" id="muxFilterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">1=rapide, 10=stable</span></div>
                 <button type="submit" class="btn">Enregistrer</button>
                 <button type="button" class="btn" style="background:#6b7280;" onclick="hideMuxForm()">Annuler</button>
                 <div class="hint" id="muxMsg"></div>
