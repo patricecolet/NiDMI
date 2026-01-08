@@ -1,5 +1,6 @@
 #include "ServerCore.h"
 #include "ui_index.h"
+#include "ui_bundle.h"
 #include "PinMapper.h"
 #include "api/APICommon.h"
 #include <Preferences.h>
@@ -141,6 +142,14 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
                 return toWrite;
             });
         response->addHeader("Connection", "close");
+        request->send(response);
+    });
+    
+    // Bundle JavaScript compressé en gzip (route /bundle)
+    server.on("/bundle", HTTP_GET, [](AsyncWebServerRequest *request){
+        const char *type = "text/javascript";
+        AsyncWebServerResponse *response = request->beginResponse_P(200, type, BUNDLE, BUNDLE_LEN);
+        response->addHeader("Content-Encoding", "gzip");
         request->send(response);
     });
     

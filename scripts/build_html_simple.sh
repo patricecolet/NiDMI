@@ -66,52 +66,45 @@ if [ ! -s "$TEMP_JS" ]; then
     exit 1
 fi
 
-# Intégrer le JS concaténé dans le HTML entre les marqueurs <!--JS-->...<!--/JS-->
-# Utiliser awk pour le remplacement multi-lignes (portable)
-echo "📄 Intégration du JavaScript dans web/index.html..."
+# Remplacer <!--JS-->...<!--/JS--> par <script src="/bundle"></script>
+echo "📄 Génération HTML minimal avec /bundle..."
 TEMP_HTML=$(mktemp)
-awk -v js_file="$TEMP_JS" '
-BEGIN {
-    # Lire tout le contenu JS depuis le fichier
-    while ((getline line < js_file) > 0) {
-        if (js_content != "") js_content = js_content "\n"
-        js_content = js_content line
-    }
-    close(js_file)
-    # Supprimer les newlines en début/fin
-    gsub(/^[ \t\n\r]+|[ \t\n\r]+$/, "", js_content)
-    
-    in_js_section = 0
-    js_section_replaced = 0
-}
+awk '
 /<!--JS-->/ {
+    print "<script src=\"/bundle\"></script>"
     in_js_section = 1
-    if (!js_section_replaced) {
-        print "<script>" js_content "</script>"
-        js_section_replaced = 1
-    }
     next
 }
 /<!--\/JS-->/ {
-    if (in_js_section) {
-        in_js_section = 0
-        next
-    }
+    in_js_section = 0
+    next
 }
 in_js_section == 0 {
     print
 }
 ' web/index.html > "$TEMP_HTML"
 
-rm -f "$TEMP_JS"
-
 if [ ! -s "$TEMP_HTML" ]; then
-    echo "❌ Erreur: L'intégration a échoué"
-    rm -f "$TEMP_HTML"
+    echo "❌ Erreur: La génération HTML a échoué"
+    rm -f "$TEMP_HTML" "$TEMP_JS"
     exit 1
 fi
 
-echo "✅ JavaScript intégré"
+echo "✅ HTML minimal généré"
+
+# Calculer la taille JS avant compression
+JS_SIZE=$(wc -c < "$TEMP_JS")
+
+# Compresser le JS avec gzip
+echo "🗜️  Compression JavaScript en gzip..."
+if ! gzip -c "$TEMP_JS" > build/bundle.js.gz; then
+    echo "❌ Erreur: La compression gzip a échoué"
+    rm -f "$TEMP_HTML" "$TEMP_JS"
+    exit 1
+fi
+
+BUNDLE_GZ_SIZE=$(wc -c < build/bundle.js.gz)
+echo "✅ JavaScript compressé ($BUNDLE_GZ_SIZE bytes, source: $JS_SIZE bytes)"
 
 # Minifier : supprimer commentaires HTML, commentaires JS /* */, et espaces multiples
 # Ne PAS toucher aux // (peuvent être dans des URLs)
@@ -139,51 +132,77 @@ echo "🔨 Génération de src/ui_index.cpp..."
   echo ')rawliteral";'
 } > src/ui_index.cpp
 
+# Générer le bundle C++ avec xxd (format wvr)
+echo "🔨 Génération de src/ui_bundle.h..."
+xxd -i build/bundle.js.gz > src/ui_bundle.h.tmp
+
+# Extraire le nom du tableau et la longueur
+BUNDLE_NAME=$(grep -o '^unsigned char [^[]*\[\]' src/ui_bundle.h.tmp | sed 's/unsigned char //; s/\[\]//')
+BUNDLE_LEN=$(grep -o 'unsigned int.*_len = [0-9]*' src/ui_bundle.h.tmp | grep -o '[0-9]*$')
+
+if [ -z "$BUNDLE_NAME" ] || [ -z "$BUNDLE_LEN" ]; then
+    echo "❌ Erreur: Impossible d'extraire le nom ou la longueur du bundle"
+    rm -f src/ui_bundle.h.tmp "$TEMP_JS"
+    exit 1
+fi
+
+# Générer le fichier final avec PROGMEM et BUNDLE_LEN (format wvr)
+{
+    echo '#ifndef UI_BUNDLE_H'
+    echo '#define UI_BUNDLE_H'
+    echo ''
+    echo "#define BUNDLE_LEN $BUNDLE_LEN"
+    sed -E "s/unsigned char ${BUNDLE_NAME}\[\] =/const uint8_t BUNDLE[] PROGMEM =/" src/ui_bundle.h.tmp | grep -v "^unsigned int"
+    echo ''
+    echo '#endif'
+} > src/ui_bundle.h
+
+rm -f src/ui_bundle.h.tmp "$TEMP_JS"
+
+if [ ! -s src/ui_bundle.h ]; then
+    echo "❌ Erreur: La génération ui_bundle.h a échoué"
+    rm -f "$TEMP_HTML"
+    exit 1
+fi
+
+echo "✅ Bundle généré dans src/ui_bundle.h (BUNDLE_LEN=$BUNDLE_LEN)"
+
 # Afficher les tailles
 HTML_SIZE=$(wc -c < web/index.html)
-JS_SIZE=0
-if [ -f "web/js/core.js" ]; then
-    JS_SIZE=$((JS_SIZE + $(wc -c < web/js/core.js)))
-fi
-if [ -f "web/js/api.js" ]; then
-    JS_SIZE=$((JS_SIZE + $(wc -c < web/js/api.js)))
-fi
-if [ -f "web/js/pins.js" ]; then
-    JS_SIZE=$((JS_SIZE + $(wc -c < web/js/pins.js)))
-fi
-if [ -f "web/js/components.js" ]; then
-    JS_SIZE=$((JS_SIZE + $(wc -c < web/js/components.js)))
-fi
-if [ -f "web/js/websocket.js" ]; then
-    JS_SIZE=$((JS_SIZE + $(wc -c < web/js/websocket.js)))
-fi
-if [ -f "web/js/mux.js" ]; then
-    JS_SIZE=$((JS_SIZE + $(wc -c < web/js/mux.js)))
-fi
-if [ -f "web/app.js" ]; then
-    JS_SIZE=$((JS_SIZE + $(wc -c < web/app.js)))
-fi
 MIN_SIZE=$(wc -c < build/index.min.html)
-CPP_SIZE=$(wc -c < src/ui_index.cpp)
+BUNDLE_SIZE=$(wc -c < build/bundle.js.gz)
+CPP_HTML_SIZE=$(wc -c < src/ui_index.cpp)
+CPP_BUNDLE_SIZE=$(wc -c < src/ui_bundle.h)
 
 COMBINED_SIZE=$((HTML_SIZE + JS_SIZE))
 
 if [ "$COMBINED_SIZE" -gt 0 ]; then
-    REDUCTION=$(( (COMBINED_SIZE - MIN_SIZE) * 100 / COMBINED_SIZE ))
+    TOTAL_MIN=$((MIN_SIZE + BUNDLE_SIZE))
+    REDUCTION=$(( (COMBINED_SIZE - TOTAL_MIN) * 100 / COMBINED_SIZE ))
 else
     REDUCTION=0
 fi
 
+GZIP_RATIO=0
+if [ "$JS_SIZE" -gt 0 ]; then
+    GZIP_RATIO=$(( (JS_SIZE - BUNDLE_SIZE) * 100 / JS_SIZE ))
+fi
+
+rm -f "$TEMP_HTML"
+
 echo ""
 echo "✅ Build terminé !"
 echo "📊 Résultats:"
-echo "  HTML source:     $HTML_SIZE bytes"
-echo "  JS source:       $JS_SIZE bytes"
-echo "  Total source:    $COMBINED_SIZE bytes"
-echo "  HTML minifié:    $MIN_SIZE bytes"
-echo "  ui_index.cpp:    $CPP_SIZE bytes"
-echo "  Réduction:       $REDUCTION%"
+echo "  HTML source:        $HTML_SIZE bytes"
+echo "  JS source:          $JS_SIZE bytes"
+echo "  Total source:       $COMBINED_SIZE bytes"
+echo "  HTML minifié:       $MIN_SIZE bytes"
+echo "  Bundle JS (gzip):   $BUNDLE_SIZE bytes (réduction: $GZIP_RATIO%)"
+echo "  Total minifié:      $((MIN_SIZE + BUNDLE_SIZE)) bytes"
+echo "  Réduction totale:   $REDUCTION%"
 echo ""
 echo "📁 Fichiers générés:"
-echo "  build/index.min.html  (vérifier avant de déployer)"
-echo "  src/ui_index.cpp      (remplace l'ancien)"
+echo "  build/index.min.html  (HTML minimal)"
+echo "  build/bundle.js.gz    (JS compressé)"
+echo "  src/ui_index.cpp      (HTML minimal en C++)"
+echo "  src/ui_bundle.h       (Bundle JS gzipé en C++)"
