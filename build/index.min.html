@@ -1411,7 +1411,25 @@ function updatePinsList(){
  });
 }
 
-document.addEventListener('DOMContentLoaded', ()=>{initTabs(); loadStatus(); loadMdns(); loadOscConfig(); loadStaConfig(); initForms(); initMuxForm(); initWebSocket(); loadCaps().then(()=>{drawBoard(); loadConfiguredPins(); loadMuxList();}); if($('#saveAllBtn')) $('#saveAllBtn').onclick=saveAll; setInterval(loadStatus, 5000);});</script>
+document.addEventListener('DOMContentLoaded', ()=>{
+ initTabs();
+ loadStatus();
+ loadMdns();
+ loadOscConfig();
+ loadStaConfig();
+ initForms();
+ initMuxForm();
+ loadCaps().then(()=>{
+ drawBoard();
+ loadConfiguredPins();
+ loadMuxList();
+ });
+ if($('#saveAllBtn')) $('#saveAllBtn').onclick=saveAll;
+ setTimeout(()=>{
+ initWebSocket();
+ }, 2000);
+ setInterval(loadStatus, 10000);
+});</script>
 </head>
 <body>
  <div class="h"><h1>ESP32 Server</h1><p>Configuration Wi‑Fi, RTP‑MIDI et OSC</p></div>

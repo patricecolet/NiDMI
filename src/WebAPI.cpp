@@ -5,6 +5,7 @@
 #include <Preferences.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncWebSocket.h>
+#include <pgmspace.h>
 
 // Forward declarations pour les APIs
 void setupPinAPI(AsyncWebServer& server);
@@ -127,10 +128,20 @@ void sendRtpStatus(AsyncWebSocket& ws) {
 void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     // Serial.println("[WebAPI] Starting setup...");
     
-    // Page principale
+    // Page principale - Utiliser streaming par chunks depuis PROGMEM
     // Serial.println("[WebAPI] Setting up main page...");
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send_P(200, "text/html; charset=utf-8", INDEX_HTML);
+        size_t htmlLen = strlen_P(INDEX_HTML);
+        AsyncWebServerResponse *response = request->beginResponse("text/html; charset=utf-8", htmlLen, 
+            [htmlLen](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+                size_t toWrite = (htmlLen - index < maxLen) ? (htmlLen - index) : maxLen;
+                if (toWrite > 0) {
+                    memcpy_P(buffer, INDEX_HTML + index, toWrite);
+                }
+                return toWrite;
+            });
+        response->addHeader("Connection", "close");
+        request->send(response);
     });
     
     // API - Statut système

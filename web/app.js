@@ -36,4 +36,22 @@ function updatePinsList(){
  });
 }
 
-document.addEventListener('DOMContentLoaded', ()=>{initTabs(); loadStatus(); loadMdns(); loadOscConfig(); loadStaConfig(); initForms(); initMuxForm(); initWebSocket(); loadCaps().then(()=>{drawBoard(); loadConfiguredPins(); loadMuxList();}); if($('#saveAllBtn')) $('#saveAllBtn').onclick=saveAll; setInterval(loadStatus, 5000);});
+document.addEventListener('DOMContentLoaded', ()=>{
+ initTabs();
+ loadStatus();
+ loadMdns();
+ loadOscConfig();
+ loadStaConfig();
+ initForms();
+ initMuxForm();
+ loadCaps().then(()=>{
+  drawBoard();
+  loadConfiguredPins();
+  loadMuxList();
+ });
+ if($('#saveAllBtn')) $('#saveAllBtn').onclick=saveAll;
+ setTimeout(()=>{
+  initWebSocket();
+ }, 2000);
+ setInterval(loadStatus, 10000);
+});
