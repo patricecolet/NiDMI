@@ -2,6 +2,8 @@
 # Script simple qui minifie web/index.html et génère src/ui_index.cpp
 # Intègre web/app.js entre les marqueurs <!--JS-->...<!--/JS-->
 # Ne modifie PAS le code, juste la minification (commentaires + espaces)
+# Utilise uniquement sed/awk pour la portabilité (pas de Python)
+# Compatible macOS (BSD) et Linux (GNU)
 
 set -e
 
@@ -43,6 +45,9 @@ TEMP_JS=$(mktemp)
     fi
 } > "$TEMP_JS"
 
+# Le JS est prêt, pas besoin de nettoyage supplémentaire
+# (les lignes vides en début/fin seront gérées par awk lors de l'intégration)
+
 if [ ! -s "$TEMP_JS" ]; then
     echo "❌ Erreur: Aucun fichier JavaScript trouvé"
     rm -f "$TEMP_JS"
@@ -50,35 +55,42 @@ if [ ! -s "$TEMP_JS" ]; then
 fi
 
 # Intégrer le JS concaténé dans le HTML entre les marqueurs <!--JS-->...<!--/JS-->
+# Utiliser awk pour le remplacement multi-lignes (portable)
 echo "📄 Intégration du JavaScript dans web/index.html..."
 TEMP_HTML=$(mktemp)
-python3 << EOF > "$TEMP_HTML"
-import sys
-import re
+awk -v js_file="$TEMP_JS" '
+BEGIN {
+    # Lire tout le contenu JS depuis le fichier
+    while ((getline line < js_file) > 0) {
+        if (js_content != "") js_content = js_content "\n"
+        js_content = js_content line
+    }
+    close(js_file)
+    # Supprimer les newlines en début/fin
+    gsub(/^[ \t\n\r]+|[ \t\n\r]+$/, "", js_content)
+    
+    in_js_section = 0
+    js_section_replaced = 0
+}
+/<!--JS-->/ {
+    in_js_section = 1
+    if (!js_section_replaced) {
+        print "<script>" js_content "</script>"
+        js_section_replaced = 1
+    }
+    next
+}
+/<!--\/JS-->/ {
+    if (in_js_section) {
+        in_js_section = 0
+        next
+    }
+}
+in_js_section == 0 {
+    print
+}
+' web/index.html > "$TEMP_HTML"
 
-# Lire web/index.html
-with open('web/index.html', 'r', encoding='utf-8') as f:
-    html_content = f.read()
-
-# Lire le JS concaténé depuis le fichier temporaire
-with open('${TEMP_JS}', 'r', encoding='utf-8') as f:
-    js_content = f.read().strip()
-
-# Remplacer <!--JS--><!--/JS--> par <script>...</script> avec le contenu JS
-# Utiliser une fonction de remplacement pour éviter les problèmes d'échappement
-pattern = r'<!--JS-->.*?<!--/JS-->'
-def replace_func(match):
-    # Supprimer les newlines en début/fin du JS
-    js_clean = js_content.strip()
-    return '<script>' + js_clean + '</script>'
-result = re.sub(pattern, replace_func, html_content, flags=re.DOTALL)
-
-# Supprimer les newlines juste après <script> (problème d'encodage ESP32)
-result = re.sub(r'<script>\n+', '<script>', result)
-result = re.sub(r'\n+</script>', '</script>', result)
-
-sys.stdout.write(result)
-EOF
 rm -f "$TEMP_JS"
 
 if [ ! -s "$TEMP_HTML" ]; then
@@ -93,20 +105,11 @@ echo "✅ JavaScript intégré"
 # Ne PAS toucher aux // (peuvent être dans des URLs)
 echo "📄 Minification..."
 sed -E 's/<!--[^>]*-->//g; s|/\*[^*]*\*/||g; s/  +/ /g' "$TEMP_HTML" > build/index.min.html.tmp
-rm -f "$TEMP_HTML"
 
-# Supprimer les newlines après <script> (problème d'encodage ESP32)
-python3 << 'PYTHON_FIX' > build/index.min.html
-import sys
-import re
-with open('build/index.min.html.tmp', 'r', encoding='utf-8') as f:
-    content = f.read()
-# Supprimer les newlines juste après <script> et avant </script>
-content = re.sub(r'<script>\s+', '<script>', content)
-content = re.sub(r'\s+</script>', '</script>', content)
-sys.stdout.write(content)
-PYTHON_FIX
-rm -f build/index.min.html.tmp
+# Supprimer les newlines après <script> et avant </script> (problème d'encodage ESP32)
+# Utiliser sed avec des patterns simples (compatible macOS et Linux)
+sed -E 's|<script>[[:space:]]+|<script>|g; s|[[:space:]]+</script>|</script>|g' build/index.min.html.tmp > build/index.min.html
+rm -f "$TEMP_HTML" build/index.min.html.tmp
 
 if [ ! -s build/index.min.html ]; then
     echo "❌ Erreur: Le fichier minifié est vide"
