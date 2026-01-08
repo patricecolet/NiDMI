@@ -29,15 +29,23 @@ struct MuxConfig {
     uint8_t s0, s1, s2, s3; // Pins de selection
     uint8_t en_pin;       // Pin enable (255 = non connectee)
     bool enabled;         // Multiplexeur actif
-    uint16_t analog_min;  // Seuil minimum (0-4095, défaut: 0)
-    uint16_t analog_max;  // Seuil maximum (0-4095, défaut: 4095)
+    uint16_t analog_min[16];  // Seuil minimum par canal (0-4095, défaut: 0)
+    uint16_t analog_max[16];  // Seuil maximum par canal (0-4095, défaut: 4095)
     bool hysteresis_enabled; // Hystérésis activée (défaut: true)
     MuxOSCFormat osc_format; // Format OSC (défaut: FLOAT)
     uint8_t filter_intensity; // Intensité du filtrage (1-10): 1=rapide, 10=stable (défaut: 5)
+    char osc_base[64];   // Adresse OSC de base (défaut: /mux{id})
     
     MuxConfig() : sig_pin(0), s0(0), s1(0), s2(0), s3(0), en_pin(255), 
-                  enabled(false), analog_min(0), analog_max(4095), 
-                  hysteresis_enabled(true), osc_format(MuxOSCFormat::FLOAT), filter_intensity(5) {}
+                  enabled(false), hysteresis_enabled(true), osc_format(MuxOSCFormat::FLOAT), filter_intensity(5) {
+        // Initialiser tous les canaux avec valeurs par défaut
+        for (uint8_t i = 0; i < 16; i++) {
+            analog_min[i] = 0;
+            analog_max[i] = 4095;
+        }
+        // Initialiser osc_base avec chaîne vide (sera rempli par addMux)
+        osc_base[0] = '\0';
+    }
 };
 
 // Constantes pour les GPIO virtuels des multiplexeurs
@@ -334,7 +342,7 @@ public:
     bool addMux(uint8_t mux_id, uint8_t sig, uint8_t s0, uint8_t s1, uint8_t s2, uint8_t s3, 
                 uint8_t en = 255, uint16_t analog_min = 0, uint16_t analog_max = 4095, 
                 bool hysteresis_enabled = true, MuxOSCFormat osc_format = MuxOSCFormat::FLOAT,
-                uint8_t filter_intensity = 5);
+                uint8_t filter_intensity = 5, const char* osc_base = nullptr);
     bool removeMux(uint8_t mux_id);
     uint8_t getMuxCount() const { return mux_count; }
     const MuxConfig* getMuxConfig(uint8_t mux_id) const;
@@ -344,6 +352,10 @@ public:
     // Lecture batch optimisée de tous les canaux d'un MUX
     bool readMuxAllChannels(uint8_t mux_id, uint16_t* values);
     void updateMuxCache(uint8_t mux_id); // Mettre à jour le cache MUX
+    
+    // Calibrage OSC des seuils min/max
+    bool calibrateMux(uint8_t mux_id, uint8_t channel, bool is_min, bool all_channels);
+    bool resetMuxThresholds(uint8_t mux_id, uint8_t channel, bool all_channels);
     
     // Debug
     void printStats();

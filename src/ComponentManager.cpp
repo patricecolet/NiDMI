@@ -66,6 +66,103 @@ void ComponentManager::begin(MidiSender* sender) {
     
     // Configuration OSC optimisée (système direct)
     
+    // Configurer le callback OSC pour les commandes de calibrage
+    osc_manager.setMessageCallback([this](const String& address, float value, const String& arg_string) {
+        Serial.printf("[ComponentManager] Callback OSC: address='%s', value=%f, arg_string='%s'\n", 
+                     address.c_str(), value, arg_string.c_str());
+        
+        // Parser les commandes de calibrage : /mux/{id}/cal avec argument "min", "max", "reset", etc.
+        if (address.startsWith("/mux")) {
+            Serial.printf("[ComponentManager] Adresse commence par /mux\n");
+            
+            // Format: /mux/{id}/cal avec argument string "min", "max", "reset"
+            // Format: /mux/{id}/cal/{cmd} avec argument optionnel (channel)
+            
+            int mux_id_start = address.indexOf('/', 1); // Après "/mux"
+            if (mux_id_start < 0) {
+                Serial.printf("[ComponentManager] ERREUR: pas de '/' après /mux\n");
+                return;
+            }
+            
+            // Extraire mux_id (peut être "0" ou "1")
+            int mux_id_end = address.indexOf('/', mux_id_start + 1);
+            if (mux_id_end < 0) {
+                Serial.printf("[ComponentManager] ERREUR: pas de '/' après mux_id\n");
+                return;
+            }
+            
+            String mux_id_str = address.substring(mux_id_start + 1, mux_id_end);
+            uint8_t mux_id = mux_id_str.toInt();
+            Serial.printf("[ComponentManager] mux_id extrait: '%s' -> %d\n", mux_id_str.c_str(), mux_id);
+            
+            // Vérifier que mux_id est valide
+            if (mux_id >= MAX_MUXES) {
+                Serial.printf("[ComponentManager] ERREUR: mux_id %d >= MAX_MUXES (%d)\n", mux_id, MAX_MUXES);
+                return;
+            }
+            
+            // Vérifier que c'est une commande cal (accepter /cal ou /calibrate)
+            String after_id = address.substring(mux_id_end);
+            Serial.printf("[ComponentManager] Partie après mux_id: '%s', arg_string: '%s'\n", 
+                         after_id.c_str(), arg_string.c_str());
+            
+            String cmd;
+            if (after_id == "/cal" || after_id == "/calibrate") {
+                // Format: /mux/{id}/cal avec argument string dans le message OSC
+                cmd = arg_string;
+                Serial.printf("[ComponentManager] Commande extraite de l'argument: '%s'\n", cmd.c_str());
+            } else if (after_id.startsWith("/cal/") || after_id.startsWith("/calibrate/")) {
+                // Format: /mux/{id}/cal/{cmd} avec argument optionnel
+                int cmd_start = after_id.startsWith("/cal/") ? 5 : 12; // "/cal/" = 5, "/calibrate/" = 12
+                cmd = after_id.substring(cmd_start);
+                Serial.printf("[ComponentManager] Commande extraite de l'adresse: '%s'\n", cmd.c_str());
+            } else {
+                Serial.printf("[ComponentManager] ERREUR: ne commence pas par /cal ou /calibrate\n");
+                return;
+            }
+            
+            // Parser selon le type de commande
+            if (cmd == "min") {
+                Serial.printf("[ComponentManager] Commande: cal/min (tous les canaux)\n");
+                this->calibrateMux(mux_id, 0, true, true);
+            } else if (cmd == "max") {
+                Serial.printf("[ComponentManager] Commande: cal/max (tous les canaux)\n");
+                this->calibrateMux(mux_id, 0, false, true);
+            } else if (cmd == "reset") {
+                Serial.printf("[ComponentManager] Commande: cal/reset (tous les canaux)\n");
+                this->resetMuxThresholds(mux_id, 0, true);
+            } else if (cmd.startsWith("min/")) {
+                uint8_t channel = cmd.substring(4).toInt();
+                Serial.printf("[ComponentManager] Commande: cal/min/%d\n", channel);
+                if (channel < 16) {
+                    this->calibrateMux(mux_id, channel, true, false);
+                } else {
+                    Serial.printf("[ComponentManager] ERREUR: canal %d >= 16\n", channel);
+                }
+            } else if (cmd.startsWith("max/")) {
+                uint8_t channel = cmd.substring(4).toInt();
+                Serial.printf("[ComponentManager] Commande: cal/max/%d\n", channel);
+                if (channel < 16) {
+                    this->calibrateMux(mux_id, channel, false, false);
+                } else {
+                    Serial.printf("[ComponentManager] ERREUR: canal %d >= 16\n", channel);
+                }
+            } else if (cmd.startsWith("reset/")) {
+                uint8_t channel = cmd.substring(6).toInt();
+                Serial.printf("[ComponentManager] Commande: cal/reset/%d\n", channel);
+                if (channel < 16) {
+                    this->resetMuxThresholds(mux_id, channel, false);
+                } else {
+                    Serial.printf("[ComponentManager] ERREUR: canal %d >= 16\n", channel);
+                }
+            } else {
+                Serial.printf("[ComponentManager] ERREUR: commande inconnue: '%s'\n", cmd.c_str());
+            }
+        } else {
+            Serial.printf("[ComponentManager] Adresse ne commence pas par /mux, ignorée\n");
+        }
+    });
+    
     // Serial.printf("[ComponentManager] Loaded %d components\n", component_count);
     
     printStats();
@@ -121,6 +218,9 @@ void ComponentManager::update() {
 
     syncOSCConfig();
     
+    // Traiter les messages OSC entrants (commandes de calibrage)
+    osc_manager.update();
+    
     // OPTIMISATION: Mettre à jour tous les MUX en batch AVANT de traiter les composants
     for (uint8_t mux_id = 0; mux_id < MAX_MUXES; mux_id++) {
         if (muxes[mux_id] != nullptr && mux_configs[mux_id].enabled) {
@@ -135,46 +235,13 @@ void ComponentManager::update() {
             
             // Envoyer le batch seulement si des valeurs ont changé
             if (cache.valid && cache.values_changed) {
-                // Trouver l'adresse OSC de base (depuis le premier composant MUX configuré)
-                String oscBase = "/ctl"; // Défaut
-                
-                // Chercher un composant configuré sur ce MUX pour obtenir l'adresse OSC
-                for (uint8_t i = 0; i < component_count; i++) {
-                    if (isMuxGpio(configs[i].gpio)) {
-                        uint8_t offset = configs[i].gpio - MUX_GPIO_BASE;
-                        uint8_t comp_mux_id = offset / MUX_CHANNELS;
-                        if (comp_mux_id == mux_id && (configs[i].flags & 0x02)) {
-                            // Composant OSC activé sur ce MUX
-                            String oscAddress = (configs[i].osc_address[0] != '\0') ? 
-                                String(configs[i].osc_address) : "/ctl";
-                            
-                            // Extraire la base (sans numéro de canal)
-                            int lastSlash = oscAddress.lastIndexOf('/');
-                            if (lastSlash > 0) {
-                                String lastSegment = oscAddress.substring(lastSlash + 1);
-                                bool isNumber = true;
-                                for (int j = 0; j < lastSegment.length(); j++) {
-                                    if (!isdigit(lastSegment.charAt(j))) {
-                                        isNumber = false;
-                                        break;
-                                    }
-                                }
-                                if (isNumber) {
-                                    oscBase = oscAddress.substring(0, lastSlash);
-                                } else {
-                                    oscBase = oscAddress;
-                                }
-                            } else {
-                                oscBase = oscAddress;
-                            }
-                            break; // Utiliser la première adresse trouvée
-                        }
-                    }
-                }
+                // Utiliser directement l'adresse OSC de base depuis MuxConfig
+                const MuxConfig& mux_config = mux_configs[mux_id];
+                String oscBase = (mux_config.osc_base[0] != '\0') ? 
+                    String(mux_config.osc_base) : "/mux" + String(mux_id);
                 
                 // Envoyer en batch selon le format OSC configuré
                 // stable_values est déjà en 0-127 (méthode Control-Surface)
-                const MuxConfig& mux_config = mux_configs[mux_id];
                 switch (mux_config.osc_format) {
                     case MuxOSCFormat::RAW: {
                         // Données brutes (0-4095) - convertir depuis 0-127 avec formule précise
@@ -1304,7 +1371,8 @@ void ComponentManager::handleMidiControlChange(uint8_t channel, uint8_t control,
 
 bool ComponentManager::addMux(uint8_t mux_id, uint8_t sig, uint8_t s0, uint8_t s1, uint8_t s2, uint8_t s3, 
                                uint8_t en, uint16_t analog_min, uint16_t analog_max, 
-                               bool hysteresis_enabled, MuxOSCFormat osc_format, uint8_t filter_intensity) {
+                               bool hysteresis_enabled, MuxOSCFormat osc_format, uint8_t filter_intensity,
+                               const char* osc_base) {
     if (mux_id >= MAX_MUXES) {
         Serial.printf("[ComponentManager] Mux ID %d invalide (max %d)\n", mux_id, MAX_MUXES - 1);
         return false;
@@ -1383,11 +1451,23 @@ bool ComponentManager::addMux(uint8_t mux_id, uint8_t sig, uint8_t s0, uint8_t s
     mux_configs[mux_id].s3 = s3;
     mux_configs[mux_id].en_pin = en;
     mux_configs[mux_id].enabled = true;
-    mux_configs[mux_id].analog_min = analog_min;
-    mux_configs[mux_id].analog_max = analog_max;
+    // Initialiser tous les canaux avec les mêmes valeurs min/max
+    for (uint8_t ch = 0; ch < 16; ch++) {
+        mux_configs[mux_id].analog_min[ch] = analog_min;
+        mux_configs[mux_id].analog_max[ch] = analog_max;
+    }
     mux_configs[mux_id].hysteresis_enabled = hysteresis_enabled;
     mux_configs[mux_id].osc_format = osc_format;
     mux_configs[mux_id].filter_intensity = filter_intensity;
+    
+    // Configurer l'adresse OSC de base
+    if (osc_base != nullptr && strlen(osc_base) > 0) {
+        strncpy(mux_configs[mux_id].osc_base, osc_base, sizeof(mux_configs[mux_id].osc_base) - 1);
+        mux_configs[mux_id].osc_base[sizeof(mux_configs[mux_id].osc_base) - 1] = '\0';
+    } else {
+        // Valeur par défaut : /mux{id}
+        snprintf(mux_configs[mux_id].osc_base, sizeof(mux_configs[mux_id].osc_base), "/mux%d", mux_id);
+    }
     
     // Compter les mux actifs
     mux_count = 0;
@@ -1446,19 +1526,30 @@ void ComponentManager::updateMuxCache(uint8_t mux_id) {
         // Traiter chaque canal avec seuils, filtrage, hystérésis et mapping
         cache.values_changed = false;
         for (uint8_t ch = 0; ch < 16; ch++) {
-            // 1. Appliquer seuils min/max (clamp)
-            uint16_t clamped_value = cache.raw_values[ch];
-            if (clamped_value < config.analog_min) {
-                clamped_value = config.analog_min;
-            } else if (clamped_value > config.analog_max) {
-                clamped_value = config.analog_max;
+            // 1. Mapper la valeur brute depuis [analog_min, analog_max] vers [0, 4095]
+            uint16_t mapped_value;
+            if (config.analog_max[ch] > config.analog_min[ch]) {
+                // Clamp la valeur brute dans la plage [min, max]
+                int32_t raw = cache.raw_values[ch];
+                int32_t min_val = config.analog_min[ch];
+                int32_t max_val = config.analog_max[ch];
+                
+                if (raw < min_val) raw = min_val;
+                if (raw > max_val) raw = max_val;
+                
+                // Mapper linéairement vers [0, 4095]
+                // Formule: mapped = (raw - min) * 4095 / (max - min)
+                mapped_value = (uint16_t)map(raw, min_val, max_val, 0, 4095);
+            } else {
+                // Si min == max, valeur fixe à 0
+                mapped_value = 0;
             }
             
             // 2. Filtrer avec MuxChannelFilter (mettre à jour alpha selon filter_intensity)
             uint8_t intensity = config.filter_intensity;
             if (intensity == 0) intensity = 5; // Valeur par défaut si non configuré
             cache.filters[ch].setAlphaFromIntensity(intensity);
-            cache.filtered_values[ch] = cache.filters[ch].process(clamped_value);
+            cache.filtered_values[ch] = cache.filters[ch].process(mapped_value);
             
             // 3. Appliquer hystérésis qui réduit directement vers 7 bits (méthode Control-Surface)
             uint8_t old_stable = cache.stable_values[ch];
@@ -1530,6 +1621,221 @@ uint16_t ComponentManager::readMuxChannel(uint8_t gpio) {
     return (uint16_t)cache.stable_values[channel] * 4095 / 127;
 }
 
+bool ComponentManager::calibrateMux(uint8_t mux_id, uint8_t channel, bool is_min, bool all_channels) {
+    if (mux_id >= MAX_MUXES || muxes[mux_id] == nullptr) {
+        Serial.printf("[ComponentManager] Mux %d non configure\n", mux_id);
+        return false;
+    }
+    
+    if (!all_channels && channel >= 16) {
+        Serial.printf("[ComponentManager] Canal %d invalide (max 15)\n", channel);
+        return false;
+    }
+    
+    // Mettre à jour le cache pour avoir les valeurs actuelles
+    updateMuxCache(mux_id);
+    MuxCache& cache = mux_cache[mux_id];
+    
+    if (!cache.valid) {
+        Serial.printf("[ComponentManager] Cache Mux %d invalide\n", mux_id);
+        return false;
+    }
+    
+    // Calibrer selon le mode
+    if (all_channels) {
+        // Calibrer tous les canaux avec leurs valeurs actuelles
+        for (uint8_t ch = 0; ch < 16; ch++) {
+            if (is_min) {
+                mux_configs[mux_id].analog_min[ch] = cache.raw_values[ch];
+                Serial.printf("[ComponentManager] Mux %d canal %d: analog_min = %d\n", mux_id, ch, cache.raw_values[ch]);
+            } else {
+                mux_configs[mux_id].analog_max[ch] = cache.raw_values[ch];
+                Serial.printf("[ComponentManager] Mux %d canal %d: analog_max = %d\n", mux_id, ch, cache.raw_values[ch]);
+            }
+        }
+    } else {
+        // Calibrer un seul canal
+        if (is_min) {
+            mux_configs[mux_id].analog_min[channel] = cache.raw_values[channel];
+            Serial.printf("[ComponentManager] Mux %d canal %d: analog_min = %d\n", mux_id, channel, cache.raw_values[channel]);
+        } else {
+            mux_configs[mux_id].analog_max[channel] = cache.raw_values[channel];
+            Serial.printf("[ComponentManager] Mux %d canal %d: analog_max = %d\n", mux_id, channel, cache.raw_values[channel]);
+        }
+    }
+    
+    // Sauvegarder les seuils en NVS (format binaire compact)
+    Preferences prefs;
+    prefs.begin("esp32server", false);
+    String key = "mux_thresh_" + String(mux_id);
+    
+    // Vérifier si tous les canaux ont la même valeur (format compact)
+    bool uniform = true;
+    uint16_t first_min = mux_configs[mux_id].analog_min[0];
+    uint16_t first_max = mux_configs[mux_id].analog_max[0];
+    
+    for (uint8_t ch = 1; ch < 16; ch++) {
+        if (mux_configs[mux_id].analog_min[ch] != first_min || 
+            mux_configs[mux_id].analog_max[ch] != first_max) {
+            uniform = false;
+            break;
+        }
+    }
+    
+    if (uniform) {
+        // Format compact : 5 bytes (1 flag + 2 min + 2 max)
+        uint8_t buffer[5];
+        buffer[0] = 0x01; // Flag: uniform = true
+        buffer[1] = first_min & 0xFF;
+        buffer[2] = (first_min >> 8) & 0xFF;
+        buffer[3] = first_max & 0xFF;
+        buffer[4] = (first_max >> 8) & 0xFF;
+        prefs.putBytes(key.c_str(), buffer, 5);
+        Serial.printf("[ComponentManager] Sauvegarde seuils Mux %d (uniform: min=%d, max=%d)\n", mux_id, first_min, first_max);
+    } else {
+        // Format complet : 65 bytes (1 flag + 32 min + 32 max)
+        uint8_t buffer[65];
+        buffer[0] = 0x00; // Flag: uniform = false
+        // Copier les 16 valeurs min (2 bytes chacune)
+        for (uint8_t ch = 0; ch < 16; ch++) {
+            uint16_t val = mux_configs[mux_id].analog_min[ch];
+            buffer[1 + ch * 2] = val & 0xFF;
+            buffer[1 + ch * 2 + 1] = (val >> 8) & 0xFF;
+        }
+        // Copier les 16 valeurs max (2 bytes chacune)
+        for (uint8_t ch = 0; ch < 16; ch++) {
+            uint16_t val = mux_configs[mux_id].analog_max[ch];
+            buffer[33 + ch * 2] = val & 0xFF;
+            buffer[33 + ch * 2 + 1] = (val >> 8) & 0xFF;
+        }
+        prefs.putBytes(key.c_str(), buffer, 65);
+        Serial.printf("[ComponentManager] Sauvegarde seuils Mux %d (non-uniform)\n", mux_id);
+    }
+    
+    prefs.end();
+    
+    // Envoyer confirmation OSC avec les valeurs stockées
+    const MuxConfig& mux_config = mux_configs[mux_id];
+    String oscBase = (mux_config.osc_base[0] != '\0') ? 
+        String(mux_config.osc_base) : "/mux" + String(mux_id);
+    
+    if (all_channels) {
+        // Envoyer un tableau avec toutes les valeurs
+        if (is_min) {
+            osc_queue.enqueueIntArray(oscBase + "/cal/min", mux_configs[mux_id].analog_min, 16);
+        } else {
+            osc_queue.enqueueIntArray(oscBase + "/cal/max", mux_configs[mux_id].analog_max, 16);
+        }
+    } else {
+        // Envoyer une seule valeur pour le canal spécifique
+        if (is_min) {
+            uint16_t single_value = mux_configs[mux_id].analog_min[channel];
+            osc_queue.enqueueIntArray(oscBase + "/cal/min/" + String(channel), &single_value, 1);
+        } else {
+            uint16_t single_value = mux_configs[mux_id].analog_max[channel];
+            osc_queue.enqueueIntArray(oscBase + "/cal/max/" + String(channel), &single_value, 1);
+        }
+    }
+    
+    return true;
+}
+
+bool ComponentManager::resetMuxThresholds(uint8_t mux_id, uint8_t channel, bool all_channels) {
+    if (mux_id >= MAX_MUXES || muxes[mux_id] == nullptr) {
+        Serial.printf("[ComponentManager] Mux %d non configure\n", mux_id);
+        return false;
+    }
+    
+    if (!all_channels && channel >= 16) {
+        Serial.printf("[ComponentManager] Canal %d invalide (max 15)\n", channel);
+        return false;
+    }
+    
+    // Reset les seuils
+    if (all_channels) {
+        // Reset tous les canaux (0, 4095)
+        for (uint8_t ch = 0; ch < 16; ch++) {
+            mux_configs[mux_id].analog_min[ch] = 0;
+            mux_configs[mux_id].analog_max[ch] = 4095;
+        }
+        Serial.printf("[ComponentManager] Reset seuils Mux %d (tous les canaux)\n", mux_id);
+    } else {
+        // Reset un seul canal
+        mux_configs[mux_id].analog_min[channel] = 0;
+        mux_configs[mux_id].analog_max[channel] = 4095;
+        Serial.printf("[ComponentManager] Reset seuils Mux %d canal %d\n", mux_id, channel);
+    }
+    
+    // Sauvegarder les seuils en NVS (format binaire compact) - même code que calibrateMux
+    Preferences prefs;
+    prefs.begin("esp32server", false);
+    String key = "mux_thresh_" + String(mux_id);
+    
+    // Vérifier si tous les canaux ont la même valeur (format compact)
+    bool uniform = true;
+    uint16_t first_min = mux_configs[mux_id].analog_min[0];
+    uint16_t first_max = mux_configs[mux_id].analog_max[0];
+    
+    for (uint8_t ch = 1; ch < 16; ch++) {
+        if (mux_configs[mux_id].analog_min[ch] != first_min || 
+            mux_configs[mux_id].analog_max[ch] != first_max) {
+            uniform = false;
+            break;
+        }
+    }
+    
+    if (uniform) {
+        // Format compact : 5 bytes (1 flag + 2 min + 2 max)
+        uint8_t buffer[5];
+        buffer[0] = 0x01; // Flag: uniform = true
+        buffer[1] = first_min & 0xFF;
+        buffer[2] = (first_min >> 8) & 0xFF;
+        buffer[3] = first_max & 0xFF;
+        buffer[4] = (first_max >> 8) & 0xFF;
+        prefs.putBytes(key.c_str(), buffer, 5);
+    } else {
+        // Format complet : 65 bytes (1 flag + 32 min + 32 max)
+        uint8_t buffer[65];
+        buffer[0] = 0x00; // Flag: uniform = false
+        // Copier les 16 valeurs min (2 bytes chacune)
+        for (uint8_t ch = 0; ch < 16; ch++) {
+            uint16_t val = mux_configs[mux_id].analog_min[ch];
+            buffer[1 + ch * 2] = val & 0xFF;
+            buffer[1 + ch * 2 + 1] = (val >> 8) & 0xFF;
+        }
+        // Copier les 16 valeurs max (2 bytes chacune)
+        for (uint8_t ch = 0; ch < 16; ch++) {
+            uint16_t val = mux_configs[mux_id].analog_max[ch];
+            buffer[33 + ch * 2] = val & 0xFF;
+            buffer[33 + ch * 2 + 1] = (val >> 8) & 0xFF;
+        }
+        prefs.putBytes(key.c_str(), buffer, 65);
+    }
+    
+    prefs.end();
+    
+    // Envoyer confirmation OSC avec les valeurs reset
+    const MuxConfig& mux_config = mux_configs[mux_id];
+    String oscBase = (mux_config.osc_base[0] != '\0') ? 
+        String(mux_config.osc_base) : "/mux" + String(mux_id);
+    
+    if (all_channels) {
+        // Envoyer deux tableaux avec toutes les valeurs (0 et 4095)
+        uint16_t min_vals[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        uint16_t max_vals[16] = {4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095};
+        osc_queue.enqueueIntArray(oscBase + "/cal/min", min_vals, 16);
+        osc_queue.enqueueIntArray(oscBase + "/cal/max", max_vals, 16);
+    } else {
+        // Envoyer les valeurs reset pour le canal spécifique
+        uint16_t min_val = 0;
+        uint16_t max_val = 4095;
+        osc_queue.enqueueIntArray(oscBase + "/cal/min/" + String(channel), &min_val, 1);
+        osc_queue.enqueueIntArray(oscBase + "/cal/max/" + String(channel), &max_val, 1);
+    }
+    
+    return true;
+}
+
 void ComponentManager::loadMuxConfigFromNVS() {
     Preferences prefs;
     prefs.begin("esp32server", true);
@@ -1539,27 +1845,37 @@ void ComponentManager::loadMuxConfigFromNVS() {
         String config = prefs.getString(key.c_str(), "");
         
         if (!config.isEmpty()) {
-            // Parser la config : "sig,s0,s1,s2,s3,en,min,max,hysteresis,osc_format,filter_intensity" (format étendu)
-            // Rétrocompatible avec ancien format "sig,s0,s1,s2,s3,en"
-            int vals[11] = {0, 0, 0, 0, 0, 255, 0, 4095, 1, 1, 5}; // Défauts pour min, max, hysteresis, osc_format, filter_intensity
+            // Parser la config : "sig,s0,s1,s2,s3,en,hysteresis,osc_format,filter_intensity,osc_base" (seuils séparés)
+            int vals[9] = {0, 0, 0, 0, 0, 255, 1, 1, 5}; // Défauts pour hysteresis, osc_format, filter_intensity
+            String osc_base_str = "";
             int idx = 0;
             int start = 0;
+            int comma_count = 0;
             
-            for (int j = 0; j <= (int)config.length() && idx < 11; j++) {
+            // Compter les virgules pour savoir combien de champs on a
+            for (int j = 0; j < (int)config.length(); j++) {
+                if (config[j] == ',') comma_count++;
+            }
+            
+            // Parser les 9 premiers champs (numériques)
+            for (int j = 0; j <= (int)config.length() && idx < 9; j++) {
                 if (j == (int)config.length() || config[j] == ',') {
                     vals[idx++] = config.substring(start, j).toInt();
                     start = j + 1;
                 }
             }
             
+            // Si on a 10 champs (9 virgules), le dernier est osc_base
+            if (comma_count >= 9 && start < (int)config.length()) {
+                osc_base_str = config.substring(start);
+            }
+            
             if (idx >= 5) { // Au moins sig, s0, s1, s2, s3
-                // Utiliser valeurs par défaut si absentes (rétrocompatibilité)
-                uint16_t analog_min = (idx >= 7) ? vals[6] : 0;
-                uint16_t analog_max = (idx >= 8) ? vals[7] : 4095;
-                bool hysteresis_enabled = (idx >= 9) ? (vals[8] != 0) : true;
-                MuxOSCFormat osc_format = (idx >= 10) ? 
-                    static_cast<MuxOSCFormat>(vals[9]) : MuxOSCFormat::FLOAT;
-                uint8_t filter_intensity = (idx >= 11) ? vals[10] : 5;
+                // Utiliser valeurs par défaut si absentes
+                bool hysteresis_enabled = (idx >= 7) ? (vals[6] != 0) : true;
+                MuxOSCFormat osc_format = (idx >= 8) ? 
+                    static_cast<MuxOSCFormat>(vals[7]) : MuxOSCFormat::FLOAT;
+                uint8_t filter_intensity = (idx >= 9) ? vals[8] : 5;
                 
                 // Valider osc_format
                 if (osc_format > MuxOSCFormat::MIDI) {
@@ -1570,10 +1886,45 @@ void ComponentManager::loadMuxConfigFromNVS() {
                 if (filter_intensity < 1) filter_intensity = 1;
                 if (filter_intensity > 10) filter_intensity = 10;
                 
+                // Charger les seuils depuis le format binaire compact
+                String thresh_key = "mux_thresh_" + String(i);
+                uint8_t buffer[65];
+                size_t bytes_read = prefs.getBytes(thresh_key.c_str(), buffer, 65);
+                
+                uint16_t analog_min = 0;
+                uint16_t analog_max = 4095;
+                
+                if (bytes_read == 5) {
+                    // Format uniform : flag + min + max
+                    if (buffer[0] == 0x01) {
+                        analog_min = buffer[1] | (buffer[2] << 8);
+                        analog_max = buffer[3] | (buffer[4] << 8);
+                    }
+                } else if (bytes_read == 65) {
+                    // Format non-uniform : flag + 16 min + 16 max
+                    if (buffer[0] == 0x00) {
+                        // Charger les premiers min/max pour initialisation (sera remplacé après)
+                        analog_min = buffer[1] | (buffer[2] << 8);
+                        analog_max = buffer[33] | (buffer[34] << 8);
+                    }
+                }
+                
+                // Créer le MUX avec valeurs par défaut (sera remplacé si format non-uniform)
+                const char* osc_base_ptr = (osc_base_str.length() > 0) ? osc_base_str.c_str() : nullptr;
                 addMux(i, vals[0], vals[1], vals[2], vals[3], vals[4], vals[5], 
-                       analog_min, analog_max, hysteresis_enabled, osc_format, filter_intensity);
-                Serial.printf("[ComponentManager] Loaded mux %d from NVS (min=%d, max=%d, hyst=%d, osc_fmt=%d)\n", 
-                              i, analog_min, analog_max, hysteresis_enabled, (int)osc_format);
+                       analog_min, analog_max, hysteresis_enabled, osc_format, filter_intensity, osc_base_ptr);
+                
+                // Si format non-uniform, charger tous les canaux
+                if (bytes_read == 65 && buffer[0] == 0x00) {
+                    for (uint8_t ch = 0; ch < 16; ch++) {
+                        mux_configs[i].analog_min[ch] = buffer[1 + ch * 2] | (buffer[1 + ch * 2 + 1] << 8);
+                        mux_configs[i].analog_max[ch] = buffer[33 + ch * 2] | (buffer[33 + ch * 2 + 1] << 8);
+                    }
+                    Serial.printf("[ComponentManager] Loaded mux %d from NVS (non-uniform thresholds)\n", i);
+                } else {
+                    Serial.printf("[ComponentManager] Loaded mux %d from NVS (min=%d, max=%d, hyst=%d, osc_fmt=%d)\n", 
+                                  i, analog_min, analog_max, hysteresis_enabled, (int)osc_format);
+                }
             }
         }
     }

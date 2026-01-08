@@ -1216,6 +1216,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  <h4 style="margin-top:20px;">Configuration analogique</h4>
  <div class="f"><label>Seuil min (0-4095):</label><input type="number" id="muxMin" min="0" max="4095" value="0" style="width:100px;"></div>
  <div class="f"><label>Seuil max (0-4095):</label><input type="number" id="muxMax" min="0" max="4095" value="4095" style="width:100px;"></div>
+ <div class="hint">OSC: /muxID/cal/min min/CH max max/CH reset reset/CH</div>
  <div class="f"><label><input type="checkbox" id="muxHysteresis" checked> Hystérésis activée</label></div>
  <div class="f"><label>Format OSC:</label><select id="muxOscFormat"><option value="float">Float (0-1)</option><option value="raw">Raw (0-4095)</option><option value="midi">MIDI (0-127)</option></select></div>
  <div class="f"><label>Intensité filtrage (1-10):</label><input type="number" id="muxFilterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">1=rapide, 10=stable</span></div>

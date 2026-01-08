@@ -164,8 +164,12 @@ void setupPinAPI(AsyncWebServer& server) {
                 json += "\"s2\":" + String(cfg->s2) + ",";
                 json += "\"s3\":" + String(cfg->s3) + ",";
                 json += "\"en\":" + String(cfg->en_pin) + ",";
-                json += "\"min\":" + String(cfg->analog_min) + ",";
-                json += "\"max\":" + String(cfg->analog_max) + ",";
+                // Retourner min/max du premier canal (interface web simplifiée)
+                // Si tous les canaux ont la même valeur, retourner cette valeur unique
+                uint16_t min_val = cfg->analog_min[0];
+                uint16_t max_val = cfg->analog_max[0];
+                json += "\"min\":" + String(min_val) + ",";
+                json += "\"max\":" + String(max_val) + ",";
                 json += "\"hysteresis\":" + String(cfg->hysteresis_enabled ? 1 : 0) + ",";
                 json += "\"filterIntensity\":" + String(cfg->filter_intensity) + ",";
                 // Format OSC : "raw", "float", "midi"
@@ -313,17 +317,26 @@ void setupPinAPI(AsyncWebServer& server) {
         }
         
         if (g_componentManager.addMux(mux_id, sig, s0, s1, s2, s3, en, analog_min, analog_max, 
-                                     hysteresis_enabled, osc_format, filter_intensity)) {
-            // Sauvegarder en NVS avec format étendu
+                                     hysteresis_enabled, osc_format, filter_intensity, oscBase.c_str())) {
+            // Sauvegarder en NVS (config principale sans seuils)
             Preferences prefs;
             prefs.begin("esp32server", false);
             String key = "mux_" + String(mux_id);
             String config = String(sig) + "," + String(s0) + "," + String(s1) + "," + 
                            String(s2) + "," + String(s3) + "," + String(en) + "," +
-                           String(analog_min) + "," + String(analog_max) + "," + 
                            String(hysteresis_enabled ? 1 : 0) + "," + String((int)osc_format) + "," +
-                           String(filter_intensity);
+                           String(filter_intensity) + "," + String(oscBase);
             prefs.putString(key.c_str(), config);
+            
+            // Sauvegarder les seuils en format binaire compact (uniform : 5 bytes)
+            String thresh_key = "mux_thresh_" + String(mux_id);
+            uint8_t buffer[5];
+            buffer[0] = 0x01; // Flag: uniform = true
+            buffer[1] = analog_min & 0xFF;
+            buffer[2] = (analog_min >> 8) & 0xFF;
+            buffer[3] = analog_max & 0xFF;
+            buffer[4] = (analog_max >> 8) & 0xFF;
+            prefs.putBytes(thresh_key.c_str(), buffer, 5);
             
             // Générer et sauvegarder les 16 configurations de pins MUX
             for (uint8_t ch = 0; ch < 16; ch++) {
