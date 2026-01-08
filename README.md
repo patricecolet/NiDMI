@@ -240,11 +240,14 @@ arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32C3 examples/esp32server_basic/e
 ### Tests
 
 ```bash
-# Tests de l'interface web
-./scripts/minify_test.sh
+# Build et test de compilation
+./scripts/esp32server.sh compile
 
-# Tests de compilation
-arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32C3 examples/esp32server_basic/esp32server_basic.ino
+# Build complet + upload
+./scripts/esp32server.sh upload
+
+# Moniteur série pour logs
+./scripts/esp32server.sh monitor
 ```
 
 ## Bugs connus et limitations
@@ -293,65 +296,101 @@ arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32C3 examples/esp32server_basic/e
 
 ## Optimisation de l'interface web
 
-### Minification automatique
+### Architecture Modulaire et Compression
 
-L'interface web est automatiquement minifiée pour optimiser l'utilisation de la mémoire flash :
+L'interface web est **modularisée** et **compressée** pour optimiser l'utilisation de la mémoire flash :
+
+- ✅ **7 modules JavaScript** organisés par responsabilité
+- ✅ **HTML minimal** séparé du JavaScript (~15.6 KB)
+- ✅ **Compression gzip** du bundle JS (75% de réduction)
+- ✅ **Total optimisé** : 26 KB (au lieu de 58 KB) → **55% de réduction**
+
+### Build Automatique
+
+Le build est **automatique** via `esp32server.sh` :
 
 ```bash
-# Minification de l'interface
-./scripts/minify_safe.sh
+# Build + Sync + Compile + Upload (recommandé)
+./scripts/esp32server.sh upload
 
-# Test de la minification
-./scripts/minify_test.sh
+# Ou seulement build + sync
+./scripts/esp32server.sh sync
 ```
 
-**Optimisations appliquées** :
-- ✅ Suppression des commentaires HTML `<!-- -->`
-- ✅ Suppression des commentaires JavaScript `/* */`
-- ✅ Remplacement des espaces multiples par un seul espace
-- ✅ **Réduction de 31%** (46589 → 31110 bytes)
+**Le script `esp32server.sh`** :
+1. Appelle automatiquement `build_html_simple.sh`
+2. Génère `src/ui_index.cpp` (HTML minimal)
+3. Génère `src/ui_bundle.h` (Bundle JS gzipé)
+4. Synchronise les fichiers vers la librairie Arduino
 
-**Avantages** :
-- **Code lisible** : Interface développée dans `web/index.html`
-- **Mémoire optimisée** : Version minifiée dans le firmware
-- **Workflow simple** : Un script pour tout automatiser
-- **Sécurité** : Minification sûre qui préserve la fonctionnalité
+### Structure Modulaire
+
+```
+web/
+├── index.html          # HTML minimal avec <script src="/bundle"></script>
+├── app.js             # Code JS principal résiduel
+└── js/
+    ├── core.js         # Utilitaires de base (variables globales, $)
+    ├── api.js          # Appels API (loadStatus, loadMdns, etc.)
+    ├── pins.js         # Gestion des pins (drawBoard, updatePinsList)
+    ├── components.js   # Fonctions génériques pour composants
+    ├── websocket.js    # WebSocket temps réel
+    └── mux.js          # Multiplexeurs analogiques
+```
 
 ### Développement de l'interface web
 
 **Modifier l'interface** :
-1. **Éditer** `web/index.html` avec votre éditeur préféré
-2. **Tester** les modifications dans un navigateur (fichier local)
-3. **Minifier** avec `./scripts/minify_safe.sh`
-4. **Synchroniser** la bibliothèque : `cp src/ui_index.cpp ~/Documents/Arduino/libraries/esp32server/src/`
-5. **Compiler** le firmware pour tester : `arduino-cli compile --fqbn esp32:esp32:esp32c3 examples/esp32server_basic/esp32server_basic.ino`
-
-**Structure de l'interface** :
-- **HTML** : Structure des onglets et formulaires
-- **CSS** : Styles pour l'interface ESP32-C3 et les pins
-- **JavaScript** : Logique des onglets, API calls, gestion des pins
+1. **Éditer** les fichiers source dans `web/` :
+   - `web/index.html` : HTML/CSS
+   - `web/js/*.js` : Modules JavaScript (par responsabilité)
+2. **Build automatique** : `./scripts/esp32server.sh sync`
+3. **Tester** : Compiler et uploader vers ESP32
 
 **Workflow de développement complet** :
 ```bash
 # 1. Éditer l'interface
-# Modifier web/index.html avec votre éditeur
+vim web/index.html              # HTML/CSS
+vim web/js/pins.js              # Module spécifique
 
-# 2. Minifier et intégrer
-./scripts/minify_safe.sh
+# 2. Build automatique (génère HTML + bundle gzip)
+./scripts/esp32server.sh sync
 
-# 3. Synchroniser la bibliothèque
-cp src/ui_index.cpp ~/Documents/Arduino/libraries/esp32server/src/
+# 3. Compiler et uploader
+./scripts/esp32server.sh upload
 
-# 4. Tester la compilation
-arduino-cli compile --fqbn esp32:esp32:esp32c3 examples/esp32server_basic/esp32server_basic.ino
+# 4. Tester dans le navigateur
+# Ouvrir http://192.168.4.1 (ou nom.local)
 ```
 
 **Conseils de développement** :
-- **Utilisez des commentaires** `/* */` en JavaScript (supprimés automatiquement)
-- **Évitez les commentaires** `//` (peuvent casser la minification)
-- **Testez** toujours après minification
-- **Sauvegardez** `web/index.html` avant modifications importantes
-- **Éditez toujours** `web/index.html` (pas `src/ui_index.cpp` directement)
+- ✅ **Utilisez des commentaires** `/* */` en JavaScript (supprimés automatiquement)
+- ❌ **Évitez les commentaires** `//` (interdits sauf dans URLs)
+- ✅ **Éditez toujours** les fichiers dans `web/` (jamais `src/ui_index.cpp` directement)
+- ✅ **Testez** après chaque modification importante
+- ✅ **Consultez** `docs/MODULARISATION_UI.md` pour la structure complète
+
+### Optimisations Appliquées
+
+**Build Process** :
+1. Concaténation des modules JS dans l'ordre correct
+2. Génération HTML minimal avec `<script src="/bundle"></script>`
+3. Compression gzip du bundle JS
+4. Minification HTML (suppression commentaires + espaces)
+5. Conversion en C++ PROGMEM pour ESP32
+
+**Résultats** :
+- **HTML source** : ~15.6 KB
+- **JS source** : ~43 KB
+- **Bundle JS (gzip)** : ~10.4 KB (réduction 75%)
+- **Total minifié** : ~26 KB
+- **Réduction totale** : 55% par rapport à version monolithique
+
+**Avantages** :
+- **Code maintenable** : Modules organisés par responsabilité
+- **Mémoire optimisée** : Compression gzip + HTML minimal
+- **Workflow simple** : Build automatique via `esp32server.sh`
+- **Fiabilité** : Bug encodage résolu avec streaming par chunks
 
 ---
 
