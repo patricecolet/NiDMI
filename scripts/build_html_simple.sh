@@ -24,7 +24,7 @@ if [ ! -f "web/app.js" ] && [ ! -f "web/js/core.js" ]; then
     exit 1
 fi
 
-# Concaténer les fichiers JS dans l'ordre : core.js, api.js, pins.js, components.js, puis app.js
+# Concaténer les fichiers JS dans l'ordre : core.js, api.js, pins.js, components.js, websocket.js, mux.js, puis app.js
 echo "📄 Concaténation des modules JavaScript..."
 TEMP_JS=$(mktemp)
 {
@@ -42,6 +42,14 @@ TEMP_JS=$(mktemp)
     if [ -f "web/js/components.js" ]; then
         echo ""
         cat web/js/components.js
+    fi
+    if [ -f "web/js/websocket.js" ]; then
+        echo ""
+        cat web/js/websocket.js
+    fi
+    if [ -f "web/js/mux.js" ]; then
+        echo ""
+        cat web/js/mux.js
     fi
     if [ -f "web/app.js" ]; then
         echo ""
@@ -145,6 +153,12 @@ if [ -f "web/js/pins.js" ]; then
 fi
 if [ -f "web/js/components.js" ]; then
     JS_SIZE=$((JS_SIZE + $(wc -c < web/js/components.js)))
+fi
+if [ -f "web/js/websocket.js" ]; then
+    JS_SIZE=$((JS_SIZE + $(wc -c < web/js/websocket.js)))
+fi
+if [ -f "web/js/mux.js" ]; then
+    JS_SIZE=$((JS_SIZE + $(wc -c < web/js/mux.js)))
 fi
 if [ -f "web/app.js" ]; then
     JS_SIZE=$((JS_SIZE + $(wc -c < web/app.js)))

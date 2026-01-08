@@ -130,7 +130,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     // Page principale
     // Serial.println("[WebAPI] Setting up main page...");
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(200, "text/html; charset=utf-8", INDEX_HTML);
+        request->send_P(200, "text/html; charset=utf-8", INDEX_HTML);
     });
     
     // API - Statut système

@@ -50,7 +50,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .modal{background:#fff;border-radius:8px;padding:25px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,.3)}
 .modal h3{margin-bottom:20px;color:#1f2937;font-size:18px}
 </style>
-<script>const $=s=>document.querySelector(s[0]=='#'?s:'#'+s);
+<script>
+
+const $=s=>document.querySelector(s[0]=='#'?s:'#'+s);
 const pcfg={};
 let cur='';
 let caps=null;
@@ -865,6 +867,54 @@ function applyCfg(c){
  updateRtpParamsVisibility();
 }
 
+function getGpioFromD(dNum){
+ if(!caps||!caps.pins) return null;
+ const pin=caps.pins.find(p=>p.label===`D${dNum}`);
+ return pin?pin.gpio:null;
+}
+
+function getDFromGpio(gpio){
+ if(!caps||!caps.pins) return null;
+ const pin=caps.pins.find(p=>p.gpio===gpio&&p.label&&p.label.startsWith('D'));
+ return pin?parseInt(pin.label.substring(1)):null;
+}
+
+function getUsedGpios(additionalSelectIds=[]){
+ const usedGpios=new Set();
+ Object.keys(pcfg).forEach(lbl=>{
+ const pin=caps.pins.find(p=>p.label===lbl);
+ if(pin) usedGpios.add(pin.gpio);
+ });
+ const currentMuxId=$('#muxId')?parseInt($('#muxId').value):null;
+ muxList.forEach(m=>{
+ if(currentMuxId!==null&&m.id==currentMuxId) return;
+ if(m.sig!==undefined&&m.sig!==null) usedGpios.add(m.sig);
+ if(m.s0!==undefined&&m.s0!==null) usedGpios.add(m.s0);
+ if(m.s1!==undefined&&m.s1!==null) usedGpios.add(m.s1);
+ if(m.s2!==undefined&&m.s2!==null) usedGpios.add(m.s2);
+ if(m.s3!==undefined&&m.s3!==null) usedGpios.add(m.s3);
+ if(m.en!==undefined&&m.en!==null&&m.en!==255) usedGpios.add(m.en);
+ });
+ additionalSelectIds.forEach(id=>{
+ const sel=$('#'+id);
+ if(!sel||!sel.value||sel.value==='255') return;
+ if(id==='muxPinGroup'){
+ const firstD=parseInt(sel.value);
+ const s0=getGpioFromD(firstD);
+ const s1=getGpioFromD(firstD+1);
+ const s2=getGpioFromD(firstD+2);
+ const s3=getGpioFromD(firstD+3);
+ if(s0) usedGpios.add(s0);
+ if(s1) usedGpios.add(s1);
+ if(s2) usedGpios.add(s2);
+ if(s3) usedGpios.add(s3);
+ } else{
+ usedGpios.add(parseInt(sel.value));
+ }
+ });
+ return usedGpios;
+}
+
 function applyPinReplacementLogic(pin){
  if(pin.startsWith('A')){
  const dLabel=pin.replace('A','D');
@@ -966,90 +1016,40 @@ function handlePinClick(label){
  }
 }
 
-function updatePinsList(){
- const pl=$('#pinsList');
- if(!pl) return;
- pl.innerHTML='';
- Object.keys(pcfg).forEach(lbl=>{
- const cfg=pcfg[lbl];
- if(!cfg||!cfg.role) return;
- const isMuxPin=lbl.startsWith('M');
- if(isMuxPin) return;
- const it=document.createElement('div');
- it.className=`item ${pType(lbl)}`;
- it.innerHTML=`<span class="lbl">${lbl}</span><span class="role">${cfg.role}</span><span class="stat">${stat(cfg, lbl)}</span><button class="del-btn">×</button>`;
- it.onclick=()=>{
- 
- if(window._selRect) window._selRect.classList.remove('selectedSquare');
- const r=prect[lbl];
- if(r){
- window._selRect=r;
- r.classList.add('selectedSquare');
- }
- 
- cur=lbl;
- $('#selPin').textContent=lbl;
- 
- updFunc(lbl);
- if(pcfg[lbl]) applyCfg(pcfg[lbl]);
+function initWebSocket(){
+ const protocol=window.location.protocol==='https:'?'wss:':'ws:';
+ const wsUrl=`${protocol}//${window.location.host}/ws`;
+ websocket=new WebSocket(wsUrl);
+ websocket.onopen=function(){
+ console.log('WebSocket connected');
  };
- const delBtn=it.querySelector('.del-btn');
- if(delBtn) delBtn.onclick=(e)=>{
- e.stopPropagation();
- delete pcfg[lbl];
+ websocket.onmessage=function(event){
+ const message=event.data;
+ if(message.startsWith('PIN_CONFIG:')){
+ const parts=message.split(':');
+ if(parts.length>=3){
+ const pin=parts[1];
+ const config=JSON.parse(parts.slice(2).join(':'));
+ applyPinReplacementLogic(pin);
+ if(['SDA','SCL'].includes(pin)&&config.role==='I2C'){
+ pcfg['I2C']=config;
+ } else if(['MOSI','MISO','SCK'].includes(pin)&&config.role==='SPI'){
+ pcfg['SPI']=config;
+ } else{
+ pcfg[pin]=config;
+ }
  updatePinsList();
  updateBusVisuals();
- };
- pl.appendChild(it);
- });
-}
-
-function getGpioFromD(dNum){
- if(!caps||!caps.pins) return null;
- const pin=caps.pins.find(p=>p.label===`D${dNum}`);
- return pin?pin.gpio:null;
-}
-
-function getDFromGpio(gpio){
- if(!caps||!caps.pins) return null;
- const pin=caps.pins.find(p=>p.gpio===gpio&&p.label&&p.label.startsWith('D'));
- return pin?parseInt(pin.label.substring(1)):null;
-}
-
-function getUsedGpios(additionalSelectIds=[]){
- const usedGpios=new Set();
- Object.keys(pcfg).forEach(lbl=>{
- const pin=caps.pins.find(p=>p.label===lbl);
- if(pin) usedGpios.add(pin.gpio);
- });
- const currentMuxId=$('#muxId')?parseInt($('#muxId').value):null;
- muxList.forEach(m=>{
- if(currentMuxId!==null&&m.id==currentMuxId) return;
- if(m.sig!==undefined&&m.sig!==null) usedGpios.add(m.sig);
- if(m.s0!==undefined&&m.s0!==null) usedGpios.add(m.s0);
- if(m.s1!==undefined&&m.s1!==null) usedGpios.add(m.s1);
- if(m.s2!==undefined&&m.s2!==null) usedGpios.add(m.s2);
- if(m.s3!==undefined&&m.s3!==null) usedGpios.add(m.s3);
- if(m.en!==undefined&&m.en!==null&&m.en!==255) usedGpios.add(m.en);
- });
- additionalSelectIds.forEach(id=>{
- const sel=$('#'+id);
- if(!sel||!sel.value||sel.value==='255') return;
- if(id==='muxPinGroup'){
- const firstD=parseInt(sel.value);
- const s0=getGpioFromD(firstD);
- const s1=getGpioFromD(firstD+1);
- const s2=getGpioFromD(firstD+2);
- const s3=getGpioFromD(firstD+3);
- if(s0) usedGpios.add(s0);
- if(s1) usedGpios.add(s1);
- if(s2) usedGpios.add(s2);
- if(s3) usedGpios.add(s3);
- } else{
- usedGpios.add(parseInt(sel.value));
+ if(cur===pin){
+ applyCfg(config);
  }
- });
- return usedGpios;
+ }
+ }
+ };
+ websocket.onclose=function(){
+ console.log('WebSocket disconnected');
+ setTimeout(initWebSocket,3000);
+ };
 }
 
 async function loadMuxList(){
@@ -1370,45 +1370,47 @@ async function deleteMux(id,event){
  } catch(e){ console.log('Erreur suppression mux:',e); }
 }
 
-function initWebSocket(){
- const protocol=window.location.protocol==='https:'?'wss:':'ws:';
- const wsUrl=`${protocol}//${window.location.host}/ws`;
- websocket=new WebSocket(wsUrl);
- websocket.onopen=function(){
- console.log('WebSocket connected');
- };
- websocket.onmessage=function(event){
- const message=event.data;
- if(message.startsWith('PIN_CONFIG:')){
- const parts=message.split(':');
- if(parts.length>=3){
- const pin=parts[1];
- const config=JSON.parse(parts.slice(2).join(':'));
- applyPinReplacementLogic(pin);
- if(['SDA','SCL'].includes(pin)&&config.role==='I2C'){
- pcfg['I2C']=config;
- } else if(['MOSI','MISO','SCK'].includes(pin)&&config.role==='SPI'){
- pcfg['SPI']=config;
- } else{
- pcfg[pin]=config;
- }
- updatePinsList();
- updateBusVisuals();
- if(cur===pin){
- applyCfg(config);
- }
- }
- }
- };
- websocket.onclose=function(){
- console.log('WebSocket disconnected');
- setTimeout(initWebSocket,3000);
- };
-}
-
 function initMuxForm(){
  const form=$('#muxForm');
  if(form) form.onsubmit=saveMux;
+}
+
+function updatePinsList(){
+ const pl=$('#pinsList');
+ if(!pl) return;
+ pl.innerHTML='';
+ Object.keys(pcfg).forEach(lbl=>{
+ const cfg=pcfg[lbl];
+ if(!cfg||!cfg.role) return;
+ const isMuxPin=lbl.startsWith('M');
+ if(isMuxPin) return;
+ const it=document.createElement('div');
+ it.className=`item ${pType(lbl)}`;
+ it.innerHTML=`<span class="lbl">${lbl}</span><span class="role">${cfg.role}</span><span class="stat">${stat(cfg, lbl)}</span><button class="del-btn">×</button>`;
+ it.onclick=()=>{
+ 
+ if(window._selRect) window._selRect.classList.remove('selectedSquare');
+ const r=prect[lbl];
+ if(r){
+ window._selRect=r;
+ r.classList.add('selectedSquare');
+ }
+ 
+ cur=lbl;
+ $('#selPin').textContent=lbl;
+ 
+ updFunc(lbl);
+ if(pcfg[lbl]) applyCfg(pcfg[lbl]);
+ };
+ const delBtn=it.querySelector('.del-btn');
+ if(delBtn) delBtn.onclick=(e)=>{
+ e.stopPropagation();
+ delete pcfg[lbl];
+ updatePinsList();
+ updateBusVisuals();
+ };
+ pl.appendChild(it);
+ });
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{initTabs(); loadStatus(); loadMdns(); loadOscConfig(); loadStaConfig(); initForms(); initMuxForm(); initWebSocket(); loadCaps().then(()=>{drawBoard(); loadConfiguredPins(); loadMuxList();}); if($('#saveAllBtn')) $('#saveAllBtn').onclick=saveAll; setInterval(loadStatus, 5000);});</script>
