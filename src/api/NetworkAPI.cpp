@@ -5,7 +5,7 @@ void setupNetworkAPI(AsyncWebServer& server) {
     /* API - Statut général */
         /* Page principale - Servir le HTML embarqué */
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send_P(200, "text/html", INDEX_HTML);
+        request->send_P(200, "text/html; charset=utf-8", INDEX_HTML);
     });
     server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request){
         String json = "{";

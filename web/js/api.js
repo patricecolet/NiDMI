@@ -1,0 +1,244 @@
+/* Fonctions d'appels API et initialisation des formulaires */
+
+async function loadStatus(){
+ const r=await fetch('/api/status');
+ const d=await r.json();
+ $('#apSsid').textContent=d.ap_ssid;
+ $('#apIp').textContent=d.ap_ip;
+ $('#staSsid').textContent=d.sta_ssid;
+ $('#staIp').textContent=d.sta_ip;
+ const s=$('#staStatus');
+ s.textContent=d.sta_connected?'Connecté':'Déconnecté';
+ s.style.color=d.sta_connected?'#059669':'#dc2626';
+ $('#mdnsAddress').textContent=d.mdns_address||'-';
+ let oscInfo='';
+ if(d.osc_target==='ip'&&d.osc_ip){
+ oscInfo=d.osc_ip+':'+d.osc_port;
+ }else if(d.osc_target==='ap'){
+ oscInfo='Broadcast AP (192.168.4.255:'+d.osc_port+')';
+ }else{
+ oscInfo='Broadcast STA ('+(d.sta_ip||'0.0.0.0')+':'+d.osc_port+')';
+ }
+ $('#oscConfig').textContent=oscInfo;
+}
+
+async function loadMdns(){
+ const r=await fetch('/api/mdns/status');
+ const d=await r.json();
+ $('#mdnsName').value=d.name;
+}
+
+async function loadOscConfig(){
+ try {
+ const r=await fetch('/api/osc/status');
+ const d=await r.json();
+ if($('#oscTarget')) $('#oscTarget').value=d.target||'sta';
+ if($('#oscPort')) $('#oscPort').value=d.port||8000;
+ if($('#oscIp')) $('#oscIp').value=d.ip||'';
+if($('#oscBroadcast')) $('#oscBroadcast').checked=!!d.broadcast;
+
+
+const oscTarget = $('#oscTarget');
+ const oscIpRow = $('#oscIpRow');
+ if (oscTarget && oscIpRow) {
+ if (oscTarget.value === 'ip') {
+ oscIpRow.style.display = 'block';
+ } else {
+ oscIpRow.style.display = 'none';
+ }
+ }
+ } catch(err) {
+ console.log('Erreur chargement OSC:', err);
+ }
+}
+
+async function loadStaConfig(){
+ try {
+ const r=await fetch('/api/sta/status');
+ const d=await r.json();
+ if($('#ssid')) $('#ssid').value=d.ssid||'';
+ 
+ if($('#pass')) {
+ const currentValue = $('#pass').value;
+ $('#pass').placeholder=d.has_pass ? '•••••••• (déjà configuré)' : 'Mot de passe';
+ 
+ if(!currentValue || currentValue === '') {
+ $('#pass').value='';
+ }
+ }
+ } catch(err) {
+ console.log('Erreur chargement STA:', err);
+ }
+}
+
+function initForms(){
+ const oscTarget = $('#oscTarget');
+ const oscIpRow = $('#oscIpRow');
+ const oscBroadcast = $('#oscBroadcast');
+ 
+ function updateOscForm() {
+ const target = oscTarget.value;
+ if (target === 'ip') {
+ oscIpRow.style.display = 'block';
+ oscBroadcast.checked = false;
+ } else {
+ oscIpRow.style.display = 'none';
+ oscBroadcast.checked = true;
+ }
+ }
+ 
+ if (oscTarget) {
+ oscTarget.addEventListener('change', updateOscForm);
+ updateOscForm();
+ }
+ 
+ $('#mdns').addEventListener('submit', async (e) => {
+ e.preventDefault();
+ const formData = new FormData();
+ formData.append('name', $('#mdnsName').value);
+ try {
+ const r = await fetch('/api/mdns', { method: 'POST', body: formData });
+ const d = await r.json();
+ $('#mdnsMsg').textContent = d.status === 'ok' ? 'Nom enregistré' : 'Erreur: ' + d.error;
+ $('#mdnsMsg').style.color = d.status === 'ok' ? '#059669' : '#dc2626';
+ } catch (err) {
+ $('#mdnsMsg').textContent = 'Erreur de connexion';
+ $('#mdnsMsg').style.color = '#dc2626';
+ }
+ });
+ 
+ $('#sta').addEventListener('submit', async (e) => {
+ e.preventDefault();
+ const formData = new FormData();
+ formData.append('ssid', $('#ssid').value);
+ formData.append('pass', $('#pass').value);
+ try {
+ const r = await fetch('/api/sta', { method: 'POST', body: formData });
+ const d = await r.json();
+ $('#staMsg').textContent = d.status === 'ok' ? 'Configuration enregistrée, redémarrage...' : 'Erreur: ' + d.error;
+ $('#staMsg').style.color = d.status === 'ok' ? '#059669' : '#dc2626';
+ if (d.status === 'ok') {
+ setTimeout(() => location.reload(), 2000);
+ }
+ } catch (err) {
+ $('#staMsg').textContent = 'Configuration enregistrée, redémarrage...';
+ $('#staMsg').style.color = '#059669';
+ setTimeout(() => location.reload(), 5000);
+ }
+ });
+ 
+ $('#osc').addEventListener('submit', async (e) => {
+ e.preventDefault();
+ const formData = new FormData();
+ const target = $('#oscTarget').value;
+ formData.append('target', target);
+ formData.append('port', $('#oscPort').value);
+ 
+ if (target === 'ip' && $('#oscIp').value) {
+ formData.append('ip', $('#oscIp').value);
+ }
+ 
+ if ($('#oscBroadcast')) {
+ formData.append('broadcast', $('#oscBroadcast').checked ? 'true' : 'false');
+ }
+ 
+ try {
+ const r = await fetch('/api/osc', { method: 'POST', body: formData });
+ const d = await r.json();
+ $('#oscMsg').textContent = d.status === 'ok' ? 'Configuration OSC enregistrée' : 'Erreur: ' + d.error;
+ $('#oscMsg').style.color = d.status === 'ok' ? '#059669' : '#dc2626';
+ } catch (err) {
+ $('#oscMsg').textContent = 'Erreur de connexion';
+ $('#oscMsg').style.color = '#dc2626';
+ }
+ });
+}
+
+async function loadCaps(){
+ const r=await fetch('/api/pins/caps');
+ caps=await r.json();
+}
+
+async function loadConfiguredPins(){
+ try {
+ const r=await fetch('/api/pins/list');
+ const d=await r.json();
+ if(d.pins && Array.isArray(d.pins)) {
+ d.pins.forEach(pinData => {
+ if(pinData.pinLabel && pinData.role) {
+ pcfg[pinData.pinLabel] = pinData;
+ }
+ });
+ updatePinsList();
+ updateBusVisuals();
+ }
+ } catch(err) {
+ console.log('Erreur chargement pins:', err);
+ }
+}
+
+async function saveAll(){
+ const msg=$('#saveAllMsg');
+ msg.textContent='Enregistrement...';
+ try{
+ const ps=Object.keys(pcfg).map(async lbl=>{
+ const c=pcfg[lbl];
+ if(!c||!c.role) return;
+ const p=new URLSearchParams();
+ p.set('pinLabel',lbl);
+ p.set('role',c.role);
+ if(c.rtpEnabled) p.set('rtpEnabled','true');
+ if(c.rtpType) p.set('rtpType',c.rtpType);
+ if(c.rtpNote) p.set('rtpNote',c.rtpNote);
+ if(c.rtpCc) p.set('rtpCc',c.rtpCc);
+ if(c.rtpPc) p.set('rtpPc',c.rtpPc);
+ if(c.rtpChan) p.set('rtpChan',c.rtpChan);
+ if(c.rtpCcOn) p.set('rtpCcOn',c.rtpCcOn);
+ if(c.rtpCcOff) p.set('rtpCcOff',c.rtpCcOff);
+ if(c.rtpVel) p.set('rtpVel',c.rtpVel);
+ if(c.rtpCcMin) p.set('rtpCcMin',c.rtpCcMin);
+ if(c.rtpCcMax) p.set('rtpCcMax',c.rtpCcMax);
+ if(c.rtpNoteMin) p.set('rtpNoteMin',c.rtpNoteMin);
+ if(c.rtpNoteMax) p.set('rtpNoteMax',c.rtpNoteMax);
+ if(c.rtpNoteVelFix) p.set('rtpNoteVelFix',c.rtpNoteVelFix);
+ if(c.rtpNoteSweepAutoOffDelay) p.set('rtpNoteSweepAutoOffDelay',c.rtpNoteSweepAutoOffDelay);
+ if(c.ledMode) p.set('ledMode',c.ledMode);
+ if(c.btnMode) p.set('btnMode',c.btnMode);
+ if(c.btnPulseTiming) p.set('btnPulseTiming',c.btnPulseTiming);
+ if(c.potFilter) p.set('potFilter',c.potFilter);
+ if(c.filterIntensity) p.set('filterIntensity',c.filterIntensity);
+ if(c.oscEnabled) p.set('oscEnabled','true');
+ if(c.oscAddress) p.set('oscAddress',c.oscAddress);
+ if(c.oscFormat) p.set('oscFormat',c.oscFormat);
+ if(c.dbgEnabled) p.set('dbgEnabled','true');
+ if(c.dbgHeader) p.set('dbgHeader',c.dbgHeader);
+ return fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
+ });
+ await Promise.all(ps);
+ 
+ const listRes=await fetch('/api/pins/list');
+ const listData=await listRes.json();
+ const serverPins=new Set();
+ if(listData.pins && Array.isArray(listData.pins)){
+ listData.pins.forEach(p=>{
+ if(p.pinLabel) serverPins.add(p.pinLabel);
+ });
+ }
+ 
+ const localPins=new Set(Object.keys(pcfg));
+ const toDelete=Array.from(serverPins).filter(p=>!localPins.has(p));
+ const deletePromises=toDelete.map(async pinLabel=>{
+ const p=new URLSearchParams();
+ p.set('pin',pinLabel);
+ return fetch('/api/pins/delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
+ });
+ await Promise.all(deletePromises);
+ 
+ msg.textContent='Toutes les configurations enregistrées';
+ msg.style.color='#10b981';
+ }catch(e){
+ msg.textContent='Erreur lors de l\'enregistrement';
+ msg.style.color='#ef4444';
+ console.error('Erreur saveAll:',e);
+ }
+}

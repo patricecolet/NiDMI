@@ -3,86 +3,147 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html lang="fr">
 <head>
- <meta charset="UTF-8">
- <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>ESP32 Server</title>
- <style>
- :root{--cd:#3B82F6;--ca:#EC4899;--ci:#10B981;--cu:#6B7280;--cs:#8B5CF6;--cp:#EF4444;--cg:#000;--bg:#f9fafb;--bd:#e5e7eb;--tx:#374151;--mt:#6b7280}
- *{margin:0;padding:0;box-sizing:border-box}
- body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;color:#111827}
- .c{max-width:1200px;margin:0 auto;padding:20px}
- .h{text-align:center;margin-bottom:30px}.h h1{color:#1f2937;margin-bottom:10px}.h p{color:#6b7280}
- .t{display:flex;background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.1);margin-bottom:20px}
- .tab{flex:1;padding:15px;text-align:center;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s}
- .tab.active{border-bottom-color:var(--cd);color:var(--cd);font-weight:600}.tab:hover:not(.active){background:var(--bg)}
- .p{display:none;background:#fff;border-radius:8px;padding:25px;box-shadow:0 1px 3px rgba(0,0,0,.1)}.p.active{display:block}
- .f{margin-bottom:20px}.f label{display:block;margin-bottom:8px;font-weight:500;color:var(--tx)}
- .f input,.f select{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px}
- .f input:focus,.f select:focus{outline:none;border-color:var(--cd);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
- .btn{background:var(--cd);color:#fff;border:none;padding:12px 24px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500;transition:background .2s}
- .btn:hover{background:#2563eb}.btn:disabled{background:#9ca3af;cursor:not-allowed}
- .hint{margin-top:10px;color:var(--mt);font-size:14px}
- .g{display:grid;grid-template-columns:1fr 1fr;gap:20px}.card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:15px}
- .card h3{color:#1f2937;margin-bottom:10px;font-size:16px}.card p{color:var(--mt);font-size:14px;margin-bottom:5px}
- .pl{display:flex;gap:20px;align-items:flex-start}.lp{flex:0 0 30%;min-width:300px}.rp{flex:1 1 auto}
- .cp{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:16px}.cp h4{margin:6px 0 10px;font-size:15px;color:#1f2937}
- .r{display:flex;gap:12px;align-items:center;margin:8px 0;flex-wrap:wrap}.r label{color:var(--tx);font-size:14px}
- .b{width:100%;height:260px;border:1px solid var(--bd);border-radius:8px;background:var(--bg)}
- .l{display:flex;gap:14px;align-items:center;margin:10px 0 8px;flex-wrap:wrap}.s{width:14px;height:14px;border-radius:3px;display:inline-block;margin-right:6px}
- .s.digital{background:var(--cd)}.s.analog{background:var(--ca)}.s.i2c{background:var(--ci)}.s.uart{background:var(--cu)}.s.spi{background:var(--cs)}.s.touch{background:#F59E0B}.s.power{background:var(--cp)}.s.gnd{background:var(--cg)}
- .plist{margin-top:20px;padding:15px;background:var(--bg);border-radius:8px}.plist h4{margin:0 0 10px;font-size:15px;color:var(--tx)}
- .list{display:flex;flex-direction:column;gap:4px}
- .item{display:flex;align-items:center;padding:8px 12px;background:#fff;border-radius:6px;border-left:4px solid var(--bd);cursor:pointer;transition:all .2s}
- .item:hover{background:var(--bg)}.item.analog{border-left-color:var(--ca)}.item.digital{border-left-color:var(--cd)}.item.i2c{border-left-color:var(--ci)}.item.spi{border-left-color:var(--cs)}.item.uart{border-left-color:var(--cu)}.item.touch{border-left-color:#F59E0B}.item.mux{border-left-color:#8B5CF6}
- .lbl{font-weight:700;min-width:40px;margin-right:12px}.role{flex:1;color:var(--tx)}.stat{font-size:.9em;color:var(--mt)}
- .del-btn{background:#ef4444;color:#fff;border:none;border-radius:3px;width:20px;height:20px;cursor:pointer;font-size:12px;margin-left:8px}
- .del-btn:hover{background:#dc2626}
- .btn-p{width:100%;margin-top:15px;padding:12px;background:var(--cd);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer}
- .btn-p:hover{background:#2563eb}
- .svg-t{font-size:9px;fill:#ffffff;dominant-baseline:middle;pointer-events:none;user-select:none}
- .selectedSquare{stroke:#1d4ed8;stroke-width:2}
- .subcard{background:#f9fafb;border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:8px}
- .subcard .r{margin:6px 0}
- .switch{display:flex;align-items:center;gap:8px}
- .busDisabled{opacity:0.45;filter:grayscale(100%);cursor:not-allowed}
- .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
- .modal-overlay.active{display:flex}
- .modal{background:#fff;border-radius:8px;padding:25px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,.3)}
- .modal h3{margin-bottom:20px;color:#1f2937;font-size:18px}
- </style>
- <script>
- const $=s=>document.querySelector(s[0]=='#'?s:'#'+s);
- const pcfg={}; let cur=''; let caps=null; const prect={}; const FC={DIGITAL:'#3B82F6',ANALOG:'#EC4899',I2C:'#10B981',UART:'#6B7280',SPI:'#8B5CF6',TOUCH:'#F59E0B',POWER:'#EF4444',GND:'#000'};
- 
- function initTabs(){ document.querySelectorAll('.tab').forEach(t=>{ t.onclick=()=>{ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); document.querySelectorAll('.p').forEach(p=>p.classList.remove('active')); t.classList.add('active'); $(`panel-${t.dataset.t}`).classList.add('active'); }; }); }
- 
- async function loadStatus(){ const r=await fetch('/api/status'); const d=await r.json(); $('#apSsid').textContent=d.ap_ssid; $('#apIp').textContent=d.ap_ip; $('#staSsid').textContent=d.sta_ssid; $('#staIp').textContent=d.sta_ip; const s=$('#staStatus'); s.textContent=d.sta_connected?'Connecté':'Déconnecté'; s.style.color=d.sta_connected?'#059669':'#dc2626'; $('#mdnsAddress').textContent=d.mdns_address||'-'; let oscInfo=''; if(d.osc_target==='ip'&&d.osc_ip){ oscInfo=d.osc_ip+':'+d.osc_port; }else if(d.osc_target==='ap'){ oscInfo='Broadcast AP (192.168.4.255:'+d.osc_port+')'; }else{ oscInfo='Broadcast STA ('+(d.sta_ip||'0.0.0.0')+':'+d.osc_port+')'; } $('#oscConfig').textContent=oscInfo; }
- 
- async function loadMdns(){ const r=await fetch('/api/mdns/status'); const d=await r.json(); $('#mdnsName').value=d.name; }
- 
- async function loadCaps(){ const r=await fetch('/api/pins/caps'); caps=await r.json(); drawBoard(); }
- 
- async function loadConfiguredPins(){ 
- try {
- const r=await fetch('/api/pins/list'); 
- const d=await r.json(); 
- if(d.pins && Array.isArray(d.pins)) {
- d.pins.forEach(pinData => {
- if(pinData.pinLabel && pinData.role) {
- pcfg[pinData.pinLabel] = pinData;
- }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32 Server - Test</title>
+<style>
+:root{--cd:#3B82F6;--ca:#EC4899;--ci:#10B981;--cu:#6B7280;--cs:#8B5CF6;--cp:#EF4444;--cg:#000;--bg:#f9fafb;--bd:#e5e7eb;--tx:#374151;--mt:#6b7280}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;color:#111827}
+.c{max-width:1200px;margin:0 auto;padding:20px}
+.h{text-align:center;margin-bottom:30px}.h h1{color:#1f2937;margin-bottom:10px}.h p{color:#6b7280}
+.t{display:flex;background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.1);margin-bottom:20px}
+.tab{flex:1;padding:15px;text-align:center;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s}
+.tab.active{border-bottom-color:var(--cd);color:var(--cd);font-weight:600}.tab:hover:not(.active){background:var(--bg)}
+.p{display:none;background:#fff;border-radius:8px;padding:25px;box-shadow:0 1px 3px rgba(0,0,0,.1)}.p.active{display:block}
+.f{margin-bottom:20px}.f label{display:block;margin-bottom:8px;font-weight:500;color:var(--tx)}
+.f input,.f select{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px}
+.f input:focus,.f select:focus{outline:none;border-color:var(--cd);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
+.btn{background:var(--cd);color:#fff;border:none;padding:12px 24px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500;transition:background .2s}
+.btn:hover{background:#2563eb}.btn:disabled{background:#9ca3af;cursor:not-allowed}
+.hint{margin-top:10px;color:var(--mt);font-size:14px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:20px}.card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:15px}
+.card h3{color:#1f2937;margin-bottom:10px;font-size:16px}.card p{color:var(--mt);font-size:14px;margin-bottom:5px}
+.pl{display:flex;gap:20px;align-items:flex-start}.lp{flex:0 0 30%;min-width:300px}.rp{flex:1 1 auto}
+.cp{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:16px}.cp h4{margin:6px 0 10px;font-size:15px;color:#1f2937}
+.r{display:flex;gap:12px;align-items:center;margin:8px 0;flex-wrap:wrap}.r label{color:var(--tx);font-size:14px}
+.b{width:100%;height:260px;border:1px solid var(--bd);border-radius:8px;background:var(--bg)}
+.l{display:flex;gap:14px;align-items:center;margin:10px 0 8px;flex-wrap:wrap}.s{width:14px;height:14px;border-radius:3px;display:inline-block;margin-right:6px}
+.s.digital{background:var(--cd)}.s.analog{background:var(--ca)}.s.i2c{background:var(--ci)}.s.uart{background:var(--cu)}.s.spi{background:var(--cs)}.s.touch{background:#F59E0B}.s.power{background:var(--cp)}.s.gnd{background:var(--cg)}
+.plist{margin-top:20px;padding:15px;background:var(--bg);border-radius:8px}.plist h4{margin:0 0 10px;font-size:15px;color:var(--tx)}
+.list{display:flex;flex-direction:column;gap:4px}
+.item{display:flex;align-items:center;padding:8px 12px;background:#fff;border-radius:6px;border-left:4px solid var(--bd);cursor:pointer;transition:all .2s}
+.item:hover{background:var(--bg)}.item.analog{border-left-color:var(--ca)}.item.digital{border-left-color:var(--cd)}.item.i2c{border-left-color:var(--ci)}.item.spi{border-left-color:var(--cs)}.item.uart{border-left-color:var(--cu)}.item.touch{border-left-color:#F59E0B}.item.mux{border-left-color:#8B5CF6}
+.lbl{font-weight:700;min-width:40px;margin-right:12px}.role{flex:1;color:var(--tx)}.stat{font-size:.9em;color:var(--mt)}
+.del-btn{background:#ef4444;color:#fff;border:none;border-radius:3px;width:20px;height:20px;cursor:pointer;font-size:12px;margin-left:8px}
+.del-btn:hover{background:#dc2626}
+.btn-p{width:100%;margin-top:15px;padding:12px;background:var(--cd);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer}
+.btn-p:hover{background:#2563eb}
+.svg-t{font-size:9px;fill:#ffffff;dominant-baseline:middle;pointer-events:none;user-select:none}
+.selectedSquare{stroke:#1d4ed8;stroke-width:2}
+.subcard{background:#f9fafb;border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:8px}
+.subcard .r{margin:6px 0}
+.switch{display:flex;align-items:center;gap:8px}
+.busDisabled{opacity:0.45;filter:grayscale(100%);cursor:not-allowed}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
+.modal-overlay.active{display:flex}
+.modal{background:#fff;border-radius:8px;padding:25px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,.3)}
+.modal h3{margin-bottom:20px;color:#1f2937;font-size:18px}
+</style>
+<script>const $=s=>document.querySelector(s[0]=='#'?s:'#'+s);
+const pcfg={};
+let cur='';
+let caps=null;
+const prect={};
+const FC={DIGITAL:'#3B82F6',ANALOG:'#EC4899',I2C:'#10B981',UART:'#6B7280',SPI:'#8B5CF6',TOUCH:'#F59E0B',POWER:'#EF4444',GND:'#000'};
+let muxList=[];
+let websocket=null;
+
+function initTabs(){
+ document.querySelectorAll('.tab').forEach(t=>{
+ t.onclick=()=>{
+ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+ document.querySelectorAll('.p').forEach(p=>p.classList.remove('active'));
+ t.classList.add('active');
+ $(`panel-${t.dataset.t}`).classList.add('active');
+ };
  });
- updatePinsList(); 
- updateBusVisuals(); 
+}
+
+
+
+async function loadStatus(){
+ const r=await fetch('/api/status');
+ const d=await r.json();
+ $('#apSsid').textContent=d.ap_ssid;
+ $('#apIp').textContent=d.ap_ip;
+ $('#staSsid').textContent=d.sta_ssid;
+ $('#staIp').textContent=d.sta_ip;
+ const s=$('#staStatus');
+ s.textContent=d.sta_connected?'Connecté':'Déconnecté';
+ s.style.color=d.sta_connected?'#059669':'#dc2626';
+ $('#mdnsAddress').textContent=d.mdns_address||'-';
+ let oscInfo='';
+ if(d.osc_target==='ip'&&d.osc_ip){
+ oscInfo=d.osc_ip+':'+d.osc_port;
+ }else if(d.osc_target==='ap'){
+ oscInfo='Broadcast AP (192.168.4.255:'+d.osc_port+')';
+ }else{
+ oscInfo='Broadcast STA ('+(d.sta_ip||'0.0.0.0')+':'+d.osc_port+')';
+ }
+ $('#oscConfig').textContent=oscInfo;
+}
+
+async function loadMdns(){
+ const r=await fetch('/api/mdns/status');
+ const d=await r.json();
+ $('#mdnsName').value=d.name;
+}
+
+async function loadOscConfig(){
+ try {
+ const r=await fetch('/api/osc/status');
+ const d=await r.json();
+ if($('#oscTarget')) $('#oscTarget').value=d.target||'sta';
+ if($('#oscPort')) $('#oscPort').value=d.port||8000;
+ if($('#oscIp')) $('#oscIp').value=d.ip||'';
+if($('#oscBroadcast')) $('#oscBroadcast').checked=!!d.broadcast;
+
+
+const oscTarget = $('#oscTarget');
+ const oscIpRow = $('#oscIpRow');
+ if (oscTarget && oscIpRow) {
+ if (oscTarget.value === 'ip') {
+ oscIpRow.style.display = 'block';
+ } else {
+ oscIpRow.style.display = 'none';
+ }
  }
  } catch(err) {
- console.log('Erreur chargement pins:', err);
+ console.log('Erreur chargement OSC:', err);
+ }
+}
+
+async function loadStaConfig(){
+ try {
+ const r=await fetch('/api/sta/status');
+ const d=await r.json();
+ if($('#ssid')) $('#ssid').value=d.ssid||'';
+ 
+ if($('#pass')) {
+ const currentValue = $('#pass').value;
+ $('#pass').placeholder=d.has_pass ? '•••••••• (déjà configuré)' : 'Mot de passe';
+ 
+ if(!currentValue || currentValue === '') {
+ $('#pass').value='';
  }
  }
- 
- 
- function initForms(){
- 
+ } catch(err) {
+ console.log('Erreur chargement STA:', err);
+ }
+}
+
+function initForms(){
  const oscTarget = $('#oscTarget');
  const oscIpRow = $('#oscIpRow');
  const oscBroadcast = $('#oscBroadcast');
@@ -103,7 +164,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  updateOscForm();
  }
  
- 
  $('#mdns').addEventListener('submit', async (e) => {
  e.preventDefault();
  const formData = new FormData();
@@ -119,7 +179,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  }
  });
  
- 
  $('#sta').addEventListener('submit', async (e) => {
  e.preventDefault();
  const formData = new FormData();
@@ -134,13 +193,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  setTimeout(() => location.reload(), 2000);
  }
  } catch (err) {
- 
  $('#staMsg').textContent = 'Configuration enregistrée, redémarrage...';
  $('#staMsg').style.color = '#059669';
  setTimeout(() => location.reload(), 5000);
  }
  });
- 
  
  $('#osc').addEventListener('submit', async (e) => {
  e.preventDefault();
@@ -149,11 +206,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  formData.append('target', target);
  formData.append('port', $('#oscPort').value);
  
- 
  if (target === 'ip' && $('#oscIp').value) {
  formData.append('ip', $('#oscIp').value);
  }
- 
  
  if ($('#oscBroadcast')) {
  formData.append('broadcast', $('#oscBroadcast').checked ? 'true' : 'false');
@@ -169,71 +224,110 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  $('#oscMsg').style.color = '#dc2626';
  }
  });
+}
+
+async function loadCaps(){
+ const r=await fetch('/api/pins/caps');
+ caps=await r.json();
+}
+
+async function loadConfiguredPins(){
+ try {
+ const r=await fetch('/api/pins/list');
+ const d=await r.json();
+ if(d.pins && Array.isArray(d.pins)) {
+ d.pins.forEach(pinData => {
+ if(pinData.pinLabel && pinData.role) {
+ pcfg[pinData.pinLabel] = pinData;
+ }
+ });
+ updatePinsList();
+ updateBusVisuals();
+ }
+ } catch(err) {
+ console.log('Erreur chargement pins:', err);
+ }
+}
+
+async function saveAll(){
+ const msg=$('#saveAllMsg');
+ msg.textContent='Enregistrement...';
+ try{
+ const ps=Object.keys(pcfg).map(async lbl=>{
+ const c=pcfg[lbl];
+ if(!c||!c.role) return;
+ const p=new URLSearchParams();
+ p.set('pinLabel',lbl);
+ p.set('role',c.role);
+ if(c.rtpEnabled) p.set('rtpEnabled','true');
+ if(c.rtpType) p.set('rtpType',c.rtpType);
+ if(c.rtpNote) p.set('rtpNote',c.rtpNote);
+ if(c.rtpCc) p.set('rtpCc',c.rtpCc);
+ if(c.rtpPc) p.set('rtpPc',c.rtpPc);
+ if(c.rtpChan) p.set('rtpChan',c.rtpChan);
+ if(c.rtpCcOn) p.set('rtpCcOn',c.rtpCcOn);
+ if(c.rtpCcOff) p.set('rtpCcOff',c.rtpCcOff);
+ if(c.rtpVel) p.set('rtpVel',c.rtpVel);
+ if(c.rtpCcMin) p.set('rtpCcMin',c.rtpCcMin);
+ if(c.rtpCcMax) p.set('rtpCcMax',c.rtpCcMax);
+ if(c.rtpNoteMin) p.set('rtpNoteMin',c.rtpNoteMin);
+ if(c.rtpNoteMax) p.set('rtpNoteMax',c.rtpNoteMax);
+ if(c.rtpNoteVelFix) p.set('rtpNoteVelFix',c.rtpNoteVelFix);
+ if(c.rtpNoteSweepAutoOffDelay) p.set('rtpNoteSweepAutoOffDelay',c.rtpNoteSweepAutoOffDelay);
+ if(c.ledMode) p.set('ledMode',c.ledMode);
+ if(c.btnMode) p.set('btnMode',c.btnMode);
+ if(c.btnPulseTiming) p.set('btnPulseTiming',c.btnPulseTiming);
+ if(c.potFilter) p.set('potFilter',c.potFilter);
+ if(c.filterIntensity) p.set('filterIntensity',c.filterIntensity);
+ if(c.oscEnabled) p.set('oscEnabled','true');
+ if(c.oscAddress) p.set('oscAddress',c.oscAddress);
+ if(c.oscFormat) p.set('oscFormat',c.oscFormat);
+ if(c.dbgEnabled) p.set('dbgEnabled','true');
+ if(c.dbgHeader) p.set('dbgHeader',c.dbgHeader);
+ return fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
+ });
+ await Promise.all(ps);
+ 
+ const listRes=await fetch('/api/pins/list');
+ const listData=await listRes.json();
+ const serverPins=new Set();
+ if(listData.pins && Array.isArray(listData.pins)){
+ listData.pins.forEach(p=>{
+ if(p.pinLabel) serverPins.add(p.pinLabel);
+ });
  }
  
- function drawBoard(){ const L=$('#pinsLeft'),R=$('#pinsRight'); if(!L||!R||!caps||!caps.pins)return; L.innerHTML=''; R.innerHTML=''; const RH=28; const H=20;
- const isS3=caps.board&&caps.board.toLowerCase().includes('s3');
- const W=isS3?32:44; const GAP=isS3?2:4; const COL=isS3?{c1:20,c2:54,c3:88,c4:238,c5:272,c6:306}:{c1:20,c2:68,c4:238,c5:286};
+ const localPins=new Set(Object.keys(pcfg));
+ const toDelete=Array.from(serverPins).filter(p=>!localPins.has(p));
+ const deletePromises=toDelete.map(async pinLabel=>{
+ const p=new URLSearchParams();
+ p.set('pin',pinLabel);
+ return fetch('/api/pins/delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
+ });
+ await Promise.all(deletePromises);
  
- const getMuxUsedGpios=()=>{ const used=new Set(); muxList.forEach(m=>{ if(m.sig!==undefined&&m.sig!==null)used.add(m.sig); if(m.s0!==undefined&&m.s0!==null)used.add(m.s0); if(m.s1!==undefined&&m.s1!==null)used.add(m.s1); if(m.s2!==undefined&&m.s2!==null)used.add(m.s2); if(m.s3!==undefined&&m.s3!==null)used.add(m.s3); if(m.en!==undefined&&m.en!==null&&m.en!==255)used.add(m.en); }); return used; };
- const muxUsedGpios=getMuxUsedGpios();
- 
- const isGpioUsedByMux=(gpio)=>muxUsedGpios.has(gpio);
- const mk=(x,y,w,h,fill,stroke,label,clk=true,small=false,isUsedByMux=false)=>{ const g=document.createElementNS('http://www.w3.org/2000/svg','g'); const r=document.createElementNS('http://www.w3.org/2000/svg','rect'); r.setAttribute('x',x); r.setAttribute('y',y); r.setAttribute('width',w); r.setAttribute('height',h); r.setAttribute('rx','4'); if(isUsedByMux){ r.setAttribute('fill',fill); r.setAttribute('stroke',stroke); r.setAttribute('opacity','0.4'); }else{ r.setAttribute('fill',fill); r.setAttribute('stroke',stroke); } g.appendChild(r); const t=document.createElementNS('http://www.w3.org/2000/svg','text'); t.setAttribute('x',x+w/2); t.setAttribute('y',y+h/2+1); t.setAttribute('text-anchor','middle'); t.setAttribute('class','svg-t'); if(small)t.setAttribute('style','font-size:7px'); if(isUsedByMux)t.setAttribute('opacity','0.6'); t.textContent=label; g.appendChild(t); if(clk&&label){ g.style.cursor='pointer'; r.dataset.label=label; prect[label]=r; r.addEventListener('click',()=>{ if(window._selRect) window._selRect.classList.remove('selectedSquare'); window._selRect=r; r.classList.add('selectedSquare'); cur=label; $('#selPin').textContent=label; handlePinClick(label); updFunc(label); if(pcfg[cur]) applyCfg(pcfg[cur]); }); } return g; };
- const getPinColor=(label)=>{ if(['TX','RX'].includes(label))return FC.UART; if(label.startsWith('A')||label.startsWith('M'))return FC.ANALOG; if(['SDA','SCL'].includes(label))return FC.I2C; if(['MOSI','MISO','SCK'].includes(label))return FC.SPI; return FC.DIGITAL; };
- const pins=caps.pins; const gpioMap=new Map(); pins.forEach(p=>{ if(!gpioMap.has(p.gpio))gpioMap.set(p.gpio,[]); gpioMap.get(p.gpio).push(p); });
- const getAlias=(gpio,prefix)=>{ const ps=gpioMap.get(gpio)||[]; return ps.find(p=>p.label.startsWith(prefix))?.label||''; };
- const getBus=(gpio)=>{ const ps=gpioMap.get(gpio)||[]; return ps.find(p=>['SDA','SCL','TX','RX','MOSI','MISO','SCK'].includes(p.label))?.label||''; };
- const isSmall=(lbl)=>['MOSI','MISO'].includes(lbl);
- 
- const isLabelUsedByMux=(label)=>{ if(!label)return false; const pin=pins.find(p=>p.label===label); return pin?isGpioUsedByMux(pin.gpio):false; };
- let leftRow=0,rightRow=0;
- if(isS3){
- const left3=(row,busLbl,adcLbl,dLbl)=>{ const y=30+row*RH; const f=document.createDocumentFragment(); if(busLbl){ f.appendChild(mk(COL.c1,y-10,W,H,getPinColor(busLbl),'#9ca3af',busLbl,true,isSmall(busLbl),isLabelUsedByMux(busLbl))); }else{ f.appendChild(mk(COL.c1,y-10,W,H,'#9ca3af','#9ca3af','',false)); } if(adcLbl){ f.appendChild(mk(COL.c2,y-10,W,H,FC.ANALOG,'#9ca3af',adcLbl,true,false,isLabelUsedByMux(adcLbl))); }else{ f.appendChild(mk(COL.c2,y-10,W,H,'#9ca3af','#9ca3af','',false)); } f.appendChild(mk(COL.c3,y-10,W,H,FC.DIGITAL,'#9ca3af',dLbl,true,false,isLabelUsedByMux(dLbl))); L.appendChild(f); };
- const right3=(row,dLbl,adcLbl,busLbl)=>{ const y=30+row*RH; const f=document.createDocumentFragment(); f.appendChild(mk(COL.c4,y-10,W,H,FC.DIGITAL,'#9ca3af',dLbl,true,false,isLabelUsedByMux(dLbl))); if(adcLbl){ f.appendChild(mk(COL.c5,y-10,W,H,FC.ANALOG,'#9ca3af',adcLbl,true,false,isLabelUsedByMux(adcLbl))); }else{ f.appendChild(mk(COL.c5,y-10,W,H,'#9ca3af','#9ca3af','',false)); } if(busLbl){ f.appendChild(mk(COL.c6,y-10,W,H,getPinColor(busLbl),'#9ca3af',busLbl,true,isSmall(busLbl),isLabelUsedByMux(busLbl))); }else{ f.appendChild(mk(COL.c6,y-10,W,H,'#9ca3af','#9ca3af','',false)); } R.appendChild(f); };
- const dPins=pins.filter(p=>p.label.startsWith('D')).sort((a,b)=>{ const na=parseInt(a.label.substring(1)); const nb=parseInt(b.label.substring(1)); return na-nb; });
- const displayed=new Set();
- dPins.filter(p=>{ const n=parseInt(p.label.substring(1)); return n<=6; }).forEach(p=>{ if(displayed.has(p.gpio))return; displayed.add(p.gpio); const busLbl=getBus(p.gpio); const adcLbl=getAlias(p.gpio,'A'); left3(leftRow++,busLbl,adcLbl,p.label); });
- const rightPow3=(row,label,color)=>{ const y=30+row*RH; const f=document.createDocumentFragment(); f.appendChild(mk(COL.c4,y-10,W,H,color,'#9ca3af',label,false)); f.appendChild(mk(COL.c5,y-10,W,H,'#9ca3af','#9ca3af','',false)); f.appendChild(mk(COL.c6,y-10,W,H,'#9ca3af','#9ca3af','',false)); R.appendChild(f); };
- rightPow3(rightRow++,'5V',FC.POWER); rightPow3(rightRow++,'GND',FC.GND); rightPow3(rightRow++,'3V3',FC.POWER);
- dPins.filter(p=>{ const n=parseInt(p.label.substring(1)); return n>=7; }).sort((a,b)=>{ const na=parseInt(a.label.substring(1)); const nb=parseInt(b.label.substring(1)); return nb-na; }).forEach(p=>{ if(displayed.has(p.gpio))return; displayed.add(p.gpio); const adcLbl=getAlias(p.gpio,'A'); const busLbl=getBus(p.gpio); right3(rightRow++,p.label,adcLbl,busLbl); });
- }else{
- const left=(row,tl,tc,dl)=>{ const y=30+row*RH; const f=document.createDocumentFragment(); if(tl){ f.appendChild(mk(COL.c1,y-10,W,H,tc,'#9ca3af',tl,true,false,isLabelUsedByMux(tl))); }else{ f.appendChild(mk(COL.c1,y-10,W,H,'#9ca3af','#9ca3af','',false)); } f.appendChild(mk(COL.c2,y-10,W,H,FC.DIGITAL,'#9ca3af',dl,true,false,isLabelUsedByMux(dl))); L.appendChild(f); };
- const leftPins=[]; const displayedGpios=new Set();
- const analogPins=pins.filter(p=>p.label.startsWith('A')&&p.caps.adc).sort((a,b)=>a.label.localeCompare(b.label));
- const i2cPins=pins.filter(p=>['SDA','SCL'].includes(p.label)).sort((a,b)=>a.label==='SDA'?-1:1);
- const uartPins=pins.filter(p=>['TX','RX'].includes(p.label)).sort((a,b)=>a.label==='TX'?-1:1);
- analogPins.forEach(p=>{ leftPins.push({gpio:p.gpio,label:p.label,color:getPinColor(p.label),dLabel:getAlias(p.gpio,'D')}); displayedGpios.add(p.gpio); });
- const digitalPins=pins.filter(p=>p.label.startsWith('D')&&!displayedGpios.has(p.gpio)&&!['SDA','SCL','MOSI','MISO','SCK','TX','RX'].some(bus=>pins.find(bp=>bp.label===bus&&bp.gpio===p.gpio))).sort((a,b)=>{ const na=parseInt(a.label.substring(1)); const nb=parseInt(b.label.substring(1)); return na-nb; });
- digitalPins.forEach(p=>{ leftPins.push({gpio:p.gpio,label:'',color:FC.DIGITAL,dLabel:p.label}); displayedGpios.add(p.gpio); });
- i2cPins.forEach(p=>{ leftPins.push({gpio:p.gpio,label:p.label,color:getPinColor(p.label),dLabel:getAlias(p.gpio,'D')}); displayedGpios.add(p.gpio); });
- const uartTx=uartPins.find(p=>p.label==='TX'); if(uartTx){ leftPins.push({gpio:uartTx.gpio,label:uartTx.label,color:getPinColor(uartTx.label),dLabel:getAlias(uartTx.gpio,'D')}); displayedGpios.add(uartTx.gpio); }
- leftPins.sort((a,b)=>a.gpio-b.gpio);
- leftPins.forEach(p=>{ left(leftRow++,p.label,p.color,p.dLabel); });
+ msg.textContent='Toutes les configurations enregistrées';
+ msg.style.color='#10b981';
+ }catch(e){
+ msg.textContent='Erreur lors de l\'enregistrement';
+ msg.style.color='#ef4444';
+ console.error('Erreur saveAll:',e);
  }
- const rightPow=(row,label,color)=>{ const y=30+row*RH; R.appendChild(mk(COL.c4,y-10,W,H,color,'#9ca3af',label,false)); };
- const right=(row,dl,tl,tc)=>{ const y=30+row*RH; const f=document.createDocumentFragment(); f.appendChild(mk(COL.c4,y-10,W,H,FC.DIGITAL,'#9ca3af',dl,true,false,isLabelUsedByMux(dl))); f.appendChild(mk(COL.c5,y-10,W,H,tc,'#9ca3af',tl,true,isSmall(tl),isLabelUsedByMux(tl))); R.appendChild(f); };
- if(!isS3){
- rightPow(rightRow++,'5V',FC.POWER); rightPow(rightRow++,'GND',FC.GND); rightPow(rightRow++,'3V3',FC.POWER);
- const spiPins=pins.filter(p=>['MOSI','MISO','SCK'].includes(p.label)).sort((a,b)=>{ const o={MOSI:0,MISO:1,SCK:2}; return (o[a.label]||99)-(o[b.label]||99); });
- spiPins.forEach(p=>{ right(rightRow++,getAlias(p.gpio,'D'),p.label,getPinColor(p.label)); });
- const uartRx=pins.find(p=>p.label==='RX'); if(uartRx){ right(rightRow++,getAlias(uartRx.gpio,'D'),uartRx.label,getPinColor(uartRx.label)); }
- }
- const boardNameEl=$('#boardName'); if(boardNameEl&&caps.board){ const boardUpper=caps.board.toUpperCase().replace('-','-'); boardNameEl.textContent=boardUpper; }
- }
- 
- function pType(lbl){ 
- if(['TX','RX'].includes(lbl)) return 'uart'; 
- if(lbl.startsWith('A')) return 'analog'; 
- if(['SDA','SCL','I2C'].includes(lbl)) return 'i2c'; 
- if(['MOSI','MISO','SCK','SPI'].includes(lbl)) return 'spi'; 
- return 'digital'; 
- }
- 
- function stat(cfg, pinLabel){ 
+}
+
+
+
+function pType(lbl){
+ if(['TX','RX'].includes(lbl)) return 'uart';
+ if(lbl.startsWith('A')) return 'analog';
+ if(['SDA','SCL','I2C'].includes(lbl)) return 'i2c';
+ if(['MOSI','MISO','SCK','SPI'].includes(lbl)) return 'spi';
+ return 'digital';
+}
+
+function stat(cfg, pinLabel){
  if(cfg.role==='Potentiomètre') {
  if(!cfg.rtpEnabled) return 'Raw';
- 
  if(cfg.rtpType === 'Control Change') return `CC#${cfg.rtpCc||7}`;
  if(cfg.rtpType === 'Program Change') return `PC#${cfg.rtpPc||0}`;
  if(cfg.rtpType === 'Pitch Bend') return 'Pitch Bend';
@@ -242,7 +336,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  }
  if(cfg.role==='Bouton') {
  if(!cfg.rtpEnabled) return 'Digital';
- 
  if(cfg.rtpType === 'Note') return `Note ${cfg.rtpNote||60}`;
  if(cfg.rtpType === 'Control Change') return `CC#${cfg.rtpCc||7}`;
  if(cfg.rtpType === 'Program Change') return `PC#${cfg.rtpPc||0}`;
@@ -256,19 +349,20 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  if(cfg.role==='I2C') return 'I2C';
  if(cfg.role==='SPI') return 'SPI';
  if(cfg.role==='UART') return pinLabel?.includes('TX') ? 'TX' : 'RX';
- return cfg.role||''; 
- }
- 
- function updatePinsList(){ const pl=$('#pinsList'); if(!pl) return; pl.innerHTML=''; Object.keys(pcfg).forEach(lbl=>{ const cfg=pcfg[lbl]; if(!cfg||!cfg.role) return; const isMuxPin=lbl.startsWith('M'); if(isMuxPin) return; const it=document.createElement('div'); it.className=`item ${pType(lbl)}`; it.innerHTML=`<span class="lbl">${lbl}</span><span class="role">${cfg.role}</span><span class="stat">${stat(cfg, lbl)}</span><button class="del-btn">×</button>`; it.onclick=()=>{ const r=prect[lbl]; if(r) r.dispatchEvent(new Event('click')); }; const delBtn=it.querySelector('.del-btn'); if(delBtn) delBtn.onclick=(e)=>{ e.stopPropagation(); delete pcfg[lbl]; updatePinsList(); updateBusVisuals(); }; pl.appendChild(it); }); muxList.forEach(m=>{ const it=document.createElement('div'); it.className='item mux'; it.style.borderLeftColor='#8B5CF6'; it.innerHTML=`<span class="lbl">MUX${m.id}</span><span class="role">HC4067</span><span class="stat">16 canaux</span>`; it.onclick=()=>{ showMuxForm(m.id); }; pl.appendChild(it); }); }
- 
- function updateBusVisuals(){
- 
+ return cfg.role||'';
+}
+
+function setOptions(sel,arr,pre=0){
+ if(!sel) return;
+ sel.innerHTML=arr.map((o,i)=>`<option ${i===pre?'selected':''}>${o}</option>`).join('');
+}
+
+function updateBusVisuals(){
  Object.keys(prect).forEach(lbl=>{
  const r = prect[lbl];
  if(!r) return;
  r.classList.remove('busDisabled');
  });
- 
  
  if(pcfg['I2C']){
  ['SDA','SCL','D4','D5'].forEach(lbl=>{
@@ -278,7 +372,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  });
  }
  
- 
  if(pcfg['SPI']){
  ['MOSI','MISO','SCK','D8','D9','D10'].forEach(lbl=>{
  const r = prect[lbl];
@@ -286,11 +379,341 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  r.classList.add('busDisabled');
  });
  }
+}
+
+function drawBoard(){
+ const L=$('#pinsLeft'),R=$('#pinsRight');
+ if(!L||!R||!caps||!caps.pins)return;
+ L.innerHTML='';
+ R.innerHTML='';
+ const RH=28;
+ const H=20;
+ const isS3=caps.board&&caps.board.toLowerCase().includes('s3');
+ const W=isS3?32:44;
+ const COL=isS3?{c1:20,c2:54,c3:88,c4:238,c5:272,c6:306}:{c1:20,c2:68,c4:238,c5:286};
+ 
+ const mk=(x,y,w,h,fill,stroke,label,clk=true)=>{
+ const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+ const r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+ r.setAttribute('x',x);
+ r.setAttribute('y',y);
+ r.setAttribute('width',w);
+ r.setAttribute('height',h);
+ r.setAttribute('rx','4');
+ r.setAttribute('fill',fill);
+ r.setAttribute('stroke',stroke);
+ g.appendChild(r);
+ if(label){
+ const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+ t.setAttribute('x',x+w/2);
+ t.setAttribute('y',y+h/2+1);
+ t.setAttribute('text-anchor','middle');
+ t.setAttribute('class','svg-t');
+ t.textContent=label;
+ g.appendChild(t);
+ }
+ if(clk&&label){
+ g.style.cursor='pointer';
+ r.dataset.label=label;
+ prect[label]=r;
+ r.addEventListener('click',()=>{
+ if(window._selRect) window._selRect.classList.remove('selectedSquare');
+ window._selRect=r;
+ r.classList.add('selectedSquare');
+ cur=label;
+ $('#selPin').textContent=label;
+ handlePinClick(label);
+ updFunc(label);
+ if(pcfg[cur]) applyCfg(pcfg[cur]);
+ });
+ }
+ return g;
+ };
+ 
+ const getPinColor=(label)=>{
+ if(['TX','RX'].includes(label))return FC.UART;
+ if(label.startsWith('A'))return FC.ANALOG;
+ if(['SDA','SCL'].includes(label))return FC.I2C;
+ if(['MOSI','MISO','SCK'].includes(label))return FC.SPI;
+ return FC.DIGITAL;
+ };
+ 
+ const pins=caps.pins;
+ const gpioMap=new Map();
+ pins.forEach(p=>{
+ if(!gpioMap.has(p.gpio))gpioMap.set(p.gpio,[]);
+ gpioMap.get(p.gpio).push(p);
+ });
+ 
+ const getAlias=(gpio,prefix)=>{
+ const ps=gpioMap.get(gpio)||[];
+ return ps.find(p=>p.label.startsWith(prefix))?.label||'';
+ };
+ 
+ const getBus=(gpio)=>{
+ const ps=gpioMap.get(gpio)||[];
+ return ps.find(p=>['SDA','SCL','TX','RX','MOSI','MISO','SCK'].includes(p.label))?.label||'';
+ };
+ 
+ if(isS3){
+ const left3=(row,busLbl,adcLbl,dLbl)=>{
+ const y=30+row*RH;
+ const f=document.createDocumentFragment();
+ if(busLbl){
+ f.appendChild(mk(COL.c1,y-10,W,H,getPinColor(busLbl),'#9ca3af',busLbl));
+ }else{
+ f.appendChild(mk(COL.c1,y-10,W,H,'#9ca3af','#9ca3af','',false));
+ }
+ if(adcLbl){
+ f.appendChild(mk(COL.c2,y-10,W,H,FC.ANALOG,'#9ca3af',adcLbl));
+ }else{
+ f.appendChild(mk(COL.c2,y-10,W,H,'#9ca3af','#9ca3af','',false));
+ }
+ f.appendChild(mk(COL.c3,y-10,W,H,FC.DIGITAL,'#9ca3af',dLbl));
+ L.appendChild(f);
+ };
+ 
+ const right3=(row,dLbl,adcLbl,busLbl)=>{
+ const y=30+row*RH;
+ const f=document.createDocumentFragment();
+ f.appendChild(mk(COL.c4,y-10,W,H,FC.DIGITAL,'#9ca3af',dLbl));
+ if(adcLbl){
+ f.appendChild(mk(COL.c5,y-10,W,H,FC.ANALOG,'#9ca3af',adcLbl));
+ }else{
+ f.appendChild(mk(COL.c5,y-10,W,H,'#9ca3af','#9ca3af','',false));
+ }
+ if(busLbl){
+ f.appendChild(mk(COL.c6,y-10,W,H,getPinColor(busLbl),'#9ca3af',busLbl));
+ }else{
+ f.appendChild(mk(COL.c6,y-10,W,H,'#9ca3af','#9ca3af','',false));
+ }
+ R.appendChild(f);
+ };
+ 
+ const dPins=pins.filter(p=>p.label.startsWith('D')).sort((a,b)=>{
+ const na=parseInt(a.label.substring(1));
+ const nb=parseInt(b.label.substring(1));
+ return na-nb;
+ });
+ const displayed=new Set();
+ let leftRow=0,rightRow=0;
+ 
+ dPins.filter(p=>{
+ const n=parseInt(p.label.substring(1));
+ return n<=6;
+ }).forEach(p=>{
+ if(displayed.has(p.gpio))return;
+ displayed.add(p.gpio);
+ const busLbl=getBus(p.gpio);
+ const adcLbl=getAlias(p.gpio,'A');
+ left3(leftRow++,busLbl,adcLbl,p.label);
+ });
+ 
+ R.appendChild(mk(COL.c4,30+rightRow*RH-10,W,H,FC.POWER,'#9ca3af','5V',false));
+ rightRow++;
+ R.appendChild(mk(COL.c4,30+rightRow*RH-10,W,H,FC.GND,'#9ca3af','GND',false));
+ rightRow++;
+ R.appendChild(mk(COL.c4,30+rightRow*RH-10,W,H,FC.POWER,'#9ca3af','3V3',false));
+ rightRow++;
+ 
+ dPins.filter(p=>{
+ const n=parseInt(p.label.substring(1));
+ return n>=7;
+ }).sort((a,b)=>{
+ const na=parseInt(a.label.substring(1));
+ const nb=parseInt(b.label.substring(1));
+ return nb-na;
+ }).forEach(p=>{
+ if(displayed.has(p.gpio))return;
+ displayed.add(p.gpio);
+ const adcLbl=getAlias(p.gpio,'A');
+ const busLbl=getBus(p.gpio);
+ right3(rightRow++,p.label,adcLbl,busLbl);
+ });
+ }else{
+ const left=(row,tl,tc,dl)=>{
+ const y=30+row*RH;
+ const f=document.createDocumentFragment();
+ if(tl){
+ f.appendChild(mk(COL.c1,y-10,W,H,tc,'#9ca3af',tl));
+ }else{
+ f.appendChild(mk(COL.c1,y-10,W,H,'#9ca3af','#9ca3af','',false));
+ }
+ f.appendChild(mk(COL.c2,y-10,W,H,FC.DIGITAL,'#9ca3af',dl));
+ L.appendChild(f);
+ };
+ 
+ const analogPins=pins.filter(p=>p.label.startsWith('A')&&p.caps.adc).sort((a,b)=>a.label.localeCompare(b.label));
+ const i2cPins=pins.filter(p=>['SDA','SCL'].includes(p.label)).sort((a,b)=>a.label==='SDA'?-1:1);
+ const uartPins=pins.filter(p=>['TX','RX'].includes(p.label)).sort((a,b)=>a.label==='TX'?-1:1);
+ const digitalPins=pins.filter(p=>p.label.startsWith('D')&&!['SDA','SCL','MOSI','MISO','SCK','TX','RX'].some(bus=>pins.find(bp=>bp.label===bus&&bp.gpio===p.gpio))).sort((a,b)=>{
+ const na=parseInt(a.label.substring(1));
+ const nb=parseInt(b.label.substring(1));
+ return na-nb;
+ });
+ 
+ const leftPins=[];
+ const displayedGpios=new Set();
+ let leftRow=0,rightRow=0;
+ 
+ analogPins.forEach(p=>{
+ leftPins.push({gpio:p.gpio,label:p.label,color:getPinColor(p.label),dLabel:getAlias(p.gpio,'D')});
+ displayedGpios.add(p.gpio);
+ });
+ 
+ digitalPins.forEach(p=>{
+ if(!displayedGpios.has(p.gpio)){
+ leftPins.push({gpio:p.gpio,label:'',color:FC.DIGITAL,dLabel:p.label});
+ displayedGpios.add(p.gpio);
+ }
+ });
+ 
+ i2cPins.forEach(p=>{
+ leftPins.push({gpio:p.gpio,label:p.label,color:getPinColor(p.label),dLabel:getAlias(p.gpio,'D')});
+ displayedGpios.add(p.gpio);
+ });
+ 
+ const uartTx=uartPins.find(p=>p.label==='TX');
+ if(uartTx){
+ leftPins.push({gpio:uartTx.gpio,label:uartTx.label,color:getPinColor(uartTx.label),dLabel:getAlias(uartTx.gpio,'D')});
+ displayedGpios.add(uartTx.gpio);
  }
  
- function setOptions(sel,arr,pre=0){ if(!sel) return; sel.innerHTML=arr.map((o,i)=>`<option ${i===pre?'selected':''}>${o}</option>`).join(''); }
- function showRoleCards(role){ const b=$('#cardBtn'), l=$('#cardLed'), p=$('#cardPot'); if(b) b.style.display=(role==='Bouton')?'block':'none'; if(l) l.style.display=(role==='LED')?'block':'none'; if(p) p.style.display=(role==='Potentiomètre')?'block':'none'; }
- function updateRtpForRole(role){
+ leftPins.sort((a,b)=>a.gpio-b.gpio);
+ leftPins.forEach(p=>{
+ left(leftRow++,p.label,p.color,p.dLabel);
+ });
+ 
+ R.appendChild(mk(COL.c4,30+rightRow*RH-10,W,H,FC.POWER,'#9ca3af','5V',false));
+ rightRow++;
+ R.appendChild(mk(COL.c4,30+rightRow*RH-10,W,H,FC.GND,'#9ca3af','GND',false));
+ rightRow++;
+ R.appendChild(mk(COL.c4,30+rightRow*RH-10,W,H,FC.POWER,'#9ca3af','3V3',false));
+ rightRow++;
+ 
+ const right=(row,dl,tl,tc)=>{
+ const y=30+row*RH;
+ const f=document.createDocumentFragment();
+ f.appendChild(mk(COL.c4,y-10,W,H,FC.DIGITAL,'#9ca3af',dl));
+ f.appendChild(mk(COL.c5,y-10,W,H,tc,'#9ca3af',tl));
+ return f;
+ };
+ 
+ const spiPins=pins.filter(p=>['MOSI','MISO','SCK'].includes(p.label)).sort((a,b)=>{
+ const o={MOSI:0,MISO:1,SCK:2};
+ return (o[a.label]||99)-(o[b.label]||99);
+ });
+ spiPins.forEach(p=>{
+ R.appendChild(right(rightRow++,getAlias(p.gpio,'D'),p.label,getPinColor(p.label)));
+ });
+ 
+ const uartRx=pins.find(p=>p.label==='RX');
+ if(uartRx){
+ R.appendChild(right(rightRow++,getAlias(uartRx.gpio,'D'),uartRx.label,getPinColor(uartRx.label)));
+ }
+ }
+ 
+ const boardNameEl=$('#boardName');
+ if(boardNameEl&&caps.board){
+ const boardUpper=caps.board.toUpperCase().replace('-','-');
+ boardNameEl.textContent=boardUpper;
+ }
+ 
+ updateBusVisuals();
+}
+
+function updatePinsList(){
+ const pl=$('#pinsList');
+ if(!pl) return;
+ pl.innerHTML='';
+ Object.keys(pcfg).forEach(lbl=>{
+ const cfg=pcfg[lbl];
+ if(!cfg||!cfg.role) return;
+ const isMuxPin=lbl.startsWith('M');
+ if(isMuxPin) return;
+ const it=document.createElement('div');
+ it.className=`item ${pType(lbl)}`;
+ it.innerHTML=`<span class="lbl">${lbl}</span><span class="role">${cfg.role}</span><span class="stat">${stat(cfg, lbl)}</span><button class="del-btn">×</button>`;
+ it.onclick=()=>{
+ 
+ if(window._selRect) window._selRect.classList.remove('selectedSquare');
+ const r=prect[lbl];
+ if(r){
+ window._selRect=r;
+ r.classList.add('selectedSquare');
+ }
+ 
+ cur=lbl;
+ $('#selPin').textContent=lbl;
+ 
+ updFunc(lbl);
+ if(pcfg[lbl]) applyCfg(pcfg[lbl]);
+ };
+ const delBtn=it.querySelector('.del-btn');
+ if(delBtn) delBtn.onclick=(e)=>{
+ e.stopPropagation();
+ delete pcfg[lbl];
+ updatePinsList();
+ updateBusVisuals();
+ };
+ pl.appendChild(it);
+ });
+}
+
+
+
+function showRoleCards(role){
+ const b=$('#cardBtn'), l=$('#cardLed'), p=$('#cardPot');
+ if(b) b.style.display=(role==='Bouton')?'block':'none';
+ if(l) l.style.display=(role==='LED')?'block':'none';
+ if(p) p.style.display=(role==='Potentiomètre')?'block':'none';
+}
+
+function updFunc(lbl){
+ const sel=$('#funcSelect');
+ if(!sel) return;
+ const isI2C=(lbl==='SDA'||lbl==='SCL');
+ const isSPI=(lbl==='MOSI'||lbl==='MISO'||lbl==='SCK');
+ const isUART=(lbl==='TX'||lbl==='RX');
+ const isMuxPin=lbl.startsWith('M');
+ if(/^A\d+$/.test(lbl)||isMuxPin){
+ setOptions(sel,['Potentiomètre','Analog in (raw)'],0);
+ } else if(/^D\d+$/.test(lbl) && !isI2C && !isSPI && !isUART){
+ setOptions(sel,['Bouton','LED','Digital in/out'],0);
+ } else if(isI2C){
+ setOptions(sel,['I2C'],0);
+ } else if(isSPI){
+ setOptions(sel,['SPI'],0);
+ } else if(isUART){
+ setOptions(sel,['UART'],0);
+ } else {
+ setOptions(sel,[],0);
+ }
+ showRoleCards(sel.value||'');
+ updateRtpForRole(sel.value||'');
+ 
+ const updateConfig=()=>{
+ showRoleCards(sel.value||'');
+ updateRtpForRole(sel.value||'');
+ updateBtnPulseTimingVisibility();
+ if(cur){
+ pcfg[cur]=readCfg();
+ updatePinsList();
+ updateBusVisuals();
+ }
+ };
+ 
+ sel.onchange=updateConfig;
+ 
+ const inputs=['#btnMode','#btnPulseTiming','#ledMode','#potFilter','#filterIntensity','#rtpEnabled2','#rtpMsgType','#rtpNote','#rtpCc','#rtpPc','#rtpChan','#rtpCcOn','#rtpCcOff','#rtpVel','#rtpCcMin','#rtpCcMax','#rtpNoteMin','#rtpNoteMax','#rtpNoteVelFix','#rtpNoteSweepAutoOffDelay','#oscEnabled2','#oscAddress','#oscFormat','#dbgEnabled','#dbgHeader'];
+ inputs.forEach(id=>{
+ const el=$(id);
+ if(el) el.addEventListener('change',updateConfig);
+ if(el) el.addEventListener('input',updateConfig);
+ });
+}
+
+function updateRtpForRole(role){
  const rtpEnable = $('#rtpEnabled2');
  const rtpType = $('#rtpMsgType');
  const rtpParams = $('#rtpParams');
@@ -314,15 +737,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  }
  if(rtpParams){ rtpParams.style.display = enabled ? 'block' : 'none'; }
  if(enabled) updateRtpParamsVisibility();
- }
+}
 
- function updateBtnPulseTimingVisibility(){
- const btnMode = $('#btnMode');
- const pulseTimingRow = $('#btnPulseTimingRow');
- if(!btnMode || !pulseTimingRow) return;
- pulseTimingRow.style.display = (btnMode.value === 'pulse') ? 'flex' : 'none';
- }
- function updateRtpParamsVisibility(){
+function updateRtpParamsVisibility(){
  const typeSel = $('#rtpMsgType');
  const params = $('#rtpParams');
  const noteRow = $('#rtpNoteRow');
@@ -366,785 +783,637 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  } else if(v==='Clock' || v==='Tap Tempo'){
  if(clockHint) clockHint.style.display='flex';
  }
- }
+}
 
- function updFunc(lbl){ const sel=$('#funcSelect'); if(!sel) return; const isI2C=(lbl==='SDA'||lbl==='SCL'); const isSPI=(lbl==='MOSI'||lbl==='MISO'||lbl==='SCK'); const isUART=(lbl==='TX'||lbl==='RX'); const isMuxPin=lbl.startsWith('M'); if(/^A\d+$/.test(lbl)||isMuxPin){ setOptions(sel,['Potentiomètre','Analog in (raw)'],0); } else if(/^D\d+$/.test(lbl) && !isI2C && !isSPI && !isUART){ setOptions(sel,['Bouton','LED','Digital in/out'],0); } else if(isI2C){ setOptions(sel,['I2C'],0); } else if(isSPI){ setOptions(sel,['SPI'],0); } else if(isUART){ setOptions(sel,['UART'],0); } else { setOptions(sel,[],0); } showRoleCards(sel.value||''); updateRtpForRole(sel.value||''); sel.onchange=()=>{ showRoleCards(sel.value||''); updateRtpForRole(sel.value||''); if(cur){ pcfg[cur]=readCfg(); updatePinsList(); updateBusVisuals(); } }; }
- 
- 
- let websocket = null;
- 
- 
- function applyPinReplacementLogic(pin) {
- 
- if (pin.startsWith('A')) {
- 
- const dLabel = pin.replace('A', 'D');
- if (pcfg[dLabel]) delete pcfg[dLabel];
- }
- 
- else if (['D0','D1','D2','D3'].includes(pin)) {
- 
- const aLabel = pin.replace('D', 'A');
- if (pcfg[aLabel]) delete pcfg[aLabel];
- }
- 
- else if (['SDA','SCL'].includes(pin)) {
- 
- if (pcfg['D4']) delete pcfg['D4'];
- if (pcfg['D5']) delete pcfg['D5'];
- 
- if (pcfg['SDA']) delete pcfg['SDA'];
- if (pcfg['SCL']) delete pcfg['SCL'];
- }
- 
- else if (['MOSI','MISO','SCK'].includes(pin)) {
- 
- if (pcfg['D8']) delete pcfg['D8'];
- if (pcfg['D9']) delete pcfg['D9'];
- if (pcfg['D10']) delete pcfg['D10'];
- 
- if (pcfg['MOSI']) delete pcfg['MOSI'];
- if (pcfg['MISO']) delete pcfg['MISO'];
- if (pcfg['SCK']) delete pcfg['SCK'];
- }
- 
- else if (pin === 'TX') {
- if (pcfg['D6']) delete pcfg['D6'];
- }
- 
- else if (pin === 'RX') {
- if (pcfg['D7']) delete pcfg['D7'];
- }
- 
- else if (['D4','D5'].includes(pin)) {
- if (pcfg['I2C']) delete pcfg['I2C'];
- }
- 
- else if (['D8','D9','D10'].includes(pin)) {
- if (pcfg['SPI']) delete pcfg['SPI'];
- }
- 
- else if (pin === 'D6') {
- if (pcfg['TX']) delete pcfg['TX'];
- }
- else if (pin === 'D7') {
- if (pcfg['RX']) delete pcfg['RX'];
- }
- }
- 
- function initWebSocket() {
- const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
- const wsUrl = `${protocol}//${window.location.host}/ws`;
- websocket = new WebSocket(wsUrl);
- 
- websocket.onopen = function() {
- console.log('WebSocket connected');
+function updateBtnPulseTimingVisibility(){
+ const btnMode = $('#btnMode');
+ const pulseTimingRow = $('#btnPulseTimingRow');
+ if(!btnMode || !pulseTimingRow) return;
+ pulseTimingRow.style.display = (btnMode.value === 'pulse') ? 'flex' : 'none';
+}
+
+function readCfg(){
+ const c={};
+ c.role=$('#funcSelect')?.value||'';
+ c.btnMode=$('#btnMode')?.value||'';
+ c.btnPulseTiming=$('#btnPulseTiming')?.value||'';
+ c.ledMode=$('#ledMode')?.value||'';
+ c.potFilter=$('#potFilter')?.value||'';
+ c.filterIntensity=$('#filterIntensity')?.value||'5';
+ c.rtpEnabled=!!$('#rtpEnabled2')?.checked;
+ c.rtpType=$('#rtpMsgType')?.value||'';
+ c.rtpNote=$('#rtpNote')?.value||'';
+ c.rtpCc=$('#rtpCc')?.value||'';
+ c.rtpPc=$('#rtpPc')?.value||'';
+ c.rtpChan=$('#rtpChan')?.value||'';
+ c.rtpCcOn=$('#rtpCcOn')?.value||'';
+ c.rtpCcOff=$('#rtpCcOff')?.value||'';
+ c.rtpVel=$('#rtpVel')?.value||'';
+ c.rtpCcMin=$('#rtpCcMin')?.value||'';
+ c.rtpCcMax=$('#rtpCcMax')?.value||'';
+ c.rtpNoteMin=$('#rtpNoteMin')?.value||'';
+ c.rtpNoteMax=$('#rtpNoteMax')?.value||'';
+ c.rtpNoteVelFix=$('#rtpNoteVelFix')?.value||'';
+ c.rtpNoteSweepAutoOffDelay=$('#rtpNoteSweepAutoOffDelay')?.value||'';
+ c.oscEnabled=!!$('#oscEnabled2')?.checked;
+ c.oscAddress=$('#oscAddress')?.value||'';
+ c.oscFormat=$('#oscFormat')?.value||'float';
+ c.dbgEnabled=!!$('#dbgEnabled')?.checked;
+ c.dbgHeader=$('#dbgHeader')?.value||'';
+ return c;
+}
+
+function applyCfg(c){
+ if(!c) return;
+ const setV=(id,v)=>{
+ const el=$(id);
+ if(el&&v!=null) el.value=v;
  };
- 
- websocket.onmessage = function(event) {
- const message = event.data;
- if (message.startsWith('PIN_CONFIG:')) {
- const parts = message.split(':');
- if (parts.length >= 3) {
- const pin = parts[1];
- const config = JSON.parse(parts.slice(2).join(':'));
- 
- 
- applyPinReplacementLogic(pin);
- 
- 
- if (['SDA','SCL'].includes(pin) && config.role === 'I2C') {
- pcfg['I2C'] = config; 
- } else if (['MOSI','MISO','SCK'].includes(pin) && config.role === 'SPI') {
- pcfg['SPI'] = config; 
- } else {
- pcfg[pin] = config; 
+ const setC=(id,b)=>{
+ const el=$(id);
+ if(el) el.checked=!!b;
+ };
+ setV('funcSelect',c.role);
+ showRoleCards(c.role);
+ updateRtpForRole(c.role);
+ setV('btnMode',c.btnMode);
+ setV('btnPulseTiming',c.btnPulseTiming);
+ updateBtnPulseTimingVisibility();
+ setV('ledMode',c.ledMode);
+ setV('potFilter',c.potFilter);
+ setV('filterIntensity',c.filterIntensity||'5');
+ setC('rtpEnabled2',c.rtpEnabled);
+ setV('rtpMsgType',c.rtpType);
+ setV('rtpNote',c.rtpNote);
+ setV('rtpCc',c.rtpCc);
+ setV('rtpPc',c.rtpPc);
+ setV('rtpChan',c.rtpChan);
+ setV('rtpCcOn',c.rtpCcOn);
+ setV('rtpCcOff',c.rtpCcOff);
+ setV('rtpVel',c.rtpVel);
+ setV('rtpCcMin',c.rtpCcMin);
+ setV('rtpCcMax',c.rtpCcMax);
+ setV('rtpNoteMin',c.rtpNoteMin);
+ setV('rtpNoteMax',c.rtpNoteMax);
+ setV('rtpNoteVelFix',c.rtpNoteVelFix);
+ setV('rtpNoteSweepAutoOffDelay',c.rtpNoteSweepAutoOffDelay);
+ setC('oscEnabled2',c.oscEnabled);
+ setV('oscAddress',c.oscAddress);
+ setV('oscFormat',c.oscFormat);
+ setC('dbgEnabled',c.dbgEnabled);
+ setV('dbgHeader',c.dbgHeader);
+ updateRtpParamsVisibility();
+}
+
+function applyPinReplacementLogic(pin){
+ if(pin.startsWith('A')){
+ const dLabel=pin.replace('A','D');
+ if(pcfg[dLabel]) delete pcfg[dLabel];
+ } else if(['D0','D1','D2','D3'].includes(pin)){
+ const aLabel=pin.replace('D','A');
+ if(pcfg[aLabel]) delete pcfg[aLabel];
+ } else if(['SDA','SCL'].includes(pin)){
+ if(pcfg['D4']) delete pcfg['D4'];
+ if(pcfg['D5']) delete pcfg['D5'];
+ if(pcfg['SDA']) delete pcfg['SDA'];
+ if(pcfg['SCL']) delete pcfg['SCL'];
+ } else if(['MOSI','MISO','SCK'].includes(pin)){
+ if(pcfg['D8']) delete pcfg['D8'];
+ if(pcfg['D9']) delete pcfg['D9'];
+ if(pcfg['D10']) delete pcfg['D10'];
+ if(pcfg['MOSI']) delete pcfg['MOSI'];
+ if(pcfg['MISO']) delete pcfg['MISO'];
+ if(pcfg['SCK']) delete pcfg['SCK'];
+ } else if(pin==='TX'){
+ if(pcfg['D6']) delete pcfg['D6'];
+ } else if(pin==='RX'){
+ if(pcfg['D7']) delete pcfg['D7'];
+ } else if(['D4','D5'].includes(pin)){
+ if(pcfg['I2C']) delete pcfg['I2C'];
+ } else if(['D8','D9','D10'].includes(pin)){
+ if(pcfg['SPI']) delete pcfg['SPI'];
+ } else if(pin==='D6'){
+ if(pcfg['TX']) delete pcfg['TX'];
+ } else if(pin==='D7'){
+ if(pcfg['RX']) delete pcfg['RX'];
+ }
+}
+
+function handlePinClickLocal(label){
+ if(label.startsWith('A') || label.startsWith('M')){
+ pcfg[label] = {role: 'Potentiomètre'};
+ if(label.startsWith('A')){
+ const dLabel = label.replace('A', 'D');
+ if(pcfg[dLabel]) delete pcfg[dLabel];
+ }
+ } else if(['D0','D1','D2','D3'].includes(label)){
+ pcfg[label] = {role: 'Bouton'};
+ const aLabel = label.replace('D', 'A');
+ if(pcfg[aLabel]) delete pcfg[aLabel];
+ } else if(['SDA','SCL'].includes(label)){
+ pcfg['I2C'] = {role: 'I2C'};
+ if(pcfg['D4']) delete pcfg['D4'];
+ if(pcfg['D5']) delete pcfg['D5'];
+ if(pcfg['SDA']) delete pcfg['SDA'];
+ if(pcfg['SCL']) delete pcfg['SCL'];
+ label = 'I2C';
+ } else if(['MOSI','MISO','SCK'].includes(label)){
+ pcfg['SPI'] = {role: 'SPI'};
+ if(pcfg['D8']) delete pcfg['D8'];
+ if(pcfg['D9']) delete pcfg['D9'];
+ if(pcfg['D10']) delete pcfg['D10'];
+ if(pcfg['MOSI']) delete pcfg['MOSI'];
+ if(pcfg['MISO']) delete pcfg['MISO'];
+ if(pcfg['SCK']) delete pcfg['SCK'];
+ label = 'SPI';
+ } else if(label === 'TX' || label === 'RX'){
+ pcfg[label] = {role: 'UART'};
+ if(label === 'TX' && pcfg['D6']) delete pcfg['D6'];
+ if(label === 'RX' && pcfg['D7']) delete pcfg['D7'];
+ } else if(['D4','D5'].includes(label)){
+ if(pcfg['I2C']) delete pcfg['I2C'];
+ pcfg[label] = {role: 'Bouton'};
+ } else if(['D8','D9','D10'].includes(label)){
+ if(pcfg['SPI']) delete pcfg['SPI'];
+ pcfg[label] = {role: 'Bouton'};
+ } else if(['D6','D7'].includes(label)){
+ pcfg[label] = {role: 'Bouton'};
+ if(label === 'D6' && pcfg['TX']) delete pcfg['TX'];
+ if(label === 'D7' && pcfg['RX']) delete pcfg['RX'];
+ } else if(/^D\d+$/.test(label)){
+ pcfg[label] = {role: 'Bouton'};
  }
  updatePinsList();
  updateBusVisuals();
- 
- 
- if (cur === pin) {
- applyCfg(config);
+ const finalLabel = (label === 'I2C' || label === 'SPI') ? label : label;
+ if(cur === finalLabel){
+ updFunc(finalLabel);
+ if(pcfg[finalLabel] || pcfg[cur]) applyCfg(pcfg[finalLabel] || pcfg[cur]);
  }
- }
- }
- };
- 
- websocket.onclose = function() {
- console.log('WebSocket disconnected');
- 
- setTimeout(initWebSocket, 3000);
- };
- }
- 
- function handlePinClick(label){
- 
+}
+
+function handlePinClick(label){
  if(prect[label] && prect[label].classList.contains('busDisabled')){
  return;
  }
  
  
- if (websocket && websocket.readyState === WebSocket.OPEN) {
+ if(websocket&&websocket.readyState===WebSocket.OPEN){
  websocket.send(`PIN_CLICKED:${label}`);
- } else {
+ } else{
  
  handlePinClickLocal(label);
  }
+}
+
+function updatePinsList(){
+ const pl=$('#pinsList');
+ if(!pl) return;
+ pl.innerHTML='';
+ Object.keys(pcfg).forEach(lbl=>{
+ const cfg=pcfg[lbl];
+ if(!cfg||!cfg.role) return;
+ const isMuxPin=lbl.startsWith('M');
+ if(isMuxPin) return;
+ const it=document.createElement('div');
+ it.className=`item ${pType(lbl)}`;
+ it.innerHTML=`<span class="lbl">${lbl}</span><span class="role">${cfg.role}</span><span class="stat">${stat(cfg, lbl)}</span><button class="del-btn">×</button>`;
+ it.onclick=()=>{
+ 
+ if(window._selRect) window._selRect.classList.remove('selectedSquare');
+ const r=prect[lbl];
+ if(r){
+ window._selRect=r;
+ r.classList.add('selectedSquare');
  }
  
- function handlePinClickLocal(label){
+ cur=lbl;
+ $('#selPin').textContent=lbl;
  
- if(label.startsWith('A') || label.startsWith('M')){
- pcfg[label] = {role: 'Potentiomètre', cfg: {}};
- 
- if(label.startsWith('A')){
- const dLabel = label.replace('A', 'D');
- if(pcfg[dLabel]) delete pcfg[dLabel];
- }
- }
- 
- else if(['D0','D1','D2','D3'].includes(label)){
- pcfg[label] = {role: 'Bouton', cfg: {}};
- 
- const aLabel = label.replace('D', 'A');
- if(pcfg[aLabel]) delete pcfg[aLabel];
- }
- 
- else if(['SDA','SCL'].includes(label)){
- pcfg['I2C'] = {role: 'I2C', cfg: {}};
- 
- if(pcfg['D4']) delete pcfg['D4'];
- if(pcfg['D5']) delete pcfg['D5'];
- }
- 
- else if(['MOSI','MISO','SCK'].includes(label)){
- pcfg['SPI'] = {role: 'SPI', cfg: {}};
- 
- if(pcfg['D8']) delete pcfg['D8'];
- if(pcfg['D9']) delete pcfg['D9'];
- if(pcfg['D10']) delete pcfg['D10'];
- }
- 
- else if(label === 'TX'){
- pcfg['TX'] = {role: 'UART', cfg: {}};
- if(pcfg['D6']) delete pcfg['D6'];
- }
- 
- else if(label === 'RX'){
- pcfg['RX'] = {role: 'UART', cfg: {}};
- if(pcfg['D7']) delete pcfg['D7'];
- }
- 
- else if(['D4','D5'].includes(label)){
- if(pcfg['I2C']) delete pcfg['I2C'];
- pcfg[label] = {role: 'Bouton', cfg: {}};
- }
- 
- else if(['D8','D9','D10'].includes(label)){
- if(pcfg['SPI']) delete pcfg['SPI'];
- pcfg[label] = {role: 'Bouton', cfg: {}};
- }
- 
- else if(['D6','D7'].includes(label)){
- 
- if(label === 'D6' && pcfg['TX']) delete pcfg['TX'];
- if(label === 'D7' && pcfg['RX']) delete pcfg['RX'];
- pcfg[label] = {role: 'Bouton', cfg: {}};
- }
- 
+ updFunc(lbl);
+ if(pcfg[lbl]) applyCfg(pcfg[lbl]);
+ };
+ const delBtn=it.querySelector('.del-btn');
+ if(delBtn) delBtn.onclick=(e)=>{
+ e.stopPropagation();
+ delete pcfg[lbl];
  updatePinsList();
  updateBusVisuals();
+ };
+ pl.appendChild(it);
+ });
+}
+
+function getGpioFromD(dNum){
+ if(!caps||!caps.pins) return null;
+ const pin=caps.pins.find(p=>p.label===`D${dNum}`);
+ return pin?pin.gpio:null;
+}
+
+function getDFromGpio(gpio){
+ if(!caps||!caps.pins) return null;
+ const pin=caps.pins.find(p=>p.gpio===gpio&&p.label&&p.label.startsWith('D'));
+ return pin?parseInt(pin.label.substring(1)):null;
+}
+
+function getUsedGpios(additionalSelectIds=[]){
+ const usedGpios=new Set();
+ Object.keys(pcfg).forEach(lbl=>{
+ const pin=caps.pins.find(p=>p.label===lbl);
+ if(pin) usedGpios.add(pin.gpio);
+ });
+ const currentMuxId=$('#muxId')?parseInt($('#muxId').value):null;
+ muxList.forEach(m=>{
+ if(currentMuxId!==null&&m.id==currentMuxId) return;
+ if(m.sig!==undefined&&m.sig!==null) usedGpios.add(m.sig);
+ if(m.s0!==undefined&&m.s0!==null) usedGpios.add(m.s0);
+ if(m.s1!==undefined&&m.s1!==null) usedGpios.add(m.s1);
+ if(m.s2!==undefined&&m.s2!==null) usedGpios.add(m.s2);
+ if(m.s3!==undefined&&m.s3!==null) usedGpios.add(m.s3);
+ if(m.en!==undefined&&m.en!==null&&m.en!==255) usedGpios.add(m.en);
+ });
+ additionalSelectIds.forEach(id=>{
+ const sel=$('#'+id);
+ if(!sel||!sel.value||sel.value==='255') return;
+ if(id==='muxPinGroup'){
+ const firstD=parseInt(sel.value);
+ const s0=getGpioFromD(firstD);
+ const s1=getGpioFromD(firstD+1);
+ const s2=getGpioFromD(firstD+2);
+ const s3=getGpioFromD(firstD+3);
+ if(s0) usedGpios.add(s0);
+ if(s1) usedGpios.add(s1);
+ if(s2) usedGpios.add(s2);
+ if(s3) usedGpios.add(s3);
+ } else{
+ usedGpios.add(parseInt(sel.value));
  }
- 
- function readCfg(){ const c={}; c.role=$('#funcSelect')?.value||''; c.btnMode=$('#btnMode')?.value||''; c.btnPulseTiming=$('#btnPulseTiming')?.value||''; c.ledMode=$('#ledMode')?.value||''; c.potFilter=$('#potFilter')?.value||''; c.filterIntensity=$('#filterIntensity')?.value||'5'; c.rtpEnabled=!!$('#rtpEnabled2')?.checked; c.rtpType=$('#rtpMsgType')?.value||''; c.rtpNote=$('#rtpNote')?.value||''; c.rtpCc=$('#rtpCc')?.value||''; c.rtpPc=$('#rtpPc')?.value||''; c.rtpChan=$('#rtpChan')?.value||''; c.rtpCcOn=$('#rtpCcOn')?.value||''; c.rtpCcOff=$('#rtpCcOff')?.value||''; c.rtpVel=$('#rtpVel')?.value||''; c.rtpCcMin=$('#rtpCcMin')?.value||''; c.rtpCcMax=$('#rtpCcMax')?.value||''; c.rtpNoteMin=$('#rtpNoteMin')?.value||''; c.rtpNoteMax=$('#rtpNoteMax')?.value||''; c.rtpNoteVelFix=$('#rtpNoteVelFix')?.value||''; c.rtpNoteSweepAutoOffDelay=$('#rtpNoteSweepAutoOffDelay')?.value||''; c.oscEnabled=!!$('#oscEnabled2')?.checked; c.oscAddress=$('#oscAddress')?.value||''; c.oscFormat=$('#oscFormat')?.value||'float'; c.dbgEnabled=!!$('#dbgEnabled')?.checked; c.dbgHeader=$('#dbgHeader')?.value||''; return c; }
- function applyCfg(c){ if(!c) return; const setV=(id,v)=>{ const el=$(id); if(el&&v!=null) el.value=v; }; const setC=(id,b)=>{ const el=$(id); if(el) el.checked=!!b; }; setV('funcSelect',c.role); showRoleCards(c.role); updateRtpForRole(c.role); setV('btnMode',c.btnMode); setV('btnPulseTiming',c.btnPulseTiming); updateBtnPulseTimingVisibility(); setV('ledMode',c.ledMode); setV('potFilter',c.potFilter); setV('filterIntensity',c.filterIntensity||'5'); setC('rtpEnabled2',c.rtpEnabled); setV('rtpMsgType',c.rtpType); setV('rtpNote',c.rtpNote); setV('rtpCc',c.rtpCc); setV('rtpPc',c.rtpPc); setV('rtpChan',c.rtpChan); setV('rtpCcOn',c.rtpCcOn); setV('rtpCcOff',c.rtpCcOff); setV('rtpVel',c.rtpVel); setV('rtpCcMin',c.rtpCcMin); setV('rtpCcMax',c.rtpCcMax); setV('rtpNoteMin',c.rtpNoteMin); setV('rtpNoteMax',c.rtpNoteMax); setV('rtpNoteVelFix',c.rtpNoteVelFix); setV('rtpNoteSweepAutoOffDelay',c.rtpNoteSweepAutoOffDelay); setC('oscEnabled2',c.oscEnabled); setV('oscAddress',c.oscAddress); setV('oscFormat',c.oscFormat); setC('dbgEnabled',c.dbgEnabled); setV('dbgHeader',c.dbgHeader); updateRtpParamsVisibility(); }
- 
- async function saveAll(){ const msg=$('#saveAllMsg'); msg.textContent='Enregistrement...'; try{ 
- 
- const ps=Object.keys(pcfg).map(async lbl=>{ const c=pcfg[lbl]; if(!c||!c.role) return; const p=new URLSearchParams(); p.set('pinLabel',lbl); p.set('role',c.role); if(c.rtpEnabled) p.set('rtpEnabled','true'); if(c.rtpType) p.set('rtpType',c.rtpType); if(c.rtpNote) p.set('rtpNote',c.rtpNote); if(c.rtpCc) p.set('rtpCc',c.rtpCc); if(c.rtpPc) p.set('rtpPc',c.rtpPc); if(c.rtpChan) p.set('rtpChan',c.rtpChan); if(c.rtpCcOn) p.set('rtpCcOn',c.rtpCcOn); if(c.rtpCcOff) p.set('rtpCcOff',c.rtpCcOff); if(c.rtpVel) p.set('rtpVel',c.rtpVel); if(c.rtpCcMin) p.set('rtpCcMin',c.rtpCcMin); if(c.rtpCcMax) p.set('rtpCcMax',c.rtpCcMax); if(c.rtpNoteMin) p.set('rtpNoteMin',c.rtpNoteMin); if(c.rtpNoteMax) p.set('rtpNoteMax',c.rtpNoteMax); if(c.rtpNoteVelFix) p.set('rtpNoteVelFix',c.rtpNoteVelFix); if(c.rtpNoteSweepAutoOffDelay) p.set('rtpNoteSweepAutoOffDelay',c.rtpNoteSweepAutoOffDelay); if(c.ledMode) p.set('ledMode',c.ledMode); if(c.btnMode) p.set('btnMode',c.btnMode); if(c.btnPulseTiming) p.set('btnPulseTiming',c.btnPulseTiming); if(c.potFilter) p.set('potFilter',c.potFilter); if(c.oscEnabled) p.set('oscEnabled','true'); if(c.oscAddress) p.set('oscAddress',c.oscAddress); if(c.oscFormat) p.set('oscFormat',c.oscFormat); if(c.dbgEnabled) p.set('dbgEnabled','true'); if(c.dbgHeader) p.set('dbgHeader',c.dbgHeader); return fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}); }); 
- await Promise.all(ps); 
- 
- 
- const listRes=await fetch('/api/pins/list'); 
- const listData=await listRes.json(); 
- const serverPins=new Set(); 
- if(listData.pins && Array.isArray(listData.pins)){ 
- listData.pins.forEach(p=>{ 
- if(p.pinLabel) serverPins.add(p.pinLabel); 
- }); 
- } 
- 
- 
- const localPins=new Set(Object.keys(pcfg)); 
- const toDelete=Array.from(serverPins).filter(p=>!localPins.has(p)); 
- const deletePromises=toDelete.map(async pinLabel=>{ 
- const p=new URLSearchParams(); 
- p.set('pin',pinLabel); 
- return fetch('/api/pins/delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}); 
- }); 
- await Promise.all(deletePromises); 
- 
- msg.textContent='Toutes les configurations enregistrées'; 
- msg.style.color='#10b981'; 
- }catch(e){ 
- msg.textContent='Erreur lors de l\'enregistrement'; 
- msg.style.color='#ef4444'; 
- console.error('Erreur saveAll:',e); 
- } 
- }
- 
- 
- let muxList = [];
- 
- async function loadMuxList() {
- try {
- const r = await fetch('/api/mux/list');
- 
- 
- if (!r.ok) {
- console.error('Erreur HTTP:', r.status, r.statusText);
- muxList = [];
+ });
+ return usedGpios;
+}
+
+async function loadMuxList(){
+ try{
+ const r=await fetch('/api/mux/list');
+ if(!r.ok){
+ console.error('Erreur HTTP:',r.status,r.statusText);
+ muxList=[];
  updateMuxListUI();
- updatePinsList(); 
+ updatePinsList();
  return;
  }
- 
- 
- const text = await r.text();
- if (!text || text.trim().length === 0) {
+ const text=await r.text();
+ if(!text||text.trim().length===0){
  console.warn('Réponse vide de /api/mux/list');
- muxList = [];
+ muxList=[];
  updateMuxListUI();
- updatePinsList(); 
+ updatePinsList();
  return;
  }
- 
- 
- const d = JSON.parse(text);
- muxList = d.muxes || [];
+ const d=JSON.parse(text);
+ muxList=d.muxes||[];
  updateMuxListUI();
- updatePinsList(); 
- 
- if (caps && caps.pins) drawBoard();
- } catch(e) { 
- console.error('Erreur chargement mux:', e);
- muxList = [];
+ updatePinsList();
+ if(caps&&caps.pins) drawBoard();
+ } catch(e){
+ console.error('Erreur chargement mux:',e);
+ muxList=[];
  updateMuxListUI();
- updatePinsList(); 
- 
- if (caps && caps.pins) drawBoard();
+ updatePinsList();
+ if(caps&&caps.pins) drawBoard();
  }
- }
- 
- function updateMuxListUI() {
- const list = $('#muxList');
- if (!list) return;
- list.innerHTML = '';
- if (muxList.length === 0) {
- list.innerHTML = '<p style="color:#6b7280;">Aucun multiplexeur configure.</p>';
+}
+
+function updateMuxListUI(){
+ const list=$('#muxList');
+ if(!list) return;
+ list.innerHTML='';
+ if(muxList.length===0){
+ list.innerHTML='<p style="color:#6b7280;">Aucun multiplexeur configure.</p>';
  return;
  }
- muxList.forEach(m => {
- const div = document.createElement('div');
- div.className = 'item';
- div.style.borderLeftColor = '#8B5CF6';
- div.innerHTML = `<span class="lbl">MUX${m.id}</span><span class="role">HC4067</span><span class="stat">16 canaux</span><button class="del-btn" onclick="deleteMux(${m.id}, event)">x</button>`;
- div.onclick = (e) => {
- if (e.target.classList.contains('del-btn')) return;
+ muxList.forEach(m=>{
+ const div=document.createElement('div');
+ div.className='item';
+ div.style.borderLeftColor='#8B5CF6';
+ div.innerHTML=`<span class="lbl">MUX${m.id}</span><span class="role">HC4067</span><span class="stat">16 canaux</span><button class="del-btn" onclick="deleteMux(${m.id}, event)">x</button>`;
+ div.onclick=(e)=>{
+ if(e.target.classList.contains('del-btn')) return;
  showMuxForm(m.id);
  };
  list.appendChild(div);
  });
- }
- 
- function showMuxForm(muxId = null) {
- const overlay = $('#muxModalOverlay');
- if (overlay) overlay.classList.add('active');
- 
- 
- const idSel = $('#muxId');
- if (idSel && muxId !== null) {
- idSel.value = muxId;
- idSel.disabled = true; 
- } else if (idSel) {
- idSel.value = ''; 
- idSel.disabled = false;
- }
- 
- 
- const getDFromGpio = (gpio) => {
- const pin = caps.pins.find(p => p.gpio === gpio && p.label && p.label.startsWith('D'));
- return pin ? parseInt(pin.label.substring(1)) : null;
- };
+}
 
- 
- if (muxId !== null) {
- const mux = muxList.find(m => m.id == muxId);
- if (mux) {
- if ($('#muxPinGroup') && mux.s0 !== undefined) {
- const firstD = getDFromGpio(mux.s0);
- if (firstD !== null) $('#muxPinGroup').value = firstD;
+function showMuxForm(muxId=null){
+ const overlay=$('#muxModalOverlay');
+ if(overlay) overlay.classList.add('active');
+ const idSel=$('#muxId');
+ if(idSel&&muxId!==null){
+ idSel.value=muxId;
+ idSel.disabled=true;
+ } else if(idSel){
+ idSel.value='';
+ idSel.disabled=false;
  }
- if ($('#muxEn')) $('#muxEn').value = mux.en || 255;
- if ($('#muxCcBase')) $('#muxCcBase').value = mux.ccBase || 1;
- if ($('#muxMidiChan')) $('#muxMidiChan').value = mux.midiChan || 1;
- if ($('#muxOscBase')) $('#muxOscBase').value = mux.oscBase || '/mux' + muxId;
- if ($('#muxMin')) $('#muxMin').value = mux.min !== undefined ? mux.min : 0;
- if ($('#muxMax')) $('#muxMax').value = mux.max !== undefined ? mux.max : 4095;
- if ($('#muxHysteresis')) $('#muxHysteresis').checked = mux.hysteresis !== undefined ? (mux.hysteresis === 1 || mux.hysteresis === true) : true;
- if ($('#muxOscFormat')) {
- const oscFormatValue = mux.oscFormat || 'float';
- $('#muxOscFormat').value = oscFormatValue;
+ if(muxId!==null){
+ const mux=muxList.find(m=>m.id==muxId);
+ if(mux){
+ if($('#muxPinGroup')&&mux.s0!==undefined){
+ const firstD=getDFromGpio(mux.s0);
+ if(firstD!==null) $('#muxPinGroup').value=firstD;
  }
- if ($('#muxFilterIntensity')) $('#muxFilterIntensity').value = mux.filterIntensity !== undefined ? mux.filterIntensity : 5;
+ if($('#muxEn')) $('#muxEn').value=mux.en||255;
+ if($('#muxCcBase')) $('#muxCcBase').value=mux.ccBase||1;
+ if($('#muxMidiChan')) $('#muxMidiChan').value=mux.midiChan||1;
+ if($('#muxOscBase')) $('#muxOscBase').value=mux.oscBase||'/mux'+muxId;
+ if($('#muxMin')) $('#muxMin').value=mux.min!==undefined?mux.min:0;
+ if($('#muxMax')) $('#muxMax').value=mux.max!==undefined?mux.max:4095;
+ if($('#muxHysteresis')) $('#muxHysteresis').checked=mux.hysteresis!==undefined?(mux.hysteresis===1||mux.hysteresis===true):true;
+ if($('#muxOscFormat')){
+ const oscFormatValue=mux.oscFormat||'float';
+ $('#muxOscFormat').value=oscFormatValue;
  }
- } else {
- 
- if ($('#muxSig')) $('#muxSig').value = '';
- if ($('#muxPinGroup')) $('#muxPinGroup').value = '';
- if ($('#muxEn')) $('#muxEn').value = 255;
- if ($('#muxCcBase')) $('#muxCcBase').value = 1;
- if ($('#muxMidiChan')) $('#muxMidiChan').value = 1;
- if ($('#muxOscBase')) $('#muxOscBase').value = '/mux' + (idSel ? idSel.value : '0');
- if ($('#muxMin')) $('#muxMin').value = 0;
- if ($('#muxMax')) $('#muxMax').value = 4095;
- if ($('#muxHysteresis')) $('#muxHysteresis').checked = true;
- if ($('#muxOscFormat')) $('#muxOscFormat').value = 'float';
- if ($('#muxFilterIntensity')) $('#muxFilterIntensity').value = 5;
+ if($('#muxFilterIntensity')) $('#muxFilterIntensity').value=mux.filterIntensity!==undefined?mux.filterIntensity:5;
  }
-
- 
+ } else{
+ if($('#muxSig')) $('#muxSig').value='';
+ if($('#muxPinGroup')) $('#muxPinGroup').value='';
+ if($('#muxEn')) $('#muxEn').value=255;
+ if($('#muxCcBase')) $('#muxCcBase').value=1;
+ if($('#muxMidiChan')) $('#muxMidiChan').value=1;
+ if($('#muxOscBase')) $('#muxOscBase').value='/mux'+(idSel?idSel.value:'0');
+ if($('#muxMin')) $('#muxMin').value=0;
+ if($('#muxMax')) $('#muxMax').value=4095;
+ if($('#muxHysteresis')) $('#muxHysteresis').checked=true;
+ if($('#muxOscFormat')) $('#muxOscFormat').value='float';
+ if($('#muxFilterIntensity')) $('#muxFilterIntensity').value=5;
+ }
  populateMuxPinSelects();
+ if(muxId!==null){
+ const mux=muxList.find(m=>m.id==muxId);
+ if(mux&&$('#muxSig')){
+ $('#muxSig').value=mux.sig;
+ }
+ }
+}
 
- 
- if (muxId !== null) {
- const mux = muxList.find(m => m.id == muxId);
- if (mux && $('#muxSig')) {
- $('#muxSig').value = mux.sig;
- }
- }
- }
- 
- function hideMuxForm() {
- const overlay = $('#muxModalOverlay');
- if (overlay) overlay.classList.remove('active');
- }
- 
- 
- 
- 
- 
- 
- function getGpioFromD(dNum) {
- if (!caps || !caps.pins) return null;
- const pin = caps.pins.find(p => p.label === `D${dNum}`);
- return pin ? pin.gpio : null;
- }
- 
- 
- function getDFromGpio(gpio) {
- if (!caps || !caps.pins) return null;
- const pin = caps.pins.find(p => p.gpio === gpio && p.label && p.label.startsWith('D'));
- return pin ? parseInt(pin.label.substring(1)) : null;
- }
- 
- 
- function getUsedGpios(additionalSelectIds = []) {
- const usedGpios = new Set();
- 
- 
- Object.keys(pcfg).forEach(lbl => {
- const pin = caps.pins.find(p => p.label === lbl);
- if (pin) usedGpios.add(pin.gpio);
- });
- 
- 
- const currentMuxId = $('#muxId') ? parseInt($('#muxId').value) : null;
- muxList.forEach(m => {
- 
- if (currentMuxId !== null && m.id == currentMuxId) return;
- 
- 
- if (m.sig !== undefined && m.sig !== null) usedGpios.add(m.sig);
- if (m.s0 !== undefined && m.s0 !== null) usedGpios.add(m.s0);
- if (m.s1 !== undefined && m.s1 !== null) usedGpios.add(m.s1);
- if (m.s2 !== undefined && m.s2 !== null) usedGpios.add(m.s2);
- if (m.s3 !== undefined && m.s3 !== null) usedGpios.add(m.s3);
- if (m.en !== undefined && m.en !== null && m.en !== 255) usedGpios.add(m.en);
- });
- 
- 
- additionalSelectIds.forEach(id => {
- const sel = $('#' + id);
- if (!sel || !sel.value || sel.value === '255') return;
- 
- if (id === 'muxPinGroup') {
- 
- const firstD = parseInt(sel.value);
- const s0 = getGpioFromD(firstD);
- const s1 = getGpioFromD(firstD + 1);
- const s2 = getGpioFromD(firstD + 2);
- const s3 = getGpioFromD(firstD + 3);
- if (s0) usedGpios.add(s0);
- if (s1) usedGpios.add(s1);
- if (s2) usedGpios.add(s2);
- if (s3) usedGpios.add(s3);
- } else {
- 
- usedGpios.add(parseInt(sel.value));
- }
- });
- 
- return usedGpios;
- }
- 
- 
- 
- 
- 
- function populateMuxPinSelects() {
- if (!caps || !caps.pins) return;
- 
- 
- const idSel = $('#muxId');
- const currentMuxIdValue = idSel ? parseInt(idSel.value) : null;
- const currentMuxExists = currentMuxIdValue !== null && muxList.find(m => m.id === currentMuxIdValue);
- const currentMuxId = currentMuxExists ? currentMuxIdValue : null;
- 
- 
- const usedGpiosForSigAndEn = getUsedGpios(['muxSig', 'muxEn']);
- 
- 
- const analogPins = caps.pins.filter(p => p.label && p.label.startsWith('A') && p.caps && p.caps.adc);
- let availableSig = analogPins.filter(p => !usedGpiosForSigAndEn.has(p.gpio));
- 
- 
- if (currentMuxId !== null) {
- const currentMux = muxList.find(m => m.id === currentMuxId);
- if (currentMux && currentMux.sig !== undefined && currentMux.sig !== null) {
- const currentSigPin = analogPins.find(p => p.gpio === currentMux.sig);
- if (currentSigPin && !availableSig.find(p => p.gpio === currentMux.sig)) {
+function hideMuxForm(){
+ const overlay=$('#muxModalOverlay');
+ if(overlay) overlay.classList.remove('active');
+}
+
+function populateMuxPinSelects(){
+ if(!caps||!caps.pins) return;
+ const idSel=$('#muxId');
+ const currentMuxIdValue=idSel?parseInt(idSel.value):null;
+ const currentMuxExists=currentMuxIdValue!==null&&muxList.find(m=>m.id===currentMuxIdValue);
+ const currentMuxId=currentMuxExists?currentMuxIdValue:null;
+ const usedGpiosForSigAndEn=getUsedGpios(['muxSig','muxEn']);
+ const analogPins=caps.pins.filter(p=>p.label&&p.label.startsWith('A')&&p.caps&&p.caps.adc);
+ let availableSig=analogPins.filter(p=>!usedGpiosForSigAndEn.has(p.gpio));
+ if(currentMuxId!==null){
+ const currentMux=muxList.find(m=>m.id===currentMuxId);
+ if(currentMux&&currentMux.sig!==undefined&&currentMux.sig!==null){
+ const currentSigPin=analogPins.find(p=>p.gpio===currentMux.sig);
+ if(currentSigPin&&!availableSig.find(p=>p.gpio===currentMux.sig)){
  availableSig.push(currentSigPin);
  }
  }
  }
- 
- const sigSel = $('#muxSig');
- if (sigSel) {
- sigSel.innerHTML = availableSig.map(p => `<option value="${p.gpio}">${p.label} (GPIO${p.gpio})</option>`).join('');
-
- 
- const selectedMuxId = idSel ? parseInt(idSel.value) : null;
- if (selectedMuxId === 0 && availableSig.find(p => p.gpio === 2)) {
- sigSel.value = 2; 
- } else if (selectedMuxId === 1 && availableSig.find(p => p.gpio === 3)) {
- sigSel.value = 3; 
- } else if (availableSig.length > 0) {
- sigSel.value = availableSig[0].gpio;
+ const sigSel=$('#muxSig');
+ if(sigSel){
+ sigSel.innerHTML=availableSig.map(p=>`<option value="${p.gpio}">${p.label} (GPIO${p.gpio})</option>`).join('');
+ const selectedMuxId=idSel?parseInt(idSel.value):null;
+ if(selectedMuxId===0&&availableSig.find(p=>p.gpio===2)){
+ sigSel.value=2;
+ } else if(selectedMuxId===1&&availableSig.find(p=>p.gpio===3)){
+ sigSel.value=3;
+ } else if(availableSig.length>0){
+ sigSel.value=availableSig[0].gpio;
  }
  }
- 
- 
- 
- 
- const allDPins = caps.pins
- .filter(p => p.label && p.label.startsWith('D'))
- .sort((a, b) => {
- const numA = parseInt(a.label.substring(1));
- const numB = parseInt(b.label.substring(1));
- return numA - numB;
+ const allDPins=caps.pins.filter(p=>p.label&&p.label.startsWith('D')).sort((a,b)=>{
+ const numA=parseInt(a.label.substring(1));
+ const numB=parseInt(b.label.substring(1));
+ return numA-numB;
  });
- 
- 
- 
- const usedGpiosForGroups = getUsedGpios(['muxSig', 'muxEn']);
- const pinGroupSel = $('#muxPinGroup');
- if (pinGroupSel) {
- const groups = [];
- for (let i = 0; i < allDPins.length - 3; i++) {
- const d1 = allDPins[i];
- const d2 = allDPins[i + 1];
- const d3 = allDPins[i + 2];
- const d4 = allDPins[i + 3];
- 
- const num1 = parseInt(d1.label.substring(1));
- const num2 = parseInt(d2.label.substring(1));
- const num3 = parseInt(d3.label.substring(1));
- const num4 = parseInt(d4.label.substring(1));
- 
- 
- if (num2 === num1 + 1 && num3 === num2 + 1 && num4 === num3 + 1) {
- const allAvailable = [d1.gpio, d2.gpio, d3.gpio, d4.gpio].every(g => !usedGpiosForGroups.has(g));
- if (allAvailable) {
- groups.push({
- firstD: num1,
- label: `${d1.label}-${d4.label}`,
- gpios: [d1.gpio, d2.gpio, d3.gpio, d4.gpio]
+ const usedGpiosForGroups=getUsedGpios(['muxSig','muxEn']);
+ const pinGroupSel=$('#muxPinGroup');
+ if(pinGroupSel){
+ const groups=[];
+ for(let i=0;i<allDPins.length-3;i++){
+ const d1=allDPins[i];
+ const d2=allDPins[i+1];
+ const d3=allDPins[i+2];
+ const d4=allDPins[i+3];
+ const num1=parseInt(d1.label.substring(1));
+ const num2=parseInt(d2.label.substring(1));
+ const num3=parseInt(d3.label.substring(1));
+ const num4=parseInt(d4.label.substring(1));
+ if(num2===num1+1&&num3===num2+1&&num4===num3+1){
+ const allAvailable=[d1.gpio,d2.gpio,d3.gpio,d4.gpio].every(g=>!usedGpiosForGroups.has(g));
+ if(allAvailable){
+ groups.push({firstD:num1,label:`${d1.label}-${d4.label}`,gpios:[d1.gpio,d2.gpio,d3.gpio,d4.gpio]});
+ }
+ }
+ }
+ const currentValue=pinGroupSel.value;
+ const currentValueValid=currentValue&&groups.find(g=>g.firstD===parseInt(currentValue));
+ pinGroupSel.innerHTML='<option value="">Choisir...</option>'+groups.map(g=>`<option value="${g.firstD}">${g.label}</option>`).join('');
+ if(currentValueValid){
+ pinGroupSel.value=currentValue;
+ } else{
+ const selectedMuxId=idSel?parseInt(idSel.value):null;
+ if(selectedMuxId===0&&groups.find(g=>g.firstD===3)){
+ pinGroupSel.value=3;
+ } else if(selectedMuxId===1&&groups.find(g=>g.firstD===7)){
+ pinGroupSel.value=7;
+ } else if(groups.length>0){
+ pinGroupSel.value=groups[0].firstD;
+ }
+ }
+ }
+ const enSel=$('#muxEn');
+ if(enSel){
+ enSel.innerHTML='<option value="255">Non connecte</option>';
+ const otherMuxUsesEn=muxList.some(m=>{
+ if(currentMuxId!==null&&m.id==currentMuxId) return false;
+ return m.en!==undefined&&m.en!==null&&m.en!==255;
  });
- }
- }
- }
- 
- const currentValue = pinGroupSel.value;
- const currentValueValid = currentValue && groups.find(g => g.firstD === parseInt(currentValue));
- 
- pinGroupSel.innerHTML = '<option value="">Choisir...</option>' + 
- groups.map(g => `<option value="${g.firstD}">${g.label}</option>`).join('');
- 
- 
- if (currentValueValid) {
- pinGroupSel.value = currentValue;
- } else {
- const selectedMuxId = idSel ? parseInt(idSel.value) : null;
- if (selectedMuxId === 0 && groups.find(g => g.firstD === 3)) {
- pinGroupSel.value = 3; 
- } else if (selectedMuxId === 1 && groups.find(g => g.firstD === 7)) {
- pinGroupSel.value = 7; 
- } else if (groups.length > 0) {
- 
- pinGroupSel.value = groups[0].firstD;
- }
- }
- }
- 
- 
- const enSel = $('#muxEn');
- if (enSel) {
- enSel.innerHTML = '<option value="255">Non connecte</option>';
- 
- 
- const otherMuxUsesEn = muxList.some(m => {
- if (currentMuxId !== null && m.id == currentMuxId) return false;
- return m.en !== undefined && m.en !== null && m.en !== 255;
+ if(!otherMuxUsesEn&&pinGroupSel&&pinGroupSel.value){
+ const firstD=parseInt(pinGroupSel.value);
+ const enD=firstD+4;
+ const enPin=allDPins.find(p=>{
+ const num=parseInt(p.label.substring(1));
+ return num===enD&&!usedGpiosForSigAndEn.has(p.gpio);
  });
- 
- if (!otherMuxUsesEn && pinGroupSel && pinGroupSel.value) {
- const firstD = parseInt(pinGroupSel.value);
- const enD = firstD + 4;
- const enPin = allDPins.find(p => {
- const num = parseInt(p.label.substring(1));
- return num === enD && !usedGpiosForSigAndEn.has(p.gpio);
- });
- if (enPin) {
- enSel.innerHTML += `<option value="${enPin.gpio}">${enPin.label} (GPIO${enPin.gpio})</option>`;
+ if(enPin){
+ enSel.innerHTML+=`<option value="${enPin.gpio}">${enPin.label} (GPIO${enPin.gpio})</option>`;
  }
  }
- 
- 
- if (!enSel.value || enSel.value === '') {
- enSel.value = 255;
+ if(!enSel.value||enSel.value===''){
+ enSel.value=255;
  }
  }
- 
- 
- if (idSel) {
- if (currentMuxId === null) { 
- const mux0 = muxList.find(m => m.id === 0);
- const mux1 = muxList.find(m => m.id === 1);
- 
- 
- const usedGpiosForMux1 = getUsedGpios([]); 
- const availableSigForMux1 = analogPins.filter(p => !usedGpiosForMux1.has(p.gpio));
- 
- const availableMuxIds = [0, 1].filter(id => {
- 
- if (id === 0) return !mux0;
- 
- if (id === 1) return !mux1 && availableSigForMux1.length > 0;
+ if(idSel){
+ if(currentMuxId===null){
+ const mux0=muxList.find(m=>m.id===0);
+ const mux1=muxList.find(m=>m.id===1);
+ const usedGpiosForMux1=getUsedGpios([]);
+ const availableSigForMux1=analogPins.filter(p=>!usedGpiosForMux1.has(p.gpio));
+ const availableMuxIds=[0,1].filter(id=>{
+ if(id===0) return!mux0;
+ if(id===1) return!mux1&&availableSigForMux1.length>0;
  return false;
  });
- 
- idSel.innerHTML = availableMuxIds.map(id => `<option value="${id}">MUX${id}</option>`).join('');
- 
- if (availableMuxIds.length > 0) {
- idSel.value = availableMuxIds[0];
+ idSel.innerHTML=availableMuxIds.map(id=>`<option value="${id}">MUX${id}</option>`).join('');
+ if(availableMuxIds.length>0){
+ idSel.value=availableMuxIds[0];
  }
- } else {
- 
- idSel.value = currentMuxId;
- idSel.disabled = true;
+ } else{
+ idSel.value=currentMuxId;
+ idSel.disabled=true;
  }
  }
- 
- 
- if (pinGroupSel && !pinGroupSel.dataset.listener) {
- pinGroupSel.dataset.listener = 'true';
- pinGroupSel.addEventListener('change', populateMuxPinSelects);
+ if(pinGroupSel&&!pinGroupSel.dataset.listener){
+ pinGroupSel.dataset.listener='true';
+ pinGroupSel.addEventListener('change',populateMuxPinSelects);
  }
- 
- 
- if (idSel && !idSel.dataset.listenerMuxId) {
- idSel.dataset.listenerMuxId = 'true';
- idSel.addEventListener('change', () => {
- 
- if ($('#muxPinGroup')) $('#muxPinGroup').value = '';
- 
- if ($('#muxSig')) $('#muxSig').value = '';
+ if(idSel&&!idSel.dataset.listenerMuxId){
+ idSel.dataset.listenerMuxId='true';
+ idSel.addEventListener('change',()=>{
+ if($('#muxPinGroup')) $('#muxPinGroup').value='';
+ if($('#muxSig')) $('#muxSig').value='';
  populateMuxPinSelects();
  });
  }
- }
- 
- async function saveMux(e) {
+}
+
+async function saveMux(e){
  e.preventDefault();
- const id = $('#muxId').value;
- const sig = $('#muxSig').value;
- const pinGroup = parseInt($('#muxPinGroup').value);
- const en = $('#muxEn').value;
- const ccBase = parseInt($('#muxCcBase').value) || 1;
- const midiChan = parseInt($('#muxMidiChan').value) || 1;
- const oscBase = $('#muxOscBase').value || '/mux' + id;
- 
- 
- if (!pinGroup) {
- $('#muxMsg').textContent = 'Erreur: Veuillez choisir un groupe de pins';
- $('#muxMsg').style.color = '#ef4444';
+ const id=$('#muxId').value;
+ const sig=$('#muxSig').value;
+ const pinGroup=parseInt($('#muxPinGroup').value);
+ const en=$('#muxEn').value;
+ const ccBase=parseInt($('#muxCcBase').value)||1;
+ const midiChan=parseInt($('#muxMidiChan').value)||1;
+ const oscBase=$('#muxOscBase').value||'/mux'+id;
+ if(!pinGroup){
+ $('#muxMsg').textContent='Erreur: Veuillez choisir un groupe de pins';
+ $('#muxMsg').style.color='#ef4444';
  return;
  }
- 
- const s0 = getGpioFromD(pinGroup);
- const s1 = getGpioFromD(pinGroup + 1);
- const s2 = getGpioFromD(pinGroup + 2);
- const s3 = getGpioFromD(pinGroup + 3);
- 
- if (!s0 || !s1 || !s2 || !s3) {
- $('#muxMsg').textContent = 'Erreur: Groupe de pins invalide';
- $('#muxMsg').style.color = '#ef4444';
+ const s0=getGpioFromD(pinGroup);
+ const s1=getGpioFromD(pinGroup+1);
+ const s2=getGpioFromD(pinGroup+2);
+ const s3=getGpioFromD(pinGroup+3);
+ if(!s0||!s1||!s2||!s3){
+ $('#muxMsg').textContent='Erreur: Groupe de pins invalide';
+ $('#muxMsg').style.color='#ef4444';
  return;
  }
- 
- const min = parseInt($('#muxMin').value) || 0;
- const max = parseInt($('#muxMax').value) || 4095;
- const hysteresis = $('#muxHysteresis').checked;
- const oscFormat = $('#muxOscFormat').value || 'float';
- const filterIntensity = parseInt($('#muxFilterIntensity').value) || 5;
- 
- const formData = new URLSearchParams();
- formData.append('id', id);
- formData.append('sig', sig);
- formData.append('s0', s0);
- formData.append('s1', s1);
- formData.append('s2', s2);
- formData.append('s3', s3);
- formData.append('en', en);
- formData.append('ccBase', ccBase);
- formData.append('midiChan', midiChan);
- formData.append('oscBase', oscBase);
- formData.append('min', min);
- formData.append('max', max);
- formData.append('hysteresis', hysteresis ? 'true' : 'false');
- formData.append('oscFormat', oscFormat);
- formData.append('filterIntensity', filterIntensity);
- 
- try {
- const r = await fetch('/api/mux/add', { method: 'POST', body: formData });
- const d = await r.json();
- if (d.status === 'ok') {
- $('#muxMsg').textContent = 'Multiplexeur enregistre!';
- $('#muxMsg').style.color = '#10b981';
+ const min=parseInt($('#muxMin').value)||0;
+ const max=parseInt($('#muxMax').value)||4095;
+ const hysteresis=$('#muxHysteresis').checked;
+ const oscFormat=$('#muxOscFormat').value||'float';
+ const filterIntensity=parseInt($('#muxFilterIntensity').value)||5;
+ const formData=new URLSearchParams();
+ formData.append('id',id);
+ formData.append('sig',sig);
+ formData.append('s0',s0);
+ formData.append('s1',s1);
+ formData.append('s2',s2);
+ formData.append('s3',s3);
+ formData.append('en',en);
+ formData.append('ccBase',ccBase);
+ formData.append('midiChan',midiChan);
+ formData.append('oscBase',oscBase);
+ formData.append('min',min);
+ formData.append('max',max);
+ formData.append('hysteresis',hysteresis?'true':'false');
+ formData.append('oscFormat',oscFormat);
+ formData.append('filterIntensity',filterIntensity);
+ try{
+ const r=await fetch('/api/mux/add',{method:'POST',body:formData});
+ const d=await r.json();
+ if(d.status==='ok'){
+ $('#muxMsg').textContent='Multiplexeur enregistre!';
+ $('#muxMsg').style.color='#10b981';
  hideMuxForm();
  loadMuxList();
- loadConfiguredPins(); 
- loadCaps(); 
- } else {
- $('#muxMsg').textContent = 'Erreur: ' + (d.error || 'Inconnu');
- $('#muxMsg').style.color = '#ef4444';
- }
- } catch(e) {
- $('#muxMsg').textContent = 'Erreur reseau';
- $('#muxMsg').style.color = '#ef4444';
- }
- }
- 
- async function deleteMux(id, event) {
- if (event) event.stopPropagation();
- if (!confirm('Supprimer le multiplexeur MUX' + id + '?')) return;
- const formData = new URLSearchParams();
- formData.append('id', id);
- try {
- await fetch('/api/mux/delete', { method: 'POST', body: formData });
- await loadMuxList(); 
+ loadConfiguredPins();
  loadCaps();
- 
- const overlay = $('#muxModalOverlay');
- if (overlay && overlay.classList.contains('active')) {
+ } else{
+ $('#muxMsg').textContent='Erreur: '+(d.error||'Inconnu');
+ $('#muxMsg').style.color='#ef4444';
+ }
+ } catch(e){
+ $('#muxMsg').textContent='Erreur reseau';
+ $('#muxMsg').style.color='#ef4444';
+ }
+}
+
+async function deleteMux(id,event){
+ if(event) event.stopPropagation();
+ if(!confirm('Supprimer le multiplexeur MUX'+id+'?')) return;
+ const formData=new URLSearchParams();
+ formData.append('id',id);
+ try{
+ await fetch('/api/mux/delete',{method:'POST',body:formData});
+ await loadMuxList();
+ loadCaps();
+ const overlay=$('#muxModalOverlay');
+ if(overlay&&overlay.classList.contains('active')){
  populateMuxPinSelects();
  }
- } catch(e) { console.log('Erreur suppression mux:', e); }
+ } catch(e){ console.log('Erreur suppression mux:',e); }
+}
+
+function initWebSocket(){
+ const protocol=window.location.protocol==='https:'?'wss:':'ws:';
+ const wsUrl=`${protocol}//${window.location.host}/ws`;
+ websocket=new WebSocket(wsUrl);
+ websocket.onopen=function(){
+ console.log('WebSocket connected');
+ };
+ websocket.onmessage=function(event){
+ const message=event.data;
+ if(message.startsWith('PIN_CONFIG:')){
+ const parts=message.split(':');
+ if(parts.length>=3){
+ const pin=parts[1];
+ const config=JSON.parse(parts.slice(2).join(':'));
+ applyPinReplacementLogic(pin);
+ if(['SDA','SCL'].includes(pin)&&config.role==='I2C'){
+ pcfg['I2C']=config;
+ } else if(['MOSI','MISO','SCK'].includes(pin)&&config.role==='SPI'){
+ pcfg['SPI']=config;
+ } else{
+ pcfg[pin]=config;
  }
- 
- function initMuxForm() {
- const form = $('#muxForm');
- if (form) form.onsubmit = saveMux;
+ updatePinsList();
+ updateBusVisuals();
+ if(cur===pin){
+ applyCfg(config);
  }
- 
- document.addEventListener('DOMContentLoaded', () => {
- initTabs();
- initForms();
- initMuxForm();
- initWebSocket();
- loadStatus();
- loadMdns();
- loadCaps();
- loadConfiguredPins();
- loadMuxList();
- setInterval(loadStatus, 5000);
- const btn=$('#saveAllBtn'); if(btn) btn.onclick=saveAll; 
- 
- const fieldsToWatch=['funcSelect','btnMode','btnPulseTiming','ledMode','potFilter','filterIntensity','rtpEnabled2','rtpMsgType','rtpNote','rtpCc','rtpPc','rtpChan','rtpCcOn','rtpCcOff','rtpVel','rtpCcMin','rtpCcMax','rtpNoteMin','rtpNoteMax','rtpNoteVelFix','rtpNoteSweepAutoOffDelay','oscEnabled2','oscAddress','oscFormat','dbgEnabled','dbgHeader'];
- fieldsToWatch.forEach(id=>{
- const el=document.getElementById(id);
- if(el){
- el.addEventListener('change',()=>{ 
- if(cur){ 
- pcfg[cur]=readCfg(); 
- updatePinsList(); 
- updateBusVisuals();
- } 
- });
- el.addEventListener('input',()=>{ 
- if(cur){ 
- pcfg[cur]=readCfg(); 
- updatePinsList(); 
- updateBusVisuals();
- } 
- });
  }
- });
- 
- 
- const rtpType = $('#rtpMsgType');
- if(rtpType){ 
- rtpType.onchange = function() {
- updateRtpParamsVisibility();
- 
- if(cur){ 
- pcfg[cur]=readCfg(); 
- updatePinsList(); 
- updateBusVisuals();
  }
  };
- }
- 
- 
- const btnMode = $('#btnMode');
- if(btnMode){ 
- btnMode.onchange = function() {
- updateBtnPulseTimingVisibility();
- 
- if(cur){ 
- pcfg[cur]=readCfg(); 
- updatePinsList(); 
- updateBusVisuals();
- }
+ websocket.onclose=function(){
+ console.log('WebSocket disconnected');
+ setTimeout(initWebSocket,3000);
  };
- }
- });
- </script>
+}
+
+function initMuxForm(){
+ const form=$('#muxForm');
+ if(form) form.onsubmit=saveMux;
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{initTabs(); loadStatus(); loadMdns(); loadOscConfig(); loadStaConfig(); initForms(); initMuxForm(); initWebSocket(); loadCaps().then(()=>{drawBoard(); loadConfiguredPins(); loadMuxList();}); if($('#saveAllBtn')) $('#saveAllBtn').onclick=saveAll; setInterval(loadStatus, 5000);});</script>
 </head>
 <body>
- <div class="c">
  <div class="h"><h1>ESP32 Server</h1><p>Configuration Wi‑Fi, RTP‑MIDI et OSC</p></div>
  <div class="t"><div class="tab active" data-t="status">Statut</div><div class="tab" data-t="connection">Connection</div><div class="tab" data-t="pins">Pins</div><div class="tab" data-t="components">Composants</div></div>
  <div class="p active" id="panel-status">
@@ -1216,7 +1485,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  <h4 style="margin-top:20px;">Configuration analogique</h4>
  <div class="f"><label>Seuil min (0-4095):</label><input type="number" id="muxMin" min="0" max="4095" value="0" style="width:100px;"></div>
  <div class="f"><label>Seuil max (0-4095):</label><input type="number" id="muxMax" min="0" max="4095" value="4095" style="width:100px;"></div>
- <div class="hint">OSC: /muxID/cal/min min/CH max max/CH reset reset/CH</div>
+ <div class="hint">OSC: /mux/ID/cal/min min/CH max max/CH reset reset/CH</div>
  <div class="f"><label><input type="checkbox" id="muxHysteresis" checked> Hystérésis activée</label></div>
  <div class="f"><label>Format OSC:</label><select id="muxOscFormat"><option value="float">Float (0-1)</option><option value="raw">Raw (0-4095)</option><option value="midi">MIDI (0-127)</option></select></div>
  <div class="f"><label>Intensité filtrage (1-10):</label><input type="number" id="muxFilterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">1=rapide, 10=stable</span></div>
@@ -1227,4 +1496,5 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
  </div>
  </div>
 </body>
-</html>)rawliteral";
+</html>
+)rawliteral";
