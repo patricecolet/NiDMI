@@ -11,10 +11,11 @@
 struct OSCMessageItem {
     String address;
     float value;
+    float value2; // Deuxième valeur float (pour canal MUX)
     uint8_t data1;
     uint8_t data2;
     uint8_t channel;
-    uint8_t messageType; // 0=float, 1=MIDI
+    uint8_t messageType; // 0=float, 1=MIDI, 2=float2
     uint32_t timestamp;
 };
 
@@ -28,7 +29,13 @@ public:
     
     // Ajouter des messages à la queue (non-bloquant)
     bool enqueueFloat(const String& address, float value);
+    bool enqueueFloat2(const String& address, float value1, float value2);
     bool enqueueMidi(const String& address, uint8_t data1, uint8_t data2, uint8_t channel);
+    
+    // Envoyer un tableau de valeurs (pour MUX batch, envoi direct sans queue)
+    bool enqueueFloatArray(const String& address, const float* values, int count);
+    bool enqueueIntArray(const String& address, const uint16_t* values, int count);  // Raw (0-4095)
+    bool enqueueMidiArray(const String& address, const uint8_t* values, int count); // MIDI (0-127)
     
     // Traiter la queue (à appeler dans loop())
     void update();

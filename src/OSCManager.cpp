@@ -13,7 +13,7 @@ OSCManager::OSCManager() :
     broadcastEnabled(false),
     broadcastIP(""),
     networkInterface(OSC_INTERFACE_AP),
-    messageCallback(nullptr) {
+    messageCallback() {
 }
 
 OSCManager::~OSCManager() {
@@ -276,32 +276,78 @@ void OSCManager::update() {
     // Vérifier s'il y a des paquets entrants
     int packetSize = udp.parsePacket();
     if (packetSize > 0) {
+        Serial.printf("[OSC] Paquet reçu: %d bytes\n", packetSize);
+        
         // Lire le paquet entrant
         uint8_t buffer[256];
         int len = udp.read(buffer, sizeof(buffer) - 1);
         if (len > 0) {
             buffer[len] = 0; // Null terminate
             
+            // Debug: afficher les premiers bytes du buffer
+            Serial.printf("[OSC] Buffer brut (premiers 32 bytes): ");
+            for (int i = 0; i < len && i < 32; i++) {
+                Serial.printf("%02X ", buffer[i]);
+            }
+            Serial.println();
+            
+            // Debug: essayer de lire comme string (pour voir l'adresse)
+            Serial.printf("[OSC] Buffer comme string: '%s'\n", (char*)buffer);
+            
             // Parser le message OSC
             OSCMessage msg;
             msg.fill(buffer, len);
             
             if (!msg.hasError()) {
-                // Extraire l'adresse
-                char addressBuffer[64];
-                msg.getAddress(addressBuffer, sizeof(addressBuffer));
-                String address = String(addressBuffer);
+                // Essayer différentes méthodes pour obtenir l'adresse
+                const char* addr_ptr = msg.getAddress();
+                Serial.printf("[OSC] getAddress() retourne: '%s'\n", addr_ptr ? addr_ptr : "(null)");
                 
-                // Extraire la première valeur float (si disponible)
-                if (msg.size() > 0 && msg.isFloat(0)) {
-                    float value = msg.getFloat(0);
+                // Extraire l'adresse dans un buffer
+                char addressBuffer[64];
+                addressBuffer[0] = '\0';
+                msg.getAddress(addressBuffer, sizeof(addressBuffer));
+                Serial.printf("[OSC] getAddress(buffer) remplit: '%s'\n", addressBuffer);
+                
+                String address = String(addr_ptr ? addr_ptr : addressBuffer);
+                Serial.printf("[OSC] Message reçu: '%s'\n", address.c_str());
+                
+                // Appeler le callback si défini (avec ou sans valeur)
+                if (messageCallback) {
+                    float value = 0.0f;
+                    String arg_string = "";
                     
-                    // Appeler le callback si défini
-                    if (messageCallback) {
-                        messageCallback(address, value);
+                    if (msg.size() > 0) {
+                        if (msg.isFloat(0)) {
+                            // Message avec valeur float
+                            value = msg.getFloat(0);
+                            Serial.printf("[OSC] Appel callback avec valeur float: %f\n", value);
+                        } else if (msg.isString(0)) {
+                            // Message avec argument string
+                            char strBuffer[64];
+                            msg.getString(0, strBuffer, sizeof(strBuffer));
+                            arg_string = String(strBuffer);
+                            Serial.printf("[OSC] Appel callback avec argument string: '%s'\n", arg_string.c_str());
+                        } else if (msg.isInt(0)) {
+                            // Message avec valeur int
+                            value = (float)msg.getInt(0);
+                            Serial.printf("[OSC] Appel callback avec valeur int: %d\n", (int)value);
+                        } else {
+                            Serial.printf("[OSC] Appel callback avec argument de type inconnu, size=%d\n", msg.size());
+                        }
+                    } else {
+                        Serial.printf("[OSC] Appel callback sans argument (commande), size=%d\n", msg.size());
                     }
+                    
+                    messageCallback(address, value, arg_string);
+                } else {
+                    Serial.printf("[OSC] ERREUR: callback non défini!\n");
                 }
+            } else {
+                Serial.printf("[OSC] ERREUR parsing message OSC: code=%d\n", msg.getError());
             }
+        } else {
+            Serial.printf("[OSC] ERREUR: impossible de lire le paquet\n");
         }
     }
 }

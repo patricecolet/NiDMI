@@ -63,6 +63,16 @@ sync_files() {
     echo "   📁 Source: $REPO_DIR"
     echo "   📁 Destination: $ARDUINO_LIB_DIR"
     
+    # Minifier l'UI avant la synchronisation
+    if [ -f "$REPO_DIR/scripts/build_html_simple.sh" ]; then
+        echo "   🗜️  Minification de l'UI..."
+        cd "$REPO_DIR"
+        ./scripts/build_html_simple.sh
+        echo "   ✅ UI minifiée"
+    else
+        echo "   ⚠️  Script de minification non trouvé, synchronisation sans minification"
+    fi
+    
     # Copier tous les fichiers source
     cp -f $REPO_DIR/src/*.cpp $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
     cp -f $REPO_DIR/src/*.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true

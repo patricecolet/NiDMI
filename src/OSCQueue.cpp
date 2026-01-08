@@ -59,6 +59,7 @@ bool OSCQueue::enqueueFloat(const String& address, float value) {
     OSCMessageItem item;
     item.address = address;
     item.value = value;
+    item.value2 = 0.0f;
     item.data1 = 0;
     item.data2 = 0;
     item.channel = 0;
@@ -75,6 +76,31 @@ bool OSCQueue::enqueueFloat(const String& address, float value) {
     return true;
 }
 
+bool OSCQueue::enqueueFloat2(const String& address, float value1, float value2) {
+    if (!initialized || !messageQueue) {
+        return false;
+    }
+    
+    OSCMessageItem item;
+    item.address = address;
+    item.value = value1;
+    item.value2 = value2;
+    item.data1 = 0;
+    item.data2 = 0;
+    item.channel = 0;
+    item.messageType = 2; // Float2
+    item.timestamp = millis();
+    
+    BaseType_t result = xQueueSend(messageQueue, &item, 0); // Non-bloquant
+    if (result != pdTRUE) {
+        // Serial.printf("[OSCQueue] Queue pleine, message float2 perdu: %s=%.3f,%.3f\n", 
+        //              address.c_str(), value1, value2);
+        return false;
+    }
+    
+    return true;
+}
+
 bool OSCQueue::enqueueMidi(const String& address, uint8_t data1, uint8_t data2, uint8_t channel) {
     if (!initialized || !messageQueue) {
         return false;
@@ -83,6 +109,7 @@ bool OSCQueue::enqueueMidi(const String& address, uint8_t data1, uint8_t data2, 
     OSCMessageItem item;
     item.address = address;
     item.value = 0.0f;
+    item.value2 = 0.0f;
     item.data1 = data1;
     item.data2 = data2;
     item.channel = channel;
@@ -97,6 +124,69 @@ bool OSCQueue::enqueueMidi(const String& address, uint8_t data1, uint8_t data2, 
     }
     
     return true;
+}
+
+bool OSCQueue::enqueueFloatArray(const String& address, const float* values, int count) {
+    if (!initialized || count <= 0 || count > 16 || !values) {
+        return false;
+    }
+    
+    // Créer un message avec toutes les valeurs et envoyer directement (pas de queue)
+    OSCMessage msg(address.c_str());
+    for (int i = 0; i < count; i++) {
+        msg.add(values[i]);
+    }
+    
+    // Envoyer directement (pas de queue pour les messages batch)
+    if (sendOSCMessage(msg)) {
+        sentCount++;
+        return true;
+    } else {
+        failedCount++;
+        return false;
+    }
+}
+
+bool OSCQueue::enqueueIntArray(const String& address, const uint16_t* values, int count) {
+    if (!initialized || count <= 0 || count > 16 || !values) {
+        return false;
+    }
+    
+    // Créer un message avec toutes les valeurs brutes (0-4095) comme int32
+    OSCMessage msg(address.c_str());
+    for (int i = 0; i < count; i++) {
+        msg.add((int32_t)values[i]);
+    }
+    
+    // Envoyer directement (pas de queue pour les messages batch)
+    if (sendOSCMessage(msg)) {
+        sentCount++;
+        return true;
+    } else {
+        failedCount++;
+        return false;
+    }
+}
+
+bool OSCQueue::enqueueMidiArray(const String& address, const uint8_t* values, int count) {
+    if (!initialized || count <= 0 || count > 16 || !values) {
+        return false;
+    }
+    
+    // Créer un message avec toutes les valeurs MIDI (0-127) comme int32
+    OSCMessage msg(address.c_str());
+    for (int i = 0; i < count; i++) {
+        msg.add((int32_t)values[i]);
+    }
+    
+    // Envoyer directement (pas de queue pour les messages batch)
+    if (sendOSCMessage(msg)) {
+        sentCount++;
+        return true;
+    } else {
+        failedCount++;
+        return false;
+    }
 }
 
 void OSCQueue::update() {
@@ -118,6 +208,9 @@ void OSCQueue::update() {
         
         if (item.messageType == 0) { // Float
             msg.add(item.value);
+        } else if (item.messageType == 2) { // Float2
+            msg.add(item.value);  // Canal
+            msg.add(item.value2); // Valeur
         } else { // MIDI
             msg.add((int32_t)item.data1);
             msg.add((int32_t)item.data2);

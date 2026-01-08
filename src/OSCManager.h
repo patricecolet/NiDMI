@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <WiFiUdp.h>
 #include <OSCMessage.h>
+#include <functional>
 
 // Interfaces réseau pour l'envoi OSC
 enum OSCInterface : uint8_t {
@@ -12,7 +13,7 @@ enum OSCInterface : uint8_t {
     OSC_INTERFACE_BOTH = 2
 };
 
-typedef void (*OSCMessageCallback)(const String& address, float value);
+typedef std::function<void(const String&, float, const String&)> OSCMessageCallback;
 
 class OSCManager {
 public:

@@ -4,6 +4,11 @@
 McuType PinMapper::detected_mcu = McuType::UNKNOWN;
 bool PinMapper::mcu_detected = false;
 
+// Variables statiques pour les pins virtuelles des multiplexeurs
+PinMapping PinMapper::mux_pins[MAX_MUX_PINS];
+size_t PinMapper::mux_pin_count = 0;
+char PinMapper::mux_labels[MAX_MUX_PINS][8];
+
 // ============================================================================
 // ESP32-C3 (XIAO-ESP32C3) - Pins physiques
 // ============================================================================
@@ -229,7 +234,14 @@ uint8_t PinMapper::labelToGpio(const char* label) {
         return gpio_from_alias;
     }
     
-    // 2. Vérifier si c'est une pin physique (par label principal)
+    // 2. Vérifier si c'est une pin MUX virtuelle
+    for (size_t i = 0; i < mux_pin_count; i++) {
+        if (strcmp(mux_pins[i].label, label) == 0) {
+            return mux_pins[i].gpio;
+        }
+    }
+    
+    // 3. Vérifier si c'est une pin physique (par label principal)
     const PhysicalPin* pins;
     size_t count;
     
@@ -264,6 +276,11 @@ String PinMapper::gpioToLabel(uint8_t gpio) {
 }
 
 bool PinMapper::hasAdc(uint8_t gpio) {
+    // Vérifier si c'est un GPIO virtuel MUX (200-247)
+    if (gpio >= 200 && gpio < 248) {
+        return true;  // Toutes les pins MUX ont ADC
+    }
+    
     const PhysicalPin* pin = findPhysicalPin(gpio);
     return pin ? pin->has_adc : false;
 }
@@ -326,8 +343,8 @@ const PinMapping* PinMapper::getAllMappings() {
             return nullptr;
     }
     
-    // Allouer le buffer : pins physiques + aliases
-    generated_mapping_count = pin_count + alias_count;
+    // Allouer le buffer : pins physiques + aliases + pins MUX
+    generated_mapping_count = pin_count + alias_count + mux_pin_count;
     generated_mappings = new PinMapping[generated_mapping_count];
     
     // Copier les pins physiques
@@ -351,20 +368,30 @@ const PinMapping* PinMapper::getAllMappings() {
         }
     }
     
+    // Ajouter les pins virtuelles des multiplexeurs
+    size_t base_count = pin_count + alias_count;
+    for (size_t i = 0; i < mux_pin_count; i++) {
+        generated_mappings[base_count + i] = mux_pins[i];
+    }
+    
     return generated_mappings;
 }
 
 size_t PinMapper::getMappingCount() {
     detectMcu();
     
+    size_t base_count = 0;
     switch (detected_mcu) {
         case McuType::ESP32_C3:
-            return c3_physical_pin_count + c3_alias_count;
+            base_count = c3_physical_pin_count + c3_alias_count;
+            break;
         case McuType::ESP32_S3:
-            return s3_physical_pin_count + s3_alias_count;
+            base_count = s3_physical_pin_count + s3_alias_count;
+            break;
         default:
-            return 0;
+            return mux_pin_count;
     }
+    return base_count + mux_pin_count;
 }
 
 void PinMapper::printMappings() {
@@ -411,4 +438,64 @@ void PinMapper::printMappings() {
             mappings[i].has_touch ? "✓" : "✗"
         );
     }
+}
+
+// ============================================================================
+// Gestion des pins virtuelles de multiplexeurs
+// ============================================================================
+
+void PinMapper::registerMuxPins(uint8_t mux_id) {
+    if (mux_id >= 2) return; // Max 2 mux (0, 1)
+    
+    // Supprimer d'abord les anciennes pins de ce mux
+    unregisterMuxPins(mux_id);
+    
+    // GPIO de base pour ce mux : 200 + (mux_id * 16)
+    uint8_t gpio_base = 200 + (mux_id * 16);
+    
+    // Ajouter 16 pins virtuelles pour ce mux
+    for (uint8_t ch = 0; ch < 16; ch++) {
+        if (mux_pin_count >= MAX_MUX_PINS) break;
+        
+        // Générer le label : "M0_0" à "M0_15", "M1_0" à "M1_15", etc.
+        snprintf(mux_labels[mux_pin_count], 8, "M%d_%d", mux_id, ch);
+        
+        mux_pins[mux_pin_count].label = mux_labels[mux_pin_count];
+        mux_pins[mux_pin_count].gpio = gpio_base + ch;
+        mux_pins[mux_pin_count].has_adc = true;  // Pins MUX sont analogiques
+        mux_pins[mux_pin_count].has_pwm = false;
+        mux_pins[mux_pin_count].has_touch = false;
+        
+        mux_pin_count++;
+    }
+    
+    Serial.printf("[PinMapper] Registered 16 MUX pins for mux_id=%d (GPIO%d-%d)\n", 
+                 mux_id, gpio_base, gpio_base + 15);
+}
+
+void PinMapper::unregisterMuxPins(uint8_t mux_id) {
+    if (mux_id >= 2) return; // Max 2 mux (0, 1)
+    
+    uint8_t gpio_base = 200 + (mux_id * 16);
+    uint8_t gpio_end = gpio_base + 16;
+    
+    // Supprimer les pins de ce mux (compacter le tableau)
+    size_t write_idx = 0;
+    for (size_t read_idx = 0; read_idx < mux_pin_count; read_idx++) {
+        if (mux_pins[read_idx].gpio < gpio_base || mux_pins[read_idx].gpio >= gpio_end) {
+            // Garder cette pin
+            if (write_idx != read_idx) {
+                mux_pins[write_idx] = mux_pins[read_idx];
+                strncpy(mux_labels[write_idx], mux_labels[read_idx], 8);
+                mux_pins[write_idx].label = mux_labels[write_idx];
+            }
+            write_idx++;
+        }
+    }
+    mux_pin_count = write_idx;
+}
+
+void PinMapper::clearMuxPins() {
+    mux_pin_count = 0;
+    Serial.println("[PinMapper] Cleared all MUX pins");
 }

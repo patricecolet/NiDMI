@@ -26,7 +26,22 @@
   - ✅ Configuration via interface web (intégré WebSocket)
   - ✅ Mapping OSC ↔ MIDI
 
-### **3. DEBUG (Système de Logs)**
+### **3. Multiplexeurs Analogiques (HC4067)** 🔄 **EN DÉVELOPPEMENT**
+- **Status** : 🔄 En développement (branche `feature/analog-mux`)
+- **Objectif** : Support des multiplexeurs analogiques 16 canaux
+- **Fonctionnalités** :
+  - ✅ Composant `AnalogMux` implémenté (basé sur Control-Surface)
+  - ✅ Support jusqu'à 3 multiplexeurs (MUX0, MUX1, MUX2)
+  - ✅ GPIO virtuels : 200-215 (MUX0), 216-231 (MUX1), 232-247 (MUX2)
+  - ✅ API REST : `/api/mux/list`, `/api/mux/add`, `/api/mux/delete`
+  - ✅ Interface web complète pour configuration
+  - ✅ Sauvegarde/chargement NVS automatique
+  - ✅ Intégration dans `ComponentManager` et `PinMapper`
+  - ✅ Pin EN optionnelle (active LOW)
+  - ✅ Discard first reading pour stabilité
+  - 🔄 Tests et validation en cours
+
+### **4. DEBUG (Système de Logs)**
 - **Status** : 🔄 En développement  
 - **Objectif** : Système de debug avancé et monitoring
 - **Fonctionnalités** :
@@ -35,16 +50,16 @@
   - Niveaux de log configurables
   - Export des logs
 
-### **4. ESP32-S3 (Support Complet)**
+### **5. ESP32-S3 (Support Complet)**
 - **Status** : 🔄 En développement
 - **Objectif** : Support complet de l'ESP32-S3
 - **Fonctionnalités** :
-  - Interface web adaptée ESP32-S3
-  - Mapping des pins ESP32-S3
-  - Optimisations spécifiques S3
-  - Tests de compatibilité
+  - ✅ Mapping des pins ESP32-S3 (partiellement implémenté)
+  - 🔄 Interface web adaptée ESP32-S3
+  - 🔄 Optimisations spécifiques S3
+  - 🔄 Tests de compatibilité
 
-### **4. USB-MIDI**
+### **6. USB-MIDI**
 - **Status** : 📋 Planifié
 - **Objectif** : Connexion USB directe MIDI
 - **Fonctionnalités** :
@@ -53,7 +68,7 @@
   - Routage USB ↔ RTP-MIDI
   - Compatibilité macOS/Windows/Linux
 
-### **5. TOUCH PINS (ESP32-S3)**
+### **7. TOUCH PINS (ESP32-S3)**
 - **Status** : 📋 Planifié
 - **Objectif** : Support des touch pins ESP32-S3
 - **Fonctionnalités** :
@@ -67,13 +82,15 @@
 ### **✅ Implémenté**
 - **Serveur web** : Interface de configuration
 - **RTP-MIDI** : Communication sans fil
+- **OSC** : Open Sound Control complet
 - **Pins configurables** : Potentiomètres, boutons, LEDs
 - **API REST** : Configuration via HTTP
 - **Stockage NVS** : Configuration persistante
 - **ESP32-C3** : Support complet
+- **WebSocket** : Synchronisation temps réel
 
 ### **🔄 En Développement**
-- **OSC** : Open Sound Control
+- **Multiplexeurs analogiques** : Support HC4067 (branche `feature/analog-mux`)
 - **DEBUG** : Système de logs avancé
 - **ESP32-S3** : Support complet
 
@@ -167,23 +184,31 @@ src/
 ├── ComponentManager.cpp/h      # Gestion des composants
 ├── PinMapper.cpp/h            # Mapping des pins
 ├── RtpMidi.cpp/h             # RTP-MIDI
+├── OSCManager.cpp/h          # Gestion OSC ✅
+├── DebugManager.cpp/h        # Système de logs 🔄
 ├── WebAPI.cpp                 # API REST
 ├── ServerCore.cpp/h           # Cœur du serveur
-└── ui_index.cpp/h             # Interface web intégrée
+├── ui_index.cpp/h             # Interface web intégrée
+└── components/
+    ├── AnalogMux.h            # Multiplexeur analogique 🔄
+    ├── Potentiometer.h        # Potentiomètre
+    ├── Button.h               # Bouton
+    └── Led.h                  # LED
 ```
 
 ### **Nouvelles Classes à Développper**
-- **`OscManager`** : Gestion OSC
-- **`DebugManager`** : Système de logs
 - **`UsbMidiManager`** : USB-MIDI
 - **`TouchManager`** : Touch pins ESP32-S3
 
 ## 📝 **Notes de Développement**
 
-### **OSC (Priorité 1)**
-- Utiliser la bibliothèque OSC standard
-- Interface web pour configuration
-- Mapping bidirectionnel OSC ↔ MIDI
+### **Multiplexeurs Analogiques (Priorité 1 - En cours)**
+- ✅ Composant `AnalogMux` implémenté
+- ✅ Intégration dans `ComponentManager`
+- ✅ API REST et interface web
+- 🔄 Tests et validation nécessaires
+- 🔄 Documentation d'utilisation à créer
+- **Branche** : `feature/analog-mux`
 
 ### **DEBUG (Priorité 2)**
 - Système de logs avec niveaux
@@ -207,5 +232,23 @@ src/
 
 ---
 
-*Document mis à jour le : $(date)*
-*Ordre de priorité : OSC → DEBUG → S3 → USBMIDI → TOUCH*
+## 📌 **État Actuel du Projet (Mise à jour)**
+
+**Branche active** : `feature/analog-mux`
+
+**Dernière fonctionnalité** : Support des multiplexeurs analogiques HC4067
+- Implémentation complète du composant `AnalogMux`
+- Intégration dans le système de gestion des composants
+- Interface web et API REST fonctionnelles
+- En attente de tests et validation
+
+**Prochaines étapes** :
+1. Finaliser et tester les multiplexeurs analogiques
+2. Corriger le système de debug (priorité haute)
+3. Uniformiser l'interface web (boutons/LEDs)
+4. Poursuivre le support ESP32-S3
+
+---
+
+*Document mis à jour le : 2024*
+*Ordre de priorité actuel : MUX → DEBUG → S3 → USBMIDI → TOUCH*

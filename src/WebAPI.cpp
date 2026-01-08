@@ -1,10 +1,17 @@
 #include "ServerCore.h"
 #include "ui_index.h"
+#include "ui_bundle.h"
 #include "PinMapper.h"
 #include "api/APICommon.h"
 #include <Preferences.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncWebSocket.h>
+#include <pgmspace.h>
+
+// Forward declarations pour les APIs
+void setupPinAPI(AsyncWebServer& server);
+void setupOSC_API(AsyncWebServer& server);
+void setupCacheAPI(AsyncWebServer& server);
 
 Preferences preferences;
 
@@ -25,6 +32,25 @@ String getDefaultConfig(String pin) {
             return "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":4,\"rtpChan\":1,\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
         }
         // A3 n'existe pas sur ce MCU, retourner config par défaut
+    }
+    
+    // Pins MUX (M0_0 à M1_15) - traiter comme potentiomètres
+    if (pin.startsWith("M")) {
+        // Extraire le numéro de mux et canal : M0_0 -> mux=0, ch=0
+        int underscore_pos = pin.indexOf('_');
+        if (underscore_pos > 0 && underscore_pos < pin.length() - 1) {
+            int mux_id = pin.substring(1, underscore_pos).toInt();
+            int channel = pin.substring(underscore_pos + 1).toInt();
+            // CC par défaut : 1 + (mux_id * 16) + channel
+            int default_cc = 1 + (mux_id * 16) + channel;
+            if (default_cc > 127) default_cc = 127; // Limiter à 127
+            
+            String config = "{\"role\":\"Potentiomètre\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",";
+            config += "\"rtpCc\":" + String(default_cc) + ",\"rtpChan\":1,";
+            config += "\"potFilter\":\"lowpass\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",";
+            config += "\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+            return config;
+        }
     }
     
     if (pin == "D0") return "{\"role\":\"Bouton\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":60,\"rtpChan\":1,\"btnMode\":\"pulse\",\"btnPulseTiming\":\"release\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
@@ -103,10 +129,28 @@ void sendRtpStatus(AsyncWebSocket& ws) {
 void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     // Serial.println("[WebAPI] Starting setup...");
     
-    // Page principale
+    // Page principale - Utiliser streaming par chunks depuis PROGMEM
     // Serial.println("[WebAPI] Setting up main page...");
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(200, "text/html", INDEX_HTML);
+        size_t htmlLen = strlen_P(INDEX_HTML);
+        AsyncWebServerResponse *response = request->beginResponse("text/html; charset=utf-8", htmlLen, 
+            [htmlLen](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+                size_t toWrite = (htmlLen - index < maxLen) ? (htmlLen - index) : maxLen;
+                if (toWrite > 0) {
+                    memcpy_P(buffer, INDEX_HTML + index, toWrite);
+                }
+                return toWrite;
+            });
+        response->addHeader("Connection", "close");
+        request->send(response);
+    });
+    
+    // Bundle JavaScript compressé en gzip (route /bundle)
+    server.on("/bundle", HTTP_GET, [](AsyncWebServerRequest *request){
+        const char *type = "text/javascript";
+        AsyncWebServerResponse *response = request->beginResponse_P(200, type, BUNDLE, BUNDLE_LEN);
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
     });
     
     // API - Statut système
@@ -435,6 +479,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         String btnMode    = getOpt("btnMode");
         String btnPulseTiming = getOpt("btnPulseTiming");
         String potFilter  = getOpt("potFilter");
+        String filterIntensity = getOpt("filterIntensity");
         String oscEnabled = getOpt("oscEnabled");
         String oscAddress = getOpt("oscAddress");
         String oscFormat  = getOpt("oscFormat");
@@ -464,6 +509,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         if(btnMode.length())    json += ",\"btnMode\":\"" + btnMode + "\"";
         if(btnPulseTiming.length()) json += ",\"btnPulseTiming\":\"" + btnPulseTiming + "\"";
         if(potFilter.length())  json += ",\"potFilter\":\"" + potFilter + "\"";
+        if(filterIntensity.length()) json += ",\"filterIntensity\":" + filterIntensity;
         if(oscEnabled.length()) json += ",\"oscEnabled\":" + String((oscEnabled=="true")?"true":"false");
         if(oscAddress.length()) json += ",\"oscAddress\":\"" + oscAddress + "\"";
         if(oscFormat.length())  json += ",\"oscFormat\":\"" + oscFormat + "\"";
@@ -552,6 +598,12 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     // Serial.println("[WebAPI] Setting up WebSocket...");
     ws.onEvent(onWsEvent);
     server.addHandler(&ws);
+    
+    // Configurer les autres APIs
+    setupPinAPI(server);
+    setupOSC_API(server);
+    setupCacheAPI(server);
+    // Note: setupNetworkAPI n'est pas appelé car les routes sont déjà définies dans setupWebAPI
     
     // Serial.println("[WebAPI] Setup complete!");
 }
