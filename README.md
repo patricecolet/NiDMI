@@ -363,21 +363,67 @@ vim web/js/pins.js              # Module spécifique
 # Ouvrir http://192.168.4.1 (ou nom.local)
 ```
 
+**Localisation (langues)** :
+```bash
+# Build en français (défaut)
+./scripts/esp32server.sh sync
+
+# Build en anglais
+./scripts/esp32server.sh sync --lang en
+
+# Upload avec interface anglaise
+./scripts/esp32server.sh upload --lang en
+```
+
+**Note** : La localisation nécessite `jq` installé. Voir `docs/GUIDE_LOCALISATION.md` pour plus de détails.
+
 **Conseils de développement** :
 - ✅ **Utilisez des commentaires** `/* */` en JavaScript (supprimés automatiquement)
 - ❌ **Évitez les commentaires** `//` (interdits sauf dans URLs)
 - ✅ **Éditez toujours** les fichiers dans `web/` (jamais `src/ui_index.cpp` directement)
 - ✅ **Testez** après chaque modification importante
 - ✅ **Consultez** `docs/MODULARISATION_UI.md` pour la structure complète
+- ✅ **Localisation** : Consultez `docs/GUIDE_LOCALISATION.md` pour changer la langue
+
+### Localisation (Multi-langue)
+
+L'interface web supporte plusieurs langues via des fichiers JSON de traduction :
+
+```bash
+# Build en français (défaut)
+./scripts/esp32server.sh sync
+
+# Build en anglais
+./scripts/esp32server.sh sync --lang en
+
+# Upload avec interface anglaise
+./scripts/esp32server.sh upload --lang en
+```
+
+**Langues supportées** :
+- 🇫🇷 Français (défaut)
+- 🇬🇧 Anglais
+
+**Fichiers de traduction** : `web/lang/fr.json`, `web/lang/en.json`
+
+**Prérequis** : `jq` doit être installé pour les traductions (voir `docs/GUIDE_LOCALISATION.md`)
+
+**Documentation complète** : Consultez `docs/GUIDE_LOCALISATION.md` pour :
+- Comment ajouter une nouvelle langue
+- Comment utiliser les placeholders `{{t.xxx}}` dans le HTML/JS
+- Dépannage et bonnes pratiques
 
 ### Optimisations Appliquées
 
 **Build Process** :
-1. Concaténation des modules JS dans l'ordre correct
-2. Génération HTML minimal avec `<script src="/bundle"></script>`
-3. Compression gzip du bundle JS
-4. Minification HTML (suppression commentaires + espaces)
-5. Conversion en C++ PROGMEM pour ESP32
+1. Chargement des traductions (si langue autre que français)
+2. Remplacement des placeholders `{{t.xxx}}` dans HTML et JS
+3. Concaténation des modules JS dans l'ordre correct
+4. Génération HTML minimal avec `<script src="/bundle"></script>`
+5. Minification JavaScript (suppression commentaires `/* */`)
+6. Compression gzip du bundle JS
+7. Minification HTML (suppression commentaires + espaces)
+8. Conversion en C++ PROGMEM pour ESP32
 
 **Résultats** :
 - **HTML source** : ~15.6 KB

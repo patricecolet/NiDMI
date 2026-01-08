@@ -7,6 +7,7 @@
 - **Compression gzip** : Implémentée avec route `/bundle`
 - **Bug encodage** : Résolu avec HTML minimal + streaming par chunks
 - **Optimisation mémoire** : 58 KB → 26 KB (réduction 55%)
+- **Localisation** : Système multi-langue (français/anglais) avec JSON
 
 ### ✅ Réalisations Récentes
 
@@ -20,6 +21,14 @@
 - ✅ HTML minimal (~15.6 KB) avec `<script src="/bundle"></script>`
 - ✅ Route `/bundle` avec en-tête `Content-Encoding: gzip`
 - ✅ Streaming par chunks depuis PROGMEM pour fiabilité
+- ✅ Minification JavaScript (suppression commentaires `/* */`)
+
+#### Localisation Multi-langue
+- ✅ Système de traduction basé sur JSON
+- ✅ Support français (défaut) et anglais
+- ✅ Option `--lang` dans `esp32server.sh`
+- ✅ Placeholders `{{t.xxx}}` dans HTML/JS
+- ✅ Documentation complète dans `docs/GUIDE_LOCALISATION.md`
 
 #### Résolution Bugs
 - ✅ Bug encodage aléatoire résolu (HTML minimal + streaming)
@@ -42,6 +51,9 @@ NiDMI/
 ├── web/
 │   ├── index.html         # HTML minimal (source de vérité)
 │   ├── app.js            # Code JS principal résiduel
+│   ├── lang/
+│   │   ├── fr.json       # Traductions françaises
+│   │   └── en.json       # Traductions anglaises
 │   └── js/
 │       ├── core.js        # Utilitaires de base
 │       ├── api.js         # Appels API
@@ -50,13 +62,16 @@ NiDMI/
 │       ├── websocket.js   # WebSocket temps réel
 │       └── mux.js         # Multiplexeurs analogiques
 ├── scripts/
-│   ├── build_html_simple.sh  # Build HTML + bundle gzip
+│   ├── build_html_simple.sh  # Build HTML + bundle gzip + traductions
 │   └── esp32server.sh        # Script principal (intègre build)
 ├── build/                  # Fichiers générés (ignorés par git)
 │   ├── index.min.html     # HTML minifié
 │   └── bundle.js.gz       # Bundle JS compressé
 └── docs/
-    └── MODULARISATION_UI.md  # Guide complet
+    ├── GUIDE_LOCALISATION.md  # Guide localisation multi-langue
+    ├── MODULARISATION_UI.md   # Guide modularisation
+    ├── GUIDE_IMPLÉMENTATION_COMPOSANTS.md  # Guide pour stagiaires
+    └── ...
 ```
 
 ### 🔧 Bibliothèques Utilisées
@@ -73,7 +88,7 @@ NiDMI/
 - **OSC** : Support complet (Float 0-1 et MIDI 3 int)
 - **WebSocket** : Synchronisation temps réel des configurations
 - **Composants** : Boutons, potentiomètres, LEDs, Multiplexeurs
-- **Interface Web** : Modulaire, optimisée, responsive
+- **Interface Web** : Modulaire, optimisée, responsive, multi-langue
 - **Gestion Pins** : Conflits automatiques, grisage des bus
 
 ### 🔄 Synchronisation WebSocket
@@ -114,8 +129,11 @@ NiDMI/
 
 2. **Build automatique** :
    ```bash
-   # Build + Sync + Compile + Upload
+   # Build + Sync + Compile + Upload (français, défaut)
    ./scripts/esp32server.sh upload
+   
+   # Build + Sync + Compile + Upload (anglais)
+   ./scripts/esp32server.sh upload --lang en
    
    # Ou seulement build + sync
    ./scripts/esp32server.sh sync
@@ -131,19 +149,23 @@ NiDMI/
 - `esp32server.sh sync` : Build HTML + synchronisation fichiers
 - `esp32server.sh compile` : Build + compilation
 - `esp32server.sh upload` : Build + compile + upload ESP32
+- `esp32server.sh upload --lang en` : Build en anglais + upload
 - `esp32server.sh monitor` : Moniteur série
 - `build_html_simple.sh` : Build manuel HTML + bundle (si besoin)
 
 ## 🔍 Points Techniques Importants
 
 ### Build Process
-1. **Concaténation JS** : Modules concaténés dans l'ordre (`core.js` → `api.js` → `pins.js` → `components.js` → `websocket.js` → `mux.js` → `app.js`)
-2. **Génération HTML minimal** : Remplace `<!--JS-->...<!--/JS-->` par `<script src="/bundle"></script>`
-3. **Compression gzip** : Bundle JS compressé avec `gzip -c`
-4. **Conversion C++** : 
+1. **Chargement traductions** : Lecture du fichier JSON selon `LANG_CODE` (fr/en)
+2. **Remplacement placeholders** : `{{t.xxx}}` remplacés dans HTML et JS
+3. **Concaténation JS** : Modules concaténés dans l'ordre (`core.js` → `api.js` → `pins.js` → `components.js` → `websocket.js` → `mux.js` → `app.js`)
+4. **Minification JS** : Suppression commentaires `/* */` (y compris multi-lignes)
+5. **Génération HTML minimal** : Remplace `<!--JS-->...<!--/JS-->` par `<script src="/bundle"></script>`
+6. **Compression gzip** : Bundle JS compressé avec `gzip -c`
+7. **Conversion C++** : 
    - HTML → `src/ui_index.cpp` (format `R"rawliteral(...)rawliteral"`)
    - Bundle → `src/ui_bundle.h` (format PROGMEM avec `xxd -i`)
-5. **Minification** : Suppression commentaires HTML/JS et espaces multiples
+8. **Minification HTML** : Suppression commentaires HTML/JS et espaces multiples
 
 ### Routes HTTP
 - **`/`** : HTML minimal (streaming par chunks depuis PROGMEM)
@@ -176,6 +198,16 @@ const uint8_t BUNDLE[] PROGMEM = {
 #endif
 ```
 
+### Localisation
+
+**Fichiers JSON** : `web/lang/fr.json`, `web/lang/en.json`
+
+**Prérequis** : `jq` installé (`brew install jq` sur macOS)
+
+**Placeholders** : Utiliser `{{t.section.key}}` dans HTML et JS
+
+**Documentation** : `docs/GUIDE_LOCALISATION.md`
+
 ## ✅ État de Développement
 
 ### Fonctionnalités Stables
@@ -187,6 +219,7 @@ const uint8_t BUNDLE[] PROGMEM = {
 - ✅ RTP-MIDI complet
 - ✅ OSC complet (Float et MIDI)
 - ✅ Sauvegarde NVS automatique
+- ✅ Localisation multi-langue (fr/en)
 
 ### Optimisations Réalisées
 - ✅ Modularisation JavaScript (7 modules)
@@ -194,20 +227,23 @@ const uint8_t BUNDLE[] PROGMEM = {
 - ✅ HTML minimal séparé
 - ✅ Streaming par chunks (résout bug encodage)
 - ✅ Délai WebSocket pour éviter concurrence
-- ✅ Minification automatique
+- ✅ Minification automatique (commentaires `/* */`)
+- ✅ Système de traduction JSON
 
 ## 🎯 Prochaines Évolutions Possibles
 
 ### Court Terme
+- [ ] Implémenter les placeholders `{{t.xxx}}` dans `web/index.html`
+- [ ] Ajouter traductions dans les fichiers JavaScript
 - [ ] Tests unitaires pour modules JS
 - [ ] Documentation API WebSocket
-- [ ] Exemples d'utilisation avancés
 
 ### Moyen Terme
 - [ ] Support USB-MIDI
 - [ ] Interface ESP32-S3 optimisée
 - [ ] Touch pins ESP32-S3
 - [ ] Debug avancé avec logs structurés
+- [ ] Ajouter d'autres langues (espagnol, allemand, etc.)
 
 ### Long Terme
 - [ ] Lazy loading modules JS (si nécessaire)
@@ -239,8 +275,15 @@ Les modules JavaScript doivent être chargés dans l'ordre :
 - ❌ **Interdits** : Commentaires `//` (sauf dans URLs)
 - **Raison** : Simplifie la minification et évite problèmes d'encodage
 
+### Localisation
+- **Fichiers JSON** : `web/lang/fr.json`, `web/lang/en.json`
+- **Prérequis** : `jq` installé
+- **Placeholders** : Format `{{t.section.key}}` (ex: `{{t.tabs.status}}`)
+- **Option** : `--lang LANG` dans `esp32server.sh` (défaut: `fr`)
+- **Documentation** : `docs/GUIDE_LOCALISATION.md`
+
 ---
 
 *Document mis à jour le : Janvier 2025*
 *État du projet : Stable et optimisé*
-*Dernières modifications : Modularisation terminée + Compression gzip*
+*Dernières modifications : Localisation multi-langue ajoutée*

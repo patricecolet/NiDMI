@@ -7,7 +7,76 @@
 
 set -e
 
+# Récupérer la langue depuis la variable d'environnement (défaut: fr)
+LANG_CODE=${LANG_CODE:-fr}
+
+# Validation de la langue
+if [ "$LANG_CODE" != "fr" ] && [ "$LANG_CODE" != "en" ]; then
+    echo "⚠️  Langue non supportée: $LANG_CODE, utilisation de 'fr' par défaut"
+    LANG_CODE="fr"
+fi
+
 echo "🗜️  Minification HTML simple..."
+echo "🌐 Langue sélectionnée: $LANG_CODE"
+
+# Charger le fichier de traduction
+LANG_FILE="web/lang/${LANG_CODE}.json"
+if [ ! -f "$LANG_FILE" ]; then
+    echo "❌ Erreur: Fichier de traduction non trouvé: $LANG_FILE"
+    exit 1
+fi
+
+# Vérifier que jq est installé si on utilise une langue autre que fr
+if [ "$LANG_CODE" != "fr" ] && ! command -v jq &> /dev/null; then
+    echo "❌ Erreur: jq est requis pour les traductions"
+    echo "📝 Installation: brew install jq (macOS) ou sudo apt-get install jq (Linux)"
+    exit 1
+fi
+
+# Fonction pour récupérer une valeur depuis le JSON avec jq
+get_translation() {
+    local key="$1"
+    if command -v jq &> /dev/null; then
+        jq -r ".$key // empty" "$LANG_FILE" 2>/dev/null | sed 's/"/\\"/g'
+    else
+        echo ""
+    fi
+}
+
+# Fonction pour remplacer les placeholders {{t.key}} dans un fichier
+replace_translations() {
+    local file="$1"
+    local temp_file=$(mktemp)
+    
+    cp "$file" "$temp_file"
+    
+    # Chercher tous les placeholders {{t.xxx}} et les remplacer
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Chercher tous les placeholders dans la ligne
+        while echo "$line" | grep -q '{{t\.'; do
+            # Extraire la clé du premier placeholder trouvé
+            key=$(echo "$line" | sed -n 's/.*{{t\.\([^}]*\)}}.*/\1/p')
+            if [ -n "$key" ]; then
+                # Récupérer la traduction avec jq
+                translation=$(get_translation "$key")
+                
+                if [ -n "$translation" ] && [ "$translation" != "null" ]; then
+                    # Échapper les caractères spéciaux pour sed
+                    translation_escaped=$(printf '%s\n' "$translation" | sed 's/[[\.*^$()+?{|]/\\&/g')
+                    line=$(echo "$line" | sed "s|{{t\.$key}}|$translation_escaped|g")
+                else
+                    # Si pas de traduction trouvée, laisser le placeholder
+                    break
+                fi
+            else
+                break
+            fi
+        done
+        echo "$line"
+    done < "$temp_file" > "$file"
+    
+    rm -f "$temp_file"
+}
 
 # Créer le dossier build s'il n'existe pas
 mkdir -p build
@@ -57,14 +126,66 @@ TEMP_JS=$(mktemp)
     fi
 } > "$TEMP_JS"
 
-# Le JS est prêt, pas besoin de nettoyage supplémentaire
-# (les lignes vides en début/fin seront gérées par awk lors de l'intégration)
-
 if [ ! -s "$TEMP_JS" ]; then
     echo "❌ Erreur: Aucun fichier JavaScript trouvé"
     rm -f "$TEMP_JS"
     exit 1
 fi
+
+# Minifier le JavaScript : supprimer les commentaires /* */ et espaces multiples
+# Note: sed avec pattern /\*[^*]*\*/ ne gère que les commentaires sur une ligne
+# Pour les commentaires multi-lignes, on utilise une approche plus robuste
+echo "🗜️  Minification JavaScript (suppression commentaires /* */)..."
+TEMP_JS_MINIFIED=$(mktemp)
+
+# Supprimer les commentaires /* */ (y compris multi-lignes)
+# Utiliser awk pour gérer les commentaires multi-lignes correctement
+awk '
+BEGIN {
+    in_comment = 0
+}
+{
+    line = $0
+    result = ""
+    i = 1
+    while (i <= length(line)) {
+        if (!in_comment) {
+            # Chercher début de commentaire /* ou fin de ligne
+            if (substr(line, i, 2) == "/*") {
+                in_comment = 1
+                i += 2
+            } else {
+                result = result substr(line, i, 1)
+                i++
+            }
+        } else {
+            # Chercher fin de commentaire */
+            if (substr(line, i, 2) == "*/") {
+                in_comment = 0
+                i += 2
+            } else {
+                i++
+            }
+        }
+    }
+    if (result != "" || !in_comment) {
+        print result
+    }
+}
+' "$TEMP_JS" | sed -E 's/  +/ /g; s/^[[:space:]]+//; s/[[:space:]]+$//' | grep -v '^[[:space:]]*$' > "$TEMP_JS_MINIFIED"
+
+# Vérifier que la minification n'a pas supprimé tout le contenu
+if [ ! -s "$TEMP_JS_MINIFIED" ]; then
+    echo "⚠️  Attention: La minification a supprimé tout le contenu, utilisation du JS original"
+    cp "$TEMP_JS" "$TEMP_JS_MINIFIED"
+fi
+
+# Remplacer le fichier temporaire par la version minifiée
+mv "$TEMP_JS_MINIFIED" "$TEMP_JS"
+
+# Appliquer les traductions au JavaScript (même en français pour remplacer les placeholders éventuels)
+echo "🌐 Application des traductions JavaScript ($LANG_CODE)..."
+replace_translations "$TEMP_JS"
 
 # Remplacer <!--JS-->...<!--/JS--> par <script src="/bundle"></script>
 echo "📄 Génération HTML minimal avec /bundle..."
@@ -90,9 +211,13 @@ if [ ! -s "$TEMP_HTML" ]; then
     exit 1
 fi
 
+# Appliquer les traductions au HTML (même en français pour remplacer {{t.lang}})
+echo "🌐 Application des traductions HTML ($LANG_CODE)..."
+replace_translations "$TEMP_HTML"
+
 echo "✅ HTML minimal généré"
 
-# Calculer la taille JS avant compression
+# Calculer la taille JS avant compression (après minification)
 JS_SIZE=$(wc -c < "$TEMP_JS")
 
 # Compresser le JS avec gzip

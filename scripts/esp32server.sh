@@ -22,22 +22,56 @@ DEFAULT_SKETCH="esp32server_basic"
 SKETCH_NAME="${2:-$DEFAULT_SKETCH}"  # Utiliser le 2ème argument ou le défaut
 SKETCH_PATH="/Users/patricecolet/Documents/Arduino/libraries/esp32server/examples/$SKETCH_NAME"
 
+# Langue par défaut (français)
+LANG_CODE="fr"
+
+# Parser les arguments pour --lang
+ARGS=()
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --lang)
+            LANG_CODE="$2"
+            shift 2
+            ;;
+        *)
+            ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Réinsérer les arguments sans --lang
+set -- "${ARGS[@]}"
+
+# Validation de la langue
+if [ "$LANG_CODE" != "fr" ] && [ "$LANG_CODE" != "en" ]; then
+    echo "⚠️  Langue non supportée: $LANG_CODE, utilisation de 'fr' par défaut"
+    LANG_CODE="fr"
+fi
+
+# Export pour build_html_simple.sh
+export LANG_CODE
+
 # Fonction d'aide
 show_help() {
     echo "🚀 ESP32Server - Script unifié"
     echo "=============================="
     echo ""
-    echo "Usage: ./scripts/esp32server.sh [OPTION] [SKETCH]"
+    echo "Usage: ./scripts/esp32server.sh [OPTION] [SKETCH] [--lang LANG]"
     echo ""
-       echo "Options:"
-       echo "  sync     - Synchroniser les fichiers seulement"
-       echo "  compile  - Synchroniser + compiler"
-       echo "  build    - Synchroniser + compiler + stocker le binaire"
-       echo "  upload   - Synchroniser + compiler + uploader"
-       echo "  monitor  - Ouvrir le moniteur série"
-       echo "  all      - Tout faire (sync + compile + upload + test)"
-       echo "  clean    - Nettoyer le cache seulement"
-       echo "  help     - Afficher cette aide"
+    echo "Options:"
+    echo "  sync     - Synchroniser les fichiers seulement"
+    echo "  compile  - Synchroniser + compiler"
+    echo "  build    - Synchroniser + compiler + stocker le binaire"
+    echo "  upload   - Synchroniser + compiler + uploader"
+    echo "  monitor  - Ouvrir le moniteur série"
+    echo "  all      - Tout faire (sync + compile + upload + test)"
+    echo "  clean    - Nettoyer le cache seulement"
+    echo "  help     - Afficher cette aide"
+    echo ""
+    echo "Options de langue:"
+    echo "  --lang LANG  - Langue de l'interface web (fr|en, défaut: fr)"
+    echo "                 Nécessite jq installé (brew install jq sur macOS)"
     echo ""
     echo "Sketches disponibles:"
     echo "  esp32server_basic (défaut)"
@@ -46,14 +80,15 @@ show_help() {
     echo "  rtpmidi/*"
     echo ""
     echo "Exemples:"
-    echo "  ./scripts/esp32server.sh sync     # Juste synchroniser"
-    echo "  ./scripts/esp32server.sh compile   # Synchroniser + compiler"
-    echo "  ./scripts/esp32server.sh build    # Synchroniser + compiler + stocker binaire"
-    echo "  ./scripts/esp32server.sh upload   # Synchroniser + compiler + uploader (sketch par défaut)"
+    echo "  ./scripts/esp32server.sh sync                # Synchroniser (français par défaut)"
+    echo "  ./scripts/esp32server.sh sync --lang en      # Synchroniser en anglais"
+    echo "  ./scripts/esp32server.sh upload --lang en    # Uploader avec interface anglaise"
+    echo "  ./scripts/esp32server.sh compile             # Synchroniser + compiler"
+    echo "  ./scripts/esp32server.sh build               # Synchroniser + compiler + stocker binaire"
     echo "  ./scripts/esp32server.sh upload esp32server_osc  # Upload sketch OSC"
-    echo "  ./scripts/esp32server.sh monitor  # Ouvrir le moniteur série"
-    echo "  ./scripts/esp32server.sh all      # Tout faire + test"
-    echo "  ./scripts/esp32server.sh clean    # Nettoyer le cache"
+    echo "  ./scripts/esp32server.sh monitor             # Ouvrir le moniteur série"
+    echo "  ./scripts/esp32server.sh all                 # Tout faire + test"
+    echo "  ./scripts/esp32server.sh clean               # Nettoyer le cache"
     echo ""
 }
 
@@ -62,6 +97,15 @@ sync_files() {
     echo "🔄 Synchronisation des fichiers..."
     echo "   📁 Source: $REPO_DIR"
     echo "   📁 Destination: $ARDUINO_LIB_DIR"
+    echo "   🌐 Langue: $LANG_CODE"
+    
+    # Vérifier si jq est installé (nécessaire pour les traductions)
+    if [ "$LANG_CODE" != "fr" ] && ! command -v jq &> /dev/null; then
+        echo "   ⚠️  jq non trouvé, impossible d'utiliser la langue $LANG_CODE"
+        echo "   📝 Installation: brew install jq (macOS) ou sudo apt-get install jq (Linux)"
+        echo "   📝 Utilisation du français par défaut"
+        export LANG_CODE="fr"
+    fi
     
     # Minifier l'UI avant la synchronisation
     if [ -f "$REPO_DIR/scripts/build_html_simple.sh" ]; then
