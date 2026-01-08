@@ -161,17 +161,16 @@
 
 ## 🔧 **Corrections Interface**
 
-### **Cohérence Types MIDI - Interface Web**
+### **Cohérence Types MIDI - Interface Web** ✅ **TERMINÉ**
 - **Problème** : Incohérence dans l'affichage des types de messages MIDI
 - **Détails** :
   - ✅ **Analog (Potentiomètres)** : Affiche correctement le type MIDI (CC, Note, etc.)
-  - ❌ **Digital (Boutons/LEDs)** : N'affiche pas le type de message MIDI
-- **Impact** : Interface confuse, manque de cohérence visuelle
-- **Solution** :
-  - Afficher le type MIDI pour les boutons (Note On/Off, CC, etc.)
-  - Afficher le type MIDI pour les LEDs (Note On/Off, CC, etc.)
-  - Uniformiser l'affichage entre analog et digital
-- **Status** : 🔄 À corriger (priorité haute)
+  - ✅ **Digital (Boutons/LEDs)** : Affiche maintenant le type de message MIDI
+- **Solution appliquée** :
+  - ✅ Affichage du type MIDI pour les boutons (Note On/Off, CC, etc.)
+  - ✅ Affichage du type MIDI pour les LEDs (Note On/Off, CC, etc.)
+  - ✅ Affichage uniformisé entre analog et digital
+- **Status** : ✅ Terminé
 
 ## 📊 **Roadmap des Versions**
 
