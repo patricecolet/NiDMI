@@ -75,7 +75,6 @@ function showMuxForm(muxId=null){
  if($('#muxOscBase')) $('#muxOscBase').value=mux.oscBase||'/mux'+muxId;
  if($('#muxMin')) $('#muxMin').value=mux.min!==undefined?mux.min:0;
  if($('#muxMax')) $('#muxMax').value=mux.max!==undefined?mux.max:4095;
- if($('#muxHysteresis')) $('#muxHysteresis').checked=mux.hysteresis!==undefined?(mux.hysteresis===1||mux.hysteresis===true):true;
  if($('#muxOscFormat')){
  const oscFormatValue=mux.oscFormat||'float';
  $('#muxOscFormat').value=oscFormatValue;
@@ -91,7 +90,6 @@ function showMuxForm(muxId=null){
  if($('#muxOscBase')) $('#muxOscBase').value='/mux'+(idSel?idSel.value:'0');
  if($('#muxMin')) $('#muxMin').value=0;
  if($('#muxMax')) $('#muxMax').value=4095;
- if($('#muxHysteresis')) $('#muxHysteresis').checked=true;
  if($('#muxOscFormat')) $('#muxOscFormat').value='float';
  if($('#muxFilterIntensity')) $('#muxFilterIntensity').value=5;
  }
@@ -261,7 +259,6 @@ async function saveMux(e){
  }
  const min=parseInt($('#muxMin').value)||0;
  const max=parseInt($('#muxMax').value)||4095;
- const hysteresis=$('#muxHysteresis').checked;
  const oscFormat=$('#muxOscFormat').value||'float';
  const filterIntensity=parseInt($('#muxFilterIntensity').value)||5;
  const formData=new URLSearchParams();
@@ -277,7 +274,6 @@ async function saveMux(e){
  formData.append('oscBase',oscBase);
  formData.append('min',min);
  formData.append('max',max);
- formData.append('hysteresis',hysteresis?'true':'false');
  formData.append('oscFormat',oscFormat);
  formData.append('filterIntensity',filterIntensity);
  try{

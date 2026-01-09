@@ -170,7 +170,6 @@ void setupPinAPI(AsyncWebServer& server) {
                 uint16_t max_val = cfg->analog_max[0];
                 json += "\"min\":" + String(min_val) + ",";
                 json += "\"max\":" + String(max_val) + ",";
-                json += "\"hysteresis\":" + String(cfg->hysteresis_enabled ? 1 : 0) + ",";
                 json += "\"filterIntensity\":" + String(cfg->filter_intensity) + ",";
                 // Format OSC : "raw", "float", "midi"
                 String oscFormatStr = "float";
@@ -274,9 +273,8 @@ void setupPinAPI(AsyncWebServer& server) {
         // Paramètres seuils et hystérésis (optionnels avec valeurs par défaut)
         uint16_t analog_min = request->hasParam("min", true) ? request->getParam("min", true)->value().toInt() : 0;
         uint16_t analog_max = request->hasParam("max", true) ? request->getParam("max", true)->value().toInt() : 4095;
-        bool hysteresis_enabled = request->hasParam("hysteresis", true) ? 
-            (request->getParam("hysteresis", true)->value() == "true" || 
-             request->getParam("hysteresis", true)->value().toInt() != 0) : true;
+        // Hystérésis toujours activée (paramètre retiré de l'interface)
+        bool hysteresis_enabled = true;
         
         // Format OSC (optionnel, défaut: FLOAT)
         MuxOSCFormat osc_format = MuxOSCFormat::FLOAT;

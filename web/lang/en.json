@@ -99,8 +99,6 @@
     "analogConfig": "Analog Configuration",
     "minThreshold": "Min threshold (0-4095):",
     "maxThreshold": "Max threshold (0-4095):",
-    "oscHint": "OSC: /mux/ID/cal/min min/CH max max/CH reset reset/CH",
-    "hysteresisEnabled": "Hysteresis enabled",
     "oscFormat": "OSC Format:",
     "raw": "Raw (0-4095)",
     "cancel": "Cancel"

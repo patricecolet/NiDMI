@@ -71,12 +71,12 @@ void ComponentManager::begin(MidiSender* sender) {
         Serial.printf("[ComponentManager] Callback OSC: address='%s', value=%f, arg_string='%s'\n", 
                      address.c_str(), value, arg_string.c_str());
         
-        // Parser les commandes de calibrage : /mux/{id}/cal avec argument "min", "max", "reset", etc.
+        // Parser les commandes de calibrage : /mux/{id}/cal/{cmd} avec canal comme valeur
         if (address.startsWith("/mux")) {
             Serial.printf("[ComponentManager] Adresse commence par /mux\n");
             
-            // Format: /mux/{id}/cal avec argument string "min", "max", "reset"
-            // Format: /mux/{id}/cal/{cmd} avec argument optionnel (channel)
+            // Format: /mux/{id}/cal/{cmd} avec canal passé comme valeur (int) dans le message OSC
+            // Si value est absent ou invalide, traiter tous les canaux
             
             int mux_id_start = address.indexOf('/', 1); // Après "/mux"
             if (mux_id_start < 0) {
@@ -103,16 +103,28 @@ void ComponentManager::begin(MidiSender* sender) {
             
             // Vérifier que c'est une commande cal (accepter /cal ou /calibrate)
             String after_id = address.substring(mux_id_end);
-            Serial.printf("[ComponentManager] Partie après mux_id: '%s', arg_string: '%s'\n", 
-                         after_id.c_str(), arg_string.c_str());
+            Serial.printf("[ComponentManager] Partie après mux_id: '%s', value=%f\n", 
+                         after_id.c_str(), value);
             
             String cmd;
+            bool all_channels = false;
+            uint8_t channel = 0;
+            
+            // Extraire le canal depuis la valeur (value contient le numéro de canal 0-15)
+            if (value >= 0 && value < 16 && (int)value == value) {
+                channel = (uint8_t)value;
+                all_channels = false;
+            } else {
+                // Pas de canal spécifié (ou invalide), traiter tous les canaux
+                all_channels = true;
+            }
+            
             if (after_id == "/cal" || after_id == "/calibrate") {
                 // Format: /mux/{id}/cal avec argument string dans le message OSC
                 cmd = arg_string;
                 Serial.printf("[ComponentManager] Commande extraite de l'argument: '%s'\n", cmd.c_str());
             } else if (after_id.startsWith("/cal/") || after_id.startsWith("/calibrate/")) {
-                // Format: /mux/{id}/cal/{cmd} avec argument optionnel
+                // Format: /mux/{id}/cal/{cmd} avec canal comme valeur
                 int cmd_start = after_id.startsWith("/cal/") ? 5 : 12; // "/cal/" = 5, "/calibrate/" = 12
                 cmd = after_id.substring(cmd_start);
                 Serial.printf("[ComponentManager] Commande extraite de l'adresse: '%s'\n", cmd.c_str());
@@ -123,37 +135,28 @@ void ComponentManager::begin(MidiSender* sender) {
             
             // Parser selon le type de commande
             if (cmd == "min") {
-                Serial.printf("[ComponentManager] Commande: cal/min (tous les canaux)\n");
-                this->calibrateMux(mux_id, 0, true, true);
-            } else if (cmd == "max") {
-                Serial.printf("[ComponentManager] Commande: cal/max (tous les canaux)\n");
-                this->calibrateMux(mux_id, 0, false, true);
-            } else if (cmd == "reset") {
-                Serial.printf("[ComponentManager] Commande: cal/reset (tous les canaux)\n");
-                this->resetMuxThresholds(mux_id, 0, true);
-            } else if (cmd.startsWith("min/")) {
-                uint8_t channel = cmd.substring(4).toInt();
-                Serial.printf("[ComponentManager] Commande: cal/min/%d\n", channel);
-                if (channel < 16) {
+                if (all_channels) {
+                    Serial.printf("[ComponentManager] Commande: cal/min (tous les canaux)\n");
+                    this->calibrateMux(mux_id, 0, true, true);
+                } else {
+                    Serial.printf("[ComponentManager] Commande: cal/min canal %d\n", channel);
                     this->calibrateMux(mux_id, channel, true, false);
-                } else {
-                    Serial.printf("[ComponentManager] ERREUR: canal %d >= 16\n", channel);
                 }
-            } else if (cmd.startsWith("max/")) {
-                uint8_t channel = cmd.substring(4).toInt();
-                Serial.printf("[ComponentManager] Commande: cal/max/%d\n", channel);
-                if (channel < 16) {
+            } else if (cmd == "max") {
+                if (all_channels) {
+                    Serial.printf("[ComponentManager] Commande: cal/max (tous les canaux)\n");
+                    this->calibrateMux(mux_id, 0, false, true);
+                } else {
+                    Serial.printf("[ComponentManager] Commande: cal/max canal %d\n", channel);
                     this->calibrateMux(mux_id, channel, false, false);
-                } else {
-                    Serial.printf("[ComponentManager] ERREUR: canal %d >= 16\n", channel);
                 }
-            } else if (cmd.startsWith("reset/")) {
-                uint8_t channel = cmd.substring(6).toInt();
-                Serial.printf("[ComponentManager] Commande: cal/reset/%d\n", channel);
-                if (channel < 16) {
-                    this->resetMuxThresholds(mux_id, channel, false);
+            } else if (cmd == "reset") {
+                if (all_channels) {
+                    Serial.printf("[ComponentManager] Commande: cal/reset (tous les canaux)\n");
+                    this->resetMuxThresholds(mux_id, 0, true);
                 } else {
-                    Serial.printf("[ComponentManager] ERREUR: canal %d >= 16\n", channel);
+                    Serial.printf("[ComponentManager] Commande: cal/reset canal %d\n", channel);
+                    this->resetMuxThresholds(mux_id, channel, false);
                 }
             } else {
                 Serial.printf("[ComponentManager] ERREUR: commande inconnue: '%s'\n", cmd.c_str());
@@ -1715,26 +1718,15 @@ bool ComponentManager::calibrateMux(uint8_t mux_id, uint8_t channel, bool is_min
     prefs.end();
     
     // Envoyer confirmation OSC avec les valeurs stockées
+    // Toujours envoyer le tableau complet, même pour un canal spécifique (comportement cohérent)
     const MuxConfig& mux_config = mux_configs[mux_id];
     String oscBase = (mux_config.osc_base[0] != '\0') ? 
         String(mux_config.osc_base) : "/mux" + String(mux_id);
     
-    if (all_channels) {
-        // Envoyer un tableau avec toutes les valeurs
-        if (is_min) {
-            osc_queue.enqueueIntArray(oscBase + "/cal/min", mux_configs[mux_id].analog_min, 16);
-        } else {
-            osc_queue.enqueueIntArray(oscBase + "/cal/max", mux_configs[mux_id].analog_max, 16);
-        }
+    if (is_min) {
+        osc_queue.enqueueIntArray(oscBase + "/cal/min", mux_configs[mux_id].analog_min, 16);
     } else {
-        // Envoyer une seule valeur pour le canal spécifique
-        if (is_min) {
-            uint16_t single_value = mux_configs[mux_id].analog_min[channel];
-            osc_queue.enqueueIntArray(oscBase + "/cal/min/" + String(channel), &single_value, 1);
-        } else {
-            uint16_t single_value = mux_configs[mux_id].analog_max[channel];
-            osc_queue.enqueueIntArray(oscBase + "/cal/max/" + String(channel), &single_value, 1);
-        }
+        osc_queue.enqueueIntArray(oscBase + "/cal/max", mux_configs[mux_id].analog_max, 16);
     }
     
     return true;
@@ -1815,23 +1807,20 @@ bool ComponentManager::resetMuxThresholds(uint8_t mux_id, uint8_t channel, bool 
     prefs.end();
     
     // Envoyer confirmation OSC avec les valeurs reset
+    // Toujours envoyer les tableaux complets, même pour un canal spécifique (comportement cohérent)
     const MuxConfig& mux_config = mux_configs[mux_id];
     String oscBase = (mux_config.osc_base[0] != '\0') ? 
         String(mux_config.osc_base) : "/mux" + String(mux_id);
     
-    if (all_channels) {
-        // Envoyer deux tableaux avec toutes les valeurs (0 et 4095)
-        uint16_t min_vals[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-        uint16_t max_vals[16] = {4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095};
-        osc_queue.enqueueIntArray(oscBase + "/cal/min", min_vals, 16);
-        osc_queue.enqueueIntArray(oscBase + "/cal/max", max_vals, 16);
-    } else {
-        // Envoyer les valeurs reset pour le canal spécifique
-        uint16_t min_val = 0;
-        uint16_t max_val = 4095;
-        osc_queue.enqueueIntArray(oscBase + "/cal/min/" + String(channel), &min_val, 1);
-        osc_queue.enqueueIntArray(oscBase + "/cal/max/" + String(channel), &max_val, 1);
+    // Construire les tableaux avec les valeurs actuelles (après reset)
+    uint16_t min_vals[16];
+    uint16_t max_vals[16];
+    for (uint8_t ch = 0; ch < 16; ch++) {
+        min_vals[ch] = mux_configs[mux_id].analog_min[ch];
+        max_vals[ch] = mux_configs[mux_id].analog_max[ch];
     }
+    osc_queue.enqueueIntArray(oscBase + "/cal/min", min_vals, 16);
+    osc_queue.enqueueIntArray(oscBase + "/cal/max", max_vals, 16);
     
     return true;
 }
