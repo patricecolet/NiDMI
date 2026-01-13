@@ -1245,6 +1245,65 @@ void ComponentManager::loadConfigFromNVS() {
         }
     }
     
+    // S'assurer que tous les canaux MUX sont configurés pour chaque MUX actif
+    // (certains canaux peuvent ne pas avoir été sauvegardés en NVS)
+    for (uint8_t mux_id = 0; mux_id < MAX_MUXES; mux_id++) {
+        if (!mux_configs[mux_id].enabled) {
+            continue; // MUX non configuré, ignorer
+        }
+        
+        // Vérifier que tous les canaux sont configurés
+        for (uint8_t ch = 0; ch < MUX_CHANNELS; ch++) {
+            String pinLabel = "M" + String(mux_id) + "_" + String(ch);
+            uint8_t gpio = PinMapper::labelToGpio(pinLabel);
+            if (gpio == 255) continue;
+            
+            // Si le composant n'existe pas, le créer avec des valeurs par défaut
+            if (findComponentByGpio(gpio) == 255) {
+                // Récupérer la config du MUX pour obtenir ccBase et midiChan
+                const MuxConfig& mux_config = mux_configs[mux_id];
+                
+                // Calculer le CC par défaut : essayer de récupérer depuis la première pin MUX si elle existe
+                uint8_t ccBase = 1; // Valeur par défaut
+                uint8_t midiChan = 1; // Valeur par défaut
+                
+                String firstPinLabel = "M" + String(mux_id) + "_0";
+                String firstPinKey = "pin_" + firstPinLabel;
+                if (preferences.isKey(firstPinKey.c_str())) {
+                    String firstPinConfig = preferences.getString(firstPinKey.c_str(), "");
+                    if (firstPinConfig.length() > 0) {
+                        // Extraire rtpCc et rtpChan depuis la config
+                        int rtpCc = extractInt(firstPinConfig, "rtpCc", 1);
+                        int rtpChan = extractInt(firstPinConfig, "rtpChan", 1);
+                        ccBase = rtpCc; // Le CC de base est le CC de la première pin
+                        midiChan = rtpChan;
+                    }
+                }
+                
+                // Calculer le CC pour ce canal : ccBase + ch
+                uint8_t cc = ccBase + ch;
+                if (cc > 127) cc = 127; // Limiter à 127
+                
+                // Créer le composant avec valeurs par défaut
+                bool success = addComponent(gpio, ComponentType::POTENTIOMETER, cc, midiChan, MidiMessageType::CONTROL_CHANGE);
+                
+                if (success) {
+                    // Configurer les flags RTP et OSC
+                    uint8_t index = findComponentByGpio(gpio);
+                    if (index != 255) {
+                        configs[index].flags = 0x03; // RTP + OSC activés par défaut
+                        
+                        // Configurer l'adresse OSC depuis la config MUX
+                        String oscBase = (mux_config.osc_base[0] != '\0') ? 
+                            String(mux_config.osc_base) : "/mux" + String(mux_id);
+                        strncpy(configs[index].osc_address, oscBase.c_str(), sizeof(configs[index].osc_address) - 1);
+                        configs[index].osc_address[sizeof(configs[index].osc_address) - 1] = '\0';
+                    }
+                }
+            }
+        }
+    }
+    
     preferences.end();
     // Serial.printf("[ComponentManager] Loaded %d components from NVS\n", component_count);
 }

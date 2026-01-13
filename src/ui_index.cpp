@@ -54,7 +54,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 </head>
 <body>
  <div class="h"><h1>ESP32 Server</h1><p>Configuration Wi‑Fi, RTP‑MIDI et OSC</p></div>
- <div class="t"><div class="tab active" data-t="status">Statut</div><div class="tab" data-t="connection">Connection</div><div class="tab" data-t="pins">Pins</div><div class="tab" data-t="components">Composants</div></div>
+ <div class="t"><div class="tab active" data-t="status">Statut</div><div class="tab" data-t="connection">Connection</div><div class="tab" data-t="pins">Pins</div></div>
  <div class="p active" id="panel-status">
  <div class="g"><div class="card"><h3>Access Point</h3><p><strong>SSID:</strong> <span id="apSsid">-</span></p><p><strong>IP:</strong> <span id="apIp">-</span></p></div><div class="card"><h3>Station Wi‑Fi</h3><p><strong>SSID:</strong> <span id="staSsid">-</span></p><p><strong>IP:</strong> <span id="staIp">-</span></p><p><strong>Statut:</strong> <span id="staStatus">-</span></p></div><div class="card"><h3>mDNS</h3><p><strong>Adresse:</strong> <span id="mdnsAddress">-</span></p></div><div class="card"><h3>OSC</h3><p><strong>Configuration:</strong> <span id="oscConfig">-</span></p></div></div>
  </div>
@@ -77,6 +77,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div id="cardBtn" class="subcard" style="display:none;"><div class="r"><label>Mode bouton:</label><select id="btnMode"><option value="pulse">Push</option><option value="press_release">Press/Release</option><option value="toggle">Toggle</option></select></div><div class="r" id="btnPulseTimingRow" style="display:none;"><label>Timing Push:</label><select id="btnPulseTiming"><option value="press">Au press</option><option value="release">Au release</option></select></div></div>
  <div id="cardLed" class="subcard" style="display:none;"><div class="r"><label>LED:</label><select id="ledMode"><option value="onoff">On/Off</option><option value="pwm">PWM</option></select></div></div>
  <div id="cardPot" class="subcard" style="display:none;"><div class="r"><label>Filtre:</label><select id="potFilter"><option value="none">Aucun</option><option value="lowpass">Passe-bas</option><option value="median">Médiane</option></select></div><div class="r"><label>Intensité filtrage (1-10):</label><input type="number" id="filterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">1=rapide, 10=stable</span></div></div>
+ <div id="cardMux" class="subcard" style="display:none;">
+ <h4 style="margin-top:0;">Configuration HC4067</h4>
+ <div class="f"><label>Multiplexeur::</label><select id="muxId"><option value="0">MUX0</option><option value="1">MUX1</option></select></div>
+ <div class="f"><label>Pin SIG (analogique):</label><select id="muxSig"></select></div>
+ <div class="f"><label>Pins de sélection (S0-S3):</label><select id="muxPinGroup"></select></div>
+ <div class="f"><label>Pin EN (optionnel):</label><select id="muxEn"><option value="255">Non connecte</option></select></div>
+ <h4 style="margin-top:20px;">Configuration MIDI/OSC</h4>
+ <div class="f"><label>CC de base:</label><input type="number" id="muxCcBase" min="0" max="127" value="1" style="width:100px;"></div>
+ <div class="f"><label>Canal MIDI:</label><input type="number" id="muxMidiChan" min="1" max="16" value="1" style="width:100px;"></div>
+ <div class="f"><label>Adresse OSC de base:</label><input type="text" id="muxOscBase" placeholder="/mux0" style="width:200px;"></div>
+ <h4 style="margin-top:20px;">Configuration analogique</h4>
+ <div class="f"><label>Seuil min (0-4095):</label><input type="number" id="muxMin" min="0" max="4095" value="0" style="width:100px;"></div>
+ <div class="f"><label>Seuil max (0-4095):</label><input type="number" id="muxMax" min="0" max="4095" value="4095" style="width:100px;"></div>
+ <div class="hint">OSC: /mux/ID/cal/min [CH] /mux/ID/cal/max [CH] /mux/ID/cal/reset [CH] (CH=0-15 comme valeur)</div>
+ <div class="f"><label>OSC Format:</label><select id="muxOscFormat"><option value="float">Float (0-1)</option><option value="raw">Raw (0-4095)</option><option value="midi">MIDI (3 int)</option></select></div>
+ <div class="f"><label>Intensité filtrage (1-10):</label><input type="number" id="muxFilterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">1=rapide, 10=stable</span></div>
+ <button type="button" class="btn" onclick="saveMuxFromPin()">Enregistrer</button>
+ <div class="hint" id="muxMsg"></div>
+ </div>
  <h4>RTP‑MIDI</h4>
  <div class="r switch"><input type="checkbox" id="rtpEnabled2"><label for="rtpEnabled2">Activer</label><label>Type:</label><select id="rtpMsgType"><option>Note</option><option>Control Change</option><option>Program Change</option><option>Pitch Bend</option><option>Aftertouch (Channel)</option><option>Note + vélocité</option><option>Note (balayage)</option><option>Clock</option><option>Tap Tempo</option></select></div>
  <div id="rtpParams" class="subcard" style="display:none;">
@@ -96,15 +115,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <h4>Debug</h4>
  <div class="r switch"><input type="checkbox" id="dbgEnabled"><label for="dbgEnabled">Activer</label><label>Hdr:</label><input type="text" id="dbgHeader" placeholder="[DBG]"></div>
  </div></div>
- </div>
- </div>
- <div class="p" id="panel-components">
- <div class="g">
- <div class="card">
- <h3>Multiplexeurs analogiques</h3>
- <p>Ajouter un multiplexeur HC4067 pour etendre les entrees analogiques.</p>
- <div id="muxList" class="list" style="margin:10px 0;"></div>
- <button class="btn" onclick="showMuxForm()">+ Ajouter HC4067</button>
  </div>
  </div>
  </div>
