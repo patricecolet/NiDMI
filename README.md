@@ -4,26 +4,42 @@ Serveur web simple (HTTP + WebSocket) pour ESP32‑C3/S3, destiné à des atelie
 
 - Documentation avancée (MIDI / OSC / Temps réel): consultez `ADVANCED.md`.
 
-## Installation (macOS / Windows / Linux)
+## Installation
 
-### Option A — IDE Arduino (recommandé pour débuter)
-1. Ouvrir l'IDE Arduino 2.x.
-2. Installer le core ESP32: Outils > Type de carte > Gestionnaire de cartes… → chercher « esp32 » (Espressif Systems) → Installer.
-3. Installer les dépendances via le Gestionnaire de bibliothèques:
+### Installation automatique (Arduino IDE 2.x) — Recommandé
+
+1. Ouvrir l'IDE Arduino 2.x
+2. Aller dans **Croquis > Inclure une bibliothèque > Gérer les bibliothèques...**
+3. Rechercher "ESP32Server" et cliquer sur **Installer**
+4. Arduino IDE installera automatiquement toutes les dépendances requises :
+   - AsyncTCP
+   - ESPAsyncWebServer
+   - AppleMIDI
+5. Installer le core ESP32 si ce n'est pas déjà fait : **Outils > Type de carte > Gestionnaire de cartes...** → chercher « esp32 » (Espressif Systems) → Installer
+6. Ouvrir un exemple : **Fichier > Exemples > ESP32Server > esp32server_basic**
+
+**Note** : Si vous installez via un fichier ZIP (Croquis > Inclure une bibliothèque > Ajouter une bibliothèque .ZIP...), Arduino IDE vous proposera automatiquement d'installer les dépendances manquantes.
+
+### Installation manuelle (Arduino IDE 1.x ou avancé)
+
+Si vous utilisez Arduino IDE 1.x ou préférez installer manuellement :
+
+1. Installer le core ESP32 : **Outils > Type de carte > Gestionnaire de cartes...** → chercher « esp32 » (Espressif Systems) → Installer
+2. Installer les dépendances via le Gestionnaire de bibliothèques :
    - « ESP Async WebServer »
    - « AsyncTCP »
-4. Ajouter cette librairie:
-   - Soit via « Ajouter la bibliothèque .ZIP… » (si usage local),
-   - Soit plus tard via le Library Manager (après publication officielle).
-5. Ouvrir: Fichier > Exemples > ESP32Server > esp32server_basic → Téléverser.
+   - « AppleMIDI »
+3. Installer cette bibliothèque via **Croquis > Inclure une bibliothèque > Ajouter une bibliothèque .ZIP...**
+4. Ouvrir un exemple : **Fichier > Exemples > ESP32Server > esp32server_basic**
 
-Notes:
-- L'IDE 2.x sait proposer l'installation des dépendances si la librairie est installée via le Library Manager. Pour une librairie locale/ZIP, installez les 2 libs ci‑dessus manuellement (étape 3) ou utilisez l'option B.
+### Installation avec arduino-cli (avancé)
 
-### Option B — Automatique avec arduino-cli (avancé)
+Pour une installation en ligne de commande :
+
 - macOS/Linux: `bash scripts/install_deps.sh`
 - Windows: `PowerShell -ExecutionPolicy Bypass -File scripts/install_deps.ps1`
-Ces scripts installent le core `esp32:esp32` et les librairies « ESP Async WebServer » et « AsyncTCP ».
+
+Ces scripts installent le core `esp32:esp32` et les librairies requises.
 
 ## Fonctionnalités
 
@@ -226,6 +242,24 @@ Le BLE fonctionne comme une communication série bidirectionnelle :
 - **Format** : Communication série simple, pas MIDI standard
 
 ## Développement
+
+**Note importante** : Les fichiers générés (`src/ui_index.cpp`, `src/ui_bundle.h`) sont déjà inclus dans le dépôt. Les utilisateurs finaux n'ont **pas besoin** d'outils de développement comme `xxd` ou Xcode pour installer et utiliser la bibliothèque.
+
+### Modification de l'interface web
+
+Si vous modifiez les fichiers source de l'interface web dans `web/`, vous devrez reconstruire les fichiers générés :
+
+```bash
+# Reconstruire l'interface web (nécessite xxd)
+./scripts/build_html_simple.sh
+
+# Ou utiliser le script complet qui fait tout
+./scripts/esp32server.sh sync
+```
+
+**Prérequis pour le développement** :
+- `xxd` : fourni par Xcode Command Line Tools sur macOS (`xcode-select --install`), ou disponible via Homebrew (`brew install xxd`) ou via les outils système sur Linux
+- `jq` : nécessaire pour les traductions (optionnel, `brew install jq` sur macOS)
 
 ### Compilation
 

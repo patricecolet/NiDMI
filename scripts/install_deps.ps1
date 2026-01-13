@@ -12,6 +12,7 @@ arduino-cli core install esp32:esp32
 arduino-cli lib update-index
 arduino-cli lib install "ESP Async WebServer"
 arduino-cli lib install "AsyncTCP"
+arduino-cli lib install "AppleMIDI"
 
 Write-Output "OK: core esp32 et bibliothèques installés."
-Write-Output "Ouvrez l’IDE Arduino et téléversez Fichier > Exemples > ESP32Server > esp32server_basic"
+Write-Output "Ouvrez l'IDE Arduino et téléversez Fichier > Exemples > ESP32Server > esp32server_basic"
