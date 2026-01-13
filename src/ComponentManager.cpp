@@ -1233,8 +1233,13 @@ void ComponentManager::loadConfigFromNVS() {
                                       pinLabel.c_str(), configs[index].osc_address);
                     }
                     
-                    Serial.printf("[ComponentManager] Final OSC config: %s addr:%s for MUX pin %s (GPIO%d)\n", 
-                                 oscEnabled ? "enabled" : "disabled", configs[index].osc_address, pinLabel.c_str(), gpio);
+                    // Vérifier le flag RTP depuis la config JSON
+                    bool rtpEnabled = extractBool(pinConfig, "rtpEnabled", true);
+                    if (rtpEnabled) {
+                        configs[index].flags |= 0x01; // Activer RTP
+                    } else {
+                        configs[index].flags &= ~0x01; // Désactiver RTP
+                    }
                 }
             }
         }
