@@ -1,29 +1,25 @@
 /*
- * ESP32Server Basic - ESP32-C3 (XIAO)
+ * NiDMI Basic - ESP32-C3/S3 (XIAO)
  * 
- * Sketch spécifique pour ESP32-C3 (XIAO_ESP32C3)
- * 
- * ⚠️ IMPORTANT : Ce sketch est pour ESP32-C3 uniquement
- * Pour ESP32-S3, utilisez esp32server_basic_s3
+ * Sketch universel pour ESP32-C3 et ESP32-S3 (XIAO)
+ * Le MCU est détecté automatiquement
  * 
  * Ce sketch utilise l'architecture optimisée avec ComponentManager.
  * 
  * Fonctionnalités :
- * - Détection automatique du MCU (ESP32-C3)
+ * - Détection automatique du MCU (ESP32-C3 ou ESP32-S3)
  * - Interface web pour configuration des pins
  * - RTP-MIDI automatique
  * - Gestion optimisée des composants
  * - OSC (Open Sound Control)
+ * - Touch pins (ESP32-S3 uniquement)
  * 
- * Pins disponibles sur ESP32-C3 (XIAO) :
- * - Analogiques : A0, A1, A2 (A3 n'existe pas)
- * - Digitales : D0-D10
- * - I2C : SDA (D4/GPIO6), SCL (D5/GPIO7)
- * - SPI : MOSI (D10/GPIO10), MISO (D9/GPIO9), SCK (D8/GPIO8)
- * - UART : TX (D6/GPIO21), RX (D7/GPIO20)
+ * Pins disponibles :
+ * - ESP32-C3 : A0-A2, D0-D10 (A3 n'existe pas)
+ * - ESP32-S3 : A0-A4, D0-D9 (toutes les touch pins sont analogiques)
  * 
  * Usage :
- * 1. Sélectionner le board : XIAO_ESP32C3 dans Arduino IDE
+ * 1. Sélectionner le board : XIAO_ESP32C3 ou XIAO_ESP32S3 dans Arduino IDE
  * 2. Uploader ce sketch
  * 3. Se connecter au WiFi "esp32rtpmidi" (mot de passe: "esp32pass")
  * 4. Ouvrir http://192.168.4.1 dans Firefox (recommandé)
@@ -35,24 +31,12 @@
  * - Interface web compatible avec tous les navigateurs
  * - Brave/Chrome fonctionnent aussi pour la configuration
  * 
- * 🎵 Web MIDI (à venir)
- * - Web MIDI n'est pas encore implémenté dans l'interface actuelle
- * - Une page de test Web MIDI sera disponible sur GitHub (HTTPS)
- * - Cette page permettra de tester Web MIDI avec l'ESP32
- * - Firefox sera recommandé pour cette fonctionnalité future
- * 
  * Option NVS Clear :
  * - Décommentez la ligne CLEAR_NVS ci-dessous pour forcer le reset
  * - Utile si des anciens réglages persistent
  */
 
-// ============================================================================
-// ACTIVATION DU DEBUG (DOIT ÊTRE AVANT LES INCLUDES!)
-// ============================================================================
-// Décommentez les lignes suivantes pour activer le debug
-// Debug désactivé (système de logs retiré)
-
-#include "Esp32Server.h"
+#include "NiDMIServer.h"
 #include <Preferences.h>
 
 // Décommentez la ligne suivante pour forcer le nettoyage NVS
@@ -63,16 +47,16 @@ void setup() {
     delay(100);
     
     #ifdef CLEAR_NVS
-    Serial.println("[ESP32Server] Clearing NVS...");
+    Serial.println("[NiDMI] Clearing NVS...");
     Preferences preferences;
-    preferences.begin("esp32server", false);
+    preferences.begin("nidmi", false);
     preferences.clear();
     preferences.end();
-    Serial.println("[ESP32Server] NVS cleared!");
+    Serial.println("[NiDMI] NVS cleared!");
     #endif
     
-    // Initialisation automatique
-    esp32server.begin();
+    // Initialisation automatique (détection MCU automatique)
+    nidmi.begin();
     
     // Le système est maintenant prêt :
     // - WiFi AP "esp32rtpmidi" actif
@@ -83,7 +67,7 @@ void setup() {
 
 void loop() {
     // Traitement automatique
-    esp32server.loop();
+    nidmi.loop();
     
     // Le ComponentManager gère :
     // - Lecture des potentiomètres
@@ -91,4 +75,3 @@ void loop() {
     // - Envoi MIDI automatique
     // - Rechargement des configurations
 }
-

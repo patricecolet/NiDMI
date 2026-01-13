@@ -20,7 +20,7 @@ RtpMidi::~RtpMidi() {
 bool RtpMidi::begin(const String& name) {
     // Lire le nom depuis les préférences (priorité) ou utiliser le paramètre
     Preferences preferences;
-    preferences.begin("esp32server", false);
+    preferences.begin("nidmi", false);
     String storedName = preferences.getString("rtp_name", "\n");
     preferences.end();
     
@@ -42,7 +42,7 @@ bool RtpMidi::begin(const String& name) {
     Serial.printf("RTP-MIDI: Nom AppleMIDI défini: %s\n", deviceName.c_str());
     
     // Lire le nom mDNS depuis les préférences (configuré par le serveur)
-    preferences.begin("esp32server", false);
+    preferences.begin("nidmi", false);
     String mdnsName = preferences.getString("mdns_name", "\n");
     preferences.end();
     

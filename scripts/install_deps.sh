@@ -16,4 +16,4 @@ arduino-cli lib install "AsyncTCP" || true
 arduino-cli lib install "AppleMIDI" || true
 
 echo "OK: core esp32 et bibliothèques installés."
-echo "Ouvrez l'IDE Arduino et téléversez Fichier > Exemples > ESP32Server > esp32server_basic"
+echo "Ouvrez l'IDE Arduino et téléversez Fichier > Exemples > NiDMI > nidmi_basic"

@@ -1,6 +1,6 @@
 #include "BluetoothManager.h"
 
-#ifdef ESP32SERVER_ENABLE_BLE_MIDI
+#ifdef NIDMI_ENABLE_BLE_MIDI
 // UUIDs pour BLE MIDI (plus simples)
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
@@ -34,7 +34,7 @@ class MyCharacteristicCallbacks: public BLECharacteristicCallbacks {
 };
 
 BluetoothManager::BluetoothManager() 
-#ifdef ESP32SERVER_ENABLE_BLE_MIDI
+#ifdef NIDMI_ENABLE_BLE_MIDI
     : pServer(nullptr), pCharacteristic(nullptr), deviceName("ESP32-MIDI"), 
       isStarted(false), connected(false), lastConnectionCheck(0), 
       bytesSent(0), bytesReceived(0) {
@@ -240,7 +240,7 @@ BluetoothManager::~BluetoothManager() {
 
 bool BluetoothManager::begin(const String& name) {
     deviceName = name;
-    Serial.println("[BLE] BLE MIDI désactivé (compilation sans ESP32SERVER_ENABLE_BLE_MIDI)");
+    Serial.println("[BLE] BLE MIDI désactivé (compilation sans NIDMI_ENABLE_BLE_MIDI)");
     return false;
 }
 
@@ -306,4 +306,4 @@ void BluetoothManager::checkConnection() {
     // Rien à faire
 }
 
-#endif // ESP32SERVER_ENABLE_BLE_MIDI
+#endif // NIDMI_ENABLE_BLE_MIDI

@@ -282,7 +282,7 @@ void setup() {
 
 **Recommandation** : Commencer simple, n'optimiser que si nécessaire.
 
-## 🔮 Hooks à venir dans Esp32Server
+## 🔮 Hooks à venir dans NiDMIServer
 
 ### Événements (queue) exposés
 
@@ -290,7 +290,7 @@ Un système d'événements pourrait être ajouté pour découpler complètement 
 
 ```cpp
 // Interface proposée (non implémentée)
-Esp32Server::onInputEvent([](InputEvent& event) {
+NiDMIServer::onInputEvent([](InputEvent& event) {
     // Event.type = BUTTON, POT, ENCODER, etc.
     // Event.value = valeur associée
     // Automatiquement routé vers MIDI/OSC selon config

@@ -2,7 +2,7 @@
 
 ## 📋 **Contexte**
 
-L'ESP32-S3 dispose de capacités de touch sensing intégrées qui ne sont pas encore exploitées dans ESP32Server. Cette fonctionnalité est cruciale pour l'ESP32-S3.
+L'ESP32-S3 dispose de capacités de touch sensing intégrées qui ne sont pas encore exploitées dans NiDMI. Cette fonctionnalité est cruciale pour l'ESP32-S3.
 
 ## 🔍 **Analyse Actuelle**
 

@@ -1,4 +1,4 @@
-# TODO – Plan d'implémentation ESP32Server
+# TODO – Plan d'implémentation NiDMI
 
 ## 🎯 **Priorités de Développement**
 
@@ -125,8 +125,8 @@
 - **Problème** : Les macros de debug ne fonctionnent pas (pas de logs série)
 - **Impact** : Impossible de diagnostiquer les problèmes
 - **Détails** :
-  - Macros définies dans `esp32server_debug.h`
-  - `#define ESP32SERVER_DEBUG_NETWORK 1` ne produit aucun log
+  - Macros définies dans `nidmi_debug.h`
+  - `#define NIDMI_DEBUG_NETWORK 1` ne produit aucun log
   - Les `debug_network()` ne s'affichent pas dans le moniteur série
 - **Status** : 🔴 À corriger en priorité absolue
 
@@ -221,7 +221,7 @@
 ### **Architecture Actuelle**
 ```
 src/
-├── Esp32Server.cpp/h          # Classe principale
+├── NiDMIServer.cpp/h          # Classe principale
 ├── ComponentManager.cpp/h      # Gestion des composants ✅
 ├── PinMapper.cpp/h            # Mapping des pins ✅
 ├── RtpMidi.cpp/h             # RTP-MIDI ✅
@@ -261,7 +261,7 @@ web/
 - ✅ Compression gzip (75% réduction JS, 55% total)
 - ✅ Streaming par chunks depuis PROGMEM
 - ✅ Bug encodage aléatoire résolu
-- ✅ Build automatique intégré dans `esp32server.sh`
+- ✅ Build automatique intégré dans `nidmi.sh`
 - ✅ Documentation complète dans `docs/MODULARISATION_UI.md`
 
 ### **Multiplexeurs Analogiques (Terminé)**

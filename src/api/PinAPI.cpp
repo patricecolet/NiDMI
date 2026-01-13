@@ -1,7 +1,7 @@
 #include "APICommon.h"
 #include "PinMapper.h"
 #include "ComponentManager.h"
-#include "Esp32Server.h" /* Pour esp32server_requestReloadPins */
+#include "NiDMIServer.h" /* Pour nidmi_requestReloadPins */
 
 /* Forward declarations */
 String getDefaultConfig(String pin);
@@ -77,7 +77,7 @@ void setupPinAPI(AsyncWebServer& server) {
         json += "\"pins\":[";
         
         Preferences preferences;
-        preferences.begin("esp32server", true);
+        preferences.begin("nidmi", true);
         
         /* Scanner toutes les clés pin_* - Utiliser PinMapper pour obtenir dynamiquement toutes les pins */
         bool first = true;
@@ -118,7 +118,7 @@ void setupPinAPI(AsyncWebServer& server) {
             
             /* Sauvegarder en NVS */
             Preferences preferences;
-            preferences.begin("esp32server", false);
+            preferences.begin("nidmi", false);
             String key = "pin_" + pin;
             preferences.putString(key.c_str(), config);
             preferences.end();
@@ -150,7 +150,7 @@ void setupPinAPI(AsyncWebServer& server) {
         bool first = true;
         
         Preferences prefs;
-        prefs.begin("esp32server", true);
+        prefs.begin("nidmi", true);
         
         for (uint8_t i = 0; i < MAX_MUXES; i++) {
             const MuxConfig* cfg = g_componentManager.getMuxConfig(i);
@@ -318,7 +318,7 @@ void setupPinAPI(AsyncWebServer& server) {
                                      hysteresis_enabled, osc_format, filter_intensity, oscBase.c_str())) {
             // Sauvegarder en NVS (config principale sans seuils)
             Preferences prefs;
-            prefs.begin("esp32server", false);
+            prefs.begin("nidmi", false);
             String key = "mux_" + String(mux_id);
             String config = String(sig) + "," + String(s0) + "," + String(s1) + "," + 
                            String(s2) + "," + String(s3) + "," + String(en) + "," +
@@ -389,7 +389,7 @@ void setupPinAPI(AsyncWebServer& server) {
         if (g_componentManager.removeMux(mux_id)) {
             // Supprimer de NVS
             Preferences prefs;
-            prefs.begin("esp32server", false);
+            prefs.begin("nidmi", false);
             String key = "mux_" + String(mux_id);
             prefs.remove(key.c_str());
             

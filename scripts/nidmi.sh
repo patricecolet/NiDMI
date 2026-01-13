@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Script unifié pour esp32server
-# Usage: ./scripts/esp32server.sh [OPTIONS]
+# Script unifié pour nidmi
+# Usage: ./scripts/nidmi.sh [OPTIONS]
 # 
 # Options:
 #   sync     - Synchroniser les fichiers seulement
@@ -18,7 +18,7 @@ REPO_DIR="/Users/patricecolet/repo/NiDMI"
 ARDUINO_LIB_DIR="/Users/patricecolet/Documents/Arduino/libraries/NiDMI"
 ARDUINO_CACHE_DIR="/Users/patricecolet/Library/Caches/arduino/sketches"
 BOARD="esp32:esp32:XIAO_ESP32C3"
-DEFAULT_SKETCH="esp32server_basic"
+DEFAULT_SKETCH="nidmi_basic"
 SKETCH_NAME="${2:-$DEFAULT_SKETCH}"  # Utiliser le 2ème argument ou le défaut
 SKETCH_PATH="$ARDUINO_LIB_DIR/examples/$SKETCH_NAME/$SKETCH_NAME.ino"
 
@@ -54,10 +54,10 @@ export LANG_CODE
 
 # Fonction d'aide
 show_help() {
-    echo "🚀 ESP32Server - Script unifié"
+    echo "🚀 NiDMI - Script unifié"
     echo "=============================="
     echo ""
-    echo "Usage: ./scripts/esp32server.sh [OPTION] [SKETCH] [--lang LANG]"
+    echo "Usage: ./scripts/nidmi.sh [OPTION] [SKETCH] [--lang LANG]"
     echo ""
     echo "Options:"
     echo "  sync     - Synchroniser les fichiers seulement"
@@ -74,21 +74,18 @@ show_help() {
     echo "                 Nécessite jq installé (brew install jq sur macOS)"
     echo ""
     echo "Sketches disponibles:"
-    echo "  esp32server_basic (défaut)"
-    echo "  esp32server_osc"
-    echo "  components_basic"
-    echo "  rtpmidi/*"
+    echo "  nidmi_basic (défaut)"
     echo ""
     echo "Exemples:"
-    echo "  ./scripts/esp32server.sh sync                # Synchroniser (français par défaut)"
-    echo "  ./scripts/esp32server.sh sync --lang en      # Synchroniser en anglais"
-    echo "  ./scripts/esp32server.sh upload --lang en    # Uploader avec interface anglaise"
-    echo "  ./scripts/esp32server.sh compile             # Synchroniser + compiler"
-    echo "  ./scripts/esp32server.sh build               # Synchroniser + compiler + stocker binaire + UF2"
-    echo "  ./scripts/esp32server.sh upload esp32server_osc  # Upload sketch OSC"
-    echo "  ./scripts/esp32server.sh monitor             # Ouvrir le moniteur série"
-    echo "  ./scripts/esp32server.sh all                 # Tout faire + test"
-    echo "  ./scripts/esp32server.sh clean               # Nettoyer le cache"
+    echo "  ./scripts/nidmi.sh sync                # Synchroniser (français par défaut)"
+    echo "  ./scripts/nidmi.sh sync --lang en      # Synchroniser en anglais"
+    echo "  ./scripts/nidmi.sh upload --lang en    # Uploader avec interface anglaise"
+    echo "  ./scripts/nidmi.sh compile             # Synchroniser + compiler"
+    echo "  ./scripts/nidmi.sh build               # Synchroniser + compiler + stocker binaire + UF2"
+    echo "  ./scripts/nidmi.sh upload nidmi_osc  # Upload sketch OSC"
+    echo "  ./scripts/nidmi.sh monitor             # Ouvrir le moniteur série"
+    echo "  ./scripts/nidmi.sh all                 # Tout faire + test"
+    echo "  ./scripts/nidmi.sh clean               # Nettoyer le cache"
     echo ""
 }
 
@@ -410,7 +407,7 @@ upload_sketch() {
 main() {
     case "${1:-help}" in
         "sync")
-            echo "🚀 ESP32Server - Synchronisation"
+            echo "🚀 NiDMI - Synchronisation"
             echo "================================"
             sync_files
             clean_cache
@@ -419,7 +416,7 @@ main() {
             echo "📝 Maintenant compile et upload dans l'IDE Arduino"
             ;;
                "compile")
-                   echo "🚀 ESP32Server - Synchronisation + Compilation"
+                   echo "🚀 NiDMI - Synchronisation + Compilation"
                    echo "================================================"
                    sync_files
                    clean_cache
@@ -429,7 +426,7 @@ main() {
                    echo "📝 Maintenant upload dans l'IDE Arduino"
                    ;;
                "build")
-                   echo "🚀 ESP32Server - Synchronisation + Compilation + Stockage"
+                   echo "🚀 NiDMI - Synchronisation + Compilation + Stockage"
                    echo "========================================================"
                    sync_files
                    clean_cache
@@ -439,7 +436,7 @@ main() {
                    echo "📦 Binaire stocké dans bin/"
                    ;;
                "upload")
-                   echo "🚀 ESP32Server - Synchronisation + Compilation + Upload"
+                   echo "🚀 NiDMI - Synchronisation + Compilation + Upload"
                    echo "====================================================="
                    sync_files
                    clean_cache
@@ -455,12 +452,12 @@ main() {
                    echo "   4. Vérifier les logs dans la console"
                    ;;
                "monitor")
-                   echo "🚀 ESP32Server - Moniteur série"
+                   echo "🚀 NiDMI - Moniteur série"
                    echo "============================="
                    monitor_serial
                    ;;
         "all")
-            echo "🚀 ESP32Server - TOUT FAIRE (Sync + Compile + Upload + Test)"
+            echo "🚀 NiDMI - TOUT FAIRE (Sync + Compile + Upload + Test)"
             echo "========================================================="
             sync_files
             clean_cache
@@ -483,7 +480,7 @@ main() {
             echo "   5. Les pins I2C devraient se griser automatiquement"
             ;;
         "clean")
-            echo "🚀 ESP32Server - Nettoyage du cache"
+            echo "🚀 NiDMI - Nettoyage du cache"
             echo "==================================="
             clean_cache
             echo ""

@@ -27,23 +27,23 @@ pip3 --version
 
 ```bash
 cd /Users/patricecolet/repo/NiDMI
-./scripts/esp32server.sh upload
+./scripts/nidmi.sh upload
 ```
 
 ### Compiler et générer le fichier binaire
 
 ```bash
-./scripts/esp32server.sh build
+./scripts/nidmi.sh build
 ```
 
-Le fichier binaire sera généré dans `bin/esp32server_basic.ino.merged.bin` et le fichier UF2 dans `bin/esp32server_basic.uf2`.
+Le fichier binaire sera généré dans `bin/nidmi_basic.ino.merged.bin` et le fichier UF2 dans `bin/nidmi_basic.uf2`.
 
 ## Méthode 2 : Arduino IDE
 
 ### Via l'interface graphique
 
 1. Ouvrir Arduino IDE
-2. Fichier > Ouvrir > Sélectionner le sketch dans `examples/esp32server_basic/`
+2. Fichier > Ouvrir > Sélectionner le sketch dans `examples/nidmi_basic/`
 3. Outils > Type de carte > XIAO_ESP32C3 (ou XIAO_ESP32S3)
 4. Outils > Port > Sélectionner le port série
 5. Bouton "Téléverser" (compilera puis uploadera automatiquement)
@@ -71,14 +71,14 @@ ls /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null
 ```bash
 esptool.py --chip esp32c3 \
   --port /dev/cu.usbmodem* \
-  write_flash 0x0 bin/esp32server_basic.ino.merged.bin
+  write_flash 0x0 bin/nidmi_basic.ino.merged.bin
 ```
 
 **Pour ESP32-S3 :**
 ```bash
 esptool.py --chip esp32s3 \
   --port /dev/cu.usbmodem* \
-  write_flash 0x0 bin/esp32server_basic.ino.merged.bin
+  write_flash 0x0 bin/nidmi_basic.ino.merged.bin
 ```
 
 ### Utiliser esptool.py inclus avec Arduino IDE
@@ -90,12 +90,12 @@ Si vous préférez utiliser l'esptool.py inclus avec Arduino IDE (sans installer
 ESPTOOL=$(find ~/Library/Arduino15/packages/esp32/tools/esptool_py -name esptool.py 2>/dev/null | head -1)
 
 # Uploader
-python3 "$ESPTOOL" --chip esp32c3 --port /dev/cu.usbmodem* write_flash 0x0 bin/esp32server_basic.ino.merged.bin
+python3 "$ESPTOOL" --chip esp32c3 --port /dev/cu.usbmodem* write_flash 0x0 bin/nidmi_basic.ino.merged.bin
 ```
 
 ## Méthode 4 : Format UF2 (non supporté nativement)
 
-Le format UF2 est généré automatiquement par le script (`./scripts/esp32server.sh build`), mais **le XIAO ESP32-C3/S3 ne supporte pas nativement le drag-and-drop UF2** comme le RP2040.
+Le format UF2 est généré automatiquement par le script (`./scripts/nidmi.sh build`), mais **le XIAO ESP32-C3/S3 ne supporte pas nativement le drag-and-drop UF2** comme le RP2040.
 
 Pour ESP32, utilisez les méthodes ci-dessus (Arduino IDE ou esptool.py).
 
@@ -103,13 +103,13 @@ Pour ESP32, utilisez les méthodes ci-dessus (Arduino IDE ou esptool.py).
 
 ```bash
 # 1. Compiler + uploader (tout automatique)
-./scripts/esp32server.sh upload
+./scripts/nidmi.sh upload
 
 # 2. Compiler uniquement (génère le .bin)
-./scripts/esp32server.sh build
+./scripts/nidmi.sh build
 
 # 3. Uploader avec esptool (nécessite pip3 install esptool)
-esptool.py --chip esp32c3 --port /dev/cu.usbmodem* write_flash 0x0 bin/esp32server_basic.ino.merged.bin
+esptool.py --chip esp32c3 --port /dev/cu.usbmodem* write_flash 0x0 bin/nidmi_basic.ino.merged.bin
 ```
 
 ## Dépannage

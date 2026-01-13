@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include "Esp32Server.h"
+#include "NiDMIServer.h"
 #include "ServerCore.h"
 #include "ComponentManager.h"
 #include "PinMapper.h"
@@ -12,7 +12,7 @@ ComponentManager g_componentManager;
 
 // Demande de rechargement des configs pins depuis l'API
 static bool g_requestReloadPins = false;
-extern "C" void esp32server_requestReloadPins(){ g_requestReloadPins = true; }
+extern "C" void nidmi_requestReloadPins(){ g_requestReloadPins = true; }
 
 // Le mapping GPIO est maintenant géré par PinMapper
 
@@ -28,7 +28,7 @@ void processComponents() {
     g_componentManager.update();
 }
 
-void esp32server_begin() {
+void nidmi_begin() {
     // Logs
     Serial.begin(115200);
     delay(50);
@@ -39,11 +39,11 @@ void esp32server_begin() {
 
     // Nettoyer les anciens réglages NVS si nécessaire
     // (décommentez la ligne suivante pour forcer le reset)
-    // Preferences::clear("esp32server\n\n");
+    // Preferences::clear("nidmi\n\n");
 
     // Lire nom serveur + STA depuis NVS
     Preferences preferences;
-    preferences.begin("esp32server", false);
+    preferences.begin("nidmi", false);
     String serverName = preferences.getString("mdns_name", "esp32rtpmidi\n\n");
     String staSsid    = preferences.getString("sta_ssid", "\n\n");
     String staPass    = preferences.getString("sta_pass", "\n\n");
@@ -59,18 +59,18 @@ void esp32server_begin() {
     if (serverName.length() == 0) serverName = "esp32rtpmidi";
     
     // Sauvegarder le nom mDNS dans NVS pour RTP-MIDI
-    preferences.begin("esp32server", false);
+    preferences.begin("nidmi", false);
     preferences.putString("mdns_name", serverName);
     preferences.putString("rtp_name", serverName);  // Même nom pour RTP-MIDI
     preferences.end();
     
-    Serial.println("[ESP32Server] Names synchronized:");
+    Serial.println("[NiDMI] Names synchronized:");
     Serial.printf("  SSID: %s\n", serverName.c_str());
     Serial.printf("  mDNS: %s.local\n", serverName.c_str());
 
     
     // Debug: afficher ce qui est lu depuis NVS
-    Serial.println("[ESP32Server] NVS Debug:");
+    Serial.println("[NiDMI] NVS Debug:");
     Serial.print("  mdns_name: \""); Serial.print(serverName); Serial.println("\"");
     Serial.print("  sta_ssid: \""); Serial.print(staSsid); Serial.println("\"");
     Serial.print("  sta_pass length: "); Serial.println(staPass.length());
@@ -84,18 +84,18 @@ void esp32server_begin() {
 
     // Tente STA si configurée (AVANT de démarrer le serveur)
     if (staSsid.length() > 0) {
-        // Serial.printf("[ESP32Server] Attempting STA connection to: %s\n", staSsid.c_str());
+        // Serial.printf("[NiDMI] Attempting STA connection to: %s\n", staSsid.c_str());
         
         if (staIpStr.length() > 0 && staGwStr.length() > 0 && staSnStr.length() > 0) {
             IPAddress ip, gw, sn;
             if (ip.fromString(staIpStr) && gw.fromString(staGwStr) && sn.fromString(staSnStr)) {
                 serverCore.setStaticStaIp(ip, gw, sn);
-                Serial.printf("[ESP32Server] STA static IP: %s GW: %s SN: %s\n", staIpStr.c_str(), staGwStr.c_str(), staSnStr.c_str());
+                Serial.printf("[NiDMI] STA static IP: %s GW: %s SN: %s\n", staIpStr.c_str(), staGwStr.c_str(), staSnStr.c_str());
             }
         }
         serverCore.connectSta(staSsid.c_str(), staPass.length() > 0 ? staPass.c_str() : nullptr);
     } else {
-        Serial.println("[ESP32Server] No STA configuration found");
+        Serial.println("[NiDMI] No STA configuration found");
     }
 
     // Démarre web + mDNS + AP (après connexion STA)
@@ -113,7 +113,7 @@ void esp32server_begin() {
     // Initialiser ComponentManager
     g_componentManager.begin(&g_midiRouter);
     
-    Serial.println("[ESP32Server] Ready");
+    Serial.println("[NiDMI] Ready");
     Serial.print("  AP SSID: "); Serial.println(apSsid);
     Serial.print("  AP PASS: "); Serial.println(apPass);
     Serial.print("  AP IP: "); Serial.println(WiFi.softAPIP());
@@ -123,7 +123,7 @@ void esp32server_begin() {
     Serial.println();
 }
 
-void esp32server_loop() {
+void nidmi_loop() {
     // Mise à jour du serveur
     serverCore.update();
     
@@ -138,13 +138,13 @@ void esp32server_loop() {
 }
 
 // Instance globale
-Esp32Server esp32server;
+NiDMIServer nidmi;
 
 // Implémentation de l'interface publique
-void Esp32Server::begin() {
-    esp32server_begin();
+void NiDMIServer::begin() {
+    nidmi_begin();
 }
 
-void Esp32Server::loop() {
-    esp32server_loop();
+void NiDMIServer::loop() {
+    nidmi_loop();
 }

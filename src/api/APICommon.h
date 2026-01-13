@@ -5,7 +5,7 @@
 #include <ESPAsyncWebServer.h>
 #include <WiFi.h>
 #include <Preferences.h>
-#include "../esp32server_debug.h"
+#include "../nidmi_debug.h"
 #include "../ConfigCache.h"
 
 /* Variable globale pour le cache de configuration */

@@ -16,7 +16,7 @@ void setupCacheAPI(AsyncWebServer& server);
 Preferences preferences;
 
 // Signale au runtime de recharger les configs pins
-extern "C" void esp32server_requestReloadPins();
+extern "C" void nidmi_requestReloadPins();
 
 // Fonction pour obtenir la configuration par défaut d'une pin
 String getDefaultConfig(String pin) {
@@ -85,7 +85,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
             String pin = message.substring(12);
             
             // Vérifier NVS (compatible avec système existant)
-            preferences.begin("esp32server", true);
+            preferences.begin("nidmi", true);
             String key = "pin_" + pin;
             String config = preferences.getString(key.c_str(), "");
             preferences.end();
@@ -106,7 +106,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
 
 // Fonction pour envoyer le statut RTP-MIDI via WebSocket
 void sendRtpStatus(AsyncWebSocket& ws) {
-    preferences.begin("esp32server", false);
+    preferences.begin("nidmi", false);
     bool enabled = preferences.getBool("rtp_enabled", false);
     String name = preferences.getString("rtp_name", "ESP32-Studio");
     String target = preferences.getString("rtp_target", "sta");
@@ -156,7 +156,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     // API - Statut système
     server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request){
         // Récupérer mDNS
-        preferences.begin("esp32server", true);
+        preferences.begin("nidmi", true);
         String mdnsName = preferences.getString("mdns_name", "esp32rtpmidi");
         
         // Récupérer OSC
@@ -194,7 +194,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
             String subnet = request->hasParam("sn", true) ? request->getParam("sn", true)->value() : String("");
             
             // Sauvegarder en NVS
-            preferences.begin("esp32server", false);
+            preferences.begin("nidmi", false);
             preferences.putString("sta_ssid", ssid);
             preferences.putString("sta_pass", pass);
             if(ip.length() > 0 && gateway.length() > 0 && subnet.length() > 0){
@@ -220,7 +220,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     // API - Lecture des identifiants STA stockés en NVS
     server.on("/api/sta/status", HTTP_GET, [](AsyncWebServerRequest *request){
         try {
-            preferences.begin("esp32server", true);
+            preferences.begin("nidmi", true);
             String ssid = preferences.getString("sta_ssid", "");
             String pass = preferences.getString("sta_pass", "");
             String ip   = preferences.getString("sta_ip",  "");
@@ -248,7 +248,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
             String target = request->getParam("target", true)->value();
             
             // Sauvegarder en NVS
-            preferences.begin("esp32server", false);
+            preferences.begin("nidmi", false);
             preferences.putString("rtp_name", name);
             preferences.putString("rtp_target", target);
             preferences.end();
@@ -271,14 +271,14 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
             bool isEnabled = (enabled == "true");
             
             // Sauvegarder l'état en NVS
-            preferences.begin("esp32server", false);
+            preferences.begin("nidmi", false);
             preferences.putBool("rtp_enabled", isEnabled);
             preferences.end();
             
             extern ServerCore serverCore;
             if(isEnabled){
                 // Récupérer le nom sauvegardé
-                preferences.begin("esp32server", false);
+                preferences.begin("nidmi", false);
                 String name = preferences.getString("rtp_name", "ESP32-Studio");
                 preferences.end();
                 serverCore.rtpMidi().begin(name);
@@ -299,7 +299,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         // Pour le sketch de test : enabled = true si RTP-MIDI est initialisé
         bool enabled = serverCore.rtpMidi().isInitialized();
         
-        preferences.begin("esp32server", false);
+        preferences.begin("nidmi", false);
         String name = preferences.getString("rtp_name", "ESP32-Test");
         String target = preferences.getString("rtp_target", "sta");
         preferences.end();
@@ -324,7 +324,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
             String broadcast = request->hasParam("broadcast", true) ? request->getParam("broadcast", true)->value() : "false";
             
             // Sauvegarder en NVS
-            preferences.begin("esp32server", false);
+            preferences.begin("nidmi", false);
             preferences.putString("osc_target", target);
             preferences.putInt("osc_port", port);
             if(ip.length() > 0) preferences.putString("osc_ip", ip);
@@ -339,7 +339,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
 
     // API - Statut OSC
     server.on("/api/osc/status", HTTP_GET, [](AsyncWebServerRequest *request){
-        preferences.begin("esp32server", false);
+        preferences.begin("nidmi", false);
         String target = preferences.getString("osc_target", "sta");
         int port = preferences.getInt("osc_port", 8000);
         String ip = preferences.getString("osc_ip", "");
@@ -360,7 +360,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
             String name = request->getParam("name", true)->value();
             
             // Sauvegarder en NVS
-            preferences.begin("esp32server", false);
+            preferences.begin("nidmi", false);
             preferences.putString("mdns_name", name);
             preferences.end();
             
@@ -372,7 +372,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     
     // API - Statut mDNS
     server.on("/api/mdns/status", HTTP_GET, [](AsyncWebServerRequest *request){
-        preferences.begin("esp32server", false);
+        preferences.begin("nidmi", false);
         String name = preferences.getString("mdns_name", "esp32rtpmidi");
         preferences.end();
         String json = "{";
@@ -519,14 +519,14 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
 
         // Stocker en NVS sous une clé par pin
         String key = String("pin_") + pinLabel;
-        preferences.begin("esp32server", false);
+        preferences.begin("nidmi", false);
         bool ok = preferences.putString(key.c_str(), json) > 0;
         preferences.end();
 
         // Mettre à jour ConfigCache (sans marquer dirty car vient de NVS)
         if (ok) {
             g_configCache.setConfigClean(pinLabel, json);
-            esp32server_requestReloadPins();
+            nidmi_requestReloadPins();
             request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
             request->send(500, "application/json", "{\"error\":\"store failed\"}");
@@ -536,7 +536,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     // API - Récupérer toutes les pins configurées
     server.on("/api/pins/list", HTTP_GET, [](AsyncWebServerRequest *request){
         Preferences preferences;
-        preferences.begin("esp32server", true);
+        preferences.begin("nidmi", true);
         
         String json = "{";
         json += "\"pins\":[";
@@ -587,7 +587,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         if(request->hasParam("pin", true)){
             String pin = request->getParam("pin", true)->value();
             g_configCache.removeConfig(pin);
-            esp32server_requestReloadPins();
+            nidmi_requestReloadPins();
             request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
             request->send(400, "application/json", "{\"error\":\"pin required\"}");

@@ -1,6 +1,6 @@
 #include "pincaps_c3.h"
 
-#ifndef ESP32SERVER_NO_C3
+#ifndef NIDMI_NO_C3
 const char PINCAPS_C3[] PROGMEM = R"JSON({
   "board":"xiao-esp32c3",
   "pins":[

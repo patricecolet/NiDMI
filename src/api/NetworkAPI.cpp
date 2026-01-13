@@ -1,5 +1,5 @@
 #include "APICommon.h"
-#include "Esp32Server.h" /* Pour esp32server_requestReloadPins */
+#include "NiDMIServer.h" /* Pour nidmi_requestReloadPins */
 #include "../ui_index.h" /* Pour INDEX_HTML */  // ← AJOUTER CETTE LIGNE
 void setupNetworkAPI(AsyncWebServer& server) {
     /* API - Statut général */
@@ -25,7 +25,7 @@ void setupNetworkAPI(AsyncWebServer& server) {
             
             /* Sauvegarder en NVS */
             Preferences preferences;
-            preferences.begin("esp32server", false);
+            preferences.begin("nidmi", false);
             preferences.putString("mdns_name", name);
             preferences.end();
             
@@ -38,7 +38,7 @@ void setupNetworkAPI(AsyncWebServer& server) {
     /* API - Statut mDNS */
     server.on("/api/mdns/status", HTTP_GET, [](AsyncWebServerRequest *request){
         Preferences preferences;
-        preferences.begin("esp32server", true);
+        preferences.begin("nidmi", true);
         String name = preferences.getString("mdns_name", "esp32rtpmidi\n");
         preferences.end();
         String json = "{";
@@ -55,7 +55,7 @@ void setupNetworkAPI(AsyncWebServer& server) {
             
             /* Sauvegarder en NVS */
             Preferences preferences;
-            preferences.begin("esp32server", false);
+            preferences.begin("nidmi", false);
             preferences.putString("sta_ssid", ssid);
             preferences.putString("sta_pass", pass);
             preferences.end();

@@ -1,4 +1,4 @@
-# Architecture MIDI Optimisée - ESP32Server
+# Architecture MIDI Optimisée - NiDMI
 
 ## Table des matières
 1. [Architecture Template](#architecture-template)
