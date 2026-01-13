@@ -62,6 +62,25 @@ function updateBusVisuals(){
  r.classList.add('busDisabled');
  });
  }
+// Griser les pins utilisées par les multiplexeurs
+if(typeof getUsedGpios === 'function' && caps && caps.pins){
+    const usedGpios = getUsedGpios([]);
+    // Créer un map GPIO -> labels (comme dans drawBoard)
+    const gpioMap = new Map();
+    caps.pins.forEach(p=>{
+     if(!gpioMap.has(p.gpio))gpioMap.set(p.gpio,[]);
+     gpioMap.get(p.gpio).push(p);
+    });
+    // Griser tous les labels associés aux GPIO utilisés
+    usedGpios.forEach(gpio=>{
+     const pinsForGpio = gpioMap.get(gpio) || [];
+     pinsForGpio.forEach(pin=>{
+      if(pin && pin.label && prect[pin.label]){
+       prect[pin.label].classList.add('busDisabled');
+      }
+     });
+    });
+   }
 }
 
 function drawBoard(){
@@ -341,4 +360,43 @@ function updatePinsList(){
  };
  pl.appendChild(it);
  });
+ 
+ // Ajouter les multiplexeurs configurés à la liste
+ if(typeof muxList !== 'undefined' && Array.isArray(muxList)){
+ muxList.forEach(mux=>{
+ const it=document.createElement('div');
+ it.className='item mux';
+ it.innerHTML=`<span class="lbl">MUX${mux.id}</span><span class="role">HC4067</span><span class="stat">16 canaux</span><button class="del-btn">×</button>`;
+ it.onclick=()=>{
+ // Trouver le pin SIG correspondant et le sélectionner
+ if(caps&&caps.pins&&mux.sig!==undefined){
+  const sigPin=caps.pins.find(p=>p.gpio===mux.sig);
+  if(sigPin&&sigPin.label){
+   // Sélectionner le pin dans l'interface
+   if(window._selRect) window._selRect.classList.remove('selectedSquare');
+   const r=prect[sigPin.label];
+   if(r){
+    window._selRect=r;
+    r.classList.add('selectedSquare');
+   }
+   cur=sigPin.label;
+   $('#selPin').textContent=sigPin.label;
+   // Mettre à jour le menu déroulant pour afficher "Multiplexeur"
+   if($('#funcSelect')){
+    $('#funcSelect').value='Multiplexeur';
+    if(typeof updFunc === 'function') updFunc(sigPin.label);
+   }
+   // Charger la configuration du multiplexeur
+   if(typeof loadMuxConfigIntoForm === 'function') loadMuxConfigIntoForm(mux);
+  }
+ }
+ };
+ const delBtn=it.querySelector('.del-btn');
+ if(delBtn) delBtn.onclick=(e)=>{
+ e.stopPropagation();
+ if(typeof deleteMux === 'function') deleteMux(mux.id, e);
+ };
+ pl.appendChild(it);
+ });
+ }
 }

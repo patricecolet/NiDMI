@@ -1,10 +1,11 @@
 /* Fonctions de gestion des composants et configurations */
 
 function showRoleCards(role){
- const b=$('#cardBtn'), l=$('#cardLed'), p=$('#cardPot');
+ const b=$('#cardBtn'), l=$('#cardLed'), p=$('#cardPot'), m=$('#cardMux');
  if(b) b.style.display=(role==='Bouton')?'block':'none';
  if(l) l.style.display=(role==='LED')?'block':'none';
  if(p) p.style.display=(role==='Potentiomètre')?'block':'none';
+ if(m) m.style.display=(role==='Multiplexeur')?'block':'none';
 }
 
 function updFunc(lbl){
@@ -15,7 +16,7 @@ function updFunc(lbl){
  const isUART=(lbl==='TX'||lbl==='RX');
  const isMuxPin=lbl.startsWith('M');
  if(/^A\d+$/.test(lbl)||isMuxPin){
- setOptions(sel,['Potentiomètre','Analog in (raw)'],0);
+ setOptions(sel,['Potentiomètre','Analog in (raw)','Multiplexeur'],0);
  } else if(/^D\d+$/.test(lbl) && !isI2C && !isSPI && !isUART){
  setOptions(sel,['Bouton','LED','Digital in/out'],0);
  } else if(isI2C){
@@ -29,6 +30,11 @@ function updFunc(lbl){
  }
  showRoleCards(sel.value||'');
  updateRtpForRole(sel.value||'');
+ 
+ // Si Multiplexeur est sélectionné, initialiser le formulaire
+ if(sel.value==='Multiplexeur'){
+  initMuxFormForPin(lbl);
+ }
  
  const updateConfig=()=>{
  showRoleCards(sel.value||'');
@@ -63,6 +69,8 @@ function updateRtpForRole(role){
  types = ['Note','Control Change','Program Change','Clock','Tap Tempo'];
  } else if(role==='LED'){
  types = ['Note','Control Change'];
+ } else if(role==='Multiplexeur'){
+ enabled = false; // Le multiplexeur gère son propre MIDI/OSC
  } else if(role==='I2C' || role==='SPI' || role==='UART' || role==='Analog in (raw)' || role==='Digital in/out'){
  enabled = false;
  } else if(!role){
@@ -218,19 +226,21 @@ function getDFromGpio(gpio){
 function getUsedGpios(additionalSelectIds=[]){
  const usedGpios=new Set();
  Object.keys(pcfg).forEach(lbl=>{
- const pin=caps.pins.find(p=>p.label===lbl);
- if(pin) usedGpios.add(pin.gpio);
+  const pin=caps.pins.find(p=>p.label===lbl);
+  if(pin) usedGpios.add(pin.gpio);
  });
  const currentMuxId=$('#muxId')?parseInt($('#muxId').value):null;
- muxList.forEach(m=>{
- if(currentMuxId!==null&&m.id==currentMuxId) return;
- if(m.sig!==undefined&&m.sig!==null) usedGpios.add(m.sig);
- if(m.s0!==undefined&&m.s0!==null) usedGpios.add(m.s0);
- if(m.s1!==undefined&&m.s1!==null) usedGpios.add(m.s1);
- if(m.s2!==undefined&&m.s2!==null) usedGpios.add(m.s2);
- if(m.s3!==undefined&&m.s3!==null) usedGpios.add(m.s3);
- if(m.en!==undefined&&m.en!==null&&m.en!==255) usedGpios.add(m.en);
- });
+ if(typeof muxList !== 'undefined' && Array.isArray(muxList)){
+  muxList.forEach(m=>{
+   if(currentMuxId!==null&&m.id==currentMuxId) return;
+   if(m.sig!==undefined&&m.sig!==null) usedGpios.add(m.sig);
+   if(m.s0!==undefined&&m.s0!==null) usedGpios.add(m.s0);
+   if(m.s1!==undefined&&m.s1!==null) usedGpios.add(m.s1);
+   if(m.s2!==undefined&&m.s2!==null) usedGpios.add(m.s2);
+   if(m.s3!==undefined&&m.s3!==null) usedGpios.add(m.s3);
+   if(m.en!==undefined&&m.en!==null&&m.en!==255) usedGpios.add(m.en);
+  });
+ }
  additionalSelectIds.forEach(id=>{
  const sel=$('#'+id);
  if(!sel||!sel.value||sel.value==='255') return;
@@ -249,4 +259,110 @@ function getUsedGpios(additionalSelectIds=[]){
  }
  });
  return usedGpios;
+}
+
+// Nouvelle fonction pour initialiser le formulaire multiplexeur depuis un pin
+function initMuxFormForPin(pinLabel){
+ if(!caps||!caps.pins) return;
+ const pin=caps.pins.find(p=>p.label===pinLabel);
+ if(!pin) return;
+ 
+ // Trouver un multiplexeur existant qui utilise ce pin comme SIG, ou créer un nouveau
+ const existingMux=muxList.find(m=>m.sig===pin.gpio);
+ if(existingMux){
+  // Charger la configuration existante
+  loadMuxConfigIntoForm(existingMux);
+ } else {
+  // Nouveau multiplexeur - initialiser avec des valeurs par défaut
+  if(typeof populateMuxPinSelects === 'function') populateMuxPinSelects();
+  if($('#muxSig')) $('#muxSig').value=pin.gpio;
+  if($('#muxId')){
+   // Trouver le premier ID disponible
+   const usedIds=muxList.map(m=>m.id);
+   const availableId=[0,1].find(id=>!usedIds.includes(id));
+   if(availableId!==undefined) $('#muxId').value=availableId;
+  }
+ }
+}
+
+function loadMuxConfigIntoForm(mux){
+ if($('#muxId')) $('#muxId').value=mux.id;
+ if($('#muxSig')) $('#muxSig').value=mux.sig;
+ if($('#muxPinGroup')&&mux.s0!==undefined){
+  const firstD=getDFromGpio(mux.s0);
+  if(firstD!==null) $('#muxPinGroup').value=firstD;
+ }
+ if($('#muxEn')) $('#muxEn').value=mux.en||255;
+ if($('#muxCcBase')) $('#muxCcBase').value=mux.ccBase||1;
+ if($('#muxMidiChan')) $('#muxMidiChan').value=mux.midiChan||1;
+ if($('#muxOscBase')) $('#muxOscBase').value=mux.oscBase||'/mux'+mux.id;
+ if($('#muxMin')) $('#muxMin').value=mux.min!==undefined?mux.min:0;
+ if($('#muxMax')) $('#muxMax').value=mux.max!==undefined?mux.max:4095;
+ if($('#muxOscFormat')){
+  const oscFormatValue=mux.oscFormat||'float';
+  $('#muxOscFormat').value=oscFormatValue;
+ }
+ if($('#muxFilterIntensity')) $('#muxFilterIntensity').value=mux.filterIntensity!==undefined?mux.filterIntensity:5;
+ if(typeof populateMuxPinSelects === 'function') populateMuxPinSelects();
+}
+
+async function saveMuxFromPin(){
+ const id=$('#muxId').value;
+ const sig=$('#muxSig').value;
+ const pinGroup=parseInt($('#muxPinGroup').value);
+ const en=$('#muxEn').value;
+ const ccBase=parseInt($('#muxCcBase').value)||1;
+ const midiChan=parseInt($('#muxMidiChan').value)||1;
+ const oscBase=$('#muxOscBase').value||'/mux'+id;
+ if(!pinGroup){
+ $('#muxMsg').textContent='Erreur: Veuillez choisir un groupe de pins';
+ $('#muxMsg').style.color='#ef4444';
+ return;
+ }
+ const s0=getGpioFromD(pinGroup);
+ const s1=getGpioFromD(pinGroup+1);
+ const s2=getGpioFromD(pinGroup+2);
+ const s3=getGpioFromD(pinGroup+3);
+ if(!s0||!s1||!s2||!s3){
+ $('#muxMsg').textContent='Erreur: Groupe de pins invalide';
+ $('#muxMsg').style.color='#ef4444';
+ return;
+ }
+ const min=parseInt($('#muxMin').value)||0;
+ const max=parseInt($('#muxMax').value)||4095;
+ const oscFormat=$('#muxOscFormat').value||'float';
+ const filterIntensity=parseInt($('#muxFilterIntensity').value)||5;
+ const formData=new URLSearchParams();
+ formData.append('id',id);
+ formData.append('sig',sig);
+ formData.append('s0',s0);
+ formData.append('s1',s1);
+ formData.append('s2',s2);
+ formData.append('s3',s3);
+ formData.append('en',en);
+ formData.append('ccBase',ccBase);
+ formData.append('midiChan',midiChan);
+ formData.append('oscBase',oscBase);
+ formData.append('min',min);
+ formData.append('max',max);
+ formData.append('oscFormat',oscFormat);
+ formData.append('filterIntensity',filterIntensity);
+ try{
+ const r=await fetch('/api/mux/add',{method:'POST',body:formData});
+ const d=await r.json();
+ if(d.status==='ok'){
+ $('#muxMsg').textContent='Multiplexeur enregistré!';
+ $('#muxMsg').style.color='#10b981';
+ if(typeof loadMuxList === 'function') await loadMuxList();
+ if(typeof loadCaps === 'function') await loadCaps();
+ if(typeof updatePinsList === 'function') updatePinsList();
+ if(typeof updateBusVisuals === 'function') updateBusVisuals();
+ } else{
+ $('#muxMsg').textContent='Erreur: '+(d.error||'Inconnu');
+ $('#muxMsg').style.color='#ef4444';
+ }
+ } catch(e){
+ $('#muxMsg').textContent='Erreur réseau';
+ $('#muxMsg').style.color='#ef4444';
+ }
 }

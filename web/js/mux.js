@@ -31,27 +31,26 @@ async function loadMuxList(){
 }
 
 function updateMuxListUI(){
- const list=$('#muxList');
- if(!list) return;
- list.innerHTML='';
- if(muxList.length===0){
- list.innerHTML='<p style="color:#6b7280;">Aucun multiplexeur configure.</p>';
- return;
- }
- muxList.forEach(m=>{
- const div=document.createElement('div');
- div.className='item';
- div.style.borderLeftColor='#8B5CF6';
- div.innerHTML=`<span class="lbl">MUX${m.id}</span><span class="role">HC4067</span><span class="stat">16 canaux</span><button class="del-btn" onclick="deleteMux(${m.id}, event)">x</button>`;
- div.onclick=(e)=>{
- if(e.target.classList.contains('del-btn')) return;
- showMuxForm(m.id);
- };
- list.appendChild(div);
- });
+ // Cette fonction n'est plus utilisée car les multiplexeurs sont maintenant dans la liste des pins
+ // Gardée pour compatibilité mais ne fait rien
+ // La liste est mise à jour via updatePinsList() dans pins.js
 }
 
 function showMuxForm(muxId=null){
+ // Si on est dans le panneau pins (cardMux visible), utiliser loadMuxConfigIntoForm
+ const cardMux=$('#cardMux');
+ if(cardMux&&cardMux.style.display!=='none'){
+  // On est déjà dans le panneau pins, juste charger la config
+  if(muxId!==null){
+   const mux=muxList.find(m=>m.id==muxId);
+   if(mux&&typeof loadMuxConfigIntoForm === 'function'){
+    loadMuxConfigIntoForm(mux);
+   }
+  }
+  return;
+ }
+ 
+ // Sinon, utiliser la modal (pour compatibilité avec l'ancien code)
  const overlay=$('#muxModalOverlay');
  if(overlay) overlay.classList.add('active');
  const idSel=$('#muxId');
@@ -127,15 +126,22 @@ function populateMuxPinSelects(){
  }
  const sigSel=$('#muxSig');
  if(sigSel){
- sigSel.innerHTML=availableSig.map(p=>`<option value="${p.gpio}">${p.label} (GPIO${p.gpio})</option>`).join('');
- const selectedMuxId=idSel?parseInt(idSel.value):null;
- if(selectedMuxId===0&&availableSig.find(p=>p.gpio===2)){
- sigSel.value=2;
- } else if(selectedMuxId===1&&availableSig.find(p=>p.gpio===3)){
- sigSel.value=3;
- } else if(availableSig.length>0){
- sigSel.value=availableSig[0].gpio;
- }
+  sigSel.innerHTML=availableSig.map(p=>`<option value="${p.gpio}">${p.label} (GPIO${p.gpio})</option>`).join('');
+  // Préserver la valeur actuelle si elle est valide
+  const currentSigValue = sigSel.value;
+  const currentSigValid = currentSigValue && availableSig.find(p=>p.gpio===parseInt(currentSigValue));
+  if(currentSigValid){
+   sigSel.value = currentSigValue;
+  } else {
+   // Ne pas utiliser de GPIO hardcodés, utiliser A0 si disponible (fonctionne sur C3 et S3)
+   // ou le premier pin analogique disponible
+   const a0Pin = availableSig.find(p=>p.label==='A0');
+   if(a0Pin){
+    sigSel.value = a0Pin.gpio;
+   } else if(availableSig.length>0){
+    sigSel.value=availableSig[0].gpio;
+   }
+  }
  }
  const allDPins=caps.pins.filter(p=>p.label&&p.label.startsWith('D')).sort((a,b)=>{
  const numA=parseInt(a.label.substring(1));

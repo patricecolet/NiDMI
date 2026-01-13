@@ -20,7 +20,7 @@ ARDUINO_CACHE_DIR="/Users/patricecolet/Library/Caches/arduino/sketches"
 BOARD="esp32:esp32:XIAO_ESP32C3"
 DEFAULT_SKETCH="esp32server_basic"
 SKETCH_NAME="${2:-$DEFAULT_SKETCH}"  # Utiliser le 2ème argument ou le défaut
-SKETCH_PATH="/Users/patricecolet/Documents/Arduino/libraries/esp32server/examples/$SKETCH_NAME"
+SKETCH_PATH="$ARDUINO_LIB_DIR/examples/$SKETCH_NAME/$SKETCH_NAME.ino"
 
 # Langue par défaut (français)
 LANG_CODE="fr"
@@ -62,7 +62,7 @@ show_help() {
     echo "Options:"
     echo "  sync     - Synchroniser les fichiers seulement"
     echo "  compile  - Synchroniser + compiler"
-    echo "  build    - Synchroniser + compiler + stocker le binaire"
+    echo "  build    - Synchroniser + compiler + stocker le binaire + générer UF2"
     echo "  upload   - Synchroniser + compiler + uploader"
     echo "  monitor  - Ouvrir le moniteur série"
     echo "  all      - Tout faire (sync + compile + upload + test)"
@@ -84,7 +84,7 @@ show_help() {
     echo "  ./scripts/esp32server.sh sync --lang en      # Synchroniser en anglais"
     echo "  ./scripts/esp32server.sh upload --lang en    # Uploader avec interface anglaise"
     echo "  ./scripts/esp32server.sh compile             # Synchroniser + compiler"
-    echo "  ./scripts/esp32server.sh build               # Synchroniser + compiler + stocker binaire"
+    echo "  ./scripts/esp32server.sh build               # Synchroniser + compiler + stocker binaire + UF2"
     echo "  ./scripts/esp32server.sh upload esp32server_osc  # Upload sketch OSC"
     echo "  ./scripts/esp32server.sh monitor             # Ouvrir le moniteur série"
     echo "  ./scripts/esp32server.sh all                 # Tout faire + test"
@@ -162,6 +162,155 @@ compile_sketch() {
     fi
 }
 
+# Fonction de génération UF2 en bash pur (sans Python)
+generate_uf2() {
+    echo "📦 Génération du fichier UF2..."
+    
+    # Déterminer le nom de base du sketch
+    SKETCH_BASENAME=$(basename "$SKETCH_PATH" .ino)
+    BIN_DIR="$REPO_DIR/bin"
+    MERGED_BIN="$BIN_DIR/${SKETCH_BASENAME}.ino.merged.bin"
+    UF2_FILE="$BIN_DIR/${SKETCH_BASENAME}.uf2"
+    
+    # Vérifier que le fichier merged.bin existe
+    if [ ! -f "$MERGED_BIN" ]; then
+        echo "   ⚠️  Fichier merged.bin non trouvé: $MERGED_BIN"
+        return 1
+    fi
+    
+    # Vérifier que xxd est disponible (nécessaire pour la conversion)
+    if ! command -v xxd &> /dev/null; then
+        echo "   ⚠️  xxd non trouvé, impossible de générer UF2"
+        echo "   📝 xxd est généralement inclus dans les systèmes Unix"
+        return 1
+    fi
+    
+    # Déterminer l'adresse de base selon la carte ESP32
+    BASE_ADDR=0
+    if [[ "$BOARD" == *"XIAO_ESP32C3"* ]]; then
+        BASE_ADDR=0
+    elif [[ "$BOARD" == *"XIAO_ESP32S3"* ]]; then
+        BASE_ADDR=0
+    fi
+    
+    echo "   🔨 Conversion en UF2 (adresse: 0x$(printf '%08x' $BASE_ADDR))..."
+    
+    # Obtenir la taille du fichier binaire
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        BIN_SIZE=$(stat -f%z "$MERGED_BIN" 2>/dev/null)
+    else
+        BIN_SIZE=$(stat -c%s "$MERGED_BIN" 2>/dev/null)
+    fi
+    
+    if [ -z "$BIN_SIZE" ] || [ "$BIN_SIZE" -eq 0 ]; then
+        echo "   ❌ Impossible de déterminer la taille du fichier ou fichier vide"
+        return 1
+    fi
+    
+    # Calculer le nombre de blocs nécessaires (476 bytes de données par bloc)
+    DATA_PER_BLOCK=476
+    NUM_BLOCKS=$(( (BIN_SIZE + DATA_PER_BLOCK - 1) / DATA_PER_BLOCK ))
+    
+    # Créer le fichier UF2
+    rm -f "$UF2_FILE"
+    
+    # Lire le fichier binaire et créer les blocs UF2
+    BLOCK_NUM=0
+    OFFSET=0
+    
+    while [ $OFFSET -lt $BIN_SIZE ]; do
+        # Calculer la taille des données pour ce bloc
+        REMAINING=$((BIN_SIZE - OFFSET))
+        BLOCK_DATA_SIZE=$((REMAINING < DATA_PER_BLOCK ? REMAINING : DATA_PER_BLOCK))
+        
+        # Adresse flash pour ce bloc
+        FLASH_ADDR=$((BASE_ADDR + OFFSET))
+        
+        # Créer l'en-tête du bloc (32 bytes)
+        # Magic: "UF2\n" (0x0A324655)
+        printf "UF2\n" > /tmp/uf2_header.bin
+        
+        # Flags: 0x00002000 (file container)
+        printf "\x00\x00\x20\x00" >> /tmp/uf2_header.bin
+        
+        # Address dans la flash (little-endian, 4 bytes)
+        printf "%08x" $FLASH_ADDR | sed 's/\(..\)\(..\)\(..\)\(..\)/\4\3\2\1/' | xxd -r -p >> /tmp/uf2_header.bin
+        
+        # Taille des données (little-endian, 4 bytes)
+        printf "%08x" $BLOCK_DATA_SIZE | sed 's/\(..\)\(..\)\(..\)\(..\)/\4\3\2\1/' | xxd -r -p >> /tmp/uf2_header.bin
+        
+        # Numéro de bloc (little-endian, 4 bytes)
+        printf "%08x" $BLOCK_NUM | sed 's/\(..\)\(..\)\(..\)\(..\)/\4\3\2\1/' | xxd -r -p >> /tmp/uf2_header.bin
+        
+        # Nombre total de blocs (little-endian, 4 bytes)
+        printf "%08x" $NUM_BLOCKS | sed 's/\(..\)\(..\)\(..\)\(..\)/\4\3\2\1/' | xxd -r -p >> /tmp/uf2_header.bin
+        
+        # Famille ID: 0x00000000 (generic) - ESP32 utilise generic
+        printf "\x00\x00\x00\x00" >> /tmp/uf2_header.bin
+        
+        # Padding (8 bytes)
+        printf "\x00\x00\x00\x00\x00\x00\x00\x00" >> /tmp/uf2_header.bin
+        
+        # Extraire les données du fichier binaire pour ce bloc
+        dd if="$MERGED_BIN" of=/tmp/uf2_data.bin bs=1 skip=$OFFSET count=$BLOCK_DATA_SIZE 2>/dev/null
+        
+        # Remplir avec des zéros si nécessaire pour atteindre 476 bytes
+        PADDING_SIZE=$((DATA_PER_BLOCK - BLOCK_DATA_SIZE))
+        if [ $PADDING_SIZE -gt 0 ]; then
+            dd if=/dev/zero of=/tmp/uf2_padding.bin bs=1 count=$PADDING_SIZE 2>/dev/null
+            cat /tmp/uf2_data.bin /tmp/uf2_padding.bin > /tmp/uf2_data_full.bin
+        else
+            cp /tmp/uf2_data.bin /tmp/uf2_data_full.bin
+        fi
+        
+        # Footer: 0x0AB16F30 (magic end)
+        printf "\x30\x6f\xb1\x0a" > /tmp/uf2_footer.bin
+        
+        # Assembler le bloc complet (32 + 476 + 4 = 512 bytes)
+        cat /tmp/uf2_header.bin /tmp/uf2_data_full.bin /tmp/uf2_footer.bin >> "$UF2_FILE"
+        
+        OFFSET=$((OFFSET + BLOCK_DATA_SIZE))
+        BLOCK_NUM=$((BLOCK_NUM + 1))
+    done
+    
+    # Nettoyer les fichiers temporaires
+    rm -f /tmp/uf2_*.bin
+    
+    if [ -f "$UF2_FILE" ]; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            UF2_SIZE=$(stat -f%z "$UF2_FILE" 2>/dev/null)
+        else
+            UF2_SIZE=$(stat -c%s "$UF2_FILE" 2>/dev/null)
+        fi
+        
+        # Formater la taille de manière lisible
+        if command -v numfmt &> /dev/null; then
+            UF2_SIZE_H=$(numfmt --to=iec-i --suffix=B $UF2_SIZE 2>/dev/null)
+        else
+            # Fallback simple
+            if [ $UF2_SIZE -gt 1048576 ]; then
+                UF2_SIZE_H=$(printf "%.1f MB" $(echo "scale=1; $UF2_SIZE / 1048576" | bc))
+            elif [ $UF2_SIZE -gt 1024 ]; then
+                UF2_SIZE_H=$(printf "%.1f KB" $(echo "scale=1; $UF2_SIZE / 1024" | bc))
+            else
+                UF2_SIZE_H="${UF2_SIZE} bytes"
+            fi
+        fi
+        
+        echo "   ✅ Fichier UF2 généré: $UF2_FILE"
+        echo "   📊 Taille: $UF2_SIZE_H"
+        echo ""
+        echo "   📋 Instructions pour upload:"
+        echo "   1. Mettre le XIAO en mode bootloader (double-clic rapide sur RESET)"
+        echo "   2. Le XIAO apparaîtra comme un disque USB"
+        echo "   3. Glisser-déposer le fichier $UF2_FILE sur le disque"
+        echo "   4. Le XIAO redémarrera automatiquement"
+    else
+        echo "   ❌ Le fichier UF2 n'a pas été généré"
+        return 1
+    fi
+}
+
 # Fonction de build (compilation + stockage binaire)
 build_binary() {
     echo "🔨 Compilation et stockage du binaire..."
@@ -178,6 +327,10 @@ build_binary() {
         echo "   ✅ Binaire compilé et stocké dans bin/"
         echo "   📁 Fichiers créés:"
         ls -la "$REPO_DIR/bin/" 2>/dev/null || echo "   📁 Aucun fichier trouvé"
+        
+        # Générer automatiquement le fichier UF2
+        echo ""
+        generate_uf2
     else
         echo "   ⚠️  arduino-cli non trouvé"
         echo "   📝 Veuillez compiler manuellement dans l'IDE Arduino"

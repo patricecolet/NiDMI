@@ -53,7 +53,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 </head>
 <body>
  <div class="h"><h1>{{t.title}}</h1><p>{{t.subtitle}}</p></div>
- <div class="t"><div class="tab active" data-t="status">{{t.tabs.status}}</div><div class="tab" data-t="connection">{{t.tabs.connection}}</div><div class="tab" data-t="pins">{{t.tabs.pins}}</div><div class="tab" data-t="components">{{t.tabs.components}}</div></div>
+ <div class="t"><div class="tab active" data-t="status">{{t.tabs.status}}</div><div class="tab" data-t="connection">{{t.tabs.connection}}</div><div class="tab" data-t="pins">{{t.tabs.pins}}</div></div>
  <div class="p active" id="panel-status">
  <div class="g"><div class="card"><h3>{{t.status.accessPoint}}</h3><p><strong>SSID:</strong> <span id="apSsid">-</span></p><p><strong>IP:</strong> <span id="apIp">-</span></p></div><div class="card"><h3>{{t.status.station}}</h3><p><strong>SSID:</strong> <span id="staSsid">-</span></p><p><strong>IP:</strong> <span id="staIp">-</span></p><p><strong>{{t.tabs.status}}:</strong> <span id="staStatus">-</span></p></div><div class="card"><h3>{{t.status.mdns}}</h3><p><strong>{{t.status.address}}:</strong> <span id="mdnsAddress">-</span></p></div><div class="card"><h3>{{t.status.osc}}</h3><p><strong>{{t.status.config}}:</strong> <span id="oscConfig">-</span></p></div></div>
  </div>
@@ -76,6 +76,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div id="cardBtn" class="subcard" style="display:none;"><div class="r"><label>{{t.pins.buttonMode}}:</label><select id="btnMode"><option value="pulse">{{t.pins.push}}</option><option value="press_release">{{t.pins.pressRelease}}</option><option value="toggle">{{t.pins.toggle}}</option></select></div><div class="r" id="btnPulseTimingRow" style="display:none;"><label>{{t.pins.timingPush}}:</label><select id="btnPulseTiming"><option value="press">{{t.pins.onPress}}</option><option value="release">{{t.pins.onRelease}}</option></select></div></div>
  <div id="cardLed" class="subcard" style="display:none;"><div class="r"><label>{{t.pins.led}}:</label><select id="ledMode"><option value="onoff">{{t.pins.onOff}}</option><option value="pwm">PWM</option></select></div></div>
  <div id="cardPot" class="subcard" style="display:none;"><div class="r"><label>{{t.pins.filter}}:</label><select id="potFilter"><option value="none">{{t.pins.none}}</option><option value="lowpass">{{t.pins.lowpass}}</option><option value="median">{{t.pins.median}}</option></select></div><div class="r"><label>{{t.pins.filterIntensity}}</label><input type="number" id="filterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">{{t.pins.filterHint}}</span></div></div>
+ <div id="cardMux" class="subcard" style="display:none;">
+ <h4 style="margin-top:0;">{{t.components.muxConfig}}</h4>
+ <div class="f"><label>{{t.components.mux}}:</label><select id="muxId"><option value="0">MUX0</option><option value="1">MUX1</option></select></div>
+ <div class="f"><label>{{t.components.sigPin}}</label><select id="muxSig"></select></div>
+ <div class="f"><label>{{t.components.selectPins}}</label><select id="muxPinGroup"></select></div>
+ <div class="f"><label>{{t.components.enPin}}</label><select id="muxEn"><option value="255">{{t.components.notConnected}}</option></select></div>
+ <h4 style="margin-top:20px;">{{t.components.midiConfig}}</h4>
+ <div class="f"><label>{{t.components.baseCc}}</label><input type="number" id="muxCcBase" min="0" max="127" value="1" style="width:100px;"></div>
+ <div class="f"><label>{{t.components.midiChannel}}</label><input type="number" id="muxMidiChan" min="1" max="16" value="1" style="width:100px;"></div>
+ <div class="f"><label>{{t.components.oscBase}}</label><input type="text" id="muxOscBase" placeholder="/mux0" style="width:200px;"></div>
+ <h4 style="margin-top:20px;">{{t.components.analogConfig}}</h4>
+ <div class="f"><label>{{t.components.minThreshold}}</label><input type="number" id="muxMin" min="0" max="4095" value="0" style="width:100px;"></div>
+ <div class="f"><label>{{t.components.maxThreshold}}</label><input type="number" id="muxMax" min="0" max="4095" value="4095" style="width:100px;"></div>
+ <div class="hint">OSC: /mux/ID/cal/min [CH] /mux/ID/cal/max [CH] /mux/ID/cal/reset [CH] (CH=0-15 comme valeur)</div>
+ <div class="f"><label>{{t.components.oscFormat}}</label><select id="muxOscFormat"><option value="float">{{t.pins.float}}</option><option value="raw">{{t.components.raw}}</option><option value="midi">{{t.pins.midi}}</option></select></div>
+ <div class="f"><label>{{t.pins.filterIntensity}}</label><input type="number" id="muxFilterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">{{t.pins.filterHint}}</span></div>
+ <button type="button" class="btn" onclick="saveMuxFromPin()">{{t.forms.save}}</button>
+ <div class="hint" id="muxMsg"></div>
+ </div>
  <h4>RTP‑MIDI</h4>
  <div class="r switch"><input type="checkbox" id="rtpEnabled2"><label for="rtpEnabled2">{{t.pins.activate}}</label><label>{{t.pins.type}}:</label><select id="rtpMsgType"><option>Note</option><option>Control Change</option><option>Program Change</option><option>Pitch Bend</option><option>Aftertouch (Channel)</option><option>{{t.pins.noteVelocity}}</option><option>{{t.pins.noteSweep}}</option><option>Clock</option><option>Tap Tempo</option></select></div>
  <div id="rtpParams" class="subcard" style="display:none;">
@@ -95,15 +114,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <h4>Debug</h4>
  <div class="r switch"><input type="checkbox" id="dbgEnabled"><label for="dbgEnabled">{{t.pins.enable}}</label><label>{{t.pins.header}}:</label><input type="text" id="dbgHeader" placeholder="[DBG]"></div>
  </div></div>
- </div>
- </div>
- <div class="p" id="panel-components">
- <div class="g">
- <div class="card">
- <h3>{{t.components.muxTitle}}</h3>
- <p>{{t.components.muxDesc}}</p>
- <div id="muxList" class="list" style="margin:10px 0;"></div>
- <button class="btn" onclick="showMuxForm()">{{t.components.addMux}}</button>
  </div>
  </div>
  </div>
