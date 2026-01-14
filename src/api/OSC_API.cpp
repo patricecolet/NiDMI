@@ -25,9 +25,9 @@ void setupOSC_API(AsyncWebServer& server) {
             // TODO: Implémenter nidmi_requestReloadOsc() si nécessaire
             // nidmi_requestReloadOsc();
             
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"error\":\"target and port required\"}\n");
+            request->send(400, "application/json", "{\"error\":\"target and port required\"}");
         }
     });
 
@@ -35,10 +35,10 @@ void setupOSC_API(AsyncWebServer& server) {
     server.on("/api/osc/status", HTTP_GET, [](AsyncWebServerRequest *request){
         Preferences preferences;
         preferences.begin("nidmi", true);
-        String target = preferences.getString("osc_target", "192.168.4.100\n");
+        String target = preferences.getString("osc_target", "192.168.4.100");
         int port = preferences.getInt("osc_port", 8000);
         bool broadcast = preferences.getBool("osc_broadcast", false);
-        String interface = preferences.getString("osc_interface", "ap\n");
+        String interface = preferences.getString("osc_interface", "ap");
         preferences.end();
         String json = "{";
         json += "\"target\":\"" + target + "\",";

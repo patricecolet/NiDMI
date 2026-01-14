@@ -38,7 +38,7 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
     // Serial.print("[ServerCore] Starting mDNS with hostname: "); Serial.println(hostname);
     
     // Essayer plusieurs noms mDNS
-    String mdnsNames[] = {hostname, "nidmi", "esp32", "esp32rtpmidi"};
+    String mdnsNames[] = {hostname, "nidmi"};
     bool mdnsOk = false;
     String workingName = "";
     
@@ -163,7 +163,7 @@ void ServerCore::reconfigureMdns(const char* hostname) {
     Serial.print("[ServerCore] Starting mDNS with hostname: "); Serial.println(hostname);
     
     // Essayer plusieurs noms mDNS
-    String mdnsNames[] = {hostname, "nidmi", "esp32", "esp32rtpmidi"};
+    String mdnsNames[] = {hostname, "nidmi"};
     bool mdnsOk = false;
     String workingName = "";
     

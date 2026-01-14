@@ -13,7 +13,7 @@ void setupNetworkAPI(AsyncWebServer& server) {
         json += "\"ap_ip\":\"" + WiFi.softAPIP().toString() + "\",";
         json += "\"sta_ssid\":\"" + WiFi.SSID() + "\",";
         json += "\"sta_ip\":\"" + WiFi.localIP().toString() + "\",";
-        json += "\"sta_connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false\n");
+        json += "\"sta_connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false");
         json += "}";
         request->send(200, "application/json", json);
     });
@@ -29,9 +29,9 @@ void setupNetworkAPI(AsyncWebServer& server) {
             preferences.putString("mdns_name", name);
             preferences.end();
             
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"error\":\"name required\"}\n");
+            request->send(400, "application/json", "{\"error\":\"name required\"}");
         }
     });
 
@@ -39,7 +39,7 @@ void setupNetworkAPI(AsyncWebServer& server) {
     server.on("/api/mdns/status", HTTP_GET, [](AsyncWebServerRequest *request){
         Preferences preferences;
         preferences.begin("nidmi", true);
-        String name = preferences.getString("mdns_name", "esp32rtpmidi\n");
+        String name = preferences.getString("mdns_name", "nidmi");
         preferences.end();
         String json = "{";
         json += "\"name\":\"" + name + "\"";
@@ -60,9 +60,9 @@ void setupNetworkAPI(AsyncWebServer& server) {
             preferences.putString("sta_pass", pass);
             preferences.end();
             
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"error\":\"ssid required\"}\n");
+            request->send(400, "application/json", "{\"error\":\"ssid required\"}");
         }
     });
 

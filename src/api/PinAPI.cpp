@@ -123,9 +123,9 @@ void setupPinAPI(AsyncWebServer& server) {
             preferences.putString(key.c_str(), config);
             preferences.end();
             
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"error\":\"pin and config required\"}\n");
+            request->send(400, "application/json", "{\"error\":\"pin and config required\"}");
         }
     });
 
@@ -134,9 +134,9 @@ void setupPinAPI(AsyncWebServer& server) {
         if(request->hasParam("pin", true)){
             String pin = request->getParam("pin", true)->value();
             g_configCache.removeConfig(pin);
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"error\":\"pin required\"}\n");
+            request->send(400, "application/json", "{\"error\":\"pin required\"}");
         }
     });
     
@@ -253,7 +253,7 @@ void setupPinAPI(AsyncWebServer& server) {
         if (!request->hasParam("id", true) || !request->hasParam("sig", true) ||
             !request->hasParam("s0", true) || !request->hasParam("s1", true) ||
             !request->hasParam("s2", true) || !request->hasParam("s3", true)) {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Missing parameters\"}\n");
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Missing parameters\"}");
             return;
         }
         
@@ -297,7 +297,7 @@ void setupPinAPI(AsyncWebServer& server) {
         
         // Valider les valeurs
         if (mux_id >= MAX_MUXES) {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid mux ID (0-" + String(MAX_MUXES - 1) + ")\"}\n");
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid mux ID (0-" + String(MAX_MUXES - 1) + ")\"}");
             return;
         }
         
@@ -306,11 +306,11 @@ void setupPinAPI(AsyncWebServer& server) {
         
         // Valider les seuils
         if (analog_min >= analog_max) {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid thresholds: min >= max\"}\n");
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid thresholds: min >= max\"}");
             return;
         }
         if (analog_max > 4095) {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid max threshold (max 4095)\"}\n");
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid max threshold (max 4095)\"}");
             return;
         }
         
@@ -371,16 +371,16 @@ void setupPinAPI(AsyncWebServer& server) {
             
             prefs.end();
             
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Failed to add mux\"}\n");
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Failed to add mux\"}");
         }
     });
     
     /* API - Supprimer un multiplexeur */
     server.on("/api/mux/delete", HTTP_POST, [](AsyncWebServerRequest *request){
         if (!request->hasParam("id", true)) {
-            request->send(400, "application/json", "{\"error\":\"id required\"}\n");
+            request->send(400, "application/json", "{\"error\":\"id required\"}");
             return;
         }
         
@@ -404,9 +404,9 @@ void setupPinAPI(AsyncWebServer& server) {
             
             prefs.end();
             
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"error\":\"Failed to remove mux\"}\n");
+            request->send(400, "application/json", "{\"error\":\"Failed to remove mux\"}");
         }
     });
 }

@@ -8,7 +8,7 @@ USING_NAMESPACE_APPLEMIDI
 
 // Créer l'instance AppleMIDI avec un nom par défaut
 // Le nom sera changé dynamiquement dans begin()
-APPLEMIDI_CREATE_INSTANCE(WiFiUDP, MIDI, "ESP32-MIDI", 5004);
+APPLEMIDI_CREATE_INSTANCE(WiFiUDP, MIDI, "NiDMI", 5004);
 
 RtpMidi::RtpMidi() : isStarted(false) {
 }
@@ -21,7 +21,7 @@ bool RtpMidi::begin(const String& name) {
     // Lire le nom depuis les préférences (priorité) ou utiliser le paramètre
     Preferences preferences;
     preferences.begin("nidmi", false);
-    String storedName = preferences.getString("rtp_name", "\n");
+    String storedName = preferences.getString("rtp_name", "");
     preferences.end();
     
     // Utiliser le nom des préférences s'il existe, sinon le paramètre
@@ -43,7 +43,7 @@ bool RtpMidi::begin(const String& name) {
     
     // Lire le nom mDNS depuis les préférences (configuré par le serveur)
     preferences.begin("nidmi", false);
-    String mdnsName = preferences.getString("mdns_name", "\n");
+    String mdnsName = preferences.getString("mdns_name", "");
     preferences.end();
     
     // Serial.printf("RTP-MIDI: Nom mDNS serveur: '%s'\n", mdnsName.c_str());

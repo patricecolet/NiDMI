@@ -6,6 +6,6 @@ void setupCacheAPI(AsyncWebServer& server) {
         debug_network( "[CacheAPI] forceSave() appelé\n");
         g_configCache.forceSave();
         debug_network( "[CacheAPI] forceSave() terminé\n");
-        request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
 }

@@ -17,20 +17,23 @@ set -e  # Arrêter en cas d'erreur
 REPO_DIR="/Users/patricecolet/repo/NiDMI"
 ARDUINO_LIB_DIR="/Users/patricecolet/Documents/Arduino/libraries/NiDMI"
 ARDUINO_CACHE_DIR="/Users/patricecolet/Library/Caches/arduino/sketches"
-BOARD="esp32:esp32:XIAO_ESP32C3"
+BOARD_TYPE="s3"  # Par défaut: S3
+BOARD="esp32:esp32:XIAO_ESP32S3"
 DEFAULT_SKETCH="nidmi_basic"
-SKETCH_NAME="${2:-$DEFAULT_SKETCH}"  # Utiliser le 2ème argument ou le défaut
-SKETCH_PATH="$ARDUINO_LIB_DIR/examples/$SKETCH_NAME/$SKETCH_NAME.ino"
 
 # Langue par défaut (français)
 LANG_CODE="fr"
 
-# Parser les arguments pour --lang
+# Parser les arguments pour --lang et --board
 ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
         --lang)
             LANG_CODE="$2"
+            shift 2
+            ;;
+        --board)
+            BOARD_TYPE="$2"
             shift 2
             ;;
         *)
@@ -40,14 +43,35 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Réinsérer les arguments sans --lang
+# Réinsérer les arguments sans --lang et --board
 set -- "${ARGS[@]}"
+
+# Définir le nom du sketch APRÈS le parsing des arguments
+SKETCH_NAME="${2:-$DEFAULT_SKETCH}"  # Utiliser le 2ème argument ou le défaut
+SKETCH_PATH="$ARDUINO_LIB_DIR/examples/$SKETCH_NAME/$SKETCH_NAME.ino"
 
 # Validation de la langue
 if [ "$LANG_CODE" != "fr" ] && [ "$LANG_CODE" != "en" ]; then
     echo "⚠️  Langue non supportée: $LANG_CODE, utilisation de 'fr' par défaut"
     LANG_CODE="fr"
 fi
+
+# Validation et configuration du board
+case "$BOARD_TYPE" in
+    c3|C3)
+        BOARD="esp32:esp32:XIAO_ESP32C3"
+        BOARD_TYPE="c3"
+        ;;
+    s3|S3)
+        BOARD="esp32:esp32:XIAO_ESP32S3"
+        BOARD_TYPE="s3"
+        ;;
+    *)
+        echo "⚠️  Board non supporté: $BOARD_TYPE, utilisation de 's3' par défaut"
+        BOARD="esp32:esp32:XIAO_ESP32S3"
+        BOARD_TYPE="s3"
+        ;;
+esac
 
 # Export pour build_html_simple.sh
 export LANG_CODE
@@ -57,7 +81,7 @@ show_help() {
     echo "🚀 NiDMI - Script unifié"
     echo "=============================="
     echo ""
-    echo "Usage: ./scripts/nidmi.sh [OPTION] [SKETCH] [--lang LANG]"
+    echo "Usage: ./scripts/nidmi.sh [OPTION] [SKETCH] [--lang LANG] [--board BOARD]"
     echo ""
     echo "Options:"
     echo "  sync     - Synchroniser les fichiers seulement"
@@ -69,23 +93,26 @@ show_help() {
     echo "  clean    - Nettoyer le cache seulement"
     echo "  help     - Afficher cette aide"
     echo ""
-    echo "Options de langue:"
-    echo "  --lang LANG  - Langue de l'interface web (fr|en, défaut: fr)"
-    echo "                 Nécessite jq installé (brew install jq sur macOS)"
+    echo "Options:"
+    echo "  --lang LANG   - Langue de l'interface web (fr|en, défaut: fr)"
+    echo "                  Nécessite jq installé (brew install jq sur macOS)"
+    echo "  --board BOARD - Type de carte ESP32 (c3|s3, défaut: s3)"
+    echo "                  c3 = XIAO ESP32-C3"
+    echo "                  s3 = XIAO ESP32-S3"
     echo ""
     echo "Sketches disponibles:"
     echo "  nidmi_basic (défaut)"
     echo ""
     echo "Exemples:"
-    echo "  ./scripts/nidmi.sh sync                # Synchroniser (français par défaut)"
-    echo "  ./scripts/nidmi.sh sync --lang en      # Synchroniser en anglais"
-    echo "  ./scripts/nidmi.sh upload --lang en    # Uploader avec interface anglaise"
-    echo "  ./scripts/nidmi.sh compile             # Synchroniser + compiler"
-    echo "  ./scripts/nidmi.sh build               # Synchroniser + compiler + stocker binaire + UF2"
-    echo "  ./scripts/nidmi.sh upload nidmi_osc  # Upload sketch OSC"
-    echo "  ./scripts/nidmi.sh monitor             # Ouvrir le moniteur série"
-    echo "  ./scripts/nidmi.sh all                 # Tout faire + test"
-    echo "  ./scripts/nidmi.sh clean               # Nettoyer le cache"
+    echo "  ./scripts/nidmi.sh sync                    # Synchroniser (français, S3 par défaut)"
+    echo "  ./scripts/nidmi.sh sync --lang en          # Synchroniser en anglais"
+    echo "  ./scripts/nidmi.sh compile --board s3      # Compiler pour ESP32-S3"
+    echo "  ./scripts/nidmi.sh upload --board s3       # Uploader sur ESP32-S3"
+    echo "  ./scripts/nidmi.sh build                   # Build (S3 par défaut)"
+    echo "  ./scripts/nidmi.sh upload nidmi_osc        # Upload sketch OSC"
+    echo "  ./scripts/nidmi.sh monitor                 # Ouvrir le moniteur série"
+    echo "  ./scripts/nidmi.sh all                     # Tout faire + test"
+    echo "  ./scripts/nidmi.sh clean                   # Nettoyer le cache"
     echo ""
 }
 

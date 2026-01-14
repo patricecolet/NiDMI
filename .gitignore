@@ -22,6 +22,9 @@ Thumbs.db
 *.swo
 *~
 
+# Fichiers de développement local
+TODO.md
+
 
 
 

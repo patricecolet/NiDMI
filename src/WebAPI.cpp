@@ -157,7 +157,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request){
         // Récupérer mDNS
         preferences.begin("nidmi", true);
-        String mdnsName = preferences.getString("mdns_name", "esp32rtpmidi");
+        String mdnsName = preferences.getString("mdns_name", "nidmi");
         
         // Récupérer OSC
         String oscTarget = preferences.getString("osc_target", "sta");
@@ -373,7 +373,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     // API - Statut mDNS
     server.on("/api/mdns/status", HTTP_GET, [](AsyncWebServerRequest *request){
         preferences.begin("nidmi", false);
-        String name = preferences.getString("mdns_name", "esp32rtpmidi");
+        String name = preferences.getString("mdns_name", "nidmi");
         preferences.end();
         String json = "{";
         json += "\"name\":\"" + name + "\"";

@@ -44,19 +44,21 @@ void nidmi_begin() {
     // Lire nom serveur + STA depuis NVS
     Preferences preferences;
     preferences.begin("nidmi", false);
-    String serverName = preferences.getString("mdns_name", "esp32rtpmidi\n\n");
-    String staSsid    = preferences.getString("sta_ssid", "\n\n");
-    String staPass    = preferences.getString("sta_pass", "\n\n");
-    String staIpStr   = preferences.getString("sta_ip",  "\n\n");
-    String staGwStr   = preferences.getString("sta_gw",  "\n\n");
-    String staSnStr   = preferences.getString("sta_sn",  "\n\n");
+    String serverName = preferences.getString("mdns_name", "nidmi");
+    String staSsid    = preferences.getString("sta_ssid", "");
+    String staPass    = preferences.getString("sta_pass", "");
+    String staIpStr   = preferences.getString("sta_ip",  "");
+    String staGwStr   = preferences.getString("sta_gw",  "");
+    String staSnStr   = preferences.getString("sta_sn",  "");
     preferences.end();
     
-    // Nettoyer le nom serveur (enlever caractères spéciaux)
-    serverName.replace(" ", "\n\n");
-    serverName.replace("-", "\n\n");
-    serverName.replace("_", "\n\n");
-    if (serverName.length() == 0) serverName = "esp32rtpmidi";
+    // Nettoyer le nom serveur (supprimer caractères invalides pour SSID WiFi)
+    serverName.trim();  // Supprimer espaces en début/fin
+    // Supprimer les caractères de contrôle et caractères invalides
+    serverName.replace("\n", "");
+    serverName.replace("\r", "");
+    serverName.replace("\t", "");
+    if (serverName.length() == 0) serverName = "nidmi";
     
     // Sauvegarder le nom mDNS dans NVS pour RTP-MIDI
     preferences.begin("nidmi", false);
@@ -79,7 +81,7 @@ void nidmi_begin() {
     // Serial.print("  sta_sn: \""); Serial.print(staSnStr); Serial.println("\"");
 
     const char* apSsid = serverName.c_str();
-    const char* apPass = "esp32pass";
+    const char* apPass = "nidmipass";
     const char* host   = serverName.c_str();
 
     // Tente STA si configurée (AVANT de démarrer le serveur)

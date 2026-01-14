@@ -2,7 +2,7 @@
 
 Serveur web simple (HTTP + WebSocket) pour ESP32‑C3/S3, destiné à des ateliers capteurs/actuateurs (musique électroacoustique et actuelle).
 
-- Documentation avancée (MIDI / OSC / Temps réel): consultez `ADVANCED.md`.
+- Documentation avancée (MIDI / OSC / Temps réel): consultez `docs/ADVANCED.md`.
 
 ## Installation
 
