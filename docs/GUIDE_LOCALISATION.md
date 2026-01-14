@@ -19,17 +19,17 @@ web/
 
 ## 🚀 Utilisation
 
-### Option 1 : Via `esp32server.sh` (recommandé)
+### Option 1 : Via `nidmi.sh` (recommandé)
 
 ```bash
 # Build en français (défaut)
-./scripts/esp32server.sh sync
+./scripts/nidmi.sh sync
 
 # Build en anglais
-./scripts/esp32server.sh sync --lang en
+./scripts/nidmi.sh sync --lang en
 
 # Upload avec interface anglaise
-./scripts/esp32server.sh upload --lang en
+./scripts/nidmi.sh upload --lang en
 ```
 
 ### Option 2 : Directement avec `build_html_simple.sh`
@@ -162,7 +162,7 @@ Créer `web/lang/nouvelle_langue.json` (ex: `web/lang/es.json` pour l'espagnol) 
 
 ### 2. Modifier les scripts
 
-**`scripts/esp32server.sh` :**
+**`scripts/nidmi.sh` :**
 
 Modifier la validation de la langue :
 
@@ -188,7 +188,7 @@ fi
 ### 3. Utiliser la nouvelle langue
 
 ```bash
-./scripts/esp32server.sh sync --lang es
+./scripts/nidmi.sh sync --lang es
 ```
 
 ## 🔍 Dépannage
@@ -223,7 +223,7 @@ Si les placeholders `{{t.xxx}}` ne sont pas remplacés :
 
 Si la langue sélectionnée n'est pas appliquée :
 
-1. Vérifier que `--lang` est bien passé à `esp32server.sh`
+1. Vérifier que `--lang` est bien passé à `nidmi.sh`
 2. Vérifier que la variable `LANG_CODE` est exportée (visible dans les logs)
 3. Pour un build manuel, utiliser `LANG_CODE=en ./scripts/build_html_simple.sh`
 
@@ -233,21 +233,21 @@ Si la langue sélectionnée n'est pas appliquée :
 
 ```bash
 # 1. Synchroniser avec interface anglaise
-./scripts/esp32server.sh sync --lang en
+./scripts/nidmi.sh sync --lang en
 
 # 2. Compiler
-./scripts/esp32server.sh compile --lang en
+./scripts/nidmi.sh compile --lang en
 
 # 3. Uploader
-./scripts/esp32server.sh upload --lang en
+./scripts/nidmi.sh upload --lang en
 ```
 
 ### Exemple 2 : Build français (défaut)
 
 ```bash
 # Pas besoin de spécifier --lang, français par défaut
-./scripts/esp32server.sh sync
-./scripts/esp32server.sh upload
+./scripts/nidmi.sh sync
+./scripts/nidmi.sh upload
 ```
 
 ### Exemple 3 : Vérifier les traductions
@@ -274,7 +274,7 @@ grep -o '{{t\.[^}]*}}' build/index.min.html
 
 - **jq** : https://stedolan.github.io/jq/
 - **Format JSON** : https://www.json.org/
-- **Scripts** : `scripts/esp32server.sh`, `scripts/build_html_simple.sh`
+- **Scripts** : `scripts/nidmi.sh`, `scripts/build_html_simple.sh`
 - **Fichiers de traduction** : `web/lang/fr.json`, `web/lang/en.json`
 
 ---

@@ -1,4 +1,4 @@
-# Guide Professeurs - ESP32Server MIDI
+# Guide Professeurs - NiDMI MIDI
 
 ## Table des matières
 1. [Vue d'ensemble](#vue-densemble)
@@ -13,8 +13,8 @@
 
 ## Vue d'ensemble
 
-### Qu'est-ce que l'ESP32Server MIDI ?
-L'ESP32Server MIDI est une plateforme éducative permettant de créer des contrôleurs MIDI professionnels avec des capteurs variés. Les étudiants apprennent l'électronique, la programmation et la musique de manière interactive.
+### Qu'est-ce que l'NiDMI MIDI ?
+L'NiDMI MIDI est une plateforme éducative permettant de créer des contrôleurs MIDI professionnels avec des capteurs variés. Les étudiants apprennent l'électronique, la programmation et la musique de manière interactive.
 
 ### Avantages pédagogiques
 - ✅ **Apprentissage progressif** (débutant → expert)
@@ -54,7 +54,7 @@ L'ESP32Server MIDI est une plateforme éducative permettant de créer des contr�
 
 ### Accès à l'interface web
 
-1. **Connexion** : L'ESP32 crée un point d'accès WiFi `ESP32Server-XXXX`
+1. **Connexion** : L'ESP32 crée un point d'accès WiFi `NiDMI-XXXX`
 2. **Interface** : Ouvrir `http://192.168.4.1` ou `http://myesp32.local` dans un navigateur
 3. **Configuration** : Interface web complète pour configurer les pins, MIDI, OSC, etc.
 
@@ -338,6 +338,6 @@ L'ESP32Server MIDI est une plateforme éducative permettant de créer des contr�
 
 ## Conclusion
 
-L'ESP32Server MIDI offre une plateforme éducative complète pour l'apprentissage de l'électronique, de la programmation et de la musique. Avec 200ko de mémoire disponible, les possibilités sont énormes : 500+ composants, 30+ bibliothèques spécialisées, et des projets collaboratifs complexes.
+L'NiDMI MIDI offre une plateforme éducative complète pour l'apprentissage de l'électronique, de la programmation et de la musique. Avec 200ko de mémoire disponible, les possibilités sont énormes : 500+ composants, 30+ bibliothèques spécialisées, et des projets collaboratifs complexes.
 
 **C'est l'avenir de l'éducation musicale et électronique !** 🎵🔬✨

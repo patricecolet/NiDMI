@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 // BLE MIDI conditionnel - seulement si activé
-#ifdef ESP32SERVER_ENABLE_BLE_MIDI
+#ifdef NIDMI_ENABLE_BLE_MIDI
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
@@ -19,7 +19,7 @@
  */
 class BluetoothManager {
 private:
-#ifdef ESP32SERVER_ENABLE_BLE_MIDI
+#ifdef NIDMI_ENABLE_BLE_MIDI
     BLEServer* pServer;
     BLECharacteristic* pCharacteristic;
 #endif

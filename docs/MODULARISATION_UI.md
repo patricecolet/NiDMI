@@ -26,7 +26,7 @@ web/
 ```
 
 ### Build et Optimisation
-- **Script** : `scripts/build_html_simple.sh` (intégré dans `esp32server.sh`)
+- **Script** : `scripts/build_html_simple.sh` (intégré dans `nidmi.sh`)
 - **HTML minimal** : Généré dans `src/ui_index.cpp` (PROGMEM)
 - **Bundle JS gzipé** : Généré dans `src/ui_bundle.h` (PROGMEM)
 - **Route `/bundle`** : Servie avec en-tête `Content-Encoding: gzip`
@@ -111,7 +111,7 @@ web/
 3. ✅ Compresse le JS avec gzip (réduction 75%)
 4. ✅ Génère `src/ui_index.cpp` (HTML minimal en PROGMEM)
 5. ✅ Génère `src/ui_bundle.h` (Bundle JS gzipé en PROGMEM)
-6. ✅ Intégré automatiquement dans `esp32server.sh`
+6. ✅ Intégré automatiquement dans `nidmi.sh`
 
 ## 📝 Exemple de Migration
 
@@ -195,7 +195,7 @@ Le script actuel (`build_html_simple.sh`) effectue :
 
 5. **Minification** : Supprime commentaires HTML/JS et espaces multiples
 
-**Usage** : Automatique via `esp32server.sh sync` ou manuel :
+**Usage** : Automatique via `nidmi.sh sync` ou manuel :
 ```bash
 ./scripts/build_html_simple.sh
 ```
@@ -290,7 +290,7 @@ Les modules doivent être chargés dans le bon ordre :
 - **HTML minimal** : `web/index.html` (138 lignes, HTML/CSS seulement)
 - **Modules JavaScript** : `web/js/*.js` (7 fichiers, ~200-350 lignes chacun)
 - **Script de build** : `scripts/build_html_simple.sh`
-- **Intégration** : Automatique via `scripts/esp32server.sh`
+- **Intégration** : Automatique via `scripts/nidmi.sh`
 - **Taille optimisée** : 26 KB (HTML: 15.6 KB + Bundle gzip: 10.4 KB)
 - **Mémoire ESP32** : 1198554 bytes / 1310720 (91%) - marge suffisante
 

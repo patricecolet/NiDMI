@@ -85,7 +85,7 @@ bool OSCManager::sendFloat(const String& address, float value) {
     OSCMessage msg(address.c_str());
     msg.add(value);
     
-    #ifdef ESP32SERVER_debug_osc
+    #ifdef NIDMI_debug_osc
     debug_network( "[OSC] Préparation %s %.3f\n", address.c_str(), value);
     #endif
     
@@ -354,7 +354,7 @@ void OSCManager::update() {
 
 void OSCManager::setMessageCallback(OSCMessageCallback callback) {
     messageCallback = callback;
-    #ifdef ESP32SERVER_debug_osc
+    #ifdef NIDMI_debug_osc
     debug_network( "[OSC] Callback %s\n", callback ? "défini" : "supprimé\n");
     #endif
 }

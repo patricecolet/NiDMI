@@ -1,4 +1,4 @@
-# 📊 État Actuel du Projet ESP32Server
+# 📊 État Actuel du Projet NiDMI
 
 ## 🎯 Résumé de la Session
 
@@ -26,7 +26,7 @@
 #### Localisation Multi-langue
 - ✅ Système de traduction basé sur JSON
 - ✅ Support français (défaut) et anglais
-- ✅ Option `--lang` dans `esp32server.sh`
+- ✅ Option `--lang` dans `nidmi.sh`
 - ✅ Placeholders `{{t.xxx}}` dans HTML/JS
 - ✅ Documentation complète dans `docs/GUIDE_LOCALISATION.md`
 
@@ -63,7 +63,7 @@ NiDMI/
 │       └── mux.js         # Multiplexeurs analogiques
 ├── scripts/
 │   ├── build_html_simple.sh  # Build HTML + bundle gzip + traductions
-│   └── esp32server.sh        # Script principal (intègre build)
+│   └── nidmi.sh        # Script principal (intègre build)
 ├── build/                  # Fichiers générés (ignorés par git)
 │   ├── index.min.html     # HTML minifié
 │   └── bundle.js.gz       # Bundle JS compressé
@@ -130,13 +130,13 @@ NiDMI/
 2. **Build automatique** :
    ```bash
    # Build + Sync + Compile + Upload (français, défaut)
-   ./scripts/esp32server.sh upload
+   ./scripts/nidmi.sh upload
    
    # Build + Sync + Compile + Upload (anglais)
-   ./scripts/esp32server.sh upload --lang en
+   ./scripts/nidmi.sh upload --lang en
    
    # Ou seulement build + sync
-   ./scripts/esp32server.sh sync
+   ./scripts/nidmi.sh sync
    ```
 
 3. **Vérification** :
@@ -146,11 +146,11 @@ NiDMI/
 
 ### Scripts Disponibles
 
-- `esp32server.sh sync` : Build HTML + synchronisation fichiers
-- `esp32server.sh compile` : Build + compilation
-- `esp32server.sh upload` : Build + compile + upload ESP32
-- `esp32server.sh upload --lang en` : Build en anglais + upload
-- `esp32server.sh monitor` : Moniteur série
+- `nidmi.sh sync` : Build HTML + synchronisation fichiers
+- `nidmi.sh compile` : Build + compilation
+- `nidmi.sh upload` : Build + compile + upload ESP32
+- `nidmi.sh upload --lang en` : Build en anglais + upload
+- `nidmi.sh monitor` : Moniteur série
 - `build_html_simple.sh` : Build manuel HTML + bundle (si besoin)
 
 ## 🔍 Points Techniques Importants
@@ -279,7 +279,7 @@ Les modules JavaScript doivent être chargés dans l'ordre :
 - **Fichiers JSON** : `web/lang/fr.json`, `web/lang/en.json`
 - **Prérequis** : `jq` installé
 - **Placeholders** : Format `{{t.section.key}}` (ex: `{{t.tabs.status}}`)
-- **Option** : `--lang LANG` dans `esp32server.sh` (défaut: `fr`)
+- **Option** : `--lang LANG` dans `nidmi.sh` (défaut: `fr`)
 - **Documentation** : `docs/GUIDE_LOCALISATION.md`
 
 ---

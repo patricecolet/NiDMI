@@ -42,7 +42,7 @@ void ComponentManager::begin(MidiSender* sender) {
     
     // Charger la configuration OSC depuis NVS
     Preferences prefs;
-    prefs.begin("esp32server", true);
+    prefs.begin("nidmi", true);
     String osc_target = prefs.getString("osc_target", "sta");
     int osc_port = prefs.getInt("osc_port", 8001);
     String osc_ip = prefs.getString("osc_ip", "255.255.255.255");
@@ -931,7 +931,7 @@ uint8_t ComponentManager::findComponentByGpio(uint8_t gpio) const {
 
 void ComponentManager::loadConfigFromNVS() {
     Preferences preferences;
-    preferences.begin("esp32server", true);
+    preferences.begin("nidmi", true);
     
     // Serial.println("[ComponentManager] Loading configs from NVS...");
     // Serial.printf("[ComponentManager] Component count before: %d\n", component_count);
@@ -1733,7 +1733,7 @@ bool ComponentManager::calibrateMux(uint8_t mux_id, uint8_t channel, bool is_min
     
     // Sauvegarder les seuils en NVS (format binaire compact)
     Preferences prefs;
-    prefs.begin("esp32server", false);
+    prefs.begin("nidmi", false);
     String key = "mux_thresh_" + String(mux_id);
     
     // Vérifier si tous les canaux ont la même valeur (format compact)
@@ -1824,7 +1824,7 @@ bool ComponentManager::resetMuxThresholds(uint8_t mux_id, uint8_t channel, bool 
     
     // Sauvegarder les seuils en NVS (format binaire compact) - même code que calibrateMux
     Preferences prefs;
-    prefs.begin("esp32server", false);
+    prefs.begin("nidmi", false);
     String key = "mux_thresh_" + String(mux_id);
     
     // Vérifier si tous les canaux ont la même valeur (format compact)
@@ -1891,7 +1891,7 @@ bool ComponentManager::resetMuxThresholds(uint8_t mux_id, uint8_t channel, bool 
 
 void ComponentManager::loadMuxConfigFromNVS() {
     Preferences prefs;
-    prefs.begin("esp32server", true);
+    prefs.begin("nidmi", true);
     
     for (uint8_t i = 0; i < MAX_MUXES; i++) {
         String key = "mux_" + String(i);

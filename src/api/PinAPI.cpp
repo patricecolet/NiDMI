@@ -1,7 +1,7 @@
 #include "APICommon.h"
 #include "PinMapper.h"
 #include "ComponentManager.h"
-#include "Esp32Server.h" /* Pour esp32server_requestReloadPins */
+#include "NiDMIServer.h" /* Pour nidmi_requestReloadPins */
 
 /* Forward declarations */
 String getDefaultConfig(String pin);
@@ -77,7 +77,7 @@ void setupPinAPI(AsyncWebServer& server) {
         json += "\"pins\":[";
         
         Preferences preferences;
-        preferences.begin("esp32server", true);
+        preferences.begin("nidmi", true);
         
         /* Scanner toutes les clés pin_* - Utiliser PinMapper pour obtenir dynamiquement toutes les pins */
         bool first = true;
@@ -118,14 +118,14 @@ void setupPinAPI(AsyncWebServer& server) {
             
             /* Sauvegarder en NVS */
             Preferences preferences;
-            preferences.begin("esp32server", false);
+            preferences.begin("nidmi", false);
             String key = "pin_" + pin;
             preferences.putString(key.c_str(), config);
             preferences.end();
             
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"error\":\"pin and config required\"}\n");
+            request->send(400, "application/json", "{\"error\":\"pin and config required\"}");
         }
     });
 
@@ -134,9 +134,9 @@ void setupPinAPI(AsyncWebServer& server) {
         if(request->hasParam("pin", true)){
             String pin = request->getParam("pin", true)->value();
             g_configCache.removeConfig(pin);
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"error\":\"pin required\"}\n");
+            request->send(400, "application/json", "{\"error\":\"pin required\"}");
         }
     });
     
@@ -150,7 +150,7 @@ void setupPinAPI(AsyncWebServer& server) {
         bool first = true;
         
         Preferences prefs;
-        prefs.begin("esp32server", true);
+        prefs.begin("nidmi", true);
         
         for (uint8_t i = 0; i < MAX_MUXES; i++) {
             const MuxConfig* cfg = g_componentManager.getMuxConfig(i);
@@ -253,7 +253,7 @@ void setupPinAPI(AsyncWebServer& server) {
         if (!request->hasParam("id", true) || !request->hasParam("sig", true) ||
             !request->hasParam("s0", true) || !request->hasParam("s1", true) ||
             !request->hasParam("s2", true) || !request->hasParam("s3", true)) {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Missing parameters\"}\n");
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Missing parameters\"}");
             return;
         }
         
@@ -297,7 +297,7 @@ void setupPinAPI(AsyncWebServer& server) {
         
         // Valider les valeurs
         if (mux_id >= MAX_MUXES) {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid mux ID (0-" + String(MAX_MUXES - 1) + ")\"}\n");
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid mux ID (0-" + String(MAX_MUXES - 1) + ")\"}");
             return;
         }
         
@@ -306,11 +306,11 @@ void setupPinAPI(AsyncWebServer& server) {
         
         // Valider les seuils
         if (analog_min >= analog_max) {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid thresholds: min >= max\"}\n");
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid thresholds: min >= max\"}");
             return;
         }
         if (analog_max > 4095) {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid max threshold (max 4095)\"}\n");
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid max threshold (max 4095)\"}");
             return;
         }
         
@@ -318,7 +318,7 @@ void setupPinAPI(AsyncWebServer& server) {
                                      hysteresis_enabled, osc_format, filter_intensity, oscBase.c_str())) {
             // Sauvegarder en NVS (config principale sans seuils)
             Preferences prefs;
-            prefs.begin("esp32server", false);
+            prefs.begin("nidmi", false);
             String key = "mux_" + String(mux_id);
             String config = String(sig) + "," + String(s0) + "," + String(s1) + "," + 
                            String(s2) + "," + String(s3) + "," + String(en) + "," +
@@ -371,16 +371,16 @@ void setupPinAPI(AsyncWebServer& server) {
             
             prefs.end();
             
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Failed to add mux\"}\n");
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Failed to add mux\"}");
         }
     });
     
     /* API - Supprimer un multiplexeur */
     server.on("/api/mux/delete", HTTP_POST, [](AsyncWebServerRequest *request){
         if (!request->hasParam("id", true)) {
-            request->send(400, "application/json", "{\"error\":\"id required\"}\n");
+            request->send(400, "application/json", "{\"error\":\"id required\"}");
             return;
         }
         
@@ -389,7 +389,7 @@ void setupPinAPI(AsyncWebServer& server) {
         if (g_componentManager.removeMux(mux_id)) {
             // Supprimer de NVS
             Preferences prefs;
-            prefs.begin("esp32server", false);
+            prefs.begin("nidmi", false);
             String key = "mux_" + String(mux_id);
             prefs.remove(key.c_str());
             
@@ -404,9 +404,9 @@ void setupPinAPI(AsyncWebServer& server) {
             
             prefs.end();
             
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"error\":\"Failed to remove mux\"}\n");
+            request->send(400, "application/json", "{\"error\":\"Failed to remove mux\"}");
         }
     });
 }

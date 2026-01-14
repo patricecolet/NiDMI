@@ -5,7 +5,7 @@ String mergeConfigWithDefaults(const String& nvsConfig, const String& defaultCon
 // Preferences utilisées localement dans chaque fonction
 String getDefaultConfig(String pin);
 extern "C" {
-    void esp32server_requestReloadPins();
+    void nidmi_requestReloadPins();
 }
 
 ConfigCache::ConfigCache() : lastSave(0), count(0) {
@@ -39,7 +39,7 @@ String ConfigCache::getConfig(const String& pin) {
     
     /* Depuis NVS */
     Preferences preferences;
-    preferences.begin("esp32server", true);
+    preferences.begin("nidmi", true);
     String key = "pin_" + pin;
     String config = preferences.getString(key.c_str(), "\n");
     preferences.end();
@@ -82,7 +82,7 @@ void ConfigCache::saveAllDirty() {
     
     debug_network( "[ConfigCache] DEBUG Début sauvegarde NVS...\n\n");
     Preferences preferences;
-    preferences.begin("esp32server", false);
+    preferences.begin("nidmi", false);
     for (int i = 0; i < count; i++) {
         if (dirty[i]) {
             String key = "pin_" + pinNames[i];
@@ -98,7 +98,7 @@ void ConfigCache::saveAllDirty() {
     debug_network( "[ConfigCache] Sauvegarde groupée terminée (%d pins)\n", count);
     
     /* Demander le rechargement des configs pins */
-    esp32server_requestReloadPins();
+    nidmi_requestReloadPins();
 }
 
 /* Auto-save si nécessaire (30 secondes) */
@@ -127,7 +127,7 @@ void ConfigCache::removeConfig(const String& pin) {
     
     /* Supprimer de la NVS */
     Preferences preferences;
-    preferences.begin("esp32server", false);
+    preferences.begin("nidmi", false);
     String key = "pin_" + pin;
     preferences.remove(key.c_str());
     preferences.end();

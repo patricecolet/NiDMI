@@ -7,7 +7,7 @@
 /* Forward declarations */
 String getDefaultConfig(String pin);
 extern "C" {
-    void esp32server_requestReloadPins();
+    void nidmi_requestReloadPins();
 }
 
 class ConfigCache {

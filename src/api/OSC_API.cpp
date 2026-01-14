@@ -1,5 +1,5 @@
 #include "APICommon.h"
-#include "Esp32Server.h" /* Pour esp32server_requestReloadOsc */
+#include "NiDMIServer.h" /* Pour nidmi_requestReloadOsc */
 
 void setupOSC_API(AsyncWebServer& server) {
     /* API - Configuration OSC */
@@ -14,7 +14,7 @@ void setupOSC_API(AsyncWebServer& server) {
             
             /* Sauvegarder en NVS */
             Preferences preferences;
-            preferences.begin("esp32server", false);
+            preferences.begin("nidmi", false);
             preferences.putString("osc_target", target);
             preferences.putInt("osc_port", port);
             preferences.putBool("osc_broadcast", broadcast);
@@ -22,23 +22,23 @@ void setupOSC_API(AsyncWebServer& server) {
             preferences.end();
             
             /* Demander le rechargement OSC */
-            // TODO: Implémenter esp32server_requestReloadOsc() si nécessaire
-            // esp32server_requestReloadOsc();
+            // TODO: Implémenter nidmi_requestReloadOsc() si nécessaire
+            // nidmi_requestReloadOsc();
             
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"error\":\"target and port required\"}\n");
+            request->send(400, "application/json", "{\"error\":\"target and port required\"}");
         }
     });
 
     /* API - Statut OSC */
     server.on("/api/osc/status", HTTP_GET, [](AsyncWebServerRequest *request){
         Preferences preferences;
-        preferences.begin("esp32server", true);
-        String target = preferences.getString("osc_target", "192.168.4.100\n");
+        preferences.begin("nidmi", true);
+        String target = preferences.getString("osc_target", "192.168.4.100");
         int port = preferences.getInt("osc_port", 8000);
         bool broadcast = preferences.getBool("osc_broadcast", false);
-        String interface = preferences.getString("osc_interface", "ap\n");
+        String interface = preferences.getString("osc_interface", "ap");
         preferences.end();
         String json = "{";
         json += "\"target\":\"" + target + "\",";

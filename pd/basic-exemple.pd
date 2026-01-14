@@ -20,7 +20,7 @@
 #X text 477 73 windows: https://www.tobias-erichsen.de/software/rtpmidi.html;
 #X text 478 105 macos: https://support.apple.com/fr-ca/guide/audio-midi-setup/ams1012/mac;
 #X text 478 153 linux: https://github.com/davidmoreno/rtpmidid;
-#X text 44 9 esp32server send and receive OSC and midi paquets through RTP or USB (esp32S3);
+#X text 44 9 nidmi send and receive OSC and midi paquets through RTP or USB (esp32S3);
 #X text 28 271 patko2025;
 #X connect 0 0 3 0;
 #X connect 0 1 2 0;

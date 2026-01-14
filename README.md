@@ -1,8 +1,8 @@
-# ESP32Server (librairie Arduino)
+# NiDMI (librairie Arduino)
 
 Serveur web simple (HTTP + WebSocket) pour ESP32‑C3/S3, destiné à des ateliers capteurs/actuateurs (musique électroacoustique et actuelle).
 
-- Documentation avancée (MIDI / OSC / Temps réel): consultez `ADVANCED.md`.
+- Documentation avancée (MIDI / OSC / Temps réel): consultez `docs/ADVANCED.md`.
 
 ## Installation
 
@@ -10,13 +10,13 @@ Serveur web simple (HTTP + WebSocket) pour ESP32‑C3/S3, destiné à des atelie
 
 1. Ouvrir l'IDE Arduino 2.x
 2. Aller dans **Croquis > Inclure une bibliothèque > Gérer les bibliothèques...**
-3. Rechercher "ESP32Server" et cliquer sur **Installer**
+3. Rechercher "NiDMI" et cliquer sur **Installer**
 4. Arduino IDE installera automatiquement toutes les dépendances requises :
    - AsyncTCP
    - ESPAsyncWebServer
    - AppleMIDI
 5. Installer le core ESP32 si ce n'est pas déjà fait : **Outils > Type de carte > Gestionnaire de cartes...** → chercher « esp32 » (Espressif Systems) → Installer
-6. Ouvrir un exemple : **Fichier > Exemples > ESP32Server > esp32server_basic**
+6. Ouvrir un exemple : **Fichier > Exemples > NiDMI > nidmi_basic**
 
 **Note** : Si vous installez via un fichier ZIP (Croquis > Inclure une bibliothèque > Ajouter une bibliothèque .ZIP...), Arduino IDE vous proposera automatiquement d'installer les dépendances manquantes.
 
@@ -30,7 +30,7 @@ Si vous utilisez Arduino IDE 1.x ou préférez installer manuellement :
    - « AsyncTCP »
    - « AppleMIDI »
 3. Installer cette bibliothèque via **Croquis > Inclure une bibliothèque > Ajouter une bibliothèque .ZIP...**
-4. Ouvrir un exemple : **Fichier > Exemples > ESP32Server > esp32server_basic**
+4. Ouvrir un exemple : **Fichier > Exemples > NiDMI > nidmi_basic**
 
 ### Installation avec arduino-cli (avancé)
 
@@ -62,32 +62,32 @@ Ces scripts installent le core `esp32:esp32` et les librairies requises.
 ### Exemple de base
 
 ```cpp
-#include <ESP32Server.h>
+#include <NiDMI.h>
 
 void setup() {
   Serial.begin(115200);
   
   // Démarrer le serveur avec nom personnalisé
-  ESP32Server.begin("MonServeur");
+  NiDMI.begin("MonServeur");
   
   // Attendre la connexion WiFi
-  while (!ESP32Server.isConnected()) {
+  while (!NiDMI.isConnected()) {
     delay(100);
   }
   
   Serial.println("Serveur prêt !");
   Serial.print("IP: ");
-  Serial.println(ESP32Server.getIP());
+  Serial.println(NiDMI.getIP());
 }
 
 void loop() {
-  ESP32Server.update();
+  NiDMI.update();
 }
 ```
 
 ### Configuration via interface web
 
-1. **Connexion** : L'ESP32 crée un point d'accès WiFi `ESP32Server-XXXX`
+1. **Connexion** : L'ESP32 crée un point d'accès WiFi `NiDMI-XXXX`
 2. **Interface** : Ouvrir `http://192.168.4.1` dans un navigateur
 3. **Configuration** :
    - **WiFi** : Nom du réseau et mot de passe
@@ -111,7 +111,7 @@ void loop() {
 
 ### Composants principaux
 
-- **`Esp32Server`** : Classe principale, gestion WiFi et serveur web
+- **`NiDMIServer`** : Classe principale, gestion WiFi et serveur web
 - **`ComponentManager`** : Gestion des pins et composants
 - **`PinMapper`** : Mapping des pins ESP32-C3/S3
 - **`RtpMidi`** : Communication MIDI sans fil
@@ -121,7 +121,7 @@ void loop() {
 
 ```
 src/
-├── Esp32Server.cpp/h          # Classe principale
+├── NiDMIServer.cpp/h          # Classe principale
 ├── ComponentManager.cpp/h      # Gestion des composants
 ├── PinMapper.cpp/h            # Mapping des pins
 ├── RtpMidi.cpp/h             # RTP-MIDI
@@ -196,23 +196,23 @@ fetch('/api/pins', {
 Pour activer le support BLE MIDI, ajoutez cette ligne au début de votre sketch :
 
 ```cpp
-#define ESP32SERVER_ENABLE_BLE_MIDI
-#include <esp32server.h>
+#define NIDMI_ENABLE_BLE_MIDI
+#include <nidmi.h>
 ```
 
 ### Utilisation
 
 ```cpp
 void setup() {
-    esp32server_setup();
+    nidmi_setup();
     
     // Configuration normale
-    esp32server_addButton(2, 1, 60, 1);
-    esp32server_addPotentiometer(6, 1, 1, 1);
+    nidmi_addButton(2, 1, 60, 1);
+    nidmi_addPotentiometer(6, 1, 1, 1);
 }
 
 void loop() {
-    esp32server_loop();
+    nidmi_loop();
 }
 ```
 
@@ -254,7 +254,7 @@ Si vous modifiez les fichiers source de l'interface web dans `web/`, vous devrez
 ./scripts/build_html_simple.sh
 
 # Ou utiliser le script complet qui fait tout
-./scripts/esp32server.sh sync
+./scripts/nidmi.sh sync
 ```
 
 **Prérequis pour le développement** :
@@ -268,20 +268,20 @@ Si vous modifiez les fichiers source de l'interface web dans `web/`, vous devrez
 ./scripts/install_deps.sh
 
 # Compilation
-arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32C3 examples/esp32server_basic/esp32server_basic.ino
+arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32C3 examples/nidmi_basic/nidmi_basic.ino
 ```
 
 ### Tests
 
 ```bash
 # Build et test de compilation
-./scripts/esp32server.sh compile
+./scripts/nidmi.sh compile
 
 # Build complet + upload
-./scripts/esp32server.sh upload
+./scripts/nidmi.sh upload
 
 # Moniteur série pour logs
-./scripts/esp32server.sh monitor
+./scripts/nidmi.sh monitor
 ```
 
 ## Bugs connus et limitations
@@ -341,17 +341,17 @@ L'interface web est **modularisée** et **compressée** pour optimiser l'utilisa
 
 ### Build Automatique
 
-Le build est **automatique** via `esp32server.sh` :
+Le build est **automatique** via `nidmi.sh` :
 
 ```bash
 # Build + Sync + Compile + Upload (recommandé)
-./scripts/esp32server.sh upload
+./scripts/nidmi.sh upload
 
 # Ou seulement build + sync
-./scripts/esp32server.sh sync
+./scripts/nidmi.sh sync
 ```
 
-**Le script `esp32server.sh`** :
+**Le script `nidmi.sh`** :
 1. Appelle automatiquement `build_html_simple.sh`
 2. Génère `src/ui_index.cpp` (HTML minimal)
 3. Génère `src/ui_bundle.h` (Bundle JS gzipé)
@@ -378,7 +378,7 @@ web/
 1. **Éditer** les fichiers source dans `web/` :
    - `web/index.html` : HTML/CSS
    - `web/js/*.js` : Modules JavaScript (par responsabilité)
-2. **Build automatique** : `./scripts/esp32server.sh sync`
+2. **Build automatique** : `./scripts/nidmi.sh sync`
 3. **Tester** : Compiler et uploader vers ESP32
 
 **Workflow de développement complet** :
@@ -388,10 +388,10 @@ vim web/index.html              # HTML/CSS
 vim web/js/pins.js              # Module spécifique
 
 # 2. Build automatique (génère HTML + bundle gzip)
-./scripts/esp32server.sh sync
+./scripts/nidmi.sh sync
 
 # 3. Compiler et uploader
-./scripts/esp32server.sh upload
+./scripts/nidmi.sh upload
 
 # 4. Tester dans le navigateur
 # Ouvrir http://192.168.4.1 (ou nom.local)
@@ -400,13 +400,13 @@ vim web/js/pins.js              # Module spécifique
 **Localisation (langues)** :
 ```bash
 # Build en français (défaut)
-./scripts/esp32server.sh sync
+./scripts/nidmi.sh sync
 
 # Build en anglais
-./scripts/esp32server.sh sync --lang en
+./scripts/nidmi.sh sync --lang en
 
 # Upload avec interface anglaise
-./scripts/esp32server.sh upload --lang en
+./scripts/nidmi.sh upload --lang en
 ```
 
 **Note** : La localisation nécessite `jq` installé. Voir `docs/GUIDE_LOCALISATION.md` pour plus de détails.
@@ -425,13 +425,13 @@ L'interface web supporte plusieurs langues via des fichiers JSON de traduction :
 
 ```bash
 # Build en français (défaut)
-./scripts/esp32server.sh sync
+./scripts/nidmi.sh sync
 
 # Build en anglais
-./scripts/esp32server.sh sync --lang en
+./scripts/nidmi.sh sync --lang en
 
 # Upload avec interface anglaise
-./scripts/esp32server.sh upload --lang en
+./scripts/nidmi.sh upload --lang en
 ```
 
 **Langues supportées** :
@@ -469,7 +469,7 @@ L'interface web supporte plusieurs langues via des fichiers JSON de traduction :
 **Avantages** :
 - **Code maintenable** : Modules organisés par responsabilité
 - **Mémoire optimisée** : Compression gzip + HTML minimal
-- **Workflow simple** : Build automatique via `esp32server.sh`
+- **Workflow simple** : Build automatique via `nidmi.sh`
 - **Fiabilité** : Bug encodage résolu avec streaming par chunks
 
 ---

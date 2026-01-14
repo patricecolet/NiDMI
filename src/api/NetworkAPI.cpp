@@ -1,5 +1,5 @@
 #include "APICommon.h"
-#include "Esp32Server.h" /* Pour esp32server_requestReloadPins */
+#include "NiDMIServer.h" /* Pour nidmi_requestReloadPins */
 #include "../ui_index.h" /* Pour INDEX_HTML */  // ← AJOUTER CETTE LIGNE
 void setupNetworkAPI(AsyncWebServer& server) {
     /* API - Statut général */
@@ -13,7 +13,7 @@ void setupNetworkAPI(AsyncWebServer& server) {
         json += "\"ap_ip\":\"" + WiFi.softAPIP().toString() + "\",";
         json += "\"sta_ssid\":\"" + WiFi.SSID() + "\",";
         json += "\"sta_ip\":\"" + WiFi.localIP().toString() + "\",";
-        json += "\"sta_connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false\n");
+        json += "\"sta_connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false");
         json += "}";
         request->send(200, "application/json", json);
     });
@@ -25,21 +25,21 @@ void setupNetworkAPI(AsyncWebServer& server) {
             
             /* Sauvegarder en NVS */
             Preferences preferences;
-            preferences.begin("esp32server", false);
+            preferences.begin("nidmi", false);
             preferences.putString("mdns_name", name);
             preferences.end();
             
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"error\":\"name required\"}\n");
+            request->send(400, "application/json", "{\"error\":\"name required\"}");
         }
     });
 
     /* API - Statut mDNS */
     server.on("/api/mdns/status", HTTP_GET, [](AsyncWebServerRequest *request){
         Preferences preferences;
-        preferences.begin("esp32server", true);
-        String name = preferences.getString("mdns_name", "esp32rtpmidi\n");
+        preferences.begin("nidmi", true);
+        String name = preferences.getString("mdns_name", "nidmi");
         preferences.end();
         String json = "{";
         json += "\"name\":\"" + name + "\"";
@@ -55,14 +55,14 @@ void setupNetworkAPI(AsyncWebServer& server) {
             
             /* Sauvegarder en NVS */
             Preferences preferences;
-            preferences.begin("esp32server", false);
+            preferences.begin("nidmi", false);
             preferences.putString("sta_ssid", ssid);
             preferences.putString("sta_pass", pass);
             preferences.end();
             
-            request->send(200, "application/json", "{\"status\":\"ok\"}\n");
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
-            request->send(400, "application/json", "{\"error\":\"ssid required\"}\n");
+            request->send(400, "application/json", "{\"error\":\"ssid required\"}");
         }
     });
 
