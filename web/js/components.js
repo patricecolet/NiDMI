@@ -33,6 +33,11 @@ function showRoleCards(role, currentCfg = {}){
    }
   }
  }
+ 
+ // Générer la section RTP-MIDI dynamiquement
+ if(def && typeof generateRtpMidiSection === 'function') {
+  generateRtpMidiSection(def, currentCfg);
+ }
 }
 
 /**
@@ -329,7 +334,8 @@ function updFunc(lbl){
  
  sel.onchange=updateConfig;
  
- const inputs=['#btnMode','#btnPulseTiming','#ledMode','#filterIntensity','#rtpEnabled2','#rtpMsgType','#rtpNote','#rtpCc','#rtpPc','#rtpChan','#rtpCcOn','#rtpCcOff','#rtpVel','#rtpCcMin','#rtpCcMax','#rtpNoteMin','#rtpNoteMax','#rtpNoteVelFix','#rtpNoteSweepAutoOffDelay','#oscEnabled2','#oscAddress','#oscFormat','#dbgEnabled','#dbgHeader','#muxS0','#muxS1','#muxS2','#muxS3','#muxEnManual'];
+ // Générer la liste d'inputs dynamiquement
+ const inputs = getAllFieldIds();
  inputs.forEach(id=>{
  const el=$(id);
  if(el) el.addEventListener('change',updateConfig);
@@ -380,59 +386,111 @@ function updateRtpForRole(role){
 function updateRtpParamsVisibility(){
  const typeSel = $('#rtpMsgType');
  const params = $('#rtpParams');
- const noteRow = $('#rtpNoteRow');
- const ccRow = $('#rtpCcRow');
- const ccOnOffRow = $('#rtpCcOnOffRow');
- const pcRow = $('#rtpPcRow');
- const velRow = $('#rtpVelRow');
- const ccRangeRow = $('#rtpCcRangeRow');
- const chanRow = $('#rtpChanRow');
- const clockHint = $('#rtpClockHint');
- const noteSweepRow = $('#rtpNoteSweepRow');
  const roleSel = $('#funcSelect');
  if(!typeSel || !params) return;
+ 
  const v = typeSel.value;
- [noteRow, ccRow, ccOnOffRow, pcRow, velRow, chanRow, clockHint, noteSweepRow, ccRangeRow].forEach(el=>{ if(el) el.style.display='none'; });
- params.style.display = 'block';
- if(v==='Note'){
- if(noteRow) noteRow.style.display='flex';
- if(chanRow) chanRow.style.display='flex';
  const role = roleSel ? roleSel.value : '';
- if(role==='button' && velRow){ velRow.style.display='flex'; }
- } else if(v==='Control Change'){
- if(ccRow) ccRow.style.display='flex';
- if(chanRow) chanRow.style.display='flex';
- const role = roleSel ? roleSel.value : '';
- if(role==='potentiometer' && ccRangeRow){ ccRangeRow.style.display='flex'; }
- if(role==='button' && ccOnOffRow){ ccOnOffRow.style.display='flex'; }
- } else if(v==='Program Change'){
- if(pcRow) pcRow.style.display='flex';
- if(chanRow) chanRow.style.display='flex';
- } else if(v==='Pitch Bend'){
- if(chanRow) chanRow.style.display='flex';
- } else if(v==='Aftertouch (Channel)'){
- if(chanRow) chanRow.style.display='flex';
- } else if(v==='Note + vélocité'){
- if(noteRow) noteRow.style.display='flex';
- if(chanRow) chanRow.style.display='flex';
- } else if(v==='Note (balayage)'){
- if(noteSweepRow) noteSweepRow.style.display='flex';
- if(chanRow) chanRow.style.display='flex';
- } else if(v==='Clock' || v==='Tap Tempo'){
- if(clockHint) clockHint.style.display='flex';
- }
+ 
+ // Masquer tous les champs
+ const allRows = params.querySelectorAll('[id$="Row"]');
+ allRows.forEach(row => {
+  if(row._showFor) {
+   // Vérifier si ce champ doit être affiché pour ce type de message
+   const shouldShow = row._showFor.includes(v);
+   if(shouldShow && row._dependsOnRole) {
+    // Vérifier aussi le rôle si nécessaire
+    row.style.display = row._dependsOnRole.includes(role) ? 'flex' : 'none';
+   } else {
+    row.style.display = shouldShow ? 'flex' : 'none';
+   }
+  } else {
+   row.style.display = 'none';
+  }
+ });
+ 
+ // La logique conditionnelle est maintenant gérée par dependsOnRole dans generateRtpParams
 }
 
 // updateBtnPulseTimingVisibility() est maintenant obsolète
 // L'affichage conditionnel est géré par generateFormFields() via dependsOn/showWhen
 
+/**
+ * Collecte tous les IDs de champs depuis les formFields et les champs RTP
+ * @returns {Array<string>} Liste des IDs de champs
+ */
+function getAllFieldIds() {
+ const ids = [];
+ 
+ // Collecter depuis les formFields de tous les composants
+ if(typeof componentDefinitions !== 'undefined' && componentDefinitions) {
+  componentDefinitions.forEach(def => {
+   if(def.formFields && Array.isArray(def.formFields)) {
+    def.formFields.forEach(field => {
+     if(field.id && !field.id.startsWith('_')) { // Ignorer les hints standalone
+      ids.push('#' + field.id);
+      // Pour RANGE, ajouter Min et Max
+      if(field.type === 4) { // RANGE
+       ids.push('#' + field.id + 'Min');
+       ids.push('#' + field.id + 'Max');
+      }
+     }
+    });
+   }
+  });
+ }
+ 
+ // Ajouter les champs RTP-MIDI standards
+ const rtpFields = [
+  '#rtpEnabled2', '#rtpMsgType', '#rtpNote', '#rtpCc', '#rtpPc', '#rtpChan',
+  '#rtpCcOn', '#rtpCcOff', '#rtpVel', '#rtpCcMin', '#rtpCcMax',
+  '#rtpNoteMin', '#rtpNoteMax', '#rtpNoteVelFix', '#rtpNoteSweepAutoOffDelay'
+ ];
+ rtpFields.forEach(id => {
+  if(!ids.includes(id)) ids.push(id);
+ });
+ 
+ // Ajouter les champs OSC et Debug
+ ids.push('#oscEnabled2', '#oscAddress', '#oscFormat', '#dbgEnabled', '#dbgHeader');
+ 
+ // Ajouter les champs MUX (gérés séparément mais nécessaires)
+ ids.push('#muxS0', '#muxS1', '#muxS2', '#muxS3', '#muxEnManual');
+ 
+ return ids;
+}
+
 function readCfg(){
  const c={};
  c.role=$('#funcSelect')?.value||'';
- c.btnMode=$('#btnMode')?.value||'';
- c.btnPulseTiming=$('#btnPulseTiming')?.value||'';
- c.ledMode=$('#ledMode')?.value||'';
- c.filterIntensity=$('#filterIntensity')?.value||'5';
+ 
+ // Lire les champs depuis les formFields du composant actuel
+ const roleSel = $('#funcSelect');
+ if(roleSel && roleSel.value) {
+  const migratedRole = typeof migrateRole === 'function' ? migrateRole(roleSel.value) : roleSel.value;
+  const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(migratedRole) : null;
+  
+  if(def && def.formFields && Array.isArray(def.formFields)) {
+   def.formFields.forEach(field => {
+    if(field.id && !field.id.startsWith('_')) {
+     const el = $('#' + field.id);
+     if(el) {
+      if(field.type === 3) { // CHECKBOX
+       c[field.id] = el.checked;
+      } else if(field.type === 4) { // RANGE
+       const elMin = $('#' + field.id + 'Min');
+       const elMax = $('#' + field.id + 'Max');
+       if(elMin) c[field.id + 'Min'] = elMin.value || '';
+       if(elMax) c[field.id + 'Max'] = elMax.value || '';
+      } else {
+       c[field.id] = el.value || '';
+      }
+     }
+    }
+   });
+  }
+ }
+ 
+ // Lire les champs RTP-MIDI
  c.rtpEnabled=!!$('#rtpEnabled2')?.checked;
  c.rtpType=$('#rtpMsgType')?.value||'';
  c.rtpNote=$('#rtpNote')?.value||'';
@@ -448,11 +506,14 @@ function readCfg(){
  c.rtpNoteMax=$('#rtpNoteMax')?.value||'';
  c.rtpNoteVelFix=$('#rtpNoteVelFix')?.value||'';
  c.rtpNoteSweepAutoOffDelay=$('#rtpNoteSweepAutoOffDelay')?.value||'';
+ 
+ // Lire les champs OSC et Debug
  c.oscEnabled=!!$('#oscEnabled2')?.checked;
  c.oscAddress=$('#oscAddress')?.value||'';
  c.oscFormat=$('#oscFormat')?.value||'float';
  c.dbgEnabled=!!$('#dbgEnabled')?.checked;
  c.dbgHeader=$('#dbgHeader')?.value||'';
+ 
  return c;
 }
 
@@ -481,6 +542,27 @@ function applyCfg(c){
 setV('funcSelect',migratedRole);
 showRoleCards(migratedRole, c);
 updateRtpForRole(migratedRole);
+
+ // Appliquer les champs depuis les formFields du composant
+ if(migratedRole && typeof getComponentDefinition === 'function') {
+  const def = getComponentDefinition(migratedRole);
+  if(def && def.formFields && Array.isArray(def.formFields)) {
+   def.formFields.forEach(field => {
+    if(field.id && !field.id.startsWith('_')) {
+     if(field.type === 3) { // CHECKBOX
+      setC(field.id, c[field.id]);
+     } else if(field.type === 4) { // RANGE
+      setV(field.id + 'Min', c[field.id + 'Min']);
+      setV(field.id + 'Max', c[field.id + 'Max']);
+     } else {
+      setV(field.id, c[field.id]);
+     }
+    }
+   });
+  }
+ }
+ 
+ // Appliquer les champs RTP-MIDI
  setC('rtpEnabled2',c.rtpEnabled);
  setV('rtpMsgType',c.rtpType);
  setV('rtpNote',c.rtpNote);
@@ -496,11 +578,15 @@ updateRtpForRole(migratedRole);
  setV('rtpNoteMax',c.rtpNoteMax);
  setV('rtpNoteVelFix',c.rtpNoteVelFix);
  setV('rtpNoteSweepAutoOffDelay',c.rtpNoteSweepAutoOffDelay);
+ 
+ // Appliquer les champs OSC et Debug
  setC('oscEnabled2',c.oscEnabled);
  setV('oscAddress',c.oscAddress);
  setV('oscFormat',c.oscFormat);
  setC('dbgEnabled',c.dbgEnabled);
  setV('dbgHeader',c.dbgHeader);
+ 
+ // Mettre à jour la visibilité des paramètres RTP
  updateRtpParamsVisibility();
 }
 
@@ -1055,4 +1141,297 @@ function generateFormFields(def, containerId, currentCfg = {}) {
    fieldContainer.appendChild(hintDiv);
   }
  });
+}
+
+/**
+ * Génère dynamiquement la section RTP-MIDI depuis les définitions du backend
+ * @param {Object} def - Définition du composant
+ * @param {Object} currentCfg - Configuration actuelle
+ */
+function generateRtpMidiSection(def, currentCfg = {}) {
+ const container = $('#rtpMidiSection');
+ if(!container) return;
+ 
+ // Vider le conteneur
+ container.innerHTML = '';
+ 
+ // Si le composant ne supporte pas MIDI, ne rien afficher
+ if(!def || !def.supportsMidi || !def.midiMessages || def.midiMessages.length === 0) {
+  return;
+ }
+ 
+ // Créer le wrapper principal
+ const wrapper = document.createElement('div');
+ wrapper.className = 'r switch';
+ 
+ // Checkbox rtpEnabled
+ const rtpEnabledCheckbox = document.createElement('input');
+ rtpEnabledCheckbox.type = 'checkbox';
+ rtpEnabledCheckbox.id = 'rtpEnabled2';
+ if(currentCfg.rtpEnabled) rtpEnabledCheckbox.checked = true;
+ 
+ const rtpEnabledLabel = document.createElement('label');
+ rtpEnabledLabel.setAttribute('for', 'rtpEnabled2');
+ rtpEnabledLabel.textContent = '{{t.pins.activate}}'; // TODO: utiliser traduction
+ 
+ const typeLabel = document.createElement('label');
+ typeLabel.textContent = '{{t.pins.type}}:'; // TODO: utiliser traduction
+ 
+ // Select rtpMsgType
+ const rtpMsgTypeSelect = document.createElement('select');
+ rtpMsgTypeSelect.id = 'rtpMsgType';
+ 
+ // Ajouter les options depuis midiMessages
+ def.midiMessages.forEach(msg => {
+  const option = document.createElement('option');
+  option.value = msg.displayName;
+  option.textContent = msg.displayName;
+  rtpMsgTypeSelect.appendChild(option);
+ });
+ 
+ // Sélectionner la valeur actuelle si disponible
+ if(currentCfg.rtpType) {
+  rtpMsgTypeSelect.value = currentCfg.rtpType;
+ }
+ 
+ wrapper.appendChild(rtpEnabledCheckbox);
+ wrapper.appendChild(rtpEnabledLabel);
+ wrapper.appendChild(typeLabel);
+ wrapper.appendChild(rtpMsgTypeSelect);
+ container.appendChild(wrapper);
+ 
+ // Créer le conteneur pour les paramètres
+ const paramsContainer = document.createElement('div');
+ paramsContainer.id = 'rtpParams';
+ paramsContainer.className = 'subcard';
+ paramsContainer.style.display = rtpEnabledCheckbox.checked ? 'block' : 'none';
+ container.appendChild(paramsContainer);
+ 
+ // Gérer l'affichage/masquage des paramètres selon rtpEnabled
+ rtpEnabledCheckbox.addEventListener('change', () => {
+  paramsContainer.style.display = rtpEnabledCheckbox.checked ? 'block' : 'none';
+  if(rtpEnabledCheckbox.checked) {
+   updateRtpParamsVisibility();
+  }
+ });
+ 
+ // Générer les champs de paramètres selon le type de message MIDI
+ generateRtpParams(def, paramsContainer, currentCfg);
+ 
+ // Gérer le changement de type de message
+ rtpMsgTypeSelect.addEventListener('change', () => {
+  updateRtpParamsVisibility();
+ });
+}
+
+/**
+ * Génère les champs de paramètres RTP-MIDI selon le type de message
+ * @param {Object} def - Définition du composant
+ * @param {HTMLElement} container - Conteneur pour les paramètres
+ * @param {Object} currentCfg - Configuration actuelle
+ */
+function generateRtpParams(def, container, currentCfg = {}) {
+ // Vider le conteneur
+ container.innerHTML = '';
+ 
+ // Définir les champs de paramètres pour chaque type de message MIDI
+ const paramFields = [
+  {
+   id: 'rtpNote',
+   label: '{{t.pins.note}}:',
+   type: 'number',
+   min: 0,
+   max: 127,
+   placeholder: '60',
+   width: 90,
+   showFor: ['Note', 'Note + vélocité']
+  },
+  {
+   id: 'rtpCc',
+   label: '{{t.pins.cc}}:',
+   type: 'number',
+   min: 0,
+   max: 127,
+   placeholder: '7',
+   width: 90,
+   showFor: ['Control Change']
+  },
+  {
+   id: 'rtpPc',
+   label: '{{t.pins.program}}:',
+   type: 'number',
+   min: 0,
+   max: 127,
+   placeholder: '0',
+   width: 90,
+   showFor: ['Program Change']
+  },
+  {
+   id: 'rtpChan',
+   label: '{{t.pins.channel}}:',
+   type: 'number',
+   min: 1,
+   max: 16,
+   placeholder: '1',
+   width: 90,
+   showFor: ['Note', 'Control Change', 'Program Change', 'Pitch Bend', 'Aftertouch (Channel)', 'Note + vélocité', 'Note (balayage)']
+  },
+  {
+   id: 'rtpVel',
+   label: '{{t.pins.velocity}}:',
+   type: 'number',
+   min: 1,
+   max: 127,
+   placeholder: '100',
+   width: 90,
+   showFor: ['Note', 'Note + vélocité'],
+   dependsOnRole: ['button']
+  },
+  {
+   id: 'rtpCcOnOff',
+   label: '{{t.pins.values}}:',
+   type: 'range',
+   min: 0,
+   max: 127,
+   defaultMin: '127',
+   defaultMax: '0',
+   separator: '→',
+   width: 90,
+   showFor: ['Control Change'],
+   dependsOnRole: ['button']
+  },
+  {
+   id: 'rtpCcRange',
+   label: '{{t.pins.midiRange}}:',
+   type: 'range',
+   min: 0,
+   max: 127,
+   defaultMin: '0',
+   defaultMax: '127',
+   separator: '→',
+   width: 90,
+   showFor: ['Control Change'],
+   dependsOnRole: ['potentiometer']
+  },
+  {
+   id: 'rtpNoteSweep',
+   label: '{{t.pins.sweep}}:',
+   type: 'range',
+   min: 0,
+   max: 127,
+   defaultMin: '48',
+   defaultMax: '72',
+   separator: '→',
+   width: 90,
+   showFor: ['Note (balayage)']
+  },
+  {
+   id: 'rtpNoteVelFix',
+   label: '{{t.pins.fixedVelocity}}:',
+   type: 'number',
+   min: 1,
+   max: 127,
+   placeholder: '100',
+   width: 90,
+   showFor: ['Note (balayage)']
+  },
+  {
+   id: 'rtpNoteSweepAutoOffDelay',
+   label: '{{t.pins.autoOff}}',
+   type: 'number',
+   min: 0,
+   max: 65535,
+   placeholder: '0',
+   width: 90,
+   showFor: ['Note (balayage)']
+  },
+  {
+   id: 'rtpClockHint',
+   type: 'info',
+   hint: '{{t.pins.clockHint}}',
+   hintClass: 'color:#6b7280;',
+   showFor: ['Clock', 'Tap Tempo']
+  }
+ ];
+ 
+ // Générer les champs
+ paramFields.forEach(field => {
+  const row = document.createElement('div');
+  row.className = 'r';
+  row.id = field.id + 'Row';
+  row.style.display = 'none';
+  
+  if(field.type === 'info') {
+   const hintDiv = document.createElement('div');
+   hintDiv.className = field.hintClass || 'hint';
+   hintDiv.textContent = field.hint;
+   row.appendChild(hintDiv);
+  } else if(field.type === 'range') {
+   const label = document.createElement('label');
+   label.textContent = field.label;
+   row.appendChild(label);
+   
+   const inputMin = document.createElement('input');
+   inputMin.type = 'number';
+   inputMin.id = field.id + 'Min';
+   inputMin.min = field.min;
+   inputMin.max = field.max;
+   inputMin.placeholder = field.defaultMin || field.min;
+   inputMin.style.width = field.width + 'px';
+   if(currentCfg[field.id + 'Min'] !== undefined) {
+    inputMin.value = currentCfg[field.id + 'Min'];
+   } else if(field.defaultMin) {
+    inputMin.value = field.defaultMin;
+   }
+   
+   const separator = document.createElement('span');
+   separator.textContent = field.separator || '→';
+   separator.style.margin = '0 4px';
+   
+   const inputMax = document.createElement('input');
+   inputMax.type = 'number';
+   inputMax.id = field.id + 'Max';
+   inputMax.min = field.min;
+   inputMax.max = field.max;
+   inputMax.placeholder = field.defaultMax || field.max;
+   inputMax.style.width = field.width + 'px';
+   if(currentCfg[field.id + 'Max'] !== undefined) {
+    inputMax.value = currentCfg[field.id + 'Max'];
+   } else if(field.defaultMax) {
+    inputMax.value = field.defaultMax;
+   }
+   
+   row.appendChild(inputMin);
+   row.appendChild(separator);
+   row.appendChild(inputMax);
+  } else {
+   const label = document.createElement('label');
+   label.textContent = field.label;
+   row.appendChild(label);
+   
+   const input = document.createElement('input');
+   input.type = field.type;
+   input.id = field.id;
+   input.min = field.min;
+   input.max = field.max;
+   input.placeholder = field.placeholder || '';
+   input.style.width = field.width + 'px';
+   if(currentCfg[field.id] !== undefined) {
+    input.value = currentCfg[field.id];
+   } else if(field.placeholder) {
+    input.value = field.placeholder;
+   }
+   
+   row.appendChild(input);
+  }
+  
+  // Stocker les informations pour updateRtpParamsVisibility
+  row._showFor = field.showFor || [];
+  row._dependsOnRole = field.dependsOnRole || null;
+  
+  container.appendChild(row);
+ });
+ 
+ // Mettre à jour la visibilité initiale
+ updateRtpParamsVisibility();
 }

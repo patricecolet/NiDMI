@@ -94,18 +94,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div class="f"><label>{{t.pins.filterIntensity}}</label><input type="number" id="muxFilterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">{{t.pins.filterHint}}</span></div>
  </div>
  <h4>RTP‑MIDI</h4>
- <div class="r switch"><input type="checkbox" id="rtpEnabled2"><label for="rtpEnabled2">{{t.pins.activate}}</label><label>{{t.pins.type}}:</label><select id="rtpMsgType"><option>Note</option><option>Control Change</option><option>Program Change</option><option>Pitch Bend</option><option>Aftertouch (Channel)</option><option>{{t.pins.noteVelocity}}</option><option>{{t.pins.noteSweep}}</option><option>Clock</option><option>Tap Tempo</option></select></div>
- <div id="rtpParams" class="subcard" style="display:none;">
- <div class="r" id="rtpNoteRow" style="display:none;"><label>{{t.pins.note}}:</label><input type="number" id="rtpNote" min="0" max="127" placeholder="60" style="width:90px;"></div>
- <div class="r" id="rtpCcRow" style="display:none;"><label>{{t.pins.cc}}:</label><input type="number" id="rtpCc" min="0" max="127" placeholder="7" style="width:90px;"></div>
- <div class="r" id="rtpCcOnOffRow" style="display:none;"><label>{{t.pins.values}}:</label><span>{{t.pins.on}}</span><input type="number" id="rtpCcOn" min="0" max="127" placeholder="127" style="width:90px;"><span>{{t.pins.off}}</span><input type="number" id="rtpCcOff" min="0" max="127" placeholder="0" style="width:90px;"></div>
- <div class="r" id="rtpPcRow" style="display:none;"><label>{{t.pins.program}}:</label><input type="number" id="rtpPc" min="0" max="127" placeholder="0" style="width:90px;"></div>
- <div class="r" id="rtpVelRow" style="display:none;"><label>{{t.pins.velocity}}:</label><input type="number" id="rtpVel" min="1" max="127" placeholder="100" style="width:90px;"></div>
- <div class="r" id="rtpCcRangeRow" style="display:none;"><label>{{t.pins.midiRange}}:</label><input type="number" id="rtpCcMin" min="0" max="127" placeholder="0" style="width:90px;"><span>→</span><input type="number" id="rtpCcMax" min="0" max="127" placeholder="127" style="width:90px;"></div>
- <div class="r" id="rtpChanRow" style="display:none;"><label>{{t.pins.channel}}:</label><input type="number" id="rtpChan" min="1" max="16" placeholder="1" style="width:90px;"></div>
- <div class="r" id="rtpClockHint" style="display:none; color:#6b7280;"><span>{{t.pins.clockHint}}</span></div>
- <div class="r" id="rtpNoteSweepRow" style="display:none;"><label>{{t.pins.sweep}}:</label><input type="number" id="rtpNoteMin" min="0" max="127" placeholder="48" style="width:90px;"><span>→</span><input type="number" id="rtpNoteMax" min="0" max="127" placeholder="72" style="width:90px;"><label style="margin-left:8px;">{{t.pins.fixedVelocity}}:</label><input type="number" id="rtpNoteVelFix" min="1" max="127" placeholder="100" style="width:90px;"><label style="margin-left:8px;">{{t.pins.autoOff}}</label><input type="number" id="rtpNoteSweepAutoOffDelay" min="0" max="65535" placeholder="0" style="width:90px;"></div>
- </div>
+ <div id="rtpMidiSection"></div>
  <h4>OSC</h4>
  <div class="r switch"><input type="checkbox" id="oscEnabled2"><label for="oscEnabled2">{{t.pins.enable}}</label><label>{{t.pins.addr}}:</label><input type="text" id="oscAddress" placeholder="/ctl"></div>
  <div class="r"><label>{{t.pins.format}}:</label><select id="oscFormat"><option value="float">{{t.pins.float}}</option><option value="midi">{{t.pins.midi}}</option></select></div>
