@@ -117,7 +117,7 @@ struct HC4067 : MuxBase {
         def.formFieldCount = 4;
         
         // Min threshold
-        def.formFields[0] = {
+        def.formFields[0] = FormFieldDef{
             "muxMin",
             "Seuil minimum",
             FieldType::NUMBER,
@@ -133,7 +133,7 @@ struct HC4067 : MuxBase {
         };
         
         // Max threshold
-        def.formFields[1] = {
+        def.formFields[1] = FormFieldDef{
             "muxMax",
             "Seuil maximum",
             FieldType::NUMBER,
@@ -149,7 +149,7 @@ struct HC4067 : MuxBase {
         };
         
         // Hint pour calibrage OSC
-        def.formFields[2] = {
+        def.formFields[2] = FormFieldDef{
             "_muxCalibHint",
             nullptr,
             FieldType::INFO,
@@ -166,7 +166,7 @@ struct HC4067 : MuxBase {
         };
         
         // Filter intensity
-        def.formFields[3] = {
+        def.formFields[3] = FormFieldDef{
             "muxFilterIntensity",
             "Intensité filtrage (1-10)",
             FieldType::NUMBER,
@@ -223,7 +223,7 @@ struct HC4051 : MuxBase {
         def.formFieldCount = 4;
         
         // Min threshold
-        def.formFields[0] = {
+        def.formFields[0] = FormFieldDef{
             "muxMin",
             "Seuil minimum",
             FieldType::NUMBER,
@@ -239,7 +239,7 @@ struct HC4051 : MuxBase {
         };
         
         // Max threshold
-        def.formFields[1] = {
+        def.formFields[1] = FormFieldDef{
             "muxMax",
             "Seuil maximum",
             FieldType::NUMBER,
@@ -255,7 +255,7 @@ struct HC4051 : MuxBase {
         };
         
         // Hint pour calibrage OSC
-        def.formFields[2] = {
+        def.formFields[2] = FormFieldDef{
             "_muxCalibHint",
             nullptr,
             FieldType::INFO,
@@ -272,7 +272,7 @@ struct HC4051 : MuxBase {
         };
         
         // Filter intensity
-        def.formFields[3] = {
+        def.formFields[3] = FormFieldDef{
             "muxFilterIntensity",
             "Intensité filtrage (1-10)",
             FieldType::NUMBER,

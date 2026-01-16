@@ -86,7 +86,7 @@ struct Button {
         def.formFieldCount = 2;
         
         // btnMode
-        def.formFields[0] = {
+        def.formFields[0] = FormFieldDef{
             "btnMode",
             "Mode bouton",
             FieldType::SELECT,
@@ -102,7 +102,7 @@ struct Button {
         };
         
         // btnPulseTiming (conditionnel sur btnMode = "pulse")
-        def.formFields[1] = {
+        def.formFields[1] = FormFieldDef{
             "btnPulseTiming",
             "Timing Push",
             FieldType::SELECT,

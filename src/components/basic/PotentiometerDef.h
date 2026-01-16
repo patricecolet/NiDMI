@@ -77,7 +77,7 @@ struct Potentiometer {
         
         // Champs de formulaire
         def.formFieldCount = 1;
-        def.formFields[0] = {
+        def.formFields[0] = FormFieldDef{
             "filterIntensity",
             "Intensité filtrage (1-10)",
             FieldType::NUMBER,

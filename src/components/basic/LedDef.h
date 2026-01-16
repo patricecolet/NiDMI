@@ -78,7 +78,7 @@ struct Led {
         
         // Champs de formulaire
         def.formFieldCount = 1;
-        def.formFields[0] = {
+        def.formFields[0] = FormFieldDef{
             "ledMode",
             "LED",
             FieldType::SELECT,
