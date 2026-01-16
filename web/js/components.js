@@ -93,8 +93,8 @@ function populateFamilySelect(pinType, pin) {
    });
   }
   
-  // Vérifier disponibilité MUX pour les multiplexeurs
-  if(def.family === 1 && pinType === 0) { // MULTIPLEXER
+  // Vérifier disponibilité MUX pour les composants complexes (multiplexeurs)
+  if(def.isComplex && pinType === 0) { // Composant complexe sur pin analogique
    const muxAvailable = pin ? areMuxAddressPinsAvailable(pin.gpio) : false;
    if(muxAvailable) {
     familiesMap.get(familyId).components.push(def);
