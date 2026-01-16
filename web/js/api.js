@@ -341,16 +341,21 @@ async function saveAll(){
  try{
  // Sauvegarder le MUX en cours d'édition s'il y en a un
  const funcSelectValue = $('#funcSelect')?.value || '';
- if(typeof saveMuxFromPin === 'function' && $('#funcSelect') && (funcSelectValue === 'hc4067' || funcSelectValue === 'hc4051') && $('#muxSig') && $('#muxSig').value){
+ // Si composant complexe (MUX) sélectionné, sauvegarder via saveMuxFromPin
+ const funcDef = typeof getComponentDefinition === 'function' ? getComponentDefinition(funcSelectValue) : null;
+ if(typeof saveMuxFromPin === 'function' && $('#funcSelect') && funcDef && funcDef.isComplex && $('#muxSig') && $('#muxSig').value){
   await saveMuxFromPin();
  }
  
  const ps=Object.keys(pcfg).map(async lbl=>{
  const c=pcfg[lbl];
  if(!c||!c.role) return;
- // Ne pas sauvegarder les pins MUX via l'API pins (elles sont gérées via l'API mux)
+ // Ne pas sauvegarder les composants complexes (MUX) via cette API, ils sont gérés via muxList
  const role = migrateRole(c.role);
- if(role === 'hc4067' || role === 'hc4051') return;
+ const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
+ if(def && def.isComplex) return;
+ const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
+ if(def && def.isComplex) return;
  const p=new URLSearchParams();
  p.set('pinLabel',lbl);
  p.set('role',c.role);

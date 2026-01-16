@@ -555,9 +555,10 @@ function updatePinsList(){
   // Ignorer les pins avec préfixe M (anciennes pins MUX)
   if(lbl.startsWith('M')) return;
   
-  // Pour les rôles MUX : afficher comme MUX si pas déjà dans muxList
+  // Pour les composants complexes (MUX) : afficher comme MUX si pas déjà dans muxList
   const role = typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role;
-  if(role === 'hc4067' || role === 'hc4051'){
+  const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
+  if(def && def.isComplex){
    if(caps && caps.pins){
     const pin=caps.pins.find(p=>p.label===lbl);
     // Si ce GPIO est déjà dans un MUX sauvegardé, ne pas afficher
@@ -629,7 +630,9 @@ function updatePinsList(){
     : [];
    const firstMux = muxDefs.length > 0 ? muxDefs[0] : null;
    const muxType = firstMux ? firstMux.displayName : 'MUX';
-   const muxChannels = firstMux && firstMux.id === 'hc4067' ? '16 canaux' : (firstMux && firstMux.id === 'hc4051' ? '8 canaux' : '');
+   // Extraire le nombre de canaux depuis le displayName (ex: "HC4067 (16 canaux)")
+   const muxChannels = firstMux && firstMux.displayName ? 
+    (firstMux.displayName.match(/\((\d+)\s+canaux\)/)?.[1] ? `(${firstMux.displayName.match(/\((\d+)\s+canaux\)/)[1]} canaux)` : '') : '';
    const it=document.createElement('div');
    it.className='item mux';
    it.innerHTML=`<span class="lbl">MUX${mux.id}</span><span class="role">${muxType}</span><span class="stat">${muxChannels}</span><button class="del-btn">×</button>`;

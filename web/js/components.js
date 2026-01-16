@@ -248,7 +248,8 @@ function updFunc(lbl){
        showRoleCards(migratedRole, currentCfg);
        updateRtpForRole(migratedRole);
        updateRtpParamsVisibility();
-       if(migratedRole === 'hc4067' || migratedRole === 'hc4051') {
+       // Si composant complexe (MUX), initialiser le formulaire
+       if(def && def.isComplex && typeof initMuxFormForPin === 'function') {
         initMuxFormForPin(lbl);
        }
       }
@@ -262,7 +263,8 @@ function updFunc(lbl){
        showRoleCards(migratedRole, currentCfg);
        updateRtpForRole(migratedRole);
        updateRtpParamsVisibility();
-       if(migratedRole === 'hc4067' || migratedRole === 'hc4051') {
+       // Si composant complexe (MUX), initialiser le formulaire
+       if(def && def.isComplex && typeof initMuxFormForPin === 'function') {
         initMuxFormForPin(lbl);
        }
       }
@@ -281,7 +283,9 @@ function updFunc(lbl){
      showRoleCards(firstComponentId, {});
      updateRtpForRole(firstComponentId);
      updateRtpParamsVisibility();
-     if(firstComponentId === 'hc4067' || firstComponentId === 'hc4051') {
+     // Si composant complexe (MUX), initialiser le formulaire
+     const firstDef = typeof getComponentDefinition === 'function' ? getComponentDefinition(firstComponentId) : null;
+     if(firstDef && firstDef.isComplex && typeof initMuxFormForPin === 'function') {
       initMuxFormForPin(lbl);
      }
     }
@@ -295,9 +299,11 @@ function updFunc(lbl){
  showRoleCards(sel.value||'', currentCfg);
  updateRtpForRole(sel.value||'');
  updateRtpParamsVisibility();
- // Si multiplexeur est sélectionné, initialiser le formulaire MUX
+ // Si composant complexe (MUX) est sélectionné, initialiser le formulaire
  const role = sel.value || '';
- if((role === 'hc4067' || role === 'hc4051') && cur){
+ const migratedRole = typeof migrateRole === 'function' ? migrateRole(role) : role;
+ const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(migratedRole) : null;
+ if(def && def.isComplex && cur && typeof initMuxFormForPin === 'function'){
   initMuxFormForPin(cur);
  } else {
   // Effacer les valeurs du formulaire MUX pour ne pas polluer getUsedGpios
@@ -714,9 +720,10 @@ function getUsedGpios(additionalSelectIds=[]){
   const pin=caps.pins.find(p=>p.label===lbl);
   if(!pin) return;
   
-  // Pour les MUX temporaires, ajouter aussi les pins d'adresse
+  // Pour les composants complexes (MUX) temporaires, ajouter aussi les pins d'adresse
   const role = cfg?.role ? migrateRole(cfg.role) : '';
-  if(role === 'hc4067' || role === 'hc4051'){
+  const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
+  if(def && def.isComplex){
    const sigGpio=parseInt(pin.gpio);
    usedGpios.add(sigGpio);
    // Calculer et ajouter les pins d'adresse (mode auto)
@@ -733,7 +740,9 @@ function getUsedGpios(additionalSelectIds=[]){
  
  // Ne pas exclure le MUX en cours d'édition sauf si on est vraiment en train d'éditer un MUX
  const funcSelectValue = $('#funcSelect')?.value || '';
- const isEditingMux = funcSelectValue === 'hc4067' || funcSelectValue === 'hc4051';
+ // Vérifier si le composant sélectionné est complexe (MUX)
+ const funcDef = typeof getComponentDefinition === 'function' ? getComponentDefinition(funcSelectValue) : null;
+ const isEditingMux = funcDef && funcDef.isComplex;
  const currentMuxId = (isEditingMux && $('#muxId')) ? parseInt($('#muxId').value) : null;
  if(typeof muxList !== 'undefined' && Array.isArray(muxList)){
   muxList.forEach(m=>{
@@ -899,7 +908,8 @@ async function saveMuxFromPin(){
   const sigPin=caps.pins.find(p=>p.gpio===sig);
   if(sigPin && sigPin.label && pcfg[sigPin.label] && pcfg[sigPin.label].role){
    const role = migrateRole(pcfg[sigPin.label].role);
-   if(role === 'hc4067' || role === 'hc4051'){
+   const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
+   if(def && def.isComplex){
     delete pcfg[sigPin.label];
    }
   }
