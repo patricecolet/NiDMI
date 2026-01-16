@@ -1,0 +1,3 @@
+# Configuration pour augmenter la taille de la pile du loopTask
+# Permet d'éviter les crashes "Stack canary watchpoint triggered"
+CONFIG_ARDUINO_LOOP_STACK_SIZE=16384

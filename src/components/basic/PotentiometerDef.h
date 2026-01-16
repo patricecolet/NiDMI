@@ -49,7 +49,7 @@ struct Potentiometer {
      * @brief Crée la définition complète pour le registre
      */
     static ComponentDefinition createDefinition() {
-        ComponentDefinition def = {};
+        ComponentDefinition def;
         def.id = ID;
         def.displayName = DISPLAY_NAME;
         def.icon = nullptr;
@@ -63,51 +63,17 @@ struct Potentiometer {
         def.supportsMidi = SUPPORTS_MIDI;
         def.supportsOsc = SUPPORTS_OSC;
         def.additionalPinCount = 0;
-        
-        // Messages MIDI supportés
-        def.midiMessageCount = 4;
-        
-        // Control Change
-        def.midiMessages[0] = MidiMessageDef{
-            "cc", "Control Change", "CC#{cc}", 3,
-            {
-                MidiParamDef{"rtpCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
-                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
-                MidiParamDef{"rtpCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, "[\"potentiometer\"]"}
-            }
-        };
-        
-        // Program Change
-        def.midiMessages[1] = MidiMessageDef{
-            "pc", "Program Change", "PC#{pc}", 2,
-            {
-                MidiParamDef{"rtpPc", "{{t.pins.program}}:", FieldType::NUMBER, 0, 127, "0", "0", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
-                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr}
-            }
-        };
-        
-        // Pitch Bend
-        def.midiMessages[2] = MidiMessageDef{
-            "pitchbend", "Pitch Bend", "Pitch Bend", 1,
-            {
-                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr}
-            }
-        };
-        
-        // Aftertouch
-        def.midiMessages[3] = MidiMessageDef{
-            "aftertouch", "Aftertouch (Channel)", "Aftertouch", 1,
-            {
-                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr}
-            }
-        };
+        def.additionalPins = nullptr;
+        def.additionalPinsCapacity = 0;
         
         // Template par défaut si pas de MIDI configuré
         def.statusTextTemplate = nullptr;
         def.statusValueMappings = nullptr;
         
-        // Champs de formulaire
+        // Allouer les champs de formulaire
         def.formFieldCount = 1;
+        def.formFieldsCapacity = 1;
+        def.formFields = new FormFieldDef[1];
         def.formFields[0] = FormFieldDef{
             "filterIntensity",
             "Intensité filtrage (1-10)",
@@ -133,6 +99,50 @@ struct Potentiometer {
             nullptr,  // labelBefore
             nullptr   // labelAfter
         };
+        
+        // Allouer les messages MIDI supportés
+        def.midiMessageCount = 4;
+        def.midiMessagesCapacity = 4;
+        def.midiMessages = new MidiMessageDef[4];
+        
+        // Control Change
+        def.midiMessages[0].id = "cc";
+        def.midiMessages[0].displayName = "Control Change";
+        def.midiMessages[0].statusTemplate = "CC#{cc}";
+        def.midiMessages[0].paramCount = 3;
+        def.midiMessages[0].paramsCapacity = 3;
+        def.midiMessages[0].params = new MidiParamDef[3];
+        def.midiMessages[0].params[0] = MidiParamDef{"rtpCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[0].params[1] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[0].params[2] = MidiParamDef{"rtpCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, "[\"potentiometer\"]"};
+        
+        // Program Change
+        def.midiMessages[1].id = "pc";
+        def.midiMessages[1].displayName = "Program Change";
+        def.midiMessages[1].statusTemplate = "PC#{pc}";
+        def.midiMessages[1].paramCount = 2;
+        def.midiMessages[1].paramsCapacity = 2;
+        def.midiMessages[1].params = new MidiParamDef[2];
+        def.midiMessages[1].params[0] = MidiParamDef{"rtpPc", "{{t.pins.program}}:", FieldType::NUMBER, 0, 127, "0", "0", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[1].params[1] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        
+        // Pitch Bend
+        def.midiMessages[2].id = "pitchbend";
+        def.midiMessages[2].displayName = "Pitch Bend";
+        def.midiMessages[2].statusTemplate = "Pitch Bend";
+        def.midiMessages[2].paramCount = 1;
+        def.midiMessages[2].paramsCapacity = 1;
+        def.midiMessages[2].params = new MidiParamDef[1];
+        def.midiMessages[2].params[0] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        
+        // Aftertouch
+        def.midiMessages[3].id = "aftertouch";
+        def.midiMessages[3].displayName = "Aftertouch (Channel)";
+        def.midiMessages[3].statusTemplate = "Aftertouch";
+        def.midiMessages[3].paramCount = 1;
+        def.midiMessages[3].paramsCapacity = 1;
+        def.midiMessages[3].params = new MidiParamDef[1];
+        def.midiMessages[3].params[0] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
         
         return def;
     }

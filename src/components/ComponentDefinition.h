@@ -39,27 +39,6 @@ struct AdditionalPinDef {
 };
 
 /**
- * @brief Description d'un type de message MIDI
- */
-struct MidiMessageDef {
-    const char* id;              // Identifiant (ex: "cc", "note", "pc")
-    const char* displayName;     // Nom affiché (ex: "Control Change", "Note")
-    const char* statusTemplate;  // Template pour le texte de statut (ex: "CC#{cc}", "Note {note}")
-    uint8_t paramCount;          // Nombre de paramètres requis pour ce message
-    MidiParamDef params[MAX_MIDI_PARAMS]; // Paramètres requis
-};
-
-/**
- * @brief Nombre max de pins additionnelles par composant
- */
-static constexpr uint8_t MAX_ADDITIONAL_PINS = 6;
-
-/**
- * @brief Nombre max de types de messages MIDI par composant
- */
-static constexpr uint8_t MAX_MIDI_MESSAGES = 8;
-
-/**
  * @brief Nombre max de paramètres MIDI par type de message
  */
 static constexpr uint8_t MAX_MIDI_PARAMS = 10;
@@ -68,6 +47,18 @@ static constexpr uint8_t MAX_MIDI_PARAMS = 10;
  * @brief Nombre max de champs de formulaire par composant
  */
 static constexpr uint8_t MAX_FORM_FIELDS = 20;
+
+/**
+ * @brief Type de champ de formulaire
+ */
+enum class FieldType : uint8_t {
+    TEXT = 0,
+    NUMBER = 1,
+    SELECT = 2,
+    CHECKBOX = 3,
+    RANGE = 4,
+    INFO = 5        // Pour texte informatif seul
+};
 
 /**
  * @brief Description d'un paramètre MIDI
@@ -103,15 +94,37 @@ struct MidiParamDef {
 };
 
 /**
- * @brief Type de champ de formulaire
+ * @brief Nombre max de pins additionnelles par composant
  */
-enum class FieldType : uint8_t {
-    TEXT = 0,
-    NUMBER = 1,
-    SELECT = 2,
-    CHECKBOX = 3,
-    RANGE = 4,
-    INFO = 5        // Pour texte informatif seul
+static constexpr uint8_t MAX_ADDITIONAL_PINS = 6;
+
+/**
+ * @brief Nombre max de types de messages MIDI par composant
+ */
+static constexpr uint8_t MAX_MIDI_MESSAGES = 8;
+
+/**
+ * @brief Description d'un type de message MIDI
+ */
+struct MidiMessageDef {
+    const char* id;              // Identifiant (ex: "cc", "note", "pc")
+    const char* displayName;     // Nom affiché (ex: "Control Change", "Note")
+    const char* statusTemplate;  // Template pour le texte de statut (ex: "CC#{cc}", "Note {note}")
+    uint8_t paramCount;          // Nombre de paramètres requis pour ce message
+    MidiParamDef* params;        // Pointeur vers heap (alloué avec new[])
+    size_t paramsCapacity;       // Taille allouée (pour vérification)
+    
+    // Constructeur par défaut
+    MidiMessageDef() : params(nullptr), paramsCapacity(0), paramCount(0) {}
+    
+    // Cleanup : libère la mémoire allouée
+    void cleanup() {
+        if (params) {
+            delete[] params;
+            params = nullptr;
+            paramsCapacity = 0;
+        }
+    }
 };
 
 /**
@@ -192,15 +205,52 @@ struct ComponentDefinition {
     
     // Champs de formulaire pour l'UI
     uint8_t formFieldCount;     // Nombre de champs de formulaire
-    FormFieldDef formFields[MAX_FORM_FIELDS]; // Champs de formulaire
+    FormFieldDef* formFields;   // Pointeur vers heap (alloué avec new[])
+    size_t formFieldsCapacity;  // Taille allouée (pour vérification)
     
     // Pins additionnelles pour composants complexes
     uint8_t additionalPinCount;  // Nombre de pins additionnelles (0 pour simple)
-    AdditionalPinDef additionalPins[MAX_ADDITIONAL_PINS]; // Description des pins
+    AdditionalPinDef* additionalPins; // Pointeur vers heap (alloué avec new[])
+    size_t additionalPinsCapacity;    // Taille allouée (pour vérification)
     
     // Messages MIDI supportés
     uint8_t midiMessageCount;    // Nombre de types de messages MIDI supportés
-    MidiMessageDef midiMessages[MAX_MIDI_MESSAGES]; // Types de messages supportés
+    MidiMessageDef* midiMessages; // Pointeur vers heap (alloué avec new[])
+    size_t midiMessagesCapacity;  // Taille allouée (pour vérification)
+    
+    // Constructeur par défaut
+    ComponentDefinition() : 
+        id(nullptr), displayName(nullptr), icon(nullptr), cardId(nullptr),
+        family(ComponentFamily::BASIC), familyName(nullptr),
+        type(ComponentType::POTENTIOMETER), pinType(PinType::PIN_DIGITAL),
+        implemented(false), isComplex(false), supportsMidi(false), supportsOsc(false),
+        statusTextTemplate(nullptr), statusValueMappings(nullptr),
+        formFieldCount(0), formFields(nullptr), formFieldsCapacity(0),
+        additionalPinCount(0), additionalPins(nullptr), additionalPinsCapacity(0),
+        midiMessageCount(0), midiMessages(nullptr), midiMessagesCapacity(0) {}
+    
+    // Cleanup : libère la mémoire allouée (récursif)
+    void cleanup() {
+        if (formFields) {
+            delete[] formFields;
+            formFields = nullptr;
+            formFieldsCapacity = 0;
+        }
+        if (additionalPins) {
+            delete[] additionalPins;
+            additionalPins = nullptr;
+            additionalPinsCapacity = 0;
+        }
+        if (midiMessages) {
+            // Libérer les params de chaque message
+            for (size_t i = 0; i < midiMessagesCapacity; i++) {
+                midiMessages[i].cleanup();
+            }
+            delete[] midiMessages;
+            midiMessages = nullptr;
+            midiMessagesCapacity = 0;
+        }
+    }
     
     /**
      * @brief Convertit la définition en JSON pour l'API
@@ -209,6 +259,9 @@ struct ComponentDefinition {
      * @return Nombre de caractères écrits
      */
     int toJson(char* buffer, size_t bufferSize) const {
+        // Protection contre buffer null ou trop petit
+        if (!buffer || bufferSize < 100) return 0;
+        
         int written = snprintf(buffer, bufferSize,
             "{\"id\":\"%s\",\"displayName\":\"%s\",\"cardId\":\"%s\",\"family\":%d,\"familyName\":\"%s\","
             "\"pinType\":%d,\"implemented\":%s,\"isComplex\":%s,"
@@ -226,26 +279,33 @@ struct ComponentDefinition {
             additionalPinCount
         );
         
+        // Vérifier que le premier snprintf a réussi
+        if (written < 0 || written >= (int)bufferSize) return 0;
+        
         // Ajouter statusTextTemplate si présent
         if (statusTextTemplate && written < (int)bufferSize - 50) {
-            written += snprintf(buffer + written, bufferSize - written,
+            int added = snprintf(buffer + written, bufferSize - written,
                 ",\"statusTextTemplate\":\"%s\"",
                 statusTextTemplate
             );
+            if (added < 0 || written + added >= (int)bufferSize) return 0;
+            written += added;
         }
         
         // Ajouter statusValueMappings si présent
         if (statusValueMappings && written < (int)bufferSize - 50) {
-            written += snprintf(buffer + written, bufferSize - written,
+            int added = snprintf(buffer + written, bufferSize - written,
                 ",\"statusValueMappings\":%s",
                 statusValueMappings
             );
+            if (added < 0 || written + added >= (int)bufferSize) return 0;
+            written += added;
         }
         
         // Ajouter les pins additionnelles si présentes
-        if (additionalPinCount > 0 && written < (int)bufferSize - 50) {
+        if (additionalPinCount > 0 && additionalPins && written < (int)bufferSize - 50) {
             written += snprintf(buffer + written, bufferSize - written, ",\"additionalPins\":[");
-            for (uint8_t i = 0; i < additionalPinCount && i < MAX_ADDITIONAL_PINS; i++) {
+            for (uint8_t i = 0; i < additionalPinCount && i < additionalPinsCapacity; i++) {
                 if (i > 0) {
                     written += snprintf(buffer + written, bufferSize - written, ",");
                 }
@@ -261,9 +321,9 @@ struct ComponentDefinition {
         }
         
         // Ajouter les messages MIDI supportés
-        if (midiMessageCount > 0 && written < (int)bufferSize - 50) {
+        if (midiMessageCount > 0 && midiMessages && written < (int)bufferSize - 50) {
             written += snprintf(buffer + written, bufferSize - written, ",\"midiMessages\":[");
-            for (uint8_t i = 0; i < midiMessageCount && i < MAX_MIDI_MESSAGES; i++) {
+            for (uint8_t i = 0; i < midiMessageCount && i < midiMessagesCapacity; i++) {
                 if (i > 0) {
                     written += snprintf(buffer + written, bufferSize - written, ",");
                 }
@@ -280,9 +340,9 @@ struct ComponentDefinition {
                     );
                 }
                 // Ajouter les paramètres MIDI
-                if (midiMessages[i].paramCount > 0 && written < (int)bufferSize - 50) {
+                if (midiMessages[i].paramCount > 0 && midiMessages[i].params && written < (int)bufferSize - 50) {
                     written += snprintf(buffer + written, bufferSize - written, ",\"params\":[");
-                    for (uint8_t j = 0; j < midiMessages[i].paramCount && j < MAX_MIDI_PARAMS; j++) {
+                    for (uint8_t j = 0; j < midiMessages[i].paramCount && j < midiMessages[i].paramsCapacity; j++) {
                         if (j > 0) {
                             written += snprintf(buffer + written, bufferSize - written, ",");
                         }
@@ -380,9 +440,9 @@ struct ComponentDefinition {
         }
         
         // Ajouter les champs de formulaire
-        if (formFieldCount > 0 && written < (int)bufferSize - 50) {
+        if (formFieldCount > 0 && formFields && written < (int)bufferSize - 50) {
             written += snprintf(buffer + written, bufferSize - written, ",\"formFields\":[");
-            for (uint8_t i = 0; i < formFieldCount && i < MAX_FORM_FIELDS; i++) {
+            for (uint8_t i = 0; i < formFieldCount && i < formFieldsCapacity; i++) {
                 if (i > 0) {
                     written += snprintf(buffer + written, bufferSize - written, ",");
                 }

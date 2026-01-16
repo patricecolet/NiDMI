@@ -51,7 +51,7 @@ struct Led {
      * @brief Crée la définition complète pour le registre
      */
     static ComponentDefinition createDefinition() {
-        ComponentDefinition def = {};
+        ComponentDefinition def;
         def.id = ID;
         def.displayName = DISPLAY_NAME;
         def.icon = nullptr;
@@ -65,41 +65,25 @@ struct Led {
         def.supportsMidi = SUPPORTS_MIDI;
         def.supportsOsc = SUPPORTS_OSC;
         def.additionalPinCount = 0;
-        
-        // Messages MIDI que la LED peut recevoir
-        def.midiMessageCount = 2;
-        
-        // Note
-        def.midiMessages[0] = MidiMessageDef{
-            "note", "Note", "Note {note}", 2,
-            {
-                MidiParamDef{"rtpNote", "{{t.pins.note}}:", FieldType::NUMBER, 0, 127, "60", "60", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
-                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr}
-            }
-        };
-        
-        // Control Change
-        def.midiMessages[1] = MidiMessageDef{
-            "cc", "Control Change", "CC#{cc}", 2,
-            {
-                MidiParamDef{"rtpCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
-                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr}
-            }
-        };
+        def.additionalPins = nullptr;
+        def.additionalPinsCapacity = 0;
         
         // Template par défaut si pas de MIDI configuré
         def.statusTextTemplate = nullptr;
         // Mapping pour ledMode dans le texte de statut
         def.statusValueMappings = "{\"ledMode\":{\"pwm\":\"PWM\",\"onoff\":\"On/Off\"}}";
         
-        // Champs de formulaire
+        // Allouer les champs de formulaire
         def.formFieldCount = 1;
+        def.formFieldsCapacity = 1;
+        def.formFields = new FormFieldDef[1];
         def.formFields[0] = FormFieldDef{
             "ledMode",
             "LED",
             FieldType::SELECT,
             false,
-            nullptr, nullptr, nullptr, 0, 0, 0,
+            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
+            0, 0, 0,              // min, max, step
             "[{\"value\":\"onoff\",\"label\":\"On/Off\"},{\"value\":\"pwm\",\"label\":\"PWM\"}]",
             nullptr,
             "onoff",
@@ -108,6 +92,31 @@ struct Led {
             "r", nullptr, 0,
             nullptr, nullptr
         };
+        
+        // Allouer les messages MIDI que la LED peut recevoir
+        def.midiMessageCount = 2;
+        def.midiMessagesCapacity = 2;
+        def.midiMessages = new MidiMessageDef[2];
+        
+        // Note
+        def.midiMessages[0].id = "note";
+        def.midiMessages[0].displayName = "Note";
+        def.midiMessages[0].statusTemplate = "Note {note}";
+        def.midiMessages[0].paramCount = 2;
+        def.midiMessages[0].paramsCapacity = 2;
+        def.midiMessages[0].params = new MidiParamDef[2];
+        def.midiMessages[0].params[0] = MidiParamDef{"rtpNote", "{{t.pins.note}}:", FieldType::NUMBER, 0, 127, "60", "60", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[0].params[1] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        
+        // Control Change
+        def.midiMessages[1].id = "cc";
+        def.midiMessages[1].displayName = "Control Change";
+        def.midiMessages[1].statusTemplate = "CC#{cc}";
+        def.midiMessages[1].paramCount = 2;
+        def.midiMessages[1].paramsCapacity = 2;
+        def.midiMessages[1].params = new MidiParamDef[2];
+        def.midiMessages[1].params[0] = MidiParamDef{"rtpCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[1].params[1] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
         
         return def;
     }

@@ -210,12 +210,33 @@ sync_files() {
 # Fonction de nettoyage
 clean_cache() {
     echo "🧹 Nettoyage du cache Arduino..."
+    
+    # Nettoyer le cache des sketches
     if [ -d "$ARDUINO_CACHE_DIR" ]; then
         rm -rf $ARDUINO_CACHE_DIR/*
-        echo "   ✅ Cache nettoyé"
-    else
-        echo "   ⚠️  Cache Arduino non trouvé"
+        echo "   ✅ Cache sketches nettoyé: $ARDUINO_CACHE_DIR"
     fi
+    
+    # Nettoyer les bibliothèques staging (copies temporaires Arduino)
+    ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
+    if [ -d "$ARDUINO_STAGING_DIR" ]; then
+        rm -rf "$ARDUINO_STAGING_DIR"/* 2>/dev/null || true
+        echo "   ✅ Bibliothèques staging nettoyées: $ARDUINO_STAGING_DIR"
+    fi
+    
+    # Nettoyer les dossiers build et bin dans la bibliothèque Arduino
+    if [ -d "$ARDUINO_LIB_DIR" ]; then
+        if [ -d "$ARDUINO_LIB_DIR/build" ]; then
+            rm -rf "$ARDUINO_LIB_DIR/build"
+            echo "   ✅ Dossier build supprimé: $ARDUINO_LIB_DIR/build"
+        fi
+        if [ -d "$ARDUINO_LIB_DIR/bin" ]; then
+            rm -rf "$ARDUINO_LIB_DIR/bin"
+            echo "   ✅ Dossier bin supprimé: $ARDUINO_LIB_DIR/bin"
+        fi
+    fi
+    
+    echo "   ✅ Cache Arduino nettoyé"
 }
 
 # Fonction de compilation

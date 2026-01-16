@@ -1,9 +1,7 @@
 #pragma once
 
 #include "ComponentTypes.h"
-#include <functional>
-#include <map>
-#include <string>
+#include <cstring>
 
 /**
  * @file ValidationRegistry.h
@@ -20,20 +18,28 @@
  *   bool valid = ValidationRegistry::validate("potentiometer", gpio);
  */
 
+/**
+ * @brief Signature d'une fonction de validation
+ * @param gpio Le GPIO à valider
+ * @param config Configuration optionnelle (pour composants complexes)
+ * @return true si la configuration est valide
+ */
+using ValidatorFunc = bool (*)(uint8_t gpio, const void* config);
+
+/**
+ * @brief Structure pour stocker un validator
+ */
+struct ValidatorEntry {
+    const char* componentId;  // Pointeur vers chaîne statique (pas de std::string)
+    ValidatorFunc validator;
+};
+
 class ValidationRegistry {
 public:
     /**
-     * @brief Signature d'une fonction de validation
-     * @param gpio Le GPIO à valider
-     * @param config Configuration optionnelle (pour composants complexes)
-     * @return true si la configuration est valide
-     */
-    using ValidatorFunc = std::function<bool(uint8_t gpio, const void* config)>;
-    
-    /**
      * @brief Enregistre un validator pour un type de composant
-     * @param componentId Identifiant du composant (ex: "potentiometer")
-     * @param validator Fonction de validation
+     * @param componentId Identifiant du composant (ex: "potentiometer") - doit être une chaîne statique
+     * @param validator Fonction de validation (pointeur de fonction, pas std::function)
      */
     static void registerValidator(const char* componentId, ValidatorFunc validator);
     
@@ -60,5 +66,7 @@ public:
     static void init();
 
 private:
-    static std::map<std::string, ValidatorFunc> validators_;
+    static constexpr size_t MAX_VALIDATORS = 10;
+    static ValidatorEntry validators_[MAX_VALIDATORS];
+    static size_t validatorCount_;
 };

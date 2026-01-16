@@ -154,14 +154,25 @@ function initForms(){
  });
 }
 
-// Variable globale pour stocker les définitions de composants
+// Variable globale pour stocker les définitions de composants (compatibilité avec ancien code)
+// DÉPRÉCIÉ: Utiliser ComponentDefinitions.cache à la place
 let componentDefinitions = [];
 
 /**
  * Charge les définitions de composants depuis l'API
+ * DÉPRÉCIÉ: Utiliser ComponentDefinitions.load() à la place
  * @returns {Promise<Array>} Tableau des définitions de composants
  */
 async function loadComponentDefinitions(){
+ // Déléguer à ComponentDefinitions.load() si disponible, sinon ancienne implémentation
+ if(typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.load) {
+  const defs = await ComponentDefinitions.load();
+  // Maintenir la compatibilité avec l'ancienne variable globale
+  componentDefinitions = ComponentDefinitions.cache;
+  return defs;
+ }
+ 
+ // Ancienne implémentation (fallback si ComponentDefinitions n'est pas disponible)
  try {
   const r=await fetch('/api/components/definitions');
   if(!r.ok) {
@@ -179,21 +190,35 @@ async function loadComponentDefinitions(){
 
 /**
  * Trouve une définition de composant par son ID
+ * DÉPRÉCIÉ: Utiliser ComponentDefinitions.getById() à la place
  * @param {string} componentId - ID du composant (ex: "potentiometer")
  * @returns {Object|null} Définition du composant ou null
  */
 function getComponentDefinition(componentId) {
+ // Déléguer à ComponentDefinitions.getById() si disponible
+ if(typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.getById) {
+  return ComponentDefinitions.getById(componentId);
+ }
+ 
+ // Ancienne implémentation (fallback)
  if(!componentDefinitions || componentDefinitions.length === 0) return null;
  return componentDefinitions.find(def => def.id === componentId) || null;
 }
 
 /**
  * Filtre les composants selon le type de pin
+ * DÉPRÉCIÉ: Utiliser ComponentDefinitions.getForPinType() à la place
  * @param {number} pinType - Type de pin (0=ANALOG, 1=DIGITAL, 2=ANALOG_OR_DIGITAL, 3=PWM)
  * @param {boolean} implementedOnly - Si true, retourne uniquement les composants implémentés
  * @returns {Array} Liste des composants compatibles
  */
 function getComponentsForPinType(pinType, implementedOnly = true) {
+ // Déléguer à ComponentDefinitions.getForPinType() si disponible
+ if(typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.getForPinType) {
+  return ComponentDefinitions.getForPinType(pinType, implementedOnly);
+ }
+ 
+ // Ancienne implémentation (fallback si ComponentDefinitions n'est pas disponible)
  if(!componentDefinitions || componentDefinitions.length === 0) {
   console.log('[getComponentsForPinType] Aucune définition disponible');
   return [];

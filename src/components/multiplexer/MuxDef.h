@@ -65,47 +65,53 @@ struct MuxBase {
         def.supportsMidi = SUPPORTS_MIDI;
         def.supportsOsc = SUPPORTS_OSC;
         
-        // Messages MIDI supportés (même que potentiomètre)
-        def.midiMessageCount = 4;
-        
-        // Control Change
-        def.midiMessages[0] = MidiMessageDef{
-            "cc", "Control Change", "CC#{cc}", 3,
-            {
-                MidiParamDef{"rtpCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
-                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
-                MidiParamDef{"rtpCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, "[\"potentiometer\"]"}
-            }
-        };
-        
-        // Program Change
-        def.midiMessages[1] = MidiMessageDef{
-            "pc", "Program Change", "PC#{pc}", 2,
-            {
-                MidiParamDef{"rtpPc", "{{t.pins.program}}:", FieldType::NUMBER, 0, 127, "0", "0", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
-                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr}
-            }
-        };
-        
-        // Pitch Bend
-        def.midiMessages[2] = MidiMessageDef{
-            "pitchbend", "Pitch Bend", "Pitch Bend", 1,
-            {
-                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr}
-            }
-        };
-        
-        // Aftertouch
-        def.midiMessages[3] = MidiMessageDef{
-            "aftertouch", "Aftertouch (Channel)", "Aftertouch", 1,
-            {
-                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr}
-            }
-        };
-        
         // Template par défaut
         def.statusTextTemplate = nullptr;
         def.statusValueMappings = nullptr;
+        
+        // Allouer les messages MIDI supportés (même que potentiomètre)
+        def.midiMessageCount = 4;
+        def.midiMessagesCapacity = 4;
+        def.midiMessages = new MidiMessageDef[4];
+        
+        // Control Change
+        def.midiMessages[0].id = "cc";
+        def.midiMessages[0].displayName = "Control Change";
+        def.midiMessages[0].statusTemplate = "CC#{cc}";
+        def.midiMessages[0].paramCount = 3;
+        def.midiMessages[0].paramsCapacity = 3;
+        def.midiMessages[0].params = new MidiParamDef[3];
+        def.midiMessages[0].params[0] = MidiParamDef{"rtpCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[0].params[1] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[0].params[2] = MidiParamDef{"rtpCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, "[\"potentiometer\"]"};
+        
+        // Program Change
+        def.midiMessages[1].id = "pc";
+        def.midiMessages[1].displayName = "Program Change";
+        def.midiMessages[1].statusTemplate = "PC#{pc}";
+        def.midiMessages[1].paramCount = 2;
+        def.midiMessages[1].paramsCapacity = 2;
+        def.midiMessages[1].params = new MidiParamDef[2];
+        def.midiMessages[1].params[0] = MidiParamDef{"rtpPc", "{{t.pins.program}}:", FieldType::NUMBER, 0, 127, "0", "0", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[1].params[1] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        
+        // Pitch Bend
+        def.midiMessages[2].id = "pitchbend";
+        def.midiMessages[2].displayName = "Pitch Bend";
+        def.midiMessages[2].statusTemplate = "Pitch Bend";
+        def.midiMessages[2].paramCount = 1;
+        def.midiMessages[2].paramsCapacity = 1;
+        def.midiMessages[2].params = new MidiParamDef[1];
+        def.midiMessages[2].params[0] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        
+        // Aftertouch
+        def.midiMessages[3].id = "aftertouch";
+        def.midiMessages[3].displayName = "Aftertouch (Channel)";
+        def.midiMessages[3].statusTemplate = "Aftertouch";
+        def.midiMessages[3].paramCount = 1;
+        def.midiMessages[3].paramsCapacity = 1;
+        def.midiMessages[3].params = new MidiParamDef[1];
+        def.midiMessages[3].params[0] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
     }
 };
 
@@ -126,26 +132,30 @@ struct HC4067 : MuxBase {
      * @brief Crée la définition pour le registre
      */
     static ComponentDefinition createDefinition() {
-        ComponentDefinition def = {};
+        ComponentDefinition def;
         def.id = ID;
         def.displayName = DISPLAY_NAME;
         def.implemented = IMPLEMENTED;
         
-        // Remplir les champs communs
+        // Remplir les champs communs (alloue midiMessages)
         fillCommonDefinition(def);
         
-        // Pins additionnelles (S0, S1, S2, S3, EN)
+        // Allouer les pins additionnelles (S0, S1, S2, S3, EN)
         def.additionalPinCount = 5;
+        def.additionalPinsCapacity = 5;
+        def.additionalPins = new AdditionalPinDef[5];
         def.additionalPins[0] = {"s0", "S0", PinType::PIN_DIGITAL, false, 255};
         def.additionalPins[1] = {"s1", "S1", PinType::PIN_DIGITAL, false, 255};
         def.additionalPins[2] = {"s2", "S2", PinType::PIN_DIGITAL, false, 255};
         def.additionalPins[3] = {"s3", "S3", PinType::PIN_DIGITAL, false, 255};
         def.additionalPins[4] = {"en", "Enable", PinType::PIN_DIGITAL, true, 255};
         
-        // Champs de formulaire pour MUX
+        // Allouer les champs de formulaire pour MUX
         // Note: Les pins additionnelles (S0-S3, EN) sont gérées séparément via additionalPins
         // Ici on définit les champs de configuration analogique
         def.formFieldCount = 4;
+        def.formFieldsCapacity = 4;
+        def.formFields = new FormFieldDef[4];
         
         // Min threshold
         def.formFields[0] = FormFieldDef{
@@ -153,8 +163,8 @@ struct HC4067 : MuxBase {
             "Seuil minimum",
             FieldType::NUMBER,
             false,
-            nullptr, nullptr, nullptr,
-            0, 4095, 1,
+            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
+            0, 4095, 1,            // min, max, step
             nullptr, nullptr,
             "0",
             HintPosition::NONE, nullptr, nullptr,
@@ -169,8 +179,8 @@ struct HC4067 : MuxBase {
             "Seuil maximum",
             FieldType::NUMBER,
             false,
-            nullptr, nullptr, nullptr,
-            0, 4095, 1,
+            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
+            0, 4095, 1,            // min, max, step
             nullptr, nullptr,
             "4095",
             HintPosition::NONE, nullptr, nullptr,
@@ -185,7 +195,8 @@ struct HC4067 : MuxBase {
             nullptr,
             FieldType::INFO,
             false,
-            nullptr, nullptr, nullptr, 0, 0, 0,
+            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
+            0, 0, 0,              // min, max, step
             nullptr, nullptr,
             nullptr,
             HintPosition::BELOW,
@@ -202,8 +213,8 @@ struct HC4067 : MuxBase {
             "Intensité filtrage (1-10)",
             FieldType::NUMBER,
             false,
-            nullptr, nullptr, nullptr,
-            1, 10, 1,
+            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
+            1, 10, 1,             // min, max, step
             nullptr, nullptr,
             "5",
             HintPosition::INLINE,
@@ -235,23 +246,27 @@ struct HC4051 : MuxBase {
      * @brief Crée la définition pour le registre
      */
     static ComponentDefinition createDefinition() {
-        ComponentDefinition def = {};
+        ComponentDefinition def;
         def.id = ID;
         def.displayName = DISPLAY_NAME;
         def.implemented = IMPLEMENTED;
         
-        // Remplir les champs communs
+        // Remplir les champs communs (alloue midiMessages)
         fillCommonDefinition(def);
         
-        // Pins additionnelles (S0, S1, S2, EN) - pas de S3 pour 8 canaux
+        // Allouer les pins additionnelles (S0, S1, S2, EN) - pas de S3 pour 8 canaux
         def.additionalPinCount = 4;
+        def.additionalPinsCapacity = 4;
+        def.additionalPins = new AdditionalPinDef[4];
         def.additionalPins[0] = {"s0", "S0", PinType::PIN_DIGITAL, false, 255};
         def.additionalPins[1] = {"s1", "S1", PinType::PIN_DIGITAL, false, 255};
         def.additionalPins[2] = {"s2", "S2", PinType::PIN_DIGITAL, false, 255};
         def.additionalPins[3] = {"en", "Enable", PinType::PIN_DIGITAL, true, 255};
         
-        // Champs de formulaire (même que HC4067)
+        // Allouer les champs de formulaire (même que HC4067)
         def.formFieldCount = 4;
+        def.formFieldsCapacity = 4;
+        def.formFields = new FormFieldDef[4];
         
         // Min threshold
         def.formFields[0] = FormFieldDef{
@@ -259,8 +274,8 @@ struct HC4051 : MuxBase {
             "Seuil minimum",
             FieldType::NUMBER,
             false,
-            nullptr, nullptr, nullptr,
-            0, 4095, 1,
+            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
+            0, 4095, 1,            // min, max, step
             nullptr, nullptr,
             "0",
             HintPosition::NONE, nullptr, nullptr,
@@ -275,8 +290,8 @@ struct HC4051 : MuxBase {
             "Seuil maximum",
             FieldType::NUMBER,
             false,
-            nullptr, nullptr, nullptr,
-            0, 4095, 1,
+            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
+            0, 4095, 1,            // min, max, step
             nullptr, nullptr,
             "4095",
             HintPosition::NONE, nullptr, nullptr,
@@ -291,7 +306,8 @@ struct HC4051 : MuxBase {
             nullptr,
             FieldType::INFO,
             false,
-            nullptr, nullptr, nullptr, 0, 0, 0,
+            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
+            0, 0, 0,              // min, max, step
             nullptr, nullptr,
             nullptr,
             HintPosition::BELOW,
@@ -308,8 +324,8 @@ struct HC4051 : MuxBase {
             "Intensité filtrage (1-10)",
             FieldType::NUMBER,
             false,
-            nullptr, nullptr, nullptr,
-            1, 10, 1,
+            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
+            1, 10, 1,             // min, max, step
             nullptr, nullptr,
             "5",
             HintPosition::INLINE,

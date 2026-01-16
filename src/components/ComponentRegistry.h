@@ -57,6 +57,12 @@ public:
      * @brief Obtient le nombre de composants enregistrés
      */
     static size_t count();
+    
+    /**
+     * @brief Libère la mémoire allouée pour toutes les définitions
+     * À appeler lors du cleanup (optionnel sur ESP32 car le programme ne se termine jamais)
+     */
+    static void cleanup();
 
 private:
     static std::vector<ComponentDefinition> definitions_;

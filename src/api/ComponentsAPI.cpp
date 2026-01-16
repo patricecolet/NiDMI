@@ -24,15 +24,20 @@ void setupComponentsAPI(AsyncWebServer& server) {
      * Retourne la liste des composants disponibles avec leurs métadonnées
      */
     server.on("/api/components/definitions", HTTP_GET, [](AsyncWebServerRequest* request) {
-        // Buffer plus grand pour inclure les pins additionnelles
-        static char jsonBuffer[4096];
+        // Buffer plus grand pour inclure toutes les métadonnées (MIDI params, formFields, etc.)
+        // Avec les nouvelles structures, chaque composant peut prendre ~500-800 bytes
+        // Pour ~10 composants, on a besoin d'au moins 8-10KB
+        static char jsonBuffer[12288];  // 12KB pour être sûr
         
         int written = ComponentRegistry::toJsonArray(jsonBuffer, sizeof(jsonBuffer));
         
-        if (written > 0) {
+        if (written > 0 && written < (int)sizeof(jsonBuffer)) {
             request->send(200, "application/json", jsonBuffer);
         } else {
-            request->send(500, "application/json", "{\"error\":\"Failed to generate component definitions\"}");
+            // Si le buffer est trop petit, envoyer une erreur plutôt que de crasher
+            Serial.printf("[ComponentsAPI] WARNING: Buffer too small or serialization failed (written=%d, size=%zu)\n", 
+                         written, sizeof(jsonBuffer));
+            request->send(500, "application/json", "{\"error\":\"Buffer too small for component definitions\"}");
         }
     });
     

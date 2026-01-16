@@ -29,7 +29,6 @@ void processComponents() {
 }
 
 void nidmi_begin() {
-    // Logs
     Serial.begin(115200);
     delay(50);
 
@@ -44,12 +43,16 @@ void nidmi_begin() {
     // Lire nom serveur + STA depuis NVS
     Preferences preferences;
     preferences.begin("nidmi", false);
+    
     String serverName = preferences.getString("mdns_name", "nidmi");
-    String staSsid    = preferences.getString("sta_ssid", "");
-    String staPass    = preferences.getString("sta_pass", "");
-    String staIpStr   = preferences.getString("sta_ip",  "");
-    String staGwStr   = preferences.getString("sta_gw",  "");
-    String staSnStr   = preferences.getString("sta_sn",  "");
+    
+    // Lire STA config une par une pour limiter le nombre de String simultanées
+    String staSsid = preferences.getString("sta_ssid", "");
+    String staPass = preferences.getString("sta_pass", "");
+    String staIpStr = preferences.getString("sta_ip", "");
+    String staGwStr = preferences.getString("sta_gw", "");
+    String staSnStr = preferences.getString("sta_sn", "");
+    
     preferences.end();
     
     // Nettoyer le nom serveur (supprimer caractères invalides pour SSID WiFi)
@@ -70,24 +73,12 @@ void nidmi_begin() {
     Serial.printf("  SSID: %s\n", serverName.c_str());
     Serial.printf("  mDNS: %s.local\n", serverName.c_str());
 
-    
-    // Debug: afficher ce qui est lu depuis NVS
-    Serial.println("[NiDMI] NVS Debug:");
-    Serial.print("  mdns_name: \""); Serial.print(serverName); Serial.println("\"");
-    Serial.print("  sta_ssid: \""); Serial.print(staSsid); Serial.println("\"");
-    Serial.print("  sta_pass length: "); Serial.println(staPass.length());
-    // Serial.print("  sta_ip: \""); Serial.print(staIpStr); Serial.println("\"");
-    // Serial.print("  sta_gw: \""); Serial.print(staGwStr); Serial.println("\"");
-    // Serial.print("  sta_sn: \""); Serial.print(staSnStr); Serial.println("\"");
-
     const char* apSsid = serverName.c_str();
     const char* apPass = "nidmipass";
     const char* host   = serverName.c_str();
 
     // Tente STA si configurée (AVANT de démarrer le serveur)
     if (staSsid.length() > 0) {
-        // Serial.printf("[NiDMI] Attempting STA connection to: %s\n", staSsid.c_str());
-        
         if (staIpStr.length() > 0 && staGwStr.length() > 0 && staSnStr.length() > 0) {
             IPAddress ip, gw, sn;
             if (ip.fromString(staIpStr) && gw.fromString(staGwStr) && sn.fromString(staSnStr)) {

@@ -193,10 +193,7 @@ void sendRtpStatus(AsyncWebSocket& ws) {
 }
 
 void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
-    // Serial.println("[WebAPI] Starting setup...");
-    
     // Page principale - Utiliser streaming par chunks depuis PROGMEM
-    // Serial.println("[WebAPI] Setting up main page...");
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
         size_t htmlLen = strlen_P(INDEX_HTML);
         AsyncWebServerResponse *response = request->beginResponse("text/html; charset=utf-8", htmlLen, 
@@ -220,7 +217,6 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     });
 
     // WebSocket
-    // Serial.println("[WebAPI] Setting up WebSocket...");
     ws.onEvent(onWsEvent);
     server.addHandler(&ws);
     
@@ -234,6 +230,4 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     setupOSC_API(server);
     setupCacheAPI(server);
     setupComponentsAPI(server);
-    
-    // Serial.println("[WebAPI] Setup complete!");
 }

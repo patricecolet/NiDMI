@@ -15,56 +15,65 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
     
     // Charger les configurations depuis NVS
     // Les clés sont sauvegardées comme "pin_A0", "pin_D2", etc.
-    String pinLabels[] = {"A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10", "A11", "A12", "A13", "A14", "A15", "A16", "A17", "A18", "A19", "A20", "A21", "A22", "A23", "A24", "A25", "A26", "A27", "A28", "A29", "A30", "A31", "A32", "A33", "A34", "A35", "A36", "A37", "A38", "A39", "A40", "A41", "A42", "A43", "A44", "A45", "A46", "A47", "A48", "A49", "A50", "A51", "A52", "A53", "A54", "A55", "A56", "A57", "A58", "A59", "A60", "A61", "A62", "A63", "A64", "A65", "A66", "A67", "A68", "A69", "A70", "A71", "A72", "A73", "A74", "A75", "A76", "A77", "A78", "A79", "A80", "A81", "A82", "A83", "A84", "A85", "A86", "A87", "A88", "A89", "A90", "A91", "A92", "A93", "A94", "A95", "A96", "A97", "A98", "A99", "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "D16", "D17", "D18", "D19", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D27", "D28", "D29", "D30", "D31", "D32", "D33", "D34", "D35", "D36", "D37", "D38", "D39", "D40", "D41", "D42", "D43", "D44", "D45", "D46", "D47", "D48", "D49", "D50", "D51", "D52", "D53", "D54", "D55", "D56", "D57", "D58", "D59", "D60", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D68", "D69", "D70", "D71", "D72", "D73", "D74", "D75", "D76", "D77", "D78", "D79", "D80", "D81", "D82", "D83", "D84", "D85", "D86", "D87", "D88", "D89", "D90", "D91", "D92", "D93", "D94", "D95", "D96", "D97", "D98", "D99"};
+    // Générer les labels dynamiquement pour éviter le dépassement de pile
+    // au lieu d'un tableau String[200] sur la pile (~6400 bytes)
     
-    for (int i = 0; i < 200; i++) { // Max 200 pins possibles
-        String pinLabel = pinLabels[i];
-        String key = "pin_" + pinLabel;
+    for (int i = 0; i < 200; i++) { // Max 200 pins possibles (A0-A99 + D0-D99)
+        // Générer le label dynamiquement : A0-A99, puis D0-D99
+        // Réduire la portée des String pour éviter le dépassement de pile
+        const char* pinLabelCStr;
+        char pinLabelBuf[8]; // Suffisant pour "A99" ou "D99"
+        if (i < 100) {
+            snprintf(pinLabelBuf, sizeof(pinLabelBuf), "A%d", i);
+        } else {
+            snprintf(pinLabelBuf, sizeof(pinLabelBuf), "D%d", i - 100);
+        }
+        pinLabelCStr = pinLabelBuf;
         
-        if (!preferences.isKey(key.c_str())) {
+        // Construire la clé sans String intermédiaire
+        char keyBuf[16]; // "pin_A99" ou "pin_D99"
+        snprintf(keyBuf, sizeof(keyBuf), "pin_%s", pinLabelCStr);
+        
+        if (!preferences.isKey(keyBuf)) {
             continue; // Passer au suivant
         }
         
-        String pinConfig = preferences.getString(key.c_str(), "");
+        // Lire la config - limiter strictement la portée de la String
+        String pinConfig = preferences.getString(keyBuf, "");
         if (pinConfig.length() == 0) {
-            // Serial.printf("[ConfigLoader] Empty config for pin: %s\n", pinLabel.c_str());
             continue;
         }
         
-        // Serial.printf("[ConfigLoader] Found pin: %s -> %s\n", pinLabel.c_str(), pinConfig.c_str());
-        
-        // Parser JSON simple
-        String role = JSONParser::extractStr(pinConfig, "role", "\n");
-        if (role.length() == 0) continue;
+        // Extraire role dans un bloc pour limiter la portée
+        const char* roleCStr = nullptr;
+        {
+            String role = JSONParser::extractStr(pinConfig, "role", "\n");
+            if (role.length() == 0) continue;
+            roleCStr = role.c_str();
+        }
         
         // Trouver la définition du composant via ComponentRegistry
-        const ComponentDefinition* def = ComponentRegistry::findById(role.c_str());
+        const ComponentDefinition* def = ComponentRegistry::findById(roleCStr);
         if (!def) {
             Serial.printf("[ConfigLoader] WARNING: Component '%s' not found in registry for pin %s\n", 
-                          role.c_str(), pinLabel.c_str());
+                          roleCStr, pinLabelCStr);
             continue;
         }
         
-        // Utiliser PinMapper pour obtenir le GPIO
-        uint8_t gpio = PinMapper::labelToGpio(pinLabel);
+        // Utiliser PinMapper pour obtenir le GPIO (accepte const char*)
+        uint8_t gpio = PinMapper::labelToGpio(pinLabelCStr);
         if (gpio == 255) {
-            Serial.printf("[ConfigLoader] Invalid pin label: %s (GPIO=255)\n", pinLabel.c_str());
+            Serial.printf("[ConfigLoader] Invalid pin label: %s (GPIO=255)\n", pinLabelCStr);
             continue;
         }
         
         // Vérifier que la pin a les capacités requises selon pinType
-        if (def->pinType == static_cast<uint8_t>(PinType::PIN_ANALOG)) {
+        if (def->pinType == PinType::PIN_ANALOG) {
             if (!PinMapper::hasAdc(gpio)) {
                 Serial.printf("[ConfigLoader] WARNING: Pin %s (GPIO%d) n'a pas d'ADC, ignorée\n", 
-                              pinLabel.c_str(), gpio);
+                              pinLabelCStr, gpio);
                 continue;
             }
-        }
-        
-        // Log pour debug AVANT d'ajouter (seulement si GPIO valide)
-        if (gpio < 255 && gpio <= 48) {
-            // Serial.printf("[ConfigLoader] Loading pin: %s -> GPIO%d, role: %s\n", 
-            //               pinLabel.c_str(), gpio, role.c_str());
         }
         
         // Extraire paramètres MIDI
@@ -72,15 +81,21 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
         uint8_t channel = 1;    // défaut canal 1
         MidiMessageType msg_type = MidiMessageType::NOTE; // défaut
         
-        // Lire rtpType depuis la config (peut être displayName ou id)
-        String rtpTypeStr = JSONParser::extractStr(pinConfig, "rtpType", "");
+        // Lire rtpType dans un bloc pour limiter la portée
+        const char* rtpTypeCStr = nullptr;
+        {
+            String rtpTypeStr = JSONParser::extractStr(pinConfig, "rtpType", "");
+            if (rtpTypeStr.length() > 0) {
+                rtpTypeCStr = rtpTypeStr.c_str();
+            }
+        }
         
         // Chercher le MidiMessageDef correspondant
         const MidiMessageDef* msgDef = nullptr;
-        if (rtpTypeStr.length() > 0) {
+        if (rtpTypeCStr) {
             // Chercher par displayName d'abord, puis par id
             for (uint8_t i = 0; i < def->midiMessageCount && i < MAX_MIDI_MESSAGES; i++) {
-                if (def->midiMessages[i].displayName && strcmp(def->midiMessages[i].displayName, rtpTypeStr.c_str()) == 0) {
+                if (def->midiMessages[i].displayName && strcmp(def->midiMessages[i].displayName, rtpTypeCStr) == 0) {
                     msgDef = &def->midiMessages[i];
                     break;
                 }
@@ -88,7 +103,7 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             // Si pas trouvé par displayName, chercher par id
             if (!msgDef) {
                 for (uint8_t i = 0; i < def->midiMessageCount && i < MAX_MIDI_MESSAGES; i++) {
-                    if (def->midiMessages[i].id && strcmp(def->midiMessages[i].id, rtpTypeStr.c_str()) == 0) {
+                    if (def->midiMessages[i].id && strcmp(def->midiMessages[i].id, rtpTypeCStr) == 0) {
                         msgDef = &def->midiMessages[i];
                         break;
                     }
@@ -98,7 +113,7 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             if (msgDef && msgDef->displayName) {
                 msg_type = stringToMidiMessageType(msgDef->displayName);
             } else {
-                msg_type = stringToMidiMessageType(rtpTypeStr);
+                msg_type = stringToMidiMessageType(rtpTypeCStr);
             }
         } else {
             // Défaut : utiliser le premier message MIDI du composant s'il existe
@@ -158,15 +173,21 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             if (index != 255) {
                 ComponentConfig* config = manager.getConfigMutable(index);
                 if (config) {
-                    // Lire oscEnabled, oscFormat et oscAddress depuis la config
+                    // Lire oscEnabled, oscFormat et oscAddress depuis la config dans des blocs pour limiter la portée
                     bool oscEnabled = JSONParser::extractBool(pinConfig, "oscEnabled", false);
-                    String oscFormat = JSONParser::extractStr(pinConfig, "oscFormat", "float");
-                    String oscAddress = JSONParser::extractStr(pinConfig, "oscAddress", "");
+                    const char* oscFormatCStr = nullptr;
+                    const char* oscAddressCStr = nullptr;
+                    {
+                        String oscFormat = JSONParser::extractStr(pinConfig, "oscFormat", "float");
+                        oscFormatCStr = oscFormat.c_str();
+                        String oscAddress = JSONParser::extractStr(pinConfig, "oscAddress", "");
+                        oscAddressCStr = oscAddress.length() > 0 ? oscAddress.c_str() : nullptr;
+                    }
                     
                     // Configurer les flags (bit 0x02 pour OSC, bit 0x04 pour format MIDI)
                     if (oscEnabled) {
                         config->flags |= 0x02; // Activer OSC
-                        if (oscFormat == "midi") {
+                        if (oscFormatCStr && strcmp(oscFormatCStr, "midi") == 0) {
                             config->flags |= 0x04; // Format MIDI
                         } else {
                             config->flags &= ~0x04; // Format float
@@ -176,14 +197,14 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                     }
                     
                     // Configurer l'adresse OSC (utiliser valeur par défaut si vide)
-                    if (oscAddress.length() > 0) {
-                        strncpy(config->osc_address, oscAddress.c_str(), sizeof(config->osc_address) - 1);
+                    if (oscAddressCStr) {
+                        strncpy(config->osc_address, oscAddressCStr, sizeof(config->osc_address) - 1);
                         config->osc_address[sizeof(config->osc_address) - 1] = '\0';
                         Serial.printf("[ConfigLoader] OSC address from config: '%s' for %s\n", 
-                                      oscAddress.c_str(), pinLabel.c_str());
+                                      oscAddressCStr, pinLabelCStr);
                     } else {
                         Serial.printf("[ConfigLoader] OSC address empty for %s, using default: '%s'\n", 
-                                      pinLabel.c_str(), config->osc_address);
+                                      pinLabelCStr, config->osc_address);
                     }
                     
                     // Lire dynamiquement tous les formFields depuis la définition
@@ -194,24 +215,30 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                         for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
                             const FormFieldDef& field = def->formFields[i];
                             if (field.id) {
-                                // Mapper les champs spécifiques existants
+                                // Mapper les champs spécifiques existants (réduire la portée des String)
                                 if (strcmp(field.id, "btnMode") == 0) {
-                                    String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
-                                    if (fieldValue.length() > 0) {
-                                        strncpy(config->btnMode, fieldValue.c_str(), sizeof(config->btnMode) - 1);
-                                        config->btnMode[sizeof(config->btnMode) - 1] = '\0';
+                                    {
+                                        String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
+                                        if (fieldValue.length() > 0) {
+                                            strncpy(config->btnMode, fieldValue.c_str(), sizeof(config->btnMode) - 1);
+                                            config->btnMode[sizeof(config->btnMode) - 1] = '\0';
+                                        }
                                     }
                                 } else if (strcmp(field.id, "btnPulseTiming") == 0) {
-                                    String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
-                                    if (fieldValue.length() > 0) {
-                                        strncpy(config->btnPulseTiming, fieldValue.c_str(), sizeof(config->btnPulseTiming) - 1);
-                                        config->btnPulseTiming[sizeof(config->btnPulseTiming) - 1] = '\0';
+                                    {
+                                        String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
+                                        if (fieldValue.length() > 0) {
+                                            strncpy(config->btnPulseTiming, fieldValue.c_str(), sizeof(config->btnPulseTiming) - 1);
+                                            config->btnPulseTiming[sizeof(config->btnPulseTiming) - 1] = '\0';
+                                        }
                                     }
                                 } else if (strcmp(field.id, "ledMode") == 0) {
-                                    String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
-                                    if (fieldValue.length() > 0) {
-                                        strncpy(config->ledMode, fieldValue.c_str(), sizeof(config->ledMode) - 1);
-                                        config->ledMode[sizeof(config->ledMode) - 1] = '\0';
+                                    {
+                                        String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
+                                        if (fieldValue.length() > 0) {
+                                            strncpy(config->ledMode, fieldValue.c_str(), sizeof(config->ledMode) - 1);
+                                            config->ledMode[sizeof(config->ledMode) - 1] = '\0';
+                                        }
                                     }
                                 } else if (strcmp(field.id, "filterIntensity") == 0) {
                                     uint8_t filter_intensity = JSONParser::extractInt(pinConfig, "filterIntensity", field.defaultValue ? atoi(field.defaultValue) : 5);
@@ -221,16 +248,19 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                                 } else {
                                     // Mapper vers les champs génériques pour les nouveaux composants
                                     if (field.type == FieldType::TEXT || field.type == FieldType::SELECT || field.type == FieldType::CHECKBOX) {
-                                        String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
-                                        if (fieldValue.length() > 0) {
-                                            if (customFieldIndex == 0) {
-                                                strncpy(config->customField1, fieldValue.c_str(), sizeof(config->customField1) - 1);
-                                                config->customField1[sizeof(config->customField1) - 1] = '\0';
-                                                customFieldIndex++;
-                                            } else if (customFieldIndex == 1) {
-                                                strncpy(config->customField2, fieldValue.c_str(), sizeof(config->customField2) - 1);
-                                                config->customField2[sizeof(config->customField2) - 1] = '\0';
-                                                customFieldIndex++;
+                                        {
+                                            String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
+                                            if (fieldValue.length() > 0) {
+                                                const char* fieldValueCStr = fieldValue.c_str();
+                                                if (customFieldIndex == 0) {
+                                                    strncpy(config->customField1, fieldValueCStr, sizeof(config->customField1) - 1);
+                                                    config->customField1[sizeof(config->customField1) - 1] = '\0';
+                                                    customFieldIndex++;
+                                                } else if (customFieldIndex == 1) {
+                                                    strncpy(config->customField2, fieldValueCStr, sizeof(config->customField2) - 1);
+                                                    config->customField2[sizeof(config->customField2) - 1] = '\0';
+                                                    customFieldIndex++;
+                                                }
                                             }
                                         }
                                     } else if (field.type == FieldType::NUMBER || field.type == FieldType::RANGE) {

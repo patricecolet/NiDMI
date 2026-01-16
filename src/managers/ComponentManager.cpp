@@ -54,13 +54,13 @@ void ComponentManager::begin(MidiSender* sender) {
 }
 
 void ComponentManager::syncOSCConfig() {
-    // Récupérer la config de osc_manager
-    String target = osc_manager.getTargetIP();
+    // Récupérer la config de osc_manager (limiter la portée de la String)
+    String targetStr = osc_manager.getTargetIP();
     int port = osc_manager.getTargetPort();
     bool broadcast = osc_manager.isBroadcastEnabled();
     
     // Appliquer à osc_queue
-    osc_queue.setTarget(target, port);
+    osc_queue.setTarget(targetStr, port);
     osc_queue.setBroadcast(broadcast);
 }
 
@@ -130,7 +130,7 @@ void ComponentManager::update() {
         // Vérifier les capacités de la pin selon la définition du composant
         const ComponentDefinition* def = ComponentRegistry::findByType(config.type);
         AnalogFilter* filter_ptr = nullptr;
-        if (def && def->pinType == static_cast<uint8_t>(PinType::PIN_ANALOG)) {
+        if (def && def->pinType == PinType::PIN_ANALOG) {
             if (!PinMapper::hasAdc(config.gpio)) {
                 continue; // Pas d'ADC, ignorer
             }
@@ -178,7 +178,7 @@ bool ComponentManager::addComponent(uint8_t gpio, ComponentType type, uint8_t mi
     
     // Vérifier que la pin a les capacités requises selon la définition du composant
     const ComponentDefinition* def = ComponentRegistry::findByType(type);
-    if (def && def->pinType == static_cast<uint8_t>(PinType::PIN_ANALOG)) {
+    if (def && def->pinType == PinType::PIN_ANALOG) {
         if (is_mux_gpio) {
             // Les pins MUX ont toujours ADC (vérifié dans hasAdc)
         } else if (!PinMapper::hasAdc(gpio)) {

@@ -38,13 +38,14 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
     // Serial.print("[ServerCore] Starting mDNS with hostname: "); Serial.println(hostname);
     
     // Essayer plusieurs noms mDNS
-    String mdnsNames[] = {hostname, "nidmi"};
+    // Réduire le nombre de String simultanées - utiliser const char* au lieu de tableau String
+    const char* mdnsNames[] = {hostname, "nidmi"};
     bool mdnsOk = false;
-    String workingName = "";
+    const char* workingName = nullptr;
     
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 2; i++) { // Seulement 2 noms, pas 4
         // Serial.print("[ServerCore] Trying mDNS name: "); Serial.println(mdnsNames[i]);
-        if (MDNS.begin(mdnsNames[i].c_str())) {
+        if (MDNS.begin(mdnsNames[i])) {
             MDNS.addService("http", "tcp", 80);
             mdnsOk = true;
             workingName = mdnsNames[i];
@@ -62,16 +63,29 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
         // mDNS configuré avec succès
         // Serial.println("[ServerCore] mDNS configuration complete");
         
-        // Debug mDNS
+        // Debug mDNS - limiter le nombre de String simultanées en les créant dans des blocs
         Serial.println("[ServerCore] mDNS Debug Info:");
-        Serial.printf("  Hostname: %s\n", workingName.c_str());
+        Serial.printf("  Hostname: %s\n", workingName);
         Serial.printf("  STA Connected: %s\n", staConnected ? "Yes" : "No");
         if (staConnected) {
-            Serial.printf("  STA IP: %s\n", WiFi.localIP().toString().c_str());
-            Serial.printf("  STA Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
-            Serial.printf("  STA Subnet: %s\n", WiFi.subnetMask().toString().c_str());
+            // Créer les String une par une pour éviter l'accumulation sur la pile
+            {
+                String staIp = WiFi.localIP().toString();
+                Serial.printf("  STA IP: %s\n", staIp.c_str());
+            }
+            {
+                String staGw = WiFi.gatewayIP().toString();
+                Serial.printf("  STA Gateway: %s\n", staGw.c_str());
+            }
+            {
+                String staSn = WiFi.subnetMask().toString();
+                Serial.printf("  STA Subnet: %s\n", staSn.c_str());
+            }
         }
-        Serial.printf("  AP IP: %s\n", WiFi.softAPIP().toString().c_str());
+        {
+            String apIp = WiFi.softAPIP().toString();
+            Serial.printf("  AP IP: %s\n", apIp.c_str());
+        }
         Serial.printf("  WiFi Mode: %d\n", WiFi.getMode());
         
         if (staConnected) {
@@ -91,9 +105,7 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
     }
     
     // Configuration des endpoints HTTP
-    // Serial.println("[ServerCore] Setting up WebAPI...");
     setupWebAPI(server, ws);
-    // Serial.println("[ServerCore] Starting HTTP server...");
     server.begin();
     // Serial.println("[ServerCore] HTTP server started on / (Async)");
     // Serial.println("[ServerCore] ServerCore initialization complete!");

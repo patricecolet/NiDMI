@@ -4,6 +4,7 @@
 #include "basic/LedDef.h"
 #include "multiplexer/MuxDef.h"
 #include <cstring>
+#include <utility>  // pour std::move
 
 // Initialisation des membres statiques
 std::vector<ComponentDefinition> ComponentRegistry::definitions_;
@@ -15,18 +16,41 @@ void ComponentRegistry::init() {
     // Initialiser le ValidationRegistry d'abord
     ValidationRegistry::init();
     
+    // Réserver l'espace dans le vector pour éviter les réallocations
+    // qui peuvent créer des copies temporaires
+    definitions_.reserve(5);
+    
     // === FAMILLE BASIC ===
     // Composants simples : Potentiomètre, Bouton, LED
+    // Créer chaque définition dans un bloc séparé pour limiter la portée sur la pile
     
-    definitions_.push_back(Components::Potentiometer::createDefinition());
-    definitions_.push_back(Components::Button::createDefinition());
-    definitions_.push_back(Components::Led::createDefinition());
+    {
+        ComponentDefinition def = Components::Potentiometer::createDefinition();
+        definitions_.push_back(std::move(def));
+    }
+    
+    {
+        ComponentDefinition def = Components::Button::createDefinition();
+        definitions_.push_back(std::move(def));
+    }
+    
+    {
+        ComponentDefinition def = Components::Led::createDefinition();
+        definitions_.push_back(std::move(def));
+    }
     
     // === FAMILLE MULTIPLEXER ===
     // Multiplexeurs analogiques : HC4067, HC4051, etc.
     
-    definitions_.push_back(Components::HC4067::createDefinition());
-    definitions_.push_back(Components::HC4051::createDefinition());
+    {
+        ComponentDefinition def = Components::HC4067::createDefinition();
+        definitions_.push_back(std::move(def));
+    }
+    
+    {
+        ComponentDefinition def = Components::HC4051::createDefinition();
+        definitions_.push_back(std::move(def));
+    }
     
     // === FAMILLES FUTURES ===
     // ENCODER : encodeurs rotatifs
@@ -96,4 +120,12 @@ int ComponentRegistry::toJsonArray(char* buffer, size_t bufferSize) {
 
 size_t ComponentRegistry::count() {
     return definitions_.size();
+}
+
+void ComponentRegistry::cleanup() {
+    for (auto& def : definitions_) {
+        def.cleanup();
+    }
+    definitions_.clear();
+    initialized_ = false;
 }
