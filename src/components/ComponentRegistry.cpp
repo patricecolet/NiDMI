@@ -1,4 +1,8 @@
 #include "ComponentRegistry.h"
+#include "input/PotentiometerDef.h"
+#include "input/ButtonDef.h"
+#include "input/MuxDef.h"
+#include "output/LedDef.h"
 #include <cstring>
 
 // Initialisation des membres statiques
@@ -11,170 +15,23 @@ void ComponentRegistry::init() {
     // Initialiser le ValidationRegistry d'abord
     ValidationRegistry::init();
     
-    // Enregistrer tous les composants disponibles
-    
     // === COMPOSANTS D'ENTRÉE ===
+    // Chaque composant est défini dans son fichier *Def.h
     
-    // Potentiomètre - composant simple, 1 pin analogique
-    {
-        ComponentDefinition def = {};
-        def.id = "potentiometer";
-        def.displayName = "Potentiomètre";
-        def.icon = nullptr;
-        def.type = ComponentType::POTENTIOMETER;
-        def.pinType = PinType::PIN_ANALOG;
-        def.implemented = true;
-        def.isComplex = false;
-        def.supportsMidi = true;
-        def.supportsOsc = true;
-        def.additionalPinCount = 0;
-        
-        // Messages MIDI supportés par le potentiomètre
-        def.midiMessageCount = 4;
-        def.midiMessages[0] = {"cc", "Control Change"};
-        def.midiMessages[1] = {"pc", "Program Change"};
-        def.midiMessages[2] = {"pitchbend", "Pitch Bend"};
-        def.midiMessages[3] = {"aftertouch", "Aftertouch (Channel)"};
-        
-        definitions_.push_back(def);
-    }
-    
-    // Bouton - composant simple, 1 pin digitale
-    {
-        ComponentDefinition def = {};
-        def.id = "button";
-        def.displayName = "Bouton";
-        def.icon = nullptr;
-        def.type = ComponentType::BUTTON;
-        def.pinType = PinType::PIN_DIGITAL;
-        def.implemented = true;
-        def.isComplex = false;
-        def.supportsMidi = true;
-        def.supportsOsc = true;
-        def.additionalPinCount = 0;
-        
-        // Messages MIDI supportés par le bouton
-        def.midiMessageCount = 6;
-        def.midiMessages[0] = {"note", "Note"};
-        def.midiMessages[1] = {"cc", "Control Change"};
-        def.midiMessages[2] = {"pc", "Program Change"};
-        def.midiMessages[3] = {"notevel", "Note + vélocité"};
-        def.midiMessages[4] = {"notesweep", "Note (balayage)"};
-        def.midiMessages[5] = {"clock", "Clock"};
-        
-        definitions_.push_back(def);
-    }
-    
-    // MUX - composant complexe, pin analogique (SIG) + 4 pins digitales (S0-S3) + 1 optionnelle (EN)
-    {
-        ComponentDefinition def = {};
-        def.id = "mux";
-        def.displayName = "Multiplexeur";
-        def.icon = nullptr;
-        def.type = ComponentType::MUX;
-        def.pinType = PinType::PIN_ANALOG;
-        def.implemented = true;
-        def.isComplex = true;
-        def.supportsMidi = true;
-        def.supportsOsc = true;
-        def.additionalPinCount = 5;
-        
-        // Pins d'adresse (obligatoires)
-        def.additionalPins[0] = {"s0", "S0", PinType::PIN_DIGITAL, false, 255};
-        def.additionalPins[1] = {"s1", "S1", PinType::PIN_DIGITAL, false, 255};
-        def.additionalPins[2] = {"s2", "S2", PinType::PIN_DIGITAL, false, 255};
-        def.additionalPins[3] = {"s3", "S3", PinType::PIN_DIGITAL, false, 255};
-        def.additionalPins[4] = {"en", "Enable", PinType::PIN_DIGITAL, true, 255};
-        
-        // Messages MIDI supportés par le MUX (même que potentiomètre)
-        def.midiMessageCount = 4;
-        def.midiMessages[0] = {"cc", "Control Change"};
-        def.midiMessages[1] = {"pc", "Program Change"};
-        def.midiMessages[2] = {"pitchbend", "Pitch Bend"};
-        def.midiMessages[3] = {"aftertouch", "Aftertouch (Channel)"};
-        
-        definitions_.push_back(def);
-    }
+    definitions_.push_back(Components::Potentiometer::createDefinition());
+    definitions_.push_back(Components::Button::createDefinition());
+    definitions_.push_back(Components::Mux::createDefinition());
     
     // === COMPOSANTS DE SORTIE ===
     
-    // LED - composant simple, 1 pin PWM (reçoit MIDI, n'envoie pas)
-    {
-        ComponentDefinition def = {};
-        def.id = "led";
-        def.displayName = "LED";
-        def.icon = nullptr;
-        def.type = ComponentType::LED;
-        def.pinType = PinType::PIN_PWM;
-        def.implemented = true;
-        def.isComplex = false;
-        def.supportsMidi = true;  // Reçoit MIDI pour contrôler la LED
-        def.supportsOsc = false;
-        
-        // Messages MIDI que la LED peut recevoir
-        def.midiMessageCount = 2;
-        def.midiMessages[0] = {"note", "Note"};
-        def.midiMessages[1] = {"cc", "Control Change"};
-        def.additionalPinCount = 0;
-        definitions_.push_back(def);
-    }
+    definitions_.push_back(Components::Led::createDefinition());
     
-    // === BUS (composants spéciaux avec pins fixes) ===
+    // Note: I2C et SPI ne sont PAS des composants, ce sont des bus hardware.
+    // Les pins I2C/SPI sont identifiées via caps.bus dans l'API /api/pins/caps.
+    // Les composants qui utilisent ces bus (écran OLED, DAC, etc.) seront ajoutés plus tard.
     
-    // I2C - 2 pins fixes (SDA, SCL)
-    {
-        ComponentDefinition def = {};
-        def.id = "i2c";
-        def.displayName = "I2C";
-        def.icon = nullptr;
-        def.type = ComponentType::BUTTON;  // Type générique pour l'instant
-        def.pinType = PinType::PIN_DIGITAL;
-        def.implemented = true;
-        def.isComplex = true;
-        def.supportsMidi = false;  // Bus, pas de MIDI direct
-        def.supportsOsc = false;
-        def.additionalPinCount = 1;
-        def.additionalPins[0] = {"scl", "SCL", PinType::PIN_DIGITAL, false, 255};
-        def.midiMessageCount = 0;
-        definitions_.push_back(def);
-    }
-    
-    // SPI - 3 pins fixes (MOSI, MISO, SCK)
-    {
-        ComponentDefinition def = {};
-        def.id = "spi";
-        def.displayName = "SPI";
-        def.icon = nullptr;
-        def.type = ComponentType::BUTTON;  // Type générique pour l'instant
-        def.pinType = PinType::PIN_DIGITAL;
-        def.implemented = true;
-        def.isComplex = true;
-        def.supportsMidi = false;
-        def.supportsOsc = false;
-        def.additionalPinCount = 2;
-        def.additionalPins[0] = {"miso", "MISO", PinType::PIN_DIGITAL, false, 255};
-        def.additionalPins[1] = {"sck", "SCK", PinType::PIN_DIGITAL, false, 255};
-        def.midiMessageCount = 0;
-        definitions_.push_back(def);
-    }
-    
-    // UART - 2 pins fixes (TX, RX)
-    {
-        ComponentDefinition def = {};
-        def.id = "uart";
-        def.displayName = "UART";
-        def.icon = nullptr;
-        def.type = ComponentType::BUTTON;  // Type générique pour l'instant
-        def.pinType = PinType::PIN_DIGITAL;
-        def.implemented = true;
-        def.isComplex = true;
-        def.supportsMidi = true;  // UART peut être utilisé pour MIDI série
-        def.supportsOsc = false;
-        def.additionalPinCount = 1;
-        def.additionalPins[0] = {"rx", "RX", PinType::PIN_DIGITAL, false, 255};
-        def.midiMessageCount = 0;  // Messages gérés différemment pour UART
-        definitions_.push_back(def);
-    }
+    // Note: TX et RX (UART) sont des pins digitales indépendantes.
+    // Elles peuvent être utilisées séparément (ex: TX seul pour MIDI OUT).
     
     initialized_ = true;
 }

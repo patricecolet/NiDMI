@@ -8,13 +8,13 @@
  * @brief Définition du composant Potentiomètre
  * 
  * Composant d'entrée analogique simple.
- * Lit une valeur 0-4095 sur un ADC et la convertit en MIDI CC (0-127).
+ * Lit une valeur 0-4095 sur un ADC et la convertit en message MIDI.
  */
 
 namespace Components {
 
 /**
- * @brief Constantes pour le Potentiomètre
+ * @brief Définition complète du Potentiomètre
  */
 struct Potentiometer {
     // Identifiants
@@ -26,34 +26,45 @@ struct Potentiometer {
     static constexpr PinType PIN_TYPE = PinType::PIN_ANALOG;
     static constexpr bool IMPLEMENTED = true;
     static constexpr bool IS_COMPLEX = false;
+    static constexpr bool SUPPORTS_MIDI = true;
+    static constexpr bool SUPPORTS_OSC = true;
     
     // Valeurs par défaut
     static constexpr uint8_t DEFAULT_CC = 1;
     static constexpr uint8_t DEFAULT_CHANNEL = 1;
-    static constexpr uint8_t DEFAULT_FILTER_INTENSITY = 5;  // 1-10
+    static constexpr uint8_t DEFAULT_FILTER_INTENSITY = 5;
     
     /**
-     * @brief Validation inline pour le potentiomètre
-     * @param gpio GPIO à valider
-     * @return true si le GPIO a une capacité ADC
+     * @brief Validation : vérifie que le GPIO a une capacité ADC
      */
     static bool validate(uint8_t gpio) {
         return PinMapper::hasAdc(gpio);
     }
     
     /**
-     * @brief Crée la définition pour le registre
+     * @brief Crée la définition complète pour le registre
      */
     static ComponentDefinition createDefinition() {
-        return {
-            ID,
-            DISPLAY_NAME,
-            nullptr,
-            TYPE,
-            PIN_TYPE,
-            IMPLEMENTED,
-            IS_COMPLEX
-        };
+        ComponentDefinition def = {};
+        def.id = ID;
+        def.displayName = DISPLAY_NAME;
+        def.icon = nullptr;
+        def.type = TYPE;
+        def.pinType = PIN_TYPE;
+        def.implemented = IMPLEMENTED;
+        def.isComplex = IS_COMPLEX;
+        def.supportsMidi = SUPPORTS_MIDI;
+        def.supportsOsc = SUPPORTS_OSC;
+        def.additionalPinCount = 0;
+        
+        // Messages MIDI supportés
+        def.midiMessageCount = 4;
+        def.midiMessages[0] = {"cc", "Control Change"};
+        def.midiMessages[1] = {"pc", "Program Change"};
+        def.midiMessages[2] = {"pitchbend", "Pitch Bend"};
+        def.midiMessages[3] = {"aftertouch", "Aftertouch (Channel)"};
+        
+        return def;
     }
 };
 

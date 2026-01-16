@@ -13,7 +13,7 @@
 namespace Components {
 
 /**
- * @brief Constantes pour le Bouton
+ * @brief Définition complète du Bouton
  */
 struct Button {
     // Identifiants
@@ -25,6 +25,8 @@ struct Button {
     static constexpr PinType PIN_TYPE = PinType::PIN_DIGITAL;
     static constexpr bool IMPLEMENTED = true;
     static constexpr bool IS_COMPLEX = false;
+    static constexpr bool SUPPORTS_MIDI = true;
+    static constexpr bool SUPPORTS_OSC = true;
     
     // Valeurs par défaut
     static constexpr uint8_t DEFAULT_NOTE = 60;  // Middle C
@@ -38,27 +40,38 @@ struct Button {
     static constexpr const char* MODE_TOGGLE = "toggle";
     
     /**
-     * @brief Validation inline pour le bouton
-     * @param gpio GPIO à valider
-     * @return true si le GPIO est valide (< 48 pour ESP32)
+     * @brief Validation : vérifie que le GPIO est valide
      */
     static bool validate(uint8_t gpio) {
-        return gpio < 48;  // ESP32 a max 48 GPIOs
+        return gpio < 48;
     }
     
     /**
-     * @brief Crée la définition pour le registre
+     * @brief Crée la définition complète pour le registre
      */
     static ComponentDefinition createDefinition() {
-        return {
-            ID,
-            DISPLAY_NAME,
-            nullptr,
-            TYPE,
-            PIN_TYPE,
-            IMPLEMENTED,
-            IS_COMPLEX
-        };
+        ComponentDefinition def = {};
+        def.id = ID;
+        def.displayName = DISPLAY_NAME;
+        def.icon = nullptr;
+        def.type = TYPE;
+        def.pinType = PIN_TYPE;
+        def.implemented = IMPLEMENTED;
+        def.isComplex = IS_COMPLEX;
+        def.supportsMidi = SUPPORTS_MIDI;
+        def.supportsOsc = SUPPORTS_OSC;
+        def.additionalPinCount = 0;
+        
+        // Messages MIDI supportés
+        def.midiMessageCount = 6;
+        def.midiMessages[0] = {"note", "Note"};
+        def.midiMessages[1] = {"cc", "Control Change"};
+        def.midiMessages[2] = {"pc", "Program Change"};
+        def.midiMessages[3] = {"notevel", "Note + vélocité"};
+        def.midiMessages[4] = {"notesweep", "Note (balayage)"};
+        def.midiMessages[5] = {"clock", "Clock"};
+        
+        return def;
     }
 };
 

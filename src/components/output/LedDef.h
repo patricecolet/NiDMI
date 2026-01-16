@@ -14,7 +14,7 @@
 namespace Components {
 
 /**
- * @brief Constantes pour la LED
+ * @brief Définition complète de la LED
  */
 struct Led {
     // Identifiants
@@ -26,35 +26,44 @@ struct Led {
     static constexpr PinType PIN_TYPE = PinType::PIN_PWM;
     static constexpr bool IMPLEMENTED = true;
     static constexpr bool IS_COMPLEX = false;
+    static constexpr bool SUPPORTS_MIDI = true;   // Reçoit MIDI
+    static constexpr bool SUPPORTS_OSC = false;
     
     // Valeurs par défaut
     static constexpr uint8_t DEFAULT_CC = 1;
     static constexpr uint8_t DEFAULT_CHANNEL = 1;
     static constexpr uint16_t PWM_FREQUENCY = 5000;
-    static constexpr uint8_t PWM_RESOLUTION = 8;  // 8 bits = 0-255
+    static constexpr uint8_t PWM_RESOLUTION = 8;
     
     /**
-     * @brief Validation inline pour la LED
-     * @param gpio GPIO à valider
-     * @return true si le GPIO a une capacité PWM
+     * @brief Validation : vérifie que le GPIO supporte PWM
      */
     static bool validate(uint8_t gpio) {
         return PinMapper::hasPwm(gpio);
     }
     
     /**
-     * @brief Crée la définition pour le registre
+     * @brief Crée la définition complète pour le registre
      */
     static ComponentDefinition createDefinition() {
-        return {
-            ID,
-            DISPLAY_NAME,
-            nullptr,
-            TYPE,
-            PIN_TYPE,
-            IMPLEMENTED,
-            IS_COMPLEX
-        };
+        ComponentDefinition def = {};
+        def.id = ID;
+        def.displayName = DISPLAY_NAME;
+        def.icon = nullptr;
+        def.type = TYPE;
+        def.pinType = PIN_TYPE;
+        def.implemented = IMPLEMENTED;
+        def.isComplex = IS_COMPLEX;
+        def.supportsMidi = SUPPORTS_MIDI;
+        def.supportsOsc = SUPPORTS_OSC;
+        def.additionalPinCount = 0;
+        
+        // Messages MIDI que la LED peut recevoir
+        def.midiMessageCount = 2;
+        def.midiMessages[0] = {"note", "Note"};
+        def.midiMessages[1] = {"cc", "Control Change"};
+        
+        return def;
     }
 };
 

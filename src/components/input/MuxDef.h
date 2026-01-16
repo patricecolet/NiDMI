@@ -21,7 +21,7 @@
 namespace Components {
 
 /**
- * @brief Constantes pour le Multiplexeur
+ * @brief Définition complète du Multiplexeur
  */
 struct Mux {
     // Identifiants
@@ -31,14 +31,16 @@ struct Mux {
     
     // Configuration
     static constexpr ComponentType TYPE = ComponentType::MUX;
-    static constexpr PinType PIN_TYPE = PinType::PIN_ANALOG;  // Pour la pin SIG
+    static constexpr PinType PIN_TYPE = PinType::PIN_ANALOG;
     static constexpr bool IMPLEMENTED = true;
-    static constexpr bool IS_COMPLEX = true;  // Nécessite MuxManager
+    static constexpr bool IS_COMPLEX = true;
+    static constexpr bool SUPPORTS_MIDI = true;
+    static constexpr bool SUPPORTS_OSC = true;
     
     // Caractéristiques
     static constexpr uint8_t NUM_CHANNELS = 16;
-    static constexpr uint8_t NUM_ADDRESS_PINS = 4;  // S0-S3
-    static constexpr uint8_t NO_PIN = 255;          // Valeur pour EN non connecté
+    static constexpr uint8_t NUM_ADDRESS_PINS = 4;
+    static constexpr uint8_t NO_PIN = 255;
     
     // Valeurs par défaut
     static constexpr uint8_t DEFAULT_CC_BASE = 1;
@@ -49,25 +51,40 @@ struct Mux {
     
     /**
      * @brief Validation basique (SIG pin seulement)
-     * Pour la validation complète, utiliser MuxValidator
-     * @param gpio GPIO de la pin SIG
-     * @return true si le GPIO a une capacité ADC
      */
     static bool validateSigPin(uint8_t gpio);
     
     /**
-     * @brief Crée la définition pour le registre
+     * @brief Crée la définition complète pour le registre
      */
     static ComponentDefinition createDefinition() {
-        return {
-            ID,
-            DISPLAY_NAME,
-            nullptr,
-            TYPE,
-            PIN_TYPE,
-            IMPLEMENTED,
-            IS_COMPLEX
-        };
+        ComponentDefinition def = {};
+        def.id = ID;
+        def.displayName = DISPLAY_NAME;
+        def.icon = nullptr;
+        def.type = TYPE;
+        def.pinType = PIN_TYPE;
+        def.implemented = IMPLEMENTED;
+        def.isComplex = IS_COMPLEX;
+        def.supportsMidi = SUPPORTS_MIDI;
+        def.supportsOsc = SUPPORTS_OSC;
+        
+        // Pins additionnelles (S0, S1, S2, S3, EN)
+        def.additionalPinCount = 5;
+        def.additionalPins[0] = {"s0", "S0", PinType::PIN_DIGITAL, false, 255};
+        def.additionalPins[1] = {"s1", "S1", PinType::PIN_DIGITAL, false, 255};
+        def.additionalPins[2] = {"s2", "S2", PinType::PIN_DIGITAL, false, 255};
+        def.additionalPins[3] = {"s3", "S3", PinType::PIN_DIGITAL, false, 255};
+        def.additionalPins[4] = {"en", "Enable", PinType::PIN_DIGITAL, true, 255};
+        
+        // Messages MIDI supportés (même que potentiomètre)
+        def.midiMessageCount = 4;
+        def.midiMessages[0] = {"cc", "Control Change"};
+        def.midiMessages[1] = {"pc", "Program Change"};
+        def.midiMessages[2] = {"pitchbend", "Pitch Bend"};
+        def.midiMessages[3] = {"aftertouch", "Aftertouch (Channel)"};
+        
+        return def;
     }
 };
 
