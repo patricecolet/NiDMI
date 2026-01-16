@@ -35,9 +35,9 @@ void ValidationRegistry::init() {
         return gpio < 48; // ESP32 a max 48 GPIOs
     });
     
-    // LED : nécessite une pin PWM (ou digitale)
+    // LED : pin digitale (PWM optionnel, utilisé si disponible et ledMode="pwm")
     registerValidator("led", [](uint8_t gpio, const void*) {
-        return PinMapper::hasPwm(gpio);
+        return gpio < 48; // N'importe quel GPIO valide
     });
     
     // MUX : validation complexe via MuxValidator

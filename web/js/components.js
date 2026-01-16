@@ -3,9 +3,9 @@
 /**
  * Affiche la carte de configuration correspondant au rôle sélectionné
  * Utilise les définitions du backend pour déterminer le cardId
- * @param {string} role - ID du rôle (ex: "potentiometer", "mux:HC4067")
+ * @param {string} role - ID du rôle (ex: "potentiometer", "hc4067")
  */
-function showRoleCards(role){
+function showRoleCards(role, currentCfg = {}){
  // Masquer toutes les cartes en utilisant les cardId du backend
  if(typeof componentDefinitions !== 'undefined' && componentDefinitions) {
   componentDefinitions.forEach(def => {
@@ -18,20 +18,174 @@ function showRoleCards(role){
  
  if(!role) return;
  
- // Extraire l'ID de base (mux:HC4067 -> mux)
- const baseRole = role.includes(':') ? role.split(':')[0] : role;
+ // Migrer les anciens formats si nécessaire
+ const migratedRole = typeof migrateRole === 'function' ? migrateRole(role) : role;
  
  // Trouver la définition du composant
- const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(baseRole) : null;
+ const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(migratedRole) : null;
  if(def && def.cardId) {
   const card = $('#' + def.cardId);
-  if(card) card.style.display = 'block';
+  if(card) {
+   card.style.display = 'block';
+   // Générer les champs de formulaire dynamiquement
+   if(typeof generateFormFields === 'function' && def.formFields && def.formFields.length > 0) {
+    generateFormFields(def, def.cardId, currentCfg);
+   }
+  }
  }
+}
+
+/**
+ * Groupe les composants par famille et remplit le menu Famille
+ * @param {number} pinType - Type de pin (0=ANALOG, 1=DIGITAL, 3=PWM)
+ * @param {Object} pin - Objet pin avec gpio
+ */
+function populateFamilySelect(pinType, pin) {
+ const familySel = $('#familySelect');
+ if(!familySel) return;
+ 
+ console.log('[populateFamilySelect] pinType=', pinType, 'componentDefinitions.length=', componentDefinitions?.length);
+ 
+ if(pinType === null || !componentDefinitions || componentDefinitions.length === 0) {
+  console.log('[populateFamilySelect] Pas de définitions, menu vide');
+  setOptions(familySel, {}, 0);
+  return;
+ }
+ 
+ // Obtenir les composants compatibles avec le type de pin (implémentés uniquement pour les familles)
+ const compatibleComponents = typeof getComponentsForPinType === 'function' 
+  ? getComponentsForPinType(pinType, true) 
+  : [];
+ 
+ console.log('[populateFamilySelect] compatibleComponents:', compatibleComponents.length);
+ 
+ // Grouper par famille
+ const familiesMap = new Map();
+ compatibleComponents.forEach(def => {
+  // getComponentsForPinType avec implementedOnly=true a déjà filtré, mais on garde pour sécurité
+  if(!def.implemented) return;
+  
+  const familyId = def.family !== undefined ? def.family : 0;
+  const familyName = def.familyName || 'Basic';
+  
+  if(!familiesMap.has(familyId)) {
+   familiesMap.set(familyId, {
+    id: familyId,
+    name: familyName,
+    components: []
+   });
+  }
+  
+  // Vérifier disponibilité MUX pour les multiplexeurs
+  if(def.family === 1 && pinType === 0) { // MULTIPLEXER
+   const muxAvailable = pin ? areMuxAddressPinsAvailable(pin.gpio) : false;
+   if(muxAvailable) {
+    familiesMap.get(familyId).components.push(def);
+   }
+  } else {
+   familiesMap.get(familyId).components.push(def);
+  }
+ });
+ 
+ // Créer les options pour le menu Famille
+ const familyOptions = {};
+ Array.from(familiesMap.values()).forEach(fam => {
+  if(fam.components.length > 0) {
+   familyOptions[fam.id] = fam.name;
+   console.log(`[populateFamilySelect] Famille ${fam.id} (${fam.name}): ${fam.components.length} composants`);
+  }
+ });
+ 
+ console.log('[populateFamilySelect] Options famille:', familyOptions);
+ setOptions(familySel, familyOptions, 0);
+ 
+ // Sélectionner automatiquement la première famille si aucune n'est sélectionnée
+ if(!familySel.value && Object.keys(familyOptions).length > 0) {
+  const firstFamilyId = parseInt(Object.keys(familyOptions)[0]);
+  familySel.value = firstFamilyId;
+ }
+ 
+ // Déclencher le filtrage du menu Composant
+ const selectedFamilyId = familySel.value ? parseInt(familySel.value) : null;
+ if(selectedFamilyId !== null) {
+  populateComponentSelect(selectedFamilyId, pinType, pin);
+ }
+}
+
+/**
+ * Remplit le menu Composant selon la famille sélectionnée
+ * @param {number} familyId - ID de la famille (0=BASIC, 1=MULTIPLEXER, etc.)
+ * @param {number} pinType - Type de pin
+ * @param {Object} pin - Objet pin avec gpio
+ */
+function populateComponentSelect(familyId, pinType, pin) {
+ const compSel = $('#funcSelect');
+ if(!compSel) return;
+ 
+ console.log('[populateComponentSelect] familyId=', familyId, 'pinType=', pinType);
+ 
+ if(pinType === null || !componentDefinitions || componentDefinitions.length === 0) {
+  console.log('[populateComponentSelect] Pas de définitions, menu vide');
+  setOptions(compSel, {}, 0);
+  return;
+ }
+ 
+ // Obtenir TOUS les composants compatibles (y compris non implémentés)
+ const compatibleComponents = typeof getComponentsForPinType === 'function' 
+  ? getComponentsForPinType(pinType, false) 
+  : [];
+ 
+ console.log('[populateComponentSelect] compatibleComponents:', compatibleComponents.length);
+ 
+ // Filtrer par famille
+ const familyComponents = compatibleComponents.filter(def => {
+  const defFamilyId = def.family !== undefined ? def.family : 0;
+  return defFamilyId === familyId;
+ });
+ 
+ console.log('[populateComponentSelect] familyComponents (familyId=' + familyId + '):', familyComponents.length, familyComponents.map(d => `${d.id} (implemented=${d.implemented})`));
+ 
+ // Créer les options pour le menu Composant
+ const options = {};
+ familyComponents.forEach(def => {
+  // Vérifier disponibilité MUX pour les multiplexeurs
+  if(def.family === 1 && pinType === 0) { // MULTIPLEXER
+   const muxAvailable = pin ? areMuxAddressPinsAvailable(pin.gpio) : false;
+   // Afficher même si non disponible si non implémenté (pour info)
+   if(muxAvailable || !def.implemented) {
+    options[def.id] = {
+     label: def.displayName,
+     disabled: !def.implemented || !muxAvailable
+    };
+   }
+  } else {
+   options[def.id] = {
+    label: def.displayName,
+    disabled: !def.implemented
+   };
+  }
+ });
+ 
+ console.log('[populateComponentSelect] Options composant:', Object.keys(options));
+ setOptions(compSel, options, 0);
 }
 
 function updFunc(lbl){
  const sel=$('#funcSelect');
- if(!sel) return;
+ const familySel=$('#familySelect');
+ if(!sel || !familySel) return;
+ 
+ // Vérifier si les définitions sont chargées, sinon les charger
+ if(!componentDefinitions || componentDefinitions.length === 0) {
+  // Charger les définitions de manière asynchrone et réessayer
+  loadComponentDefinitions().then(() => {
+   // Réessayer après chargement
+   updFunc(lbl);
+  }).catch(err => {
+   console.warn('Erreur chargement définitions dans updFunc:', err);
+  });
+  return;
+ }
  
  // Toujours vider le formulaire MUX au début pour éviter les valeurs résiduelles
  if($('#muxSig')) $('#muxSig').value='';
@@ -40,6 +194,8 @@ function updFunc(lbl){
  const type = typeof pType === 'function' ? pType(lbl) : 'digital';
  const pin = caps?.pins?.find(p => p.label === lbl);
  
+ console.log('[updFunc] Pin:', lbl, 'type:', type, 'pin:', pin);
+ 
  // Gérer les bus (I2C, SPI, UART) - rôles spéciaux
  if(type === 'i2c' || type === 'spi' || type === 'uart') {
   const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(type) : null;
@@ -47,6 +203,7 @@ function updFunc(lbl){
   const options = {};
   options[type] = displayName;
   setOptions(sel, options, 0);
+  setOptions(familySel, {}, 0);
   showRoleCards(sel.value || '');
   updateRtpForRole(sel.value || '');
   return;
@@ -57,53 +214,85 @@ function updFunc(lbl){
  if(type === 'analog') {
   pinType = 0; // PIN_ANALOG
  } else if(type === 'digital') {
-  pinType = pin && pin.has_pwm ? 3 : 1; // PIN_PWM ou PIN_DIGITAL
+  pinType = 1; // PIN_DIGITAL (toujours, peu importe si PWM ou pas)
  }
  
- // Générer les options dynamiquement depuis les définitions du backend
- const options = {};
+ console.log('[updFunc] pinType calculé:', pinType);
  
- if(pinType !== null && typeof getComponentsForPinType === 'function') {
-  const compatibleComponents = getComponentsForPinType(pinType, true);
-  
-  compatibleComponents.forEach(def => {
-   // Composants avec variants (ex: MUX avec HC4067, HC4051)
-   if(def.variants && def.variants.length > 0 && pinType === 0) {
-    const muxAvailable = pin ? areMuxAddressPinsAvailable(pin.gpio) : false;
-    options[def.id] = {
-     label: def.displayName,
-     items: def.variants.map(v => ({
-      value: `${def.id}:${v.id}`,
-      label: v.displayName,
-      disabled: !v.implemented || !muxAvailable
-     }))
-    };
-   } else if(def.implemented) {
-    options[def.id] = def.displayName;
+ // Remplir le menu Famille (qui déclenchera le remplissage du menu Composant)
+ populateFamilySelect(pinType, pin);
+ 
+ // Si une valeur était déjà sélectionnée, essayer de la restaurer APRÈS que les menus soient remplis
+ const currentRole = pcfg[lbl]?.role;
+ if(currentRole) {
+  // Utiliser setTimeout pour s'assurer que les menus sont remplis
+  setTimeout(() => {
+   const migratedRole = migrateRole(currentRole);
+   const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(migratedRole) : null;
+   if(def) {
+    // Sélectionner la bonne famille
+    const defFamilyId = def.family !== undefined ? def.family : 0;
+    if(familySel.value != defFamilyId) {
+     familySel.value = defFamilyId;
+     populateComponentSelect(defFamilyId, pinType, pin);
+     // Attendre que le menu Composant soit rempli avant de sélectionner
+     setTimeout(() => {
+      if(sel.value != migratedRole) {
+       sel.value = migratedRole;
+       const currentCfg = pcfg && pcfg[lbl] ? pcfg[lbl] : {};
+       showRoleCards(migratedRole, currentCfg);
+       updateRtpForRole(migratedRole);
+       updateRtpParamsVisibility();
+       if(migratedRole === 'hc4067' || migratedRole === 'hc4051') {
+        initMuxFormForPin(lbl);
+       }
+      }
+     }, 0);
+    } else {
+     // Famille déjà sélectionnée, juste sélectionner le composant
+     setTimeout(() => {
+      if(sel.value != migratedRole) {
+       sel.value = migratedRole;
+       const currentCfg = pcfg && pcfg[lbl] ? pcfg[lbl] : {};
+       showRoleCards(migratedRole, currentCfg);
+       updateRtpForRole(migratedRole);
+       updateRtpParamsVisibility();
+       if(migratedRole === 'hc4067' || migratedRole === 'hc4051') {
+        initMuxFormForPin(lbl);
+       }
+      }
+     }, 0);
+    }
    }
-  });
- }
- 
- if(Object.keys(options).length > 0) {
-  setOptions(sel, options, 0);
+  }, 0);
  } else {
-  setOptions(sel, [], 0);
- }
- showRoleCards(sel.value||'');
- updateRtpForRole(sel.value||'');
- 
- // Si multiplexeur est sélectionné, initialiser le formulaire
- if(sel.value && sel.value.startsWith('mux:')){
-  initMuxFormForPin(lbl);
+  // Pas de configuration existante : attendre que les menus soient remplis, puis sélectionner le premier composant par défaut
+  setTimeout(() => {
+   // Vérifier que les menus sont remplis
+   if(familySel.value && sel.options.length > 0) {
+    // Le premier composant est déjà sélectionné par setOptions avec pre=0
+    const firstComponentId = sel.value;
+    if(firstComponentId) {
+     showRoleCards(firstComponentId, {});
+     updateRtpForRole(firstComponentId);
+     updateRtpParamsVisibility();
+     if(firstComponentId === 'hc4067' || firstComponentId === 'hc4051') {
+      initMuxFormForPin(lbl);
+     }
+    }
+   }
+  }, 0);
  }
  
  const updateConfig=()=>{
- showRoleCards(sel.value||'');
+ const lbl = $('#selPin')?.textContent || '';
+ const currentCfg = pcfg && pcfg[lbl] ? pcfg[lbl] : {};
+ showRoleCards(sel.value||'', currentCfg);
  updateRtpForRole(sel.value||'');
  updateRtpParamsVisibility();
- updateBtnPulseTimingVisibility();
  // Si multiplexeur est sélectionné, initialiser le formulaire MUX
- if(sel.value&&sel.value.startsWith('mux:')&&cur){
+ const role = sel.value || '';
+ if((role === 'hc4067' || role === 'hc4051') && cur){
   initMuxFormForPin(cur);
  } else {
   // Effacer les valeurs du formulaire MUX pour ne pas polluer getUsedGpios
@@ -115,6 +304,28 @@ function updFunc(lbl){
   updateBusVisuals();
  }
  };
+ 
+ // Retirer l'ancien handler pour éviter les doublons
+ const oldHandler = familySel._onchangeHandler;
+ if(oldHandler) {
+  familySel.removeEventListener('change', oldHandler);
+ }
+ 
+ // Gérer le changement de famille
+ const newHandler = () => {
+  const familyId = parseInt(familySel.value);
+  if(!isNaN(familyId)) {
+   populateComponentSelect(familyId, pinType, pin);
+   // Réinitialiser la sélection du composant
+   sel.value = '';
+   showRoleCards('');
+   updateRtpForRole('');
+   updateRtpParamsVisibility();
+   if($('#muxSig')) $('#muxSig').value='';
+  }
+ };
+ familySel.addEventListener('change', newHandler);
+ familySel._onchangeHandler = newHandler; // Stocker pour pouvoir le retirer plus tard
  
  sel.onchange=updateConfig;
  
@@ -131,11 +342,11 @@ function updateRtpForRole(role){
  const rtpType = $('#rtpMsgType');
  const rtpParams = $('#rtpParams');
  
- // Extraire l'ID de base (mux:HC4067 -> mux)
- const baseRole = role && role.includes(':') ? role.split(':')[0] : role;
+ // Migrer les anciens formats si nécessaire
+ const migratedRole = migrateRole(role || '');
  
  // Obtenir la définition du composant depuis le backend
- const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(baseRole) : null;
+ const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(migratedRole) : null;
  
  // Déterminer si MIDI est supporté et quels messages
  let enabled = false;
@@ -212,12 +423,8 @@ function updateRtpParamsVisibility(){
  }
 }
 
-function updateBtnPulseTimingVisibility(){
- const btnMode = $('#btnMode');
- const pulseTimingRow = $('#btnPulseTimingRow');
- if(!btnMode || !pulseTimingRow) return;
- pulseTimingRow.style.display = (btnMode.value === 'pulse') ? 'flex' : 'none';
-}
+// updateBtnPulseTimingVisibility() est maintenant obsolète
+// L'affichage conditionnel est géré par generateFormFields() via dependsOn/showWhen
 
 function readCfg(){
  const c={};
@@ -259,14 +466,21 @@ function applyCfg(c){
  const el=$(id);
  if(el) el.checked=!!b;
  };
- setV('funcSelect',c.role);
- showRoleCards(c.role);
- updateRtpForRole(c.role);
- setV('btnMode',c.btnMode);
- setV('btnPulseTiming',c.btnPulseTiming);
- updateBtnPulseTimingVisibility();
- setV('ledMode',c.ledMode);
- setV('filterIntensity',c.filterIntensity||'5');
+ 
+ // Migrer le rôle si nécessaire
+ const migratedRole = typeof migrateRole === 'function' ? migrateRole(c.role) : c.role;
+ 
+ // Restaurer la famille si le rôle est défini
+ if(migratedRole && typeof getComponentDefinition === 'function') {
+  const def = getComponentDefinition(migratedRole);
+  if(def && def.family !== undefined && $('#familySelect')) {
+   $('#familySelect').value = def.family;
+  }
+ }
+ 
+setV('funcSelect',migratedRole);
+showRoleCards(migratedRole, c);
+updateRtpForRole(migratedRole);
  setC('rtpEnabled2',c.rtpEnabled);
  setV('rtpMsgType',c.rtpType);
  setV('rtpNote',c.rtpNote);
@@ -415,7 +629,8 @@ function getUsedGpios(additionalSelectIds=[]){
   if(!pin) return;
   
   // Pour les MUX temporaires, ajouter aussi les pins d'adresse
-  if(cfg && cfg.role && cfg.role.startsWith('mux:')){
+  const role = cfg?.role ? migrateRole(cfg.role) : '';
+  if(role === 'hc4067' || role === 'hc4051'){
    const sigGpio=parseInt(pin.gpio);
    usedGpios.add(sigGpio);
    // Calculer et ajouter les pins d'adresse (mode auto)
@@ -431,7 +646,8 @@ function getUsedGpios(additionalSelectIds=[]){
  });
  
  // Ne pas exclure le MUX en cours d'édition sauf si on est vraiment en train d'éditer un MUX
- const isEditingMux = $('#funcSelect') && $('#funcSelect').value && $('#funcSelect').value.startsWith('mux:');
+ const funcSelectValue = $('#funcSelect')?.value || '';
+ const isEditingMux = funcSelectValue === 'hc4067' || funcSelectValue === 'hc4051';
  const currentMuxId = (isEditingMux && $('#muxId')) ? parseInt($('#muxId').value) : null;
  if(typeof muxList !== 'undefined' && Array.isArray(muxList)){
   muxList.forEach(m=>{
@@ -595,8 +811,11 @@ async function saveMuxFromPin(){
  // Supprimer l'entrée de pcfg pour la pin SIG (le MUX est géré via muxList)
  if(caps && caps.pins){
   const sigPin=caps.pins.find(p=>p.gpio===sig);
-  if(sigPin && sigPin.label && pcfg[sigPin.label] && pcfg[sigPin.label].role && pcfg[sigPin.label].role.startsWith('mux:')){
-   delete pcfg[sigPin.label];
+  if(sigPin && sigPin.label && pcfg[sigPin.label] && pcfg[sigPin.label].role){
+   const role = migrateRole(pcfg[sigPin.label].role);
+   if(role === 'hc4067' || role === 'hc4051'){
+    delete pcfg[sigPin.label];
+   }
   }
  }
  if(typeof loadMuxList === 'function') await loadMuxList();
@@ -611,4 +830,229 @@ async function saveMuxFromPin(){
  $('#muxMsg').textContent='Erreur réseau';
  $('#muxMsg').style.color='#ef4444';
  }
+}
+
+/**
+ * Génère dynamiquement les champs de formulaire pour un composant
+ * @param {Object} def - Définition du composant depuis le backend
+ * @param {string} containerId - ID du conteneur (ex: "cardLed")
+ * @param {Object} currentCfg - Configuration actuelle (optionnel, pour pré-remplir)
+ */
+function generateFormFields(def, containerId, currentCfg = {}) {
+ const container = $('#' + containerId);
+ if(!container || !def || !def.formFields || !Array.isArray(def.formFields)) {
+  console.warn('[generateFormFields] Container ou formFields manquant', containerId, def);
+  return;
+ }
+ 
+ // Vider le conteneur
+ container.innerHTML = '';
+ 
+ // Parcourir tous les champs de formulaire
+ def.formFields.forEach(field => {
+  // Gérer l'affichage conditionnel
+  let fieldContainer = container;
+  if(field.dependsOn && field.showWhen) {
+   const dependsOnEl = $('#' + field.dependsOn);
+   if(dependsOnEl) {
+    const showWhenValues = JSON.parse(field.showWhen || '[]');
+    const shouldShow = showWhenValues.includes(dependsOnEl.value);
+    // Créer un élément pour gérer l'affichage conditionnel
+    let hiddenWrapper = $('#' + field.id + 'Row');
+    if(!hiddenWrapper) {
+     hiddenWrapper = document.createElement('div');
+     hiddenWrapper.id = field.id + 'Row';
+     container.appendChild(hiddenWrapper);
+     // Ajouter l'écouteur d'événement
+     dependsOnEl.addEventListener('change', () => {
+      const newValue = dependsOnEl.value;
+      const shouldShowNow = showWhenValues.includes(newValue);
+      hiddenWrapper.style.display = shouldShowNow ? 'block' : 'none';
+     });
+    }
+    hiddenWrapper.style.display = shouldShow ? 'block' : 'none';
+    fieldContainer = hiddenWrapper;
+   }
+  }
+  
+  // Créer le wrapper
+  const wrapper = document.createElement('div');
+  wrapper.className = field.wrapperClass || 'r';
+  if(field.type === 5) { // INFO
+   // Pour INFO, pas de wrapper, juste la div.hint
+   const infoDiv = document.createElement('div');
+   infoDiv.className = field.hintClass || 'hint';
+   infoDiv.textContent = field.hint || '';
+   fieldContainer.appendChild(infoDiv);
+   return;
+  }
+  
+  // Label principal
+  if(field.label) {
+   const label = document.createElement('label');
+   label.textContent = field.label;
+   if(field.required) label.textContent += ' *';
+   wrapper.appendChild(label);
+  }
+  
+  // Label avant (pour champs complexes)
+  if(field.labelBefore) {
+   const labelBefore = document.createElement('span');
+   labelBefore.textContent = field.labelBefore;
+   wrapper.appendChild(labelBefore);
+  }
+  
+  // Créer l'input selon le type
+  let input;
+  
+  switch(field.type) {
+   case 0: // TEXT
+    input = document.createElement('input');
+    input.type = 'text';
+    input.id = field.id;
+    if(field.placeholder) input.placeholder = field.placeholder;
+    if(field.maxLength > 0) input.maxLength = field.maxLength;
+    if(field.pattern) input.pattern = field.pattern;
+    if(field.width > 0) input.style.width = field.width + 'px';
+    if(field.defaultValue && !currentCfg[field.id]) input.value = field.defaultValue;
+    else if(currentCfg[field.id]) input.value = currentCfg[field.id];
+    break;
+    
+   case 1: // NUMBER
+    input = document.createElement('input');
+    input.type = 'number';
+    input.id = field.id;
+    input.min = field.min;
+    input.max = field.max;
+    if(field.step) input.step = field.step;
+    if(field.placeholder) input.placeholder = field.placeholder;
+    if(field.width > 0) input.style.width = field.width + 'px';
+    if(field.defaultValue && !currentCfg[field.id]) input.value = field.defaultValue;
+    else if(currentCfg[field.id] !== undefined) input.value = currentCfg[field.id];
+    break;
+    
+   case 2: // SELECT
+    input = document.createElement('select');
+    input.id = field.id;
+    if(field.width > 0) input.style.width = field.width + 'px';
+    if(field.options) {
+     try {
+      const options = JSON.parse(field.options);
+      options.forEach(opt => {
+       const option = document.createElement('option');
+       option.value = opt.value;
+       option.textContent = opt.label;
+       input.appendChild(option);
+      });
+     } catch(e) {
+      console.warn('[generateFormFields] Erreur parsing options:', e);
+     }
+    }
+    if(field.defaultValue && !currentCfg[field.id]) input.value = field.defaultValue;
+    else if(currentCfg[field.id]) input.value = currentCfg[field.id];
+    break;
+    
+   case 3: // CHECKBOX
+    input = document.createElement('input');
+    input.type = 'checkbox';
+    input.id = field.id;
+    if(field.label) {
+     const labelFor = document.createElement('label');
+     labelFor.setAttribute('for', field.id);
+     labelFor.textContent = field.label;
+     wrapper.insertBefore(labelFor, wrapper.firstChild);
+    }
+    if(field.defaultValue === 'true' || currentCfg[field.id] === true || currentCfg[field.id] === 'true') {
+     input.checked = true;
+    }
+    break;
+    
+   case 4: // RANGE
+    // Pour RANGE, créer deux inputs number
+    const rangeWrapper = document.createElement('span');
+    const inputMin = document.createElement('input');
+    inputMin.type = 'number';
+    inputMin.id = field.id + 'Min';
+    inputMin.min = field.min;
+    inputMin.max = field.max;
+    if(field.step) inputMin.step = field.step;
+    if(field.width > 0) inputMin.style.width = field.width + 'px';
+    // Pour RANGE, defaultValue est utilisé pour le min, max utilise field.max par défaut
+    if(currentCfg[field.id + 'Min'] !== undefined) {
+     inputMin.value = currentCfg[field.id + 'Min'];
+    } else if(field.defaultValue) {
+     inputMin.value = field.defaultValue;
+    } else {
+     inputMin.value = field.min;
+    }
+    
+    const separator = document.createElement('span');
+    separator.textContent = field.separator || '→';
+    separator.style.margin = '0 4px';
+    
+    const inputMax = document.createElement('input');
+    inputMax.type = 'number';
+    inputMax.id = field.id + 'Max';
+    inputMax.min = field.min;
+    inputMax.max = field.max;
+    if(field.step) inputMax.step = field.step;
+    if(field.width > 0) inputMax.style.width = field.width + 'px';
+    if(currentCfg[field.id + 'Max'] !== undefined) {
+     inputMax.value = currentCfg[field.id + 'Max'];
+    } else {
+     inputMax.value = field.max;
+    }
+    
+    rangeWrapper.appendChild(inputMin);
+    rangeWrapper.appendChild(separator);
+    rangeWrapper.appendChild(inputMax);
+    input = rangeWrapper;
+    break;
+    
+   default:
+    console.warn('[generateFormFields] Type de champ inconnu:', field.type);
+    return;
+  }
+  
+  if(input && field.inputClass) {
+   if(typeof input.classList !== 'undefined') {
+    input.classList.add(...field.inputClass.split(' '));
+   } else {
+    input.className = (input.className || '') + ' ' + field.inputClass;
+   }
+  }
+  
+  wrapper.appendChild(input);
+  
+  // Label après (pour champs complexes)
+  if(field.labelAfter) {
+   const labelAfter = document.createElement('span');
+   labelAfter.textContent = field.labelAfter;
+   wrapper.appendChild(labelAfter);
+  }
+  
+  // Hint inline
+  if(field.hintPosition === 1 && field.hint) { // INLINE
+   const hintSpan = document.createElement('span');
+   hintSpan.textContent = field.hint;
+   if(field.hintClass) {
+    hintSpan.setAttribute('style', field.hintClass);
+   } else {
+    hintSpan.style.marginLeft = '8px';
+    hintSpan.style.fontSize = '0.9em';
+    hintSpan.style.color = '#666';
+   }
+   wrapper.appendChild(hintSpan);
+  }
+  
+  fieldContainer.appendChild(wrapper);
+  
+  // Hint en dessous
+  if(field.hintPosition === 2 && field.hint) { // BELOW
+   const hintDiv = document.createElement('div');
+   hintDiv.className = field.hintClass || 'hint';
+   hintDiv.textContent = field.hint;
+   fieldContainer.appendChild(hintDiv);
+  }
+ });
 }

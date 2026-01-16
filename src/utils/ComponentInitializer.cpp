@@ -27,6 +27,8 @@ void ComponentInitializer::initializeConfig(
     config.btnMode[sizeof(config.btnMode)-1] = '\0';
     strncpy(config.btnPulseTiming, "release", sizeof(config.btnPulseTiming)); // Défaut: release
     config.btnPulseTiming[sizeof(config.btnPulseTiming)-1] = '\0';
+    strncpy(config.ledMode, "onoff", sizeof(config.ledMode)); // Défaut: on/off
+    config.ledMode[sizeof(config.ledMode)-1] = '\0';
     config.filter_intensity = 5; // Défaut: filtre modéré (bon compromis)
 }
 

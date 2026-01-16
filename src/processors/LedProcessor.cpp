@@ -2,6 +2,7 @@
 #include "ProcessorRegistry.h"
 #include "../components/ComponentTypes.h"  // Définitions communes
 #include "../utils/AnalogFilter.h"
+#include "../utils/PinMapper.h"
 
 void LedProcessor::handleMidiNoteOn(
     const ComponentConfig* configs,
@@ -17,8 +18,12 @@ void LedProcessor::handleMidiNoteOn(
             config.midi_channel == channel && 
             config.midi_param == note) {
             
-            // Allumer la LED
-            digitalWrite(config.gpio, HIGH);
+            // Allumer la LED (PWM si disponible et mode pwm, sinon digital)
+            if (strcmp(config.ledMode, "pwm") == 0 && PinMapper::hasPwm(config.gpio)) {
+                analogWrite(config.gpio, 255); // PWM à 100%
+            } else {
+                digitalWrite(config.gpio, HIGH);
+            }
             // Serial.printf("[LedProcessor] LED GPIO%d ON (Note %d ch%d)\n", 
             //              config.gpio, note, channel);
         }
@@ -39,8 +44,12 @@ void LedProcessor::handleMidiNoteOff(
             config.midi_channel == channel && 
             config.midi_param == note) {
             
-            // Éteindre la LED
-            digitalWrite(config.gpio, LOW);
+            // Éteindre la LED (PWM si disponible et mode pwm, sinon digital)
+            if (strcmp(config.ledMode, "pwm") == 0 && PinMapper::hasPwm(config.gpio)) {
+                analogWrite(config.gpio, 0); // PWM à 0%
+            } else {
+                digitalWrite(config.gpio, LOW);
+            }
             // Serial.printf("[LedProcessor] LED GPIO%d OFF (Note %d ch%d)\n", 
             //              config.gpio, note, channel);
         }
@@ -61,9 +70,17 @@ void LedProcessor::handleMidiControlChange(
             config.midi_channel == channel && 
             config.midi_param == control) {
             
-            // Allumer/éteindre selon la valeur
-            bool ledState = (value > 63); // Seuil à 50%
-            digitalWrite(config.gpio, ledState ? HIGH : LOW);
+            // Allumer/éteindre selon la valeur (PWM si disponible et mode pwm, sinon digital)
+            if (strcmp(config.ledMode, "pwm") == 0 && PinMapper::hasPwm(config.gpio)) {
+                // Mode PWM : utiliser la valeur directement (0-127 -> 0-255)
+                uint8_t pwmValue = (value * 2); // 0-127 -> 0-254, on peut aller jusqu'à 255
+                if (pwmValue > 255) pwmValue = 255;
+                analogWrite(config.gpio, pwmValue);
+            } else {
+                // Mode on/off : seuil à 50%
+                bool ledState = (value > 63);
+                digitalWrite(config.gpio, ledState ? HIGH : LOW);
+            }
             // Serial.printf("[LedProcessor] LED GPIO%d %s (CC %d ch%d val%d)\n", 
             //              config.gpio, ledState ? "ON" : "OFF", control, channel, value);
         }

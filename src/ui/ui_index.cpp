@@ -73,10 +73,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  </div>
  <div class="rp"><div class="cp">
  <h4>Fonction du pin</h4>
- <div class="r"><label>Pin:</label><span id="selPin">-</span><select id="funcSelect"></select></div>
- <div id="cardBtn" class="subcard" style="display:none;"><div class="r"><label>Mode bouton:</label><select id="btnMode"><option value="pulse">Push</option><option value="press_release">Press/Release</option><option value="toggle">Toggle</option></select></div><div class="r" id="btnPulseTimingRow" style="display:none;"><label>Timing Push:</label><select id="btnPulseTiming"><option value="press">Au press</option><option value="release">Au release</option></select></div></div>
- <div id="cardLed" class="subcard" style="display:none;"><div class="r"><label>LED:</label><select id="ledMode"><option value="onoff">On/Off</option><option value="pwm">PWM</option></select></div></div>
- <div id="cardPot" class="subcard" style="display:none;"><div class="r"><label>Intensité filtrage (1-10):</label><input type="number" id="filterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">1=rapide, 10=stable</span></div></div>
+ <div class="r"><label>Pin:</label><span id="selPin">-</span></div>
+ <div class="r"><label>Famille:</label><select id="familySelect"></select></div>
+ <div class="r"><label>Composant:</label><select id="funcSelect"></select></div>
+ <div id="cardBtn" class="subcard" style="display:none;"></div>
+ <div id="cardLed" class="subcard" style="display:none;"></div>
+ <div id="cardPot" class="subcard" style="display:none;"></div>
 <div id="cardMux" class="subcard" style="display:none;">
 <h4 style="margin-top:0;">Configuration HC4067</h4>
 <div class="f" style="display:none;"><label>Multiplexeur::</label><select id="muxId"><option value="0">MUX0</option><option value="1">MUX1</option></select></div>

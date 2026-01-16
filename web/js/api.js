@@ -194,9 +194,12 @@ function getComponentDefinition(componentId) {
  * @returns {Array} Liste des composants compatibles
  */
 function getComponentsForPinType(pinType, implementedOnly = true) {
- if(!componentDefinitions || componentDefinitions.length === 0) return [];
+ if(!componentDefinitions || componentDefinitions.length === 0) {
+  console.log('[getComponentsForPinType] Aucune définition disponible');
+  return [];
+ }
  
- return componentDefinitions.filter(def => {
+ const filtered = componentDefinitions.filter(def => {
   // Filtrer par implémenté si demandé
   if(implementedOnly && !def.implemented) return false;
   
@@ -212,6 +215,9 @@ function getComponentsForPinType(pinType, implementedOnly = true) {
     return false;
   }
  });
+ 
+ console.log(`[getComponentsForPinType] pinType=${pinType}, implementedOnly=${implementedOnly}, trouvé ${filtered.length} composants:`, filtered.map(d => `${d.id} (pinType=${d.pinType}, family=${d.family})`));
+ return filtered;
 }
 
 async function loadCaps(){
@@ -270,8 +276,8 @@ function getUsedGpiosWithEditing(editingConfig) {
  
  // Pour les composants complexes, utiliser les additionalPins du backend
  if(editingConfig.role && typeof getComponentDefinition === 'function') {
-  const baseRole = editingConfig.role.includes(':') ? editingConfig.role.split(':')[0] : editingConfig.role;
-  const def = getComponentDefinition(baseRole);
+  const migratedRole = typeof migrateRole === 'function' ? migrateRole(editingConfig.role) : editingConfig.role;
+  const def = getComponentDefinition(migratedRole);
   
   if(def && def.additionalPins && def.additionalPinCount > 0) {
    // Parcourir les pins additionnelles définies par le backend
@@ -289,16 +295,16 @@ function getUsedGpiosWithEditing(editingConfig) {
 }
 
 /**
- * Migre les anciens noms de rôle vers les IDs backend
- * Utilise les définitions du backend pour la migration
- * @param {string} role - Ancien nom ou ID de rôle
+ * Convertit un nom d'affichage vers l'ID backend correspondant
+ * Utilise uniquement les définitions du backend (pas de hardcoding)
+ * @param {string} role - Nom d'affichage ou ID de rôle
  * @returns {string} ID de rôle normalisé
  */
 function migrateRole(role){
  if(!role) return role;
  
- // Si c'est déjà un ID valide (minuscule, pas d'accent), retourner tel quel
- if(/^[a-z0-9:_-]+$/.test(role)) return role;
+ // Si c'est déjà un ID valide (format backend), retourner tel quel
+ if(/^[a-z0-9_-]+$/.test(role)) return role;
  
  // Chercher dans les définitions du backend par displayName
  if(typeof componentDefinitions !== 'undefined' && componentDefinitions.length > 0) {
@@ -306,20 +312,8 @@ function migrateRole(role){
   if(def) return def.id;
  }
  
- // Fallback legacy pour compatibilité
- // Pour Multiplexeur, récupérer le premier variant implémenté
- if(role === 'Multiplexeur') {
-  const muxDef = componentDefinitions?.find(d => d.id === 'mux');
-  const firstVariant = muxDef?.variants?.find(v => v.implemented);
-  return firstVariant ? `mux:${firstVariant.id}` : 'mux:HC4067';
- }
- 
- const legacy = {
-  'Potentiomètre':'potentiometer',
-  'Bouton':'button',
-  'LED':'led'
- };
- return legacy[role] || role;
+ // Si rien n'est trouvé, retourner tel quel
+ return role;
 }
 
 async function loadConfiguredPins(){
@@ -346,7 +340,8 @@ async function saveAll(){
  msg.textContent='Enregistrement...';
  try{
  // Sauvegarder le MUX en cours d'édition s'il y en a un
- if(typeof saveMuxFromPin === 'function' && $('#funcSelect') && $('#funcSelect').value && $('#funcSelect').value.startsWith('mux:') && $('#muxSig') && $('#muxSig').value){
+ const funcSelectValue = $('#funcSelect')?.value || '';
+ if(typeof saveMuxFromPin === 'function' && $('#funcSelect') && (funcSelectValue === 'hc4067' || funcSelectValue === 'hc4051') && $('#muxSig') && $('#muxSig').value){
   await saveMuxFromPin();
  }
  
@@ -354,7 +349,8 @@ async function saveAll(){
  const c=pcfg[lbl];
  if(!c||!c.role) return;
  // Ne pas sauvegarder les pins MUX via l'API pins (elles sont gérées via l'API mux)
- if(c.role && c.role.startsWith('mux:')) return;
+ const role = migrateRole(c.role);
+ if(role === 'hc4067' || role === 'hc4051') return;
  const p=new URLSearchParams();
  p.set('pinLabel',lbl);
  p.set('role',c.role);

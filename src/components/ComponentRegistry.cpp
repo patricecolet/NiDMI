@@ -1,8 +1,8 @@
 #include "ComponentRegistry.h"
-#include "input/PotentiometerDef.h"
-#include "input/ButtonDef.h"
-#include "input/MuxDef.h"
-#include "output/LedDef.h"
+#include "basic/PotentiometerDef.h"
+#include "basic/ButtonDef.h"
+#include "basic/LedDef.h"
+#include "multiplexer/MuxDef.h"
 #include <cstring>
 
 // Initialisation des membres statiques
@@ -15,16 +15,22 @@ void ComponentRegistry::init() {
     // Initialiser le ValidationRegistry d'abord
     ValidationRegistry::init();
     
-    // === COMPOSANTS D'ENTRÉE ===
-    // Chaque composant est défini dans son fichier *Def.h
+    // === FAMILLE BASIC ===
+    // Composants simples : Potentiomètre, Bouton, LED
     
     definitions_.push_back(Components::Potentiometer::createDefinition());
     definitions_.push_back(Components::Button::createDefinition());
-    definitions_.push_back(Components::Mux::createDefinition());
-    
-    // === COMPOSANTS DE SORTIE ===
-    
     definitions_.push_back(Components::Led::createDefinition());
+    
+    // === FAMILLE MULTIPLEXER ===
+    // Multiplexeurs analogiques : HC4067, HC4051, etc.
+    
+    definitions_.push_back(Components::HC4067::createDefinition());
+    definitions_.push_back(Components::HC4051::createDefinition());
+    
+    // === FAMILLES FUTURES ===
+    // ENCODER : encodeurs rotatifs
+    // DISPLAY : écrans OLED, LCD
     
     // Note: I2C et SPI ne sont PAS des composants, ce sont des bus hardware.
     // Les pins I2C/SPI sont identifiées via caps.bus dans l'API /api/pins/caps.

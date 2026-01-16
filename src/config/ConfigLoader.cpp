@@ -99,8 +99,8 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
         
         // Ajouter le composant
         ComponentType type = ComponentType::POTENTIOMETER;
-        if (role == "Bouton") type = ComponentType::BUTTON;
-        else if (role == "LED") type = ComponentType::LED;
+        if (role == "button" || role == "Bouton") type = ComponentType::BUTTON;
+        else if (role == "led" || role == "LED") type = ComponentType::LED;
         
         bool success = manager.addComponent(gpio, type, midi_param, channel, msg_type);
         
@@ -156,6 +156,15 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                         if (btnPulseTimingStr.length() > 0) {
                             strncpy(config->btnPulseTiming, btnPulseTimingStr.c_str(), sizeof(config->btnPulseTiming) - 1);
                             config->btnPulseTiming[sizeof(config->btnPulseTiming) - 1] = '\0';
+                        }
+                    }
+                    
+                    // Lire ledMode pour les LEDs
+                    if (role == "led" || role == "LED") {
+                        String ledModeStr = JSONParser::extractStr(pinConfig, "ledMode", "onoff");
+                        if (ledModeStr.length() > 0) {
+                            strncpy(config->ledMode, ledModeStr.c_str(), sizeof(config->ledMode) - 1);
+                            config->ledMode[sizeof(config->ledMode) - 1] = '\0';
                         }
                     }
                     

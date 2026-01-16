@@ -15,13 +15,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
  /* Initialiser le formulaire de multiplexeur */
  initMuxForm();
  
- /* Charger les définitions de composants en arrière-plan (ne pas bloquer) */
- loadComponentDefinitions().catch(err => {
-  console.warn('Erreur chargement définitions composants:', err);
- });
- 
- /* Charger les capacités de la carte, puis dessiner le board */
- loadCaps().then(async ()=>{
+ /* Charger les définitions de composants AVANT de dessiner le board */
+ loadComponentDefinitions().then(async () => {
+  /* Charger les capacités de la carte, puis dessiner le board */
+  await loadCaps();
   /* Dessiner le board SVG avec les pins */
   drawBoard();
   /* Charger les pins déjà configurées */
@@ -32,6 +29,16 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   await loadUsedGpiosFromBackend();
   /* Mettre à jour les visuels après chargement complet */
   updateBusVisuals();
+ }).catch(err => {
+  console.warn('Erreur chargement définitions composants:', err);
+  // Continuer quand même avec le board (sans définitions)
+  loadCaps().then(async ()=>{
+   drawBoard();
+   await loadConfiguredPins();
+   await loadMuxList();
+   await loadUsedGpiosFromBackend();
+   updateBusVisuals();
+  });
  });
  /* Initialiser le bouton "Enregistrer tout" */
  if($('#saveAllBtn')) $('#saveAllBtn').onclick=saveAll;

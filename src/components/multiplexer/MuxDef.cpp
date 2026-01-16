@@ -3,7 +3,7 @@
 
 namespace Components {
 
-bool Mux::validateSigPin(uint8_t gpio) {
+bool MuxBase::validateSigPin(uint8_t gpio) {
     return PinMapper::hasAdc(gpio);
 }
 

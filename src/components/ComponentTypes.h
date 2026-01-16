@@ -46,6 +46,7 @@ struct ComponentConfig {
     uint16_t rtpNoteSweepAutoOffDelay; // Délai auto-off en ms (0 = désactivé, max 65535)
     char btnMode[16];     // Mode bouton: "pulse", "press_release", "toggle"
     char btnPulseTiming[16]; // Timing pour mode pulse: "press" ou "release"
+    char ledMode[16];     // Mode LED: "onoff", "pwm"
     uint8_t filter_intensity; // Intensité du filtrage (1-10): 1=rapide, 10=stable (défaut: 5)
 };
 

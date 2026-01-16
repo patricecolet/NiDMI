@@ -161,7 +161,7 @@ sync_files() {
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
-    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/input,components/output,config,hardware,managers,midi,network,osc,processors,server,ui,utils}
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,config,hardware,managers,midi,network,osc,processors,server,ui,utils}
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -175,10 +175,10 @@ sync_files() {
     cp -f $REPO_DIR/src/api/*.h $ARDUINO_LIB_DIR/src/api/ 2>/dev/null || true
     cp -f $REPO_DIR/src/components/*.h $ARDUINO_LIB_DIR/src/components/ 2>/dev/null || true
     cp -f $REPO_DIR/src/components/*.cpp $ARDUINO_LIB_DIR/src/components/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/input/*.h $ARDUINO_LIB_DIR/src/components/input/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/input/*.cpp $ARDUINO_LIB_DIR/src/components/input/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/output/*.h $ARDUINO_LIB_DIR/src/components/output/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/output/*.cpp $ARDUINO_LIB_DIR/src/components/output/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/basic/*.h $ARDUINO_LIB_DIR/src/components/basic/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/basic/*.cpp $ARDUINO_LIB_DIR/src/components/basic/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/multiplexer/*.h $ARDUINO_LIB_DIR/src/components/multiplexer/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/multiplexer/*.cpp $ARDUINO_LIB_DIR/src/components/multiplexer/ 2>/dev/null || true
     cp -f $REPO_DIR/src/config/*.cpp $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
     cp -f $REPO_DIR/src/config/*.h $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
     cp -f $REPO_DIR/src/hardware/*.cpp $ARDUINO_LIB_DIR/src/hardware/ 2>/dev/null || true

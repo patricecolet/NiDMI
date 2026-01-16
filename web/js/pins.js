@@ -21,8 +21,11 @@ function pType(lbl){
   if(caps.bus.spi && (gpio === caps.bus.spi.mosi || gpio === caps.bus.spi.miso || gpio === caps.bus.spi.sck)) return 'spi';
  }
  
- // Utiliser le flag adc du backend (caps.adc ou pin.adc selon la structure)
- if(pin.adc || pin.caps?.adc) return 'analog';
+ // Une pin est analogique seulement si elle commence par "A" ET a ADC
+ // Sinon, même si elle a ADC, elle est considérée comme digitale (ex: ESP32-C3 où certaines pins sont les deux)
+ if(lbl && lbl.startsWith('A') && (pin.caps?.adc || pin.adc)) {
+  return 'analog';
+ }
  
  return 'digital';
 }
@@ -30,17 +33,94 @@ function pType(lbl){
 function getRoleDisplayLabel(role){
  if(!role) return '';
  
- // Extraire l'ID de base (pour MUX: mux:HC4067 -> mux)
- const baseRole = role.includes(':') ? role.split(':')[0] : role;
+ // Migrer les anciens formats si nécessaire
+ const migratedRole = typeof migrateRole === 'function' ? migrateRole(role) : role;
  
  // Utiliser les définitions du backend
  if(typeof getComponentDefinition === 'function') {
-  const def = getComponentDefinition(baseRole);
+  const def = getComponentDefinition(migratedRole);
   if(def) return def.displayName;
  }
  
  // Fallback: retourner le rôle tel quel
  return role;
+}
+
+/**
+ * Remplace les variables dans un template avec les valeurs de la config
+ * @param {string} template - Template avec variables (ex: "CC#{cc}", "Note {note}")
+ * @param {Object} cfg - Configuration du composant
+ * @returns {string} Texte avec variables remplacées
+ */
+function replaceTemplate(template, cfg, def) {
+ if(!template) return '';
+ 
+ // Utiliser le mapping du backend si disponible
+ let valueMappings = {};
+ if(def && def.statusValueMappings) {
+  try {
+   valueMappings = JSON.parse(def.statusValueMappings);
+  } catch(e) {
+   console.warn('Erreur parsing statusValueMappings:', e);
+  }
+ }
+ 
+ // Remplacer les variables {variable} avec les valeurs de cfg
+ return template.replace(/\{(\w+)\}/g, (match, key) => {
+  const value = cfg[key];
+  
+  // Si la valeur est undefined ou null, utiliser une valeur par défaut selon la clé
+  if(value === undefined || value === null) {
+   if(key === 'cc') return '7';
+   if(key === 'note') return '60';
+   if(key === 'pc') return '0';
+   return '';
+  }
+  
+  // Vérifier si on a un mapping pour cette clé (depuis le backend)
+  if(valueMappings[key] && valueMappings[key][value]) {
+   return valueMappings[key][value];
+  }
+  
+  return String(value);
+ });
+}
+
+/**
+ * Génère le texte de statut d'un composant en utilisant les templates du backend
+ * @param {Object} def - Définition du composant depuis le backend
+ * @param {Object} cfg - Configuration du composant
+ * @param {string} pinLabel - Label de la pin (pour les bus)
+ * @returns {string} Texte de statut formaté
+ */
+function getComponentStatusText(def, cfg, pinLabel) {
+ if(!def || !cfg) return '';
+ 
+ // Si rtpType est défini, utiliser le template du message MIDI
+ if(cfg.rtpType && def.midiMessages && Array.isArray(def.midiMessages)) {
+  const msg = def.midiMessages.find(m => m.displayName === cfg.rtpType);
+  if(msg && msg.statusTemplate) {
+   return replaceTemplate(msg.statusTemplate, cfg, def);
+  }
+ }
+ 
+ // Cas spéciaux pour les bus (UART, I2C, SPI)
+ // Ces composants n'ont pas de définition standard, on les gère ici
+ if(cfg.role === 'uart' && typeof caps !== 'undefined' && caps) {
+  const pin = caps.pins?.find(p => p.label === pinLabel);
+  if(pin && caps.bus?.uart) {
+   return pin.gpio === caps.bus.uart.tx ? 'TX' : 'RX';
+  }
+ }
+ 
+ // Si pas de rtpType mais qu'on a un statusTextTemplate, l'utiliser
+ // (ex: pour LED avec ledMode, le backend pourrait fournir un template)
+ if(def.statusTextTemplate) {
+  return replaceTemplate(def.statusTextTemplate, cfg, def);
+ }
+ 
+ // Fallback: utiliser le displayName
+ return def.displayName || '';
 }
 
 /**
@@ -53,44 +133,18 @@ function getRoleDisplayLabel(role){
 function stat(cfg, pinLabel){
  if(!cfg || !cfg.role) return '';
  
- // Extraire l'ID de base (mux:HC4067 -> mux)
- const baseRole = cfg.role.includes(':') ? cfg.role.split(':')[0] : cfg.role;
+ // Migrer les anciens formats si nécessaire
+ const migratedRole = typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role;
  
  // Obtenir la définition du composant depuis le backend
- const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(baseRole) : null;
+ const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(migratedRole) : null;
  
- // Si le composant supporte MIDI et est activé
- if(def && def.supportsMidi && cfg.rtpEnabled) {
-  // Formatage basé sur le type de message MIDI
-  const type = cfg.rtpType;
-  if(type === 'Control Change') return `CC#${cfg.rtpCc||7}`;
-  if(type === 'Note') return `Note ${cfg.rtpNote||60}`;
-  if(type === 'Program Change') return `PC#${cfg.rtpPc||0}`;
-  if(type === 'Pitch Bend') return 'Pitch Bend';
-  if(type === 'Aftertouch (Channel)') return 'Aftertouch';
-  if(type === 'Note + vélocité') return `Note ${cfg.rtpNote||60} +vel`;
-  if(type === 'Note (balayage)') return `Note ${cfg.rtpNote||60} scan`;
-  if(type === 'Clock') return 'Clock';
-  if(type === 'Tap Tempo') return 'Tap Tempo';
-  return type || 'MIDI';
+ // Utiliser la fonction générique pour générer le texte de statut
+ if(def && typeof getComponentStatusText === 'function') {
+  return getComponentStatusText(def, cfg, pinLabel);
  }
  
- // Cas spéciaux pour les composants sans MIDI activé
- if(baseRole === 'potentiometer' && !cfg.rtpEnabled) return 'Raw';
- if(baseRole === 'button' && !cfg.rtpEnabled) return 'Digital';
- if(baseRole === 'led') return cfg.ledMode === 'pwm' ? 'PWM' : 'On/Off';
- 
- // Pour les bus, utiliser caps pour déterminer la pin spécifique
- if(baseRole === 'uart') {
-  const pin = caps?.pins?.find(p => p.label === pinLabel);
-  if(pin && caps?.bus?.uart) {
-   return pin.gpio === caps.bus.uart.tx ? 'TX' : 'RX';
-  }
- }
- 
- // Utiliser le displayName du backend si disponible
- if(def) return def.displayName;
- 
+ // Fallback si les définitions ne sont pas disponibles
  return cfg.role || '';
 }
 
@@ -115,6 +169,15 @@ function setOptions(sel,options,pre=0){
     if(shouldSelect) selectedValue=groupKey;
     html+=`<option value="${groupKey}" ${shouldSelect?'selected':''}>${group}</option>`;
     if(isFirst) isFirst=false;
+   }else if(typeof group==='object'&&group.label){
+    // Objet avec label et disabled
+    // Ne pas sélectionner les éléments désactivés comme première valeur
+    if(firstValue===null && !group.disabled) firstValue=groupKey;
+    const shouldSelect=(pre===0&&isFirst&&!group.disabled)||(typeof pre==='string'&&groupKey===pre);
+    if(shouldSelect) selectedValue=groupKey;
+    const disabled=group.disabled?'disabled':'';
+    html+=`<option value="${groupKey}" ${shouldSelect?'selected':''} ${disabled}>${group.label}</option>`;
+    if(isFirst&&!group.disabled) isFirst=false;
    }else if(group.items&&Array.isArray(group.items)){
     html+=`<optgroup label="${group.label}">`;
     group.items.forEach((item)=>{
@@ -170,8 +233,8 @@ function updateBusVisuals(){
   
   // Pour les composants complexes, utiliser les additionalPins du backend
   if(cfg && cfg.role && typeof getComponentDefinition === 'function') {
-   const baseRole = cfg.role.includes(':') ? cfg.role.split(':')[0] : cfg.role;
-   const def = getComponentDefinition(baseRole);
+   const migratedRole = typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role;
+   const def = getComponentDefinition(migratedRole);
    
    if(def && def.additionalPins && def.additionalPinCount > 0) {
     def.additionalPins.forEach(pinDef => {
@@ -493,14 +556,16 @@ function updatePinsList(){
   if(lbl.startsWith('M')) return;
   
   // Pour les rôles MUX : afficher comme MUX si pas déjà dans muxList
-  if(cfg.role && cfg.role.startsWith('mux:')){
+  const role = typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role;
+  if(role === 'hc4067' || role === 'hc4051'){
    if(caps && caps.pins){
     const pin=caps.pins.find(p=>p.label===lbl);
     // Si ce GPIO est déjà dans un MUX sauvegardé, ne pas afficher
     if(pin && savedMuxSigGpios.has(parseInt(pin.gpio))) return;
     
     // Afficher comme MUX temporaire (non sauvegardé)
-    const muxType=cfg.role.split(':')[1]||'HC4067';
+    const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
+    const muxType = def ? def.displayName : role;
     const muxId=$('#muxId')?$('#muxId').value:'0';
     const it=document.createElement('div');
     it.className='item mux';
@@ -558,9 +623,16 @@ function updatePinsList(){
  // Ajouter les multiplexeurs sauvegardés à la liste (depuis muxList)
  if(typeof muxList !== 'undefined' && Array.isArray(muxList)){
   muxList.forEach(mux=>{
+   // Trouver le type de MUX depuis les définitions (par défaut hc4067)
+   const muxDefs = typeof componentDefinitions !== 'undefined' && componentDefinitions 
+    ? componentDefinitions.filter(d => d.family === 1 && d.implemented)
+    : [];
+   const firstMux = muxDefs.length > 0 ? muxDefs[0] : null;
+   const muxType = firstMux ? firstMux.displayName : 'MUX';
+   const muxChannels = firstMux && firstMux.id === 'hc4067' ? '16 canaux' : (firstMux && firstMux.id === 'hc4051' ? '8 canaux' : '');
    const it=document.createElement('div');
    it.className='item mux';
-   it.innerHTML=`<span class="lbl">MUX${mux.id}</span><span class="role">HC4067</span><span class="stat">16 canaux</span><button class="del-btn">×</button>`;
+   it.innerHTML=`<span class="lbl">MUX${mux.id}</span><span class="role">${muxType}</span><span class="stat">${muxChannels}</span><button class="del-btn">×</button>`;
    it.onclick=()=>{
     // Trouver le pin SIG correspondant et le sélectionner
     if(caps&&caps.pins&&mux.sig!==undefined){
@@ -575,10 +647,17 @@ function updatePinsList(){
       cur=sigPin.label;
       $('#selPin').textContent=sigPin.label;
       if($('#funcSelect')){
-       // Récupérer le premier variant implémenté du MUX depuis le backend
-       const muxDef = typeof getComponentDefinition === 'function' ? getComponentDefinition('mux') : null;
-       const firstVariant = muxDef?.variants?.find(v => v.implemented);
-       $('#funcSelect').value = firstVariant ? `mux:${firstVariant.id}` : 'mux:HC4067';
+       // Récupérer le premier multiplexeur implémenté depuis le backend
+       const muxDefs = typeof componentDefinitions !== 'undefined' && componentDefinitions 
+        ? componentDefinitions.filter(d => d.family === 1 && d.implemented)
+        : [];
+       const firstMux = muxDefs.length > 0 ? muxDefs[0] : null;
+       if(firstMux && $('#funcSelect')){
+        // Sélectionner la famille MULTIPLEXER
+        if($('#familySelect')) $('#familySelect').value = 1;
+        // Sélectionner le composant
+        $('#funcSelect').value = firstMux.id;
+       }
        if(typeof updFunc === 'function') updFunc(sigPin.label);
       }
       if(typeof loadMuxConfigIntoForm === 'function') loadMuxConfigIntoForm(mux);
