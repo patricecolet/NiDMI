@@ -2,10 +2,21 @@
 
 function showRoleCards(role){
  const b=$('#cardBtn'), l=$('#cardLed'), p=$('#cardPot'), m=$('#cardMux');
- if(b) b.style.display=(role==='button')?'block':'none';
- if(l) l.style.display=(role==='led')?'block':'none';
- if(p) p.style.display=(role==='potentiometer')?'block':'none';
- if(m) m.style.display=(role.startsWith('mux:'))?'block':'none';
+ 
+ // Masquer toutes les cartes par défaut
+ if(b) b.style.display='none';
+ if(l) l.style.display='none';
+ if(p) p.style.display='none';
+ if(m) m.style.display='none';
+ 
+ // Afficher la carte correspondante
+ if(role==='button' && b) b.style.display='block';
+ else if(role==='led' && l) l.style.display='block';
+ else if(role==='potentiometer' && p) p.style.display='block';
+ else if(role && role.startsWith('mux:') && m) m.style.display='block';
+ 
+ // Pour les composants non implémentés, on pourrait afficher un message
+ // Pour l'instant, on masque simplement toutes les cartes
 }
 
 function updFunc(lbl){
@@ -19,33 +30,95 @@ function updFunc(lbl){
  const isSPI=(lbl==='MOSI'||lbl==='MISO'||lbl==='SCK');
  const isUART=(lbl==='TX'||lbl==='RX');
  const isMuxPin=lbl.startsWith('M');
- if(/^A\d+$/.test(lbl)||isMuxPin){
-  // Vérifier la disponibilité des pins d'adressage pour le multiplexeur
-  const pin=caps?.pins?.find(p=>p.label===lbl);
-  const muxAvailable=pin?areMuxAddressPinsAvailable(pin.gpio):false;
-  setOptions(sel,{
-   'potentiometer':'Potentiomètre',
-   'mux':{
-    label:'Multiplexeur Analogique',
-    items:[
-     {value:'mux:HC4067',label:'HC4067 (16 canaux)',disabled:!muxAvailable},
-     {value:'mux:HC4051',label:'HC4051 (8 canaux)',disabled:true}
-    ]
+ 
+ // Gérer les rôles spéciaux (bus)
+ if(isI2C){
+  setOptions(sel,{'i2c':'I2C'},0);
+  showRoleCards(sel.value||'');
+  updateRtpForRole(sel.value||'');
+  return;
+ }
+ if(isSPI){
+  setOptions(sel,{'spi':'SPI'},0);
+  showRoleCards(sel.value||'');
+  updateRtpForRole(sel.value||'');
+  return;
+ }
+ if(isUART){
+  setOptions(sel,{'uart':'UART'},0);
+  showRoleCards(sel.value||'');
+  updateRtpForRole(sel.value||'');
+  return;
+ }
+ 
+ // Déterminer le type de pin pour les composants dynamiques
+ let pinType = null;
+ const pin = caps?.pins?.find(p => p.label === lbl);
+ 
+ if(/^A\d+$/.test(lbl) || isMuxPin) {
+  pinType = 0; // PIN_ANALOG
+ } else if(/^D\d+$/.test(lbl)) {
+  // Vérifier si c'est une pin PWM pour déterminer le type
+  if(pin && pin.has_pwm) {
+   pinType = 3; // PIN_PWM
+  } else {
+   pinType = 1; // PIN_DIGITAL
+  }
+ }
+ 
+ // Générer les options dynamiquement depuis les définitions
+ const options = {};
+ 
+ if(pinType !== null && typeof getComponentsForPinType === 'function') {
+  const compatibleComponents = getComponentsForPinType(pinType, true); // implementedOnly = true
+  
+  compatibleComponents.forEach(def => {
+   // Gestion spéciale pour MUX (composant complexe)
+   if(def.id === 'mux' && pinType === 0) {
+    const muxAvailable = pin ? areMuxAddressPinsAvailable(pin.gpio) : false;
+    options['mux'] = {
+     label: 'Multiplexeur Analogique',
+     items: [
+      {value: 'mux:HC4067', label: 'HC4067 (16 canaux)', disabled: !muxAvailable},
+      {value: 'mux:HC4051', label: 'HC4051 (8 canaux)', disabled: true} // Pas encore implémenté
+     ]
+    };
+   } else {
+    // Composants simples : utiliser displayName depuis la définition
+    // Si le composant n'est pas implémenté, on ne l'ajoute pas aux options pour l'instant
+    // (on pourrait l'ajouter comme disabled dans une version future)
+    if(def.implemented) {
+     options[def.id] = def.displayName;
+    }
    }
-  },0);
- } else if(/^D\d+$/.test(lbl) && !isI2C && !isSPI && !isUART){
- setOptions(sel,{
-  'button':'Bouton',
-  'led':'LED'
- },0);
- } else if(isI2C){
- setOptions(sel,{'i2c':'I2C'},0);
- } else if(isSPI){
- setOptions(sel,{'spi':'SPI'},0);
- } else if(isUART){
- setOptions(sel,{'uart':'UART'},0);
+  });
+  
+  // Pour l'instant, on n'affiche pas les composants non implémentés
+  // (on pourrait les ajouter avec disabled=true dans une version future)
  } else {
- setOptions(sel,[],0);
+  // Fallback si les définitions ne sont pas chargées (valeur par défaut)
+  if(pinType === 0) {
+   const muxAvailable = pin ? areMuxAddressPinsAvailable(pin.gpio) : false;
+   options['potentiometer'] = 'Potentiomètre';
+   options['mux'] = {
+    label: 'Multiplexeur Analogique',
+    items: [
+     {value: 'mux:HC4067', label: 'HC4067 (16 canaux)', disabled: !muxAvailable},
+     {value: 'mux:HC4051', label: 'HC4051 (8 canaux)', disabled: true}
+    ]
+   };
+  } else if(pinType === 1 || pinType === 3) {
+   options['button'] = 'Bouton';
+   if(pinType === 3) {
+    options['led'] = 'LED';
+   }
+  }
+ }
+ 
+ if(Object.keys(options).length > 0) {
+  setOptions(sel, options, 0);
+ } else {
+  setOptions(sel, [], 0);
  }
  showRoleCards(sel.value||'');
  updateRtpForRole(sel.value||'');

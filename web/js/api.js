@@ -154,9 +154,132 @@ function initForms(){
  });
 }
 
+// Variable globale pour stocker les définitions de composants
+let componentDefinitions = [];
+
+/**
+ * Charge les définitions de composants depuis l'API
+ * @returns {Promise<Array>} Tableau des définitions de composants
+ */
+async function loadComponentDefinitions(){
+ try {
+  const r=await fetch('/api/components/definitions');
+  if(!r.ok) {
+   console.warn('Erreur chargement définitions composants:', r.status);
+   return [];
+  }
+  componentDefinitions = await r.json();
+  console.log('[loadComponentDefinitions] Composants chargés:', componentDefinitions.length);
+  return componentDefinitions;
+ } catch(err) {
+  console.log('Erreur chargement définitions composants:', err);
+  return [];
+ }
+}
+
+/**
+ * Trouve une définition de composant par son ID
+ * @param {string} componentId - ID du composant (ex: "potentiometer")
+ * @returns {Object|null} Définition du composant ou null
+ */
+function getComponentDefinition(componentId) {
+ if(!componentDefinitions || componentDefinitions.length === 0) return null;
+ return componentDefinitions.find(def => def.id === componentId) || null;
+}
+
+/**
+ * Filtre les composants selon le type de pin
+ * @param {number} pinType - Type de pin (0=ANALOG, 1=DIGITAL, 2=ANALOG_OR_DIGITAL, 3=PWM)
+ * @param {boolean} implementedOnly - Si true, retourne uniquement les composants implémentés
+ * @returns {Array} Liste des composants compatibles
+ */
+function getComponentsForPinType(pinType, implementedOnly = true) {
+ if(!componentDefinitions || componentDefinitions.length === 0) return [];
+ 
+ return componentDefinitions.filter(def => {
+  // Filtrer par implémenté si demandé
+  if(implementedOnly && !def.implemented) return false;
+  
+  // Vérifier la compatibilité du type de pin
+  switch(pinType) {
+   case 0: // PIN_ANALOG
+    return def.pinType === 0 || def.pinType === 2; // ANALOG ou ANALOG_OR_DIGITAL
+   case 1: // PIN_DIGITAL
+    return def.pinType === 1 || def.pinType === 2; // DIGITAL ou ANALOG_OR_DIGITAL
+   case 3: // PIN_PWM
+    return def.pinType === 3; // PWM uniquement
+   default:
+    return false;
+  }
+ });
+}
+
 async function loadCaps(){
  const r=await fetch('/api/pins/caps');
  caps=await r.json();
+}
+
+// Variable pour stocker les GPIOs utilisés (cache)
+let cachedUsedGpios = new Set();
+
+/**
+ * Charge les GPIOs utilisés depuis l'API backend
+ * C'est la source de vérité unique pour le grisage
+ * @returns {Promise<Set<number>>} Set des GPIOs utilisés
+ */
+async function loadUsedGpiosFromBackend() {
+ try {
+  const r = await fetch('/api/components/used-gpios');
+  if(!r.ok) {
+   console.warn('Erreur chargement GPIOs utilisés:', r.status);
+   return new Set();
+  }
+  const data = await r.json();
+  cachedUsedGpios = new Set(data.gpios || []);
+  console.log('[loadUsedGpiosFromBackend] GPIOs utilisés:', Array.from(cachedUsedGpios));
+  return cachedUsedGpios;
+ } catch(err) {
+  console.warn('Erreur chargement GPIOs utilisés:', err);
+  return new Set();
+ }
+}
+
+/**
+ * Retourne les GPIOs utilisés (depuis le cache)
+ * @returns {Set<number>} Set des GPIOs utilisés
+ */
+function getCachedUsedGpios() {
+ return cachedUsedGpios;
+}
+
+/**
+ * Ajoute les GPIOs d'un composant en cours d'édition au cache
+ * Utilisé pour le grisage pendant l'édition avant sauvegarde
+ * @param {Object} config - Configuration du composant en cours d'édition
+ * @returns {Set<number>} Set mis à jour des GPIOs utilisés
+ */
+function getUsedGpiosWithEditing(editingConfig) {
+ const gpios = new Set(cachedUsedGpios);
+ 
+ if(!editingConfig) return gpios;
+ 
+ // Ajouter le GPIO principal
+ if(editingConfig.gpio !== undefined && editingConfig.gpio !== null) {
+  gpios.add(parseInt(editingConfig.gpio));
+ }
+ 
+ // Pour les composants complexes (MUX), ajouter les pins additionnelles
+ if(editingConfig.role && editingConfig.role.startsWith('mux:')) {
+  if(editingConfig.s0 !== undefined) gpios.add(parseInt(editingConfig.s0));
+  if(editingConfig.s1 !== undefined) gpios.add(parseInt(editingConfig.s1));
+  if(editingConfig.s2 !== undefined) gpios.add(parseInt(editingConfig.s2));
+  if(editingConfig.s3 !== undefined) gpios.add(parseInt(editingConfig.s3));
+  if(editingConfig.en !== undefined && editingConfig.en !== 255) {
+   gpios.add(parseInt(editingConfig.en));
+  }
+ }
+ 
+ return gpios;
 }
 
 function migrateRole(role){
@@ -267,6 +390,10 @@ async function saveAll(){
  return fetch('/api/pins/delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
  });
  await Promise.all(deletePromises);
+ 
+ // Rafraîchir le cache des GPIOs utilisés depuis le backend
+ await loadUsedGpiosFromBackend();
+ updateBusVisuals();
  
  msg.textContent='Toutes les configurations enregistrées';
  msg.style.color='#10b981';

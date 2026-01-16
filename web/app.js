@@ -1,5 +1,5 @@
 /* Initialisation principale quand le DOM est prêt */
-document.addEventListener('DOMContentLoaded', ()=>{
+document.addEventListener('DOMContentLoaded', async ()=>{
  /* Initialiser la navigation par onglets */
  initTabs();
  /* Charger l'état du serveur */
@@ -14,6 +14,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
  initForms();
  /* Initialiser le formulaire de multiplexeur */
  initMuxForm();
+ 
+ /* Charger les définitions de composants en arrière-plan (ne pas bloquer) */
+ loadComponentDefinitions().catch(err => {
+  console.warn('Erreur chargement définitions composants:', err);
+ });
+ 
  /* Charger les capacités de la carte, puis dessiner le board */
  loadCaps().then(async ()=>{
   /* Dessiner le board SVG avec les pins */
@@ -22,6 +28,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
   await loadConfiguredPins();
   /* Charger la liste des multiplexeurs */
   await loadMuxList();
+  /* Charger les GPIOs utilisés depuis le backend */
+  await loadUsedGpiosFromBackend();
   /* Mettre à jour les visuels après chargement complet */
   updateBusVisuals();
  });

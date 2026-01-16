@@ -12,68 +12,123 @@ void ComponentRegistry::init() {
     ValidationRegistry::init();
     
     // Enregistrer tous les composants disponibles
-    // Format: id, displayName, icon, type, pinType, implemented, isComplex
     
     // === COMPOSANTS D'ENTRÉE ===
     
-    // Potentiomètre - composant simple, pin analogique
-    definitions_.push_back({
-        "potentiometer",
-        "Potentiomètre",
-        nullptr,  // pas d'icône pour l'instant
-        ComponentType::POTENTIOMETER,
-        PinType::PIN_ANALOG,
-        true,     // implémenté
-        false     // simple
-    });
+    // Potentiomètre - composant simple, 1 pin analogique
+    {
+        ComponentDefinition def = {};
+        def.id = "potentiometer";
+        def.displayName = "Potentiomètre";
+        def.icon = nullptr;
+        def.type = ComponentType::POTENTIOMETER;
+        def.pinType = PinType::PIN_ANALOG;
+        def.implemented = true;
+        def.isComplex = false;
+        def.additionalPinCount = 0;  // Pas de pins additionnelles
+        definitions_.push_back(def);
+    }
     
-    // Bouton - composant simple, pin digitale
-    definitions_.push_back({
-        "button",
-        "Bouton",
-        nullptr,
-        ComponentType::BUTTON,
-        PinType::PIN_DIGITAL,
-        true,     // implémenté
-        false     // simple
-    });
+    // Bouton - composant simple, 1 pin digitale
+    {
+        ComponentDefinition def = {};
+        def.id = "button";
+        def.displayName = "Bouton";
+        def.icon = nullptr;
+        def.type = ComponentType::BUTTON;
+        def.pinType = PinType::PIN_DIGITAL;
+        def.implemented = true;
+        def.isComplex = false;
+        def.additionalPinCount = 0;
+        definitions_.push_back(def);
+    }
     
-    // MUX - composant complexe, pin analogique (SIG)
-    definitions_.push_back({
-        "mux",
-        "Multiplexeur",
-        nullptr,
-        ComponentType::MUX,
-        PinType::PIN_ANALOG,
-        true,     // implémenté
-        true      // complexe (nécessite MuxManager)
-    });
+    // MUX - composant complexe, pin analogique (SIG) + 4 pins digitales (S0-S3) + 1 optionnelle (EN)
+    {
+        ComponentDefinition def = {};
+        def.id = "mux";
+        def.displayName = "Multiplexeur";
+        def.icon = nullptr;
+        def.type = ComponentType::MUX;
+        def.pinType = PinType::PIN_ANALOG;  // Pin principale (SIG)
+        def.implemented = true;
+        def.isComplex = true;
+        def.additionalPinCount = 5;  // S0, S1, S2, S3, EN
+        
+        // Pins d'adresse (obligatoires)
+        def.additionalPins[0] = {"s0", "S0", PinType::PIN_DIGITAL, false, 255};
+        def.additionalPins[1] = {"s1", "S1", PinType::PIN_DIGITAL, false, 255};
+        def.additionalPins[2] = {"s2", "S2", PinType::PIN_DIGITAL, false, 255};
+        def.additionalPins[3] = {"s3", "S3", PinType::PIN_DIGITAL, false, 255};
+        // Pin Enable (optionnelle)
+        def.additionalPins[4] = {"en", "Enable", PinType::PIN_DIGITAL, true, 255};
+        
+        definitions_.push_back(def);
+    }
     
     // === COMPOSANTS DE SORTIE ===
     
-    // LED - composant simple, pin PWM
-    definitions_.push_back({
-        "led",
-        "LED",
-        nullptr,
-        ComponentType::LED,
-        PinType::PIN_PWM,
-        true,     // implémenté
-        false     // simple
-    });
+    // LED - composant simple, 1 pin PWM
+    {
+        ComponentDefinition def = {};
+        def.id = "led";
+        def.displayName = "LED";
+        def.icon = nullptr;
+        def.type = ComponentType::LED;
+        def.pinType = PinType::PIN_PWM;
+        def.implemented = true;
+        def.isComplex = false;
+        def.additionalPinCount = 0;
+        definitions_.push_back(def);
+    }
     
-    // === COMPOSANTS FUTURS (non implémentés, grisés dans l'UI) ===
+    // === BUS (composants spéciaux avec pins fixes) ===
     
-    // Exemple: Encoder rotatif - à implémenter plus tard
-    // definitions_.push_back({
-    //     "encoder",
-    //     "Encodeur",
-    //     nullptr,
-    //     ComponentType::ENCODER,  // à ajouter dans ComponentType enum
-    //     PinType::DIGITAL,
-    //     false,    // pas encore implémenté
-    //     false     // simple
-    // });
+    // I2C - 2 pins fixes (SDA, SCL)
+    {
+        ComponentDefinition def = {};
+        def.id = "i2c";
+        def.displayName = "I2C";
+        def.icon = nullptr;
+        def.type = ComponentType::BUTTON;  // Type générique pour l'instant
+        def.pinType = PinType::PIN_DIGITAL;
+        def.implemented = true;
+        def.isComplex = true;  // Complexe car multi-pin
+        def.additionalPinCount = 1;  // SCL est la pin additionnelle
+        def.additionalPins[0] = {"scl", "SCL", PinType::PIN_DIGITAL, false, 255};
+        definitions_.push_back(def);
+    }
+    
+    // SPI - 3 pins fixes (MOSI, MISO, SCK)
+    {
+        ComponentDefinition def = {};
+        def.id = "spi";
+        def.displayName = "SPI";
+        def.icon = nullptr;
+        def.type = ComponentType::BUTTON;  // Type générique pour l'instant
+        def.pinType = PinType::PIN_DIGITAL;
+        def.implemented = true;
+        def.isComplex = true;
+        def.additionalPinCount = 2;  // MISO et SCK sont les pins additionnelles
+        def.additionalPins[0] = {"miso", "MISO", PinType::PIN_DIGITAL, false, 255};
+        def.additionalPins[1] = {"sck", "SCK", PinType::PIN_DIGITAL, false, 255};
+        definitions_.push_back(def);
+    }
+    
+    // UART - 2 pins fixes (TX, RX)
+    {
+        ComponentDefinition def = {};
+        def.id = "uart";
+        def.displayName = "UART";
+        def.icon = nullptr;
+        def.type = ComponentType::BUTTON;  // Type générique pour l'instant
+        def.pinType = PinType::PIN_DIGITAL;
+        def.implemented = true;
+        def.isComplex = true;
+        def.additionalPinCount = 1;  // RX est la pin additionnelle
+        def.additionalPins[0] = {"rx", "RX", PinType::PIN_DIGITAL, false, 255};
+        definitions_.push_back(def);
+    }
     
     initialized_ = true;
 }

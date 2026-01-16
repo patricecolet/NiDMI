@@ -10,6 +10,18 @@ function pType(lbl){
 
 function getRoleDisplayLabel(role){
  if(!role) return '';
+ 
+ // Utiliser les définitions dynamiques si disponibles
+ if(typeof getComponentDefinition === 'function') {
+  // Pour les rôles MUX, extraire l'ID de base
+  const baseRole = role.startsWith('mux:') ? 'mux' : role;
+  const def = getComponentDefinition(baseRole);
+  if(def) {
+   return def.displayName;
+  }
+ }
+ 
+ // Fallback vers les valeurs codées en dur
  if(role==='potentiometer') return 'Potentiomètre';
  if(role==='button') return 'Bouton';
  if(role==='led') return 'LED';
@@ -96,48 +108,66 @@ function setOptions(sel,options,pre=0){
 }
 
 function updateBusVisuals(){
+ // 1. Enlever tous les grisages
  Object.keys(prect).forEach(lbl=>{
- const r = prect[lbl];
- if(!r) return;
- r.classList.remove('busDisabled');
+  const r = prect[lbl];
+  if(!r) return;
+  r.classList.remove('busDisabled');
  });
  
- if(pcfg['I2C']){
- ['SDA','SCL','D4','D5'].forEach(lbl=>{
- const r = prect[lbl];
- if(!r) return;
- r.classList.add('busDisabled');
- });
+ if(!caps || !caps.pins) return;
+ 
+ // 2. Obtenir les GPIOs utilisés depuis le cache backend
+ let usedGpios = new Set();
+ 
+ if(typeof getCachedUsedGpios === 'function') {
+  usedGpios = new Set(getCachedUsedGpios());
  }
  
- if(pcfg['SPI']){
- ['MOSI','MISO','SCK','D8','D9','D10'].forEach(lbl=>{
- const r = prect[lbl];
- if(!r) return;
- r.classList.add('busDisabled');
+ // 3. Ajouter les GPIOs de l'édition en cours (pas encore sauvegardés)
+ // Parcourir pcfg pour les composants non sauvegardés
+ Object.keys(pcfg).forEach(lbl => {
+  const cfg = pcfg[lbl];
+  const pin = caps.pins.find(p => p.label === lbl);
+  if(!pin) return;
+  
+  const gpio = parseInt(pin.gpio);
+  if(!isNaN(gpio)) usedGpios.add(gpio);
+  
+  // Pour les MUX, ajouter les pins d'adresse depuis le formulaire
+  if(cfg && cfg.role && cfg.role.startsWith('mux:')) {
+   const s0 = $('#muxS0') ? parseInt($('#muxS0').value) : NaN;
+   const s1 = $('#muxS1') ? parseInt($('#muxS1').value) : NaN;
+   const s2 = $('#muxS2') ? parseInt($('#muxS2').value) : NaN;
+   const s3 = $('#muxS3') ? parseInt($('#muxS3').value) : NaN;
+   const en = $('#muxEnManual') ? parseInt($('#muxEnManual').value) : NaN;
+   
+   if(!isNaN(s0)) usedGpios.add(s0);
+   if(!isNaN(s1)) usedGpios.add(s1);
+   if(!isNaN(s2)) usedGpios.add(s2);
+   if(!isNaN(s3)) usedGpios.add(s3);
+   if(!isNaN(en) && en !== 255) usedGpios.add(en);
+  }
  });
- }
-// Griser les pins configurées ET les pins du MUX en cours d'édition
-if(typeof getUsedGpios === 'function' && caps && caps.pins){
-    const usedGpios = getUsedGpios(['muxSig', 'muxEnCheckbox', 'muxEnManual']);
-    // Créer un map GPIO -> labels
-    const gpioMap = new Map();
-    caps.pins.forEach(p=>{
-     const gpio = parseInt(p.gpio);
-     if(isNaN(gpio)) return;
-     if(!gpioMap.has(gpio)) gpioMap.set(gpio,[]);
-     gpioMap.get(gpio).push(p);
-    });
-    // Griser TOUTES les pins dont le GPIO est utilisé
-    usedGpios.forEach(gpio=>{
-     const pinsForGpio = gpioMap.get(gpio) || [];
-     pinsForGpio.forEach(pin=>{
-      if(pin && pin.label && prect[pin.label]){
-       prect[pin.label].classList.add('busDisabled');
-      }
-     });
-    });
+ 
+ // 4. Créer un map GPIO -> labels pour le grisage
+ const gpioMap = new Map();
+ caps.pins.forEach(p => {
+  const gpio = parseInt(p.gpio);
+  if(isNaN(gpio)) return;
+  if(!gpioMap.has(gpio)) gpioMap.set(gpio, []);
+  gpioMap.get(gpio).push(p);
+ });
+ 
+ // 5. Griser toutes les pins dont le GPIO est utilisé
+ usedGpios.forEach(gpio => {
+  const pinsForGpio = gpioMap.get(gpio) || [];
+  pinsForGpio.forEach(pin => {
+   if(pin && pin.label && prect[pin.label]) {
+    prect[pin.label].classList.add('busDisabled');
    }
+  });
+ });
 }
 
 function drawBoard(){
