@@ -236,10 +236,12 @@ function updateBusVisuals(){
    const migratedRole = typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role;
    const def = getComponentDefinition(migratedRole);
    
-   if(def && def.additionalPins && def.additionalPinCount > 0) {
+   if(def && def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0) {
     def.additionalPins.forEach(pinDef => {
-     // Chercher la valeur dans le formulaire via l'ID de la pin
-     const formId = 'mux' + pinDef.id.charAt(0).toUpperCase() + pinDef.id.slice(1);
+     // Construire l'ID du champ dynamiquement depuis l'ID du composant
+     // Utiliser le préfixe basé sur l'ID du composant plutôt que "mux" hardcodé
+     const prefix = def.id ? def.id : 'comp';
+     const formId = prefix + pinDef.id.charAt(0).toUpperCase() + pinDef.id.slice(1);
      const formEl = $('#' + formId);
      if(formEl) {
       const val = parseInt(formEl.value);
@@ -564,13 +566,14 @@ function updatePinsList(){
     // Si ce GPIO est déjà dans un MUX sauvegardé, ne pas afficher
     if(pin && savedMuxSigGpios.has(parseInt(pin.gpio))) return;
     
-    // Afficher comme MUX temporaire (non sauvegardé)
-    const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
-    const muxType = def ? def.displayName : role;
+    // Afficher comme composant complexe temporaire (non sauvegardé)
+    const componentType = def ? def.displayName : role;
+    // Générer un préfixe depuis l'ID du composant (ex: "hc4067" -> "HC4", "hc4051" -> "HC4")
+    const prefix = def && def.id ? def.id.toUpperCase().substring(0, 3) : 'COMP';
     const muxId=$('#muxId')?$('#muxId').value:'0';
     const it=document.createElement('div');
     it.className='item mux';
-    it.innerHTML=`<span class="lbl">MUX${muxId}</span><span class="role">${muxType}</span><span class="stat">non sauvé</span><button class="del-btn">×</button>`;
+    it.innerHTML=`<span class="lbl">${prefix}${muxId}</span><span class="role">${componentType}</span><span class="stat">non sauvé</span><button class="del-btn">×</button>`;
     it.onclick=()=>{
      if(window._selRect) window._selRect.classList.remove('selectedSquare');
      const r=prect[lbl];
@@ -621,21 +624,32 @@ function updatePinsList(){
   pl.appendChild(it);
  });
  
- // Ajouter les multiplexeurs sauvegardés à la liste (depuis muxList)
+ // Ajouter les composants complexes sauvegardés à la liste (depuis muxList)
+ // Note: muxList est un nom historique, mais il contient tous les composants complexes
  if(typeof muxList !== 'undefined' && Array.isArray(muxList)){
   muxList.forEach(mux=>{
-   // Trouver le type de MUX depuis les définitions (par défaut hc4067)
-   const muxDefs = typeof componentDefinitions !== 'undefined' && componentDefinitions 
-    ? componentDefinitions.filter(d => d.family === 1 && d.implemented)
+   // Trouver le type de composant complexe depuis les définitions
+   // Utiliser isComplex au lieu de family === 1 pour être générique
+   const complexDefs = typeof componentDefinitions !== 'undefined' && componentDefinitions 
+    ? componentDefinitions.filter(d => d.isComplex && d.implemented)
     : [];
-   const firstMux = muxDefs.length > 0 ? muxDefs[0] : null;
-   const muxType = firstMux ? firstMux.displayName : 'MUX';
-   // Extraire le nombre de canaux depuis le displayName (ex: "HC4067 (16 canaux)")
-   const muxChannels = firstMux && firstMux.displayName ? 
-    (firstMux.displayName.match(/\((\d+)\s+canaux\)/)?.[1] ? `(${firstMux.displayName.match(/\((\d+)\s+canaux\)/)[1]} canaux)` : '') : '';
+   
+   // Essayer de trouver la définition correspondante par ID ou par rôle
+   // Pour l'instant, on prend le premier composant complexe trouvé
+   // TODO: améliorer en faisant correspondre avec l'ID du mux si disponible
+   const firstComplex = complexDefs.length > 0 ? complexDefs[0] : null;
+   const componentType = firstComplex ? firstComplex.displayName : 'Complex';
+   
+   // Générer un préfixe depuis l'ID du composant (ex: "hc4067" -> "HC4")
+   const prefix = firstComplex && firstComplex.id ? firstComplex.id.toUpperCase().substring(0, 3) : 'MUX';
+   
+   // Le statut (nombre de canaux, etc.) devrait venir du backend si nécessaire
+   // Pour l'instant, on laisse vide car c'est spécifique au type de composant
+   const stat = '';
+   
    const it=document.createElement('div');
    it.className='item mux';
-   it.innerHTML=`<span class="lbl">MUX${mux.id}</span><span class="role">${muxType}</span><span class="stat">${muxChannels}</span><button class="del-btn">×</button>`;
+   it.innerHTML=`<span class="lbl">${prefix}${mux.id}</span><span class="role">${componentType}</span><span class="stat">${stat}</span><button class="del-btn">×</button>`;
    it.onclick=()=>{
     // Trouver le pin SIG correspondant et le sélectionner
     if(caps&&caps.pins&&mux.sig!==undefined){
@@ -650,16 +664,19 @@ function updatePinsList(){
       cur=sigPin.label;
       $('#selPin').textContent=sigPin.label;
       if($('#funcSelect')){
-       // Récupérer le premier multiplexeur implémenté depuis le backend
-       const muxDefs = typeof componentDefinitions !== 'undefined' && componentDefinitions 
-        ? componentDefinitions.filter(d => d.family === 1 && d.implemented)
+       // Récupérer le premier composant complexe implémenté depuis le backend
+       // Utiliser isComplex au lieu de family === 1
+       const complexDefs = typeof componentDefinitions !== 'undefined' && componentDefinitions 
+        ? componentDefinitions.filter(d => d.isComplex && d.implemented)
         : [];
-       const firstMux = muxDefs.length > 0 ? muxDefs[0] : null;
-       if(firstMux && $('#funcSelect')){
-        // Sélectionner la famille MULTIPLEXER
-        if($('#familySelect')) $('#familySelect').value = 1;
+       const firstComplex = complexDefs.length > 0 ? complexDefs[0] : null;
+       if(firstComplex && $('#funcSelect')){
+        // Sélectionner la famille depuis la définition du composant
+        if($('#familySelect') && firstComplex.family !== undefined) {
+         $('#familySelect').value = firstComplex.family;
+        }
         // Sélectionner le composant
-        $('#funcSelect').value = firstMux.id;
+        $('#funcSelect').value = firstComplex.id;
        }
        if(typeof updFunc === 'function') updFunc(sigPin.label);
       }

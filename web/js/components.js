@@ -165,8 +165,8 @@ function populateComponentSelect(familyId, pinType, pin) {
  // Créer les options pour le menu Composant
  const options = {};
  familyComponents.forEach(def => {
-  // Vérifier disponibilité MUX pour les multiplexeurs
-  if(def.family === 1 && pinType === 0) { // MULTIPLEXER
+  // Vérifier disponibilité MUX pour les composants complexes (multiplexeurs)
+  if(def.isComplex && pinType === 0) { // Composant complexe sur pin analogique
    const muxAvailable = pin ? areMuxAddressPinsAvailable(pin.gpio) : false;
    // Afficher même si non disponible si non implémenté (pour info)
    if(muxAvailable || !def.implemented) {
@@ -495,8 +495,9 @@ function getAllFieldIds() {
    if(def.isComplex && def.additionalPins && Array.isArray(def.additionalPins)) {
     def.additionalPins.forEach(additionalPin => {
      if(additionalPin.id) {
-      // ID du champ : préfixe "mux" + id en capital (ex: s0 -> muxS0)
-      const fieldId = '#mux' + additionalPin.id.charAt(0).toUpperCase() + additionalPin.id.slice(1);
+      // ID du champ : préfixe depuis l'ID du composant + id en capital (ex: s0 -> hc4067S0)
+      const prefix = def.id ? def.id : 'comp';
+      const fieldId = '#' + prefix + additionalPin.id.charAt(0).toUpperCase() + additionalPin.id.slice(1);
       if(!ids.includes(fieldId)) ids.push(fieldId);
      }
     });
@@ -944,8 +945,9 @@ async function saveMuxFromPin(){
  if(def.additionalPins && Array.isArray(def.additionalPins)) {
   def.additionalPins.forEach(additionalPin => {
    if(additionalPin.id) {
-    // ID du champ : préfixe "mux" + id en capital (ex: s0 -> muxS0)
-    const fieldId = 'mux' + additionalPin.id.charAt(0).toUpperCase() + additionalPin.id.slice(1);
+    // ID du champ : préfixe depuis l'ID du composant + id en capital (ex: s0 -> hc4067S0)
+    const prefix = def.id ? def.id : 'comp';
+    const fieldId = prefix + additionalPin.id.charAt(0).toUpperCase() + additionalPin.id.slice(1);
     const field = $('#' + fieldId);
     if(field && field.value) {
      additionalPinValues[additionalPin.id] = parseInt(field.value);
@@ -1347,8 +1349,9 @@ function generateAdditionalPins(def, containerId, currentCfg = {}) {
   wrapper.appendChild(label);
   
   const select = document.createElement('select');
-  // ID du champ : préfixe "mux" + id en capital (ex: s0 -> muxS0, en -> muxEn)
-  const fieldId = 'mux' + additionalPin.id.charAt(0).toUpperCase() + additionalPin.id.slice(1);
+  // ID du champ : préfixe depuis l'ID du composant + id en capital (ex: s0 -> hc4067S0, en -> hc4067En)
+  const prefix = def.id ? def.id : 'comp';
+  const fieldId = prefix + additionalPin.id.charAt(0).toUpperCase() + additionalPin.id.slice(1);
   select.id = fieldId;
   select.style.width = '200px';
   

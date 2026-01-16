@@ -74,24 +74,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div class="r"><label>Pin:</label><span id="selPin">-</span></div>
  <div class="r"><label>Famille:</label><select id="familySelect"></select></div>
  <div class="r"><label>Composant:</label><select id="funcSelect"></select></div>
- <div id="cardBtn" class="subcard" style="display:none;"></div>
- <div id="cardLed" class="subcard" style="display:none;"></div>
- <div id="cardPot" class="subcard" style="display:none;"></div>
-<div id="cardMux" class="subcard" style="display:none;">
-<h4 style="margin-top:0;">Configuration HC4067</h4>
-<div class="f" style="display:none;"><label>Multiplexeur::</label><select id="muxId"><option value="0">MUX0</option><option value="1">MUX1</option></select></div>
-<div class="f" style="display:none;"><label>Pin SIG (analogique):</label><select id="muxSig"></select></div>
-<div class="f"><label>Pin S0:</label><select id="muxS0"></select></div>
-<div class="f"><label>Pin S1:</label><select id="muxS1"></select></div>
-<div class="f"><label>Pin S2:</label><select id="muxS2"></select></div>
-<div class="f"><label>Pin S3:</label><select id="muxS3"></select></div>
-<div class="f"><label>Pin EN (optionnel):</label><select id="muxEnManual"><option value="255">Non connecte</option></select></div>
-<h4 style="margin-top:20px;">Configuration analogique</h4>
- <div class="f"><label>Seuil min (0-4095):</label><input type="number" id="muxMin" min="0" max="4095" value="0" style="width:100px;"></div>
- <div class="f"><label>Seuil max (0-4095):</label><input type="number" id="muxMax" min="0" max="4095" value="4095" style="width:100px;"></div>
- <div class="hint">Adresses OSC pour le calibrage: /mux[ID]/cal/min [CH] /mux[ID]/cal/max [CH] /mux[ID]/cal/reset [CH] (CH=0-15)</div>
- <div class="f"><label>Intensité filtrage (1-10):</label><input type="number" id="muxFilterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">1=rapide, 10=stable</span></div>
- </div>
+ <div id="componentFormCard" class="subcard" style="display:none;"></div>
  <h4>RTP‑MIDI</h4>
  <div id="rtpMidiSection"></div>
  <h4>OSC</h4>
@@ -108,23 +91,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div class="modal" onclick="event.stopPropagation()">
  <h3>Configuration HC4067</h3>
  <form id="muxForm">
- <div class="f"><label>Multiplexeur::</label><select id="muxId"><option value="0">MUX0</option><option value="1">MUX1</option></select></div>
-<div class="f"><label>Pin SIG (analogique):</label><select id="muxSig"></select></div>
-<div class="f"><label>Pin S0:</label><select id="muxS0"></select></div>
-<div class="f"><label>Pin S1:</label><select id="muxS1"></select></div>
-<div class="f"><label>Pin S2:</label><select id="muxS2"></select></div>
-<div class="f"><label>Pin S3:</label><select id="muxS3"></select></div>
-<div class="f"><label>Pin EN (optionnel):</label><select id="muxEnManual"><option value="255">Non connecte</option></select></div>
- <h4 style="margin-top:20px;">Configuration MIDI/OSC</h4>
- <div class="f"><label>CC de base:</label><input type="number" id="muxCcBase" min="0" max="127" value="1" style="width:100px;"></div>
- <div class="f"><label>Canal MIDI:</label><input type="number" id="muxMidiChan" min="1" max="16" value="1" style="width:100px;"></div>
- <div class="f"><label>Adresse OSC de base:</label><input type="text" id="muxOscBase" placeholder="/mux0" style="width:200px;"></div>
- <h4 style="margin-top:20px;">Configuration analogique</h4>
- <div class="f"><label>Seuil min (0-4095):</label><input type="number" id="muxMin" min="0" max="4095" value="0" style="width:100px;"></div>
- <div class="f"><label>Seuil max (0-4095):</label><input type="number" id="muxMax" min="0" max="4095" value="4095" style="width:100px;"></div>
- <div class="hint">OSC: /mux/ID/cal/min [CH] /mux/ID/cal/max [CH] /mux/ID/cal/reset [CH] (CH=0-15 comme valeur)</div>
- <div class="f"><label>OSC Format:</label><select id="muxOscFormat"><option value="float">Float (0-1)</option><option value="raw">Raw (0-4095)</option><option value="midi">MIDI (3 int)</option></select></div>
- <div class="f"><label>Intensité filtrage (1-10):</label><input type="number" id="muxFilterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">1=rapide, 10=stable</span></div>
+ <div id="muxModalFormCard"></div>
  <button type="submit" class="btn">Enregistrer</button>
  <button type="button" class="btn" style="background:#6b7280;" onclick="hideMuxForm()">Annuler</button>
  <div class="hint" id="muxMsg"></div>
