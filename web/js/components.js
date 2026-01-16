@@ -1,37 +1,30 @@
 /* Fonctions de gestion des composants et configurations */
 
 /**
- * Mapping entre ID de composant et ID de carte HTML
- * Ce mapping est nécessaire car les IDs HTML existants ne correspondent pas aux IDs backend
- */
-const cardMapping = {
- 'button': 'cardBtn',
- 'led': 'cardLed',
- 'potentiometer': 'cardPot',
- 'mux': 'cardMux'
-};
-
-/**
  * Affiche la carte de configuration correspondant au rôle sélectionné
- * Utilise les définitions du backend pour déterminer le type de carte
+ * Utilise les définitions du backend pour déterminer le cardId
  * @param {string} role - ID du rôle (ex: "potentiometer", "mux:HC4067")
  */
 function showRoleCards(role){
- // Masquer toutes les cartes par défaut
- Object.values(cardMapping).forEach(cardId => {
-  const card = $('#' + cardId);
-  if(card) card.style.display = 'none';
- });
+ // Masquer toutes les cartes en utilisant les cardId du backend
+ if(typeof componentDefinitions !== 'undefined' && componentDefinitions) {
+  componentDefinitions.forEach(def => {
+   if(def.cardId) {
+    const card = $('#' + def.cardId);
+    if(card) card.style.display = 'none';
+   }
+  });
+ }
  
  if(!role) return;
  
  // Extraire l'ID de base (mux:HC4067 -> mux)
  const baseRole = role.includes(':') ? role.split(':')[0] : role;
  
- // Afficher la carte correspondante
- const cardId = cardMapping[baseRole];
- if(cardId) {
-  const card = $('#' + cardId);
+ // Trouver la définition du composant
+ const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(baseRole) : null;
+ if(def && def.cardId) {
+  const card = $('#' + def.cardId);
   if(card) card.style.display = 'block';
  }
 }
@@ -74,15 +67,16 @@ function updFunc(lbl){
   const compatibleComponents = getComponentsForPinType(pinType, true);
   
   compatibleComponents.forEach(def => {
-   // Gestion spéciale pour MUX (composant complexe avec sous-options)
-   if(def.id === 'mux' && pinType === 0) {
+   // Composants avec variants (ex: MUX avec HC4067, HC4051)
+   if(def.variants && def.variants.length > 0 && pinType === 0) {
     const muxAvailable = pin ? areMuxAddressPinsAvailable(pin.gpio) : false;
-    options['mux'] = {
+    options[def.id] = {
      label: def.displayName,
-     items: [
-      {value: 'mux:HC4067', label: 'HC4067 (16 canaux)', disabled: !muxAvailable},
-      {value: 'mux:HC4051', label: 'HC4051 (8 canaux)', disabled: true}
-     ]
+     items: def.variants.map(v => ({
+      value: `${def.id}:${v.id}`,
+      label: v.displayName,
+      disabled: !v.implemented || !muxAvailable
+     }))
     };
    } else if(def.implemented) {
     options[def.id] = def.displayName;

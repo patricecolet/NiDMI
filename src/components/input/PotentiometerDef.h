@@ -49,6 +49,7 @@ struct Potentiometer {
         def.id = ID;
         def.displayName = DISPLAY_NAME;
         def.icon = nullptr;
+        def.cardId = "cardPot";
         def.type = TYPE;
         def.pinType = PIN_TYPE;
         def.implemented = IMPLEMENTED;
@@ -56,6 +57,7 @@ struct Potentiometer {
         def.supportsMidi = SUPPORTS_MIDI;
         def.supportsOsc = SUPPORTS_OSC;
         def.additionalPinCount = 0;
+        def.variantCount = 0;
         
         // Messages MIDI supportés
         def.midiMessageCount = 4;

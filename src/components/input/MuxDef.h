@@ -62,6 +62,7 @@ struct Mux {
         def.id = ID;
         def.displayName = DISPLAY_NAME;
         def.icon = nullptr;
+        def.cardId = "cardMux";
         def.type = TYPE;
         def.pinType = PIN_TYPE;
         def.implemented = IMPLEMENTED;
@@ -83,6 +84,11 @@ struct Mux {
         def.midiMessages[1] = {"pc", "Program Change"};
         def.midiMessages[2] = {"pitchbend", "Pitch Bend"};
         def.midiMessages[3] = {"aftertouch", "Aftertouch (Channel)"};
+        
+        // Variants de MUX disponibles
+        def.variantCount = 2;
+        def.variants[0] = {"HC4067", "HC4067 (16 canaux)", true, 16};
+        def.variants[1] = {"HC4051", "HC4051 (8 canaux)", false, 8};  // Non implémenté
         
         return def;
     }

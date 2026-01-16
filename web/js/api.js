@@ -307,14 +307,17 @@ function migrateRole(role){
  }
  
  // Fallback legacy pour compatibilité
+ // Pour Multiplexeur, récupérer le premier variant implémenté
+ if(role === 'Multiplexeur') {
+  const muxDef = componentDefinitions?.find(d => d.id === 'mux');
+  const firstVariant = muxDef?.variants?.find(v => v.implemented);
+  return firstVariant ? `mux:${firstVariant.id}` : 'mux:HC4067';
+ }
+ 
  const legacy = {
   'Potentiomètre':'potentiometer',
   'Bouton':'button',
-  'LED':'led',
-  'Multiplexeur':'mux:HC4067',
-  'I2C':'i2c',
-  'SPI':'spi',
-  'UART':'uart'
+  'LED':'led'
  };
  return legacy[role] || role;
 }

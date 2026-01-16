@@ -35,6 +35,17 @@ struct MidiMessageDef {
 };
 
 /**
+ * @brief Description d'un variant de composant (sous-type)
+ * Ex: HC4067 et HC4051 sont des variants du composant MUX
+ */
+struct ComponentVariant {
+    const char* id;              // Identifiant (ex: "HC4067")
+    const char* displayName;     // Nom affiché (ex: "HC4067 (16 canaux)")
+    bool implemented;            // true = disponible, false = grisé
+    uint8_t channels;            // Nombre de canaux (pour MUX)
+};
+
+/**
  * @brief Nombre max de pins additionnelles par composant
  */
 static constexpr uint8_t MAX_ADDITIONAL_PINS = 6;
@@ -45,6 +56,11 @@ static constexpr uint8_t MAX_ADDITIONAL_PINS = 6;
 static constexpr uint8_t MAX_MIDI_MESSAGES = 8;
 
 /**
+ * @brief Nombre max de variants par composant
+ */
+static constexpr uint8_t MAX_VARIANTS = 4;
+
+/**
  * @struct ComponentDefinition
  * @brief Métadonnées d'un type de composant
  */
@@ -52,6 +68,7 @@ struct ComponentDefinition {
     const char* id;              // Identifiant interne (ex: "potentiometer", "button")
     const char* displayName;     // Nom affiché dans l'UI (ex: "Potentiomètre", "Bouton")
     const char* icon;            // Icône (optionnel, pour l'UI)
+    const char* cardId;          // ID de la carte HTML (ex: "cardPot", "cardMux")
     ComponentType type;          // Type enum correspondant
     PinType pinType;             // Type de pin principale
     bool implemented;            // true = disponible, false = grisé dans l'UI
@@ -67,6 +84,10 @@ struct ComponentDefinition {
     uint8_t midiMessageCount;    // Nombre de types de messages MIDI supportés
     MidiMessageDef midiMessages[MAX_MIDI_MESSAGES]; // Types de messages supportés
     
+    // Variants (sous-types, ex: HC4067/HC4051 pour MUX)
+    uint8_t variantCount;        // Nombre de variants (0 = pas de sous-types)
+    ComponentVariant variants[MAX_VARIANTS]; // Liste des variants
+    
     /**
      * @brief Convertit la définition en JSON pour l'API
      * @param buffer Buffer de sortie
@@ -75,10 +96,11 @@ struct ComponentDefinition {
      */
     int toJson(char* buffer, size_t bufferSize) const {
         int written = snprintf(buffer, bufferSize,
-            "{\"id\":\"%s\",\"displayName\":\"%s\",\"pinType\":%d,\"implemented\":%s,\"isComplex\":%s,"
+            "{\"id\":\"%s\",\"displayName\":\"%s\",\"cardId\":\"%s\",\"pinType\":%d,\"implemented\":%s,\"isComplex\":%s,"
             "\"supportsMidi\":%s,\"supportsOsc\":%s,\"additionalPinCount\":%d",
             id,
             displayName,
+            cardId ? cardId : "",
             static_cast<int>(pinType),
             implemented ? "true" : "false",
             isComplex ? "true" : "false",
@@ -116,6 +138,24 @@ struct ComponentDefinition {
                     "{\"id\":\"%s\",\"displayName\":\"%s\"}",
                     midiMessages[i].id,
                     midiMessages[i].displayName
+                );
+            }
+            written += snprintf(buffer + written, bufferSize - written, "]");
+        }
+        
+        // Ajouter les variants si présents
+        if (variantCount > 0 && written < (int)bufferSize - 50) {
+            written += snprintf(buffer + written, bufferSize - written, ",\"variants\":[");
+            for (uint8_t i = 0; i < variantCount && i < MAX_VARIANTS; i++) {
+                if (i > 0) {
+                    written += snprintf(buffer + written, bufferSize - written, ",");
+                }
+                written += snprintf(buffer + written, bufferSize - written,
+                    "{\"id\":\"%s\",\"displayName\":\"%s\",\"implemented\":%s,\"channels\":%d}",
+                    variants[i].id,
+                    variants[i].displayName,
+                    variants[i].implemented ? "true" : "false",
+                    variants[i].channels
                 );
             }
             written += snprintf(buffer + written, bufferSize - written, "]");

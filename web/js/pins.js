@@ -575,7 +575,10 @@ function updatePinsList(){
       cur=sigPin.label;
       $('#selPin').textContent=sigPin.label;
       if($('#funcSelect')){
-       $('#funcSelect').value='mux:HC4067';
+       // Récupérer le premier variant implémenté du MUX depuis le backend
+       const muxDef = typeof getComponentDefinition === 'function' ? getComponentDefinition('mux') : null;
+       const firstVariant = muxDef?.variants?.find(v => v.implemented);
+       $('#funcSelect').value = firstVariant ? `mux:${firstVariant.id}` : 'mux:HC4067';
        if(typeof updFunc === 'function') updFunc(sigPin.label);
       }
       if(typeof loadMuxConfigIntoForm === 'function') loadMuxConfigIntoForm(mux);

@@ -50,6 +50,7 @@ struct Led {
         def.id = ID;
         def.displayName = DISPLAY_NAME;
         def.icon = nullptr;
+        def.cardId = "cardLed";
         def.type = TYPE;
         def.pinType = PIN_TYPE;
         def.implemented = IMPLEMENTED;
@@ -57,6 +58,7 @@ struct Led {
         def.supportsMidi = SUPPORTS_MIDI;
         def.supportsOsc = SUPPORTS_OSC;
         def.additionalPinCount = 0;
+        def.variantCount = 0;
         
         // Messages MIDI que la LED peut recevoir
         def.midiMessageCount = 2;
