@@ -66,10 +66,41 @@ struct Potentiometer {
         
         // Messages MIDI supportés
         def.midiMessageCount = 4;
-        def.midiMessages[0] = {"cc", "Control Change", "CC#{cc}"};
-        def.midiMessages[1] = {"pc", "Program Change", "PC#{pc}"};
-        def.midiMessages[2] = {"pitchbend", "Pitch Bend", "Pitch Bend"};
-        def.midiMessages[3] = {"aftertouch", "Aftertouch (Channel)", "Aftertouch"};
+        
+        // Control Change
+        def.midiMessages[0] = MidiMessageDef{
+            "cc", "Control Change", "CC#{cc}", 3,
+            {
+                MidiParamDef{"rtpCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+                MidiParamDef{"rtpCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, "[\"potentiometer\"]"}
+            }
+        };
+        
+        // Program Change
+        def.midiMessages[1] = MidiMessageDef{
+            "pc", "Program Change", "PC#{pc}", 2,
+            {
+                MidiParamDef{"rtpPc", "{{t.pins.program}}:", FieldType::NUMBER, 0, 127, "0", "0", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr}
+            }
+        };
+        
+        // Pitch Bend
+        def.midiMessages[2] = MidiMessageDef{
+            "pitchbend", "Pitch Bend", "Pitch Bend", 1,
+            {
+                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr}
+            }
+        };
+        
+        // Aftertouch
+        def.midiMessages[3] = MidiMessageDef{
+            "aftertouch", "Aftertouch (Channel)", "Aftertouch", 1,
+            {
+                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr}
+            }
+        };
         
         // Template par défaut si pas de MIDI configuré
         def.statusTextTemplate = nullptr;

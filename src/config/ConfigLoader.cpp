@@ -1,6 +1,7 @@
 #include "ConfigLoader.h"
 #include "../managers/ComponentManager.h"
 #include "../components/ComponentTypes.h"  // Définitions communes
+#include "../components/ComponentRegistry.h"  // Pour trouver les définitions de composants
 #include "../utils/JSONParser.h"
 #include "../utils/PinMapper.h"
 #include "../midi/MidiMessageType.h"
@@ -36,6 +37,14 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
         String role = JSONParser::extractStr(pinConfig, "role", "\n");
         if (role.length() == 0) continue;
         
+        // Trouver la définition du composant via ComponentRegistry
+        const ComponentDefinition* def = ComponentRegistry::findById(role.c_str());
+        if (!def) {
+            Serial.printf("[ConfigLoader] WARNING: Component '%s' not found in registry for pin %s\n", 
+                          role.c_str(), pinLabel.c_str());
+            continue;
+        }
+        
         // Utiliser PinMapper pour obtenir le GPIO
         uint8_t gpio = PinMapper::labelToGpio(pinLabel);
         if (gpio == 255) {
@@ -43,8 +52,8 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             continue;
         }
         
-        // Vérifier que la pin a un ADC si c'est un potentiomètre
-        if (role == "potentiometer" || role == "Potentiomètre") {
+        // Vérifier que la pin a les capacités requises selon pinType
+        if (def->pinType == static_cast<uint8_t>(PinType::PIN_ANALOG)) {
             if (!PinMapper::hasAdc(gpio)) {
                 Serial.printf("[ConfigLoader] WARNING: Pin %s (GPIO%d) n'a pas d'ADC, ignorée\n", 
                               pinLabel.c_str(), gpio);
@@ -63,21 +72,66 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
         uint8_t channel = 1;    // défaut canal 1
         MidiMessageType msg_type = MidiMessageType::NOTE; // défaut
         
-        // Lire rtpType depuis la config
+        // Lire rtpType depuis la config (peut être displayName ou id)
         String rtpTypeStr = JSONParser::extractStr(pinConfig, "rtpType", "");
+        
+        // Chercher le MidiMessageDef correspondant
+        const MidiMessageDef* msgDef = nullptr;
         if (rtpTypeStr.length() > 0) {
-            msg_type = stringToMidiMessageType(rtpTypeStr);
+            // Chercher par displayName d'abord, puis par id
+            for (uint8_t i = 0; i < def->midiMessageCount && i < MAX_MIDI_MESSAGES; i++) {
+                if (def->midiMessages[i].displayName && strcmp(def->midiMessages[i].displayName, rtpTypeStr.c_str()) == 0) {
+                    msgDef = &def->midiMessages[i];
+                    break;
+                }
+            }
+            // Si pas trouvé par displayName, chercher par id
+            if (!msgDef) {
+                for (uint8_t i = 0; i < def->midiMessageCount && i < MAX_MIDI_MESSAGES; i++) {
+                    if (def->midiMessages[i].id && strcmp(def->midiMessages[i].id, rtpTypeStr.c_str()) == 0) {
+                        msgDef = &def->midiMessages[i];
+                        break;
+                    }
+                }
+            }
+            // Convertir en MidiMessageType pour msg_type
+            if (msgDef && msgDef->displayName) {
+                msg_type = stringToMidiMessageType(msgDef->displayName);
+            } else {
+                msg_type = stringToMidiMessageType(rtpTypeStr);
+            }
         } else {
-            // Défaut selon le rôle si rtpType n'est pas spécifié
-            if (role == "potentiometer" || role == "Potentiomètre") {
-                msg_type = MidiMessageType::CONTROL_CHANGE;
-            } else if (role == "button" || role == "Bouton") {
-                msg_type = MidiMessageType::NOTE;
+            // Défaut : utiliser le premier message MIDI du composant s'il existe
+            if (def->midiMessageCount > 0) {
+                msgDef = &def->midiMessages[0];
+                if (msgDef->id) {
+                    msg_type = stringToMidiMessageType(msgDef->id);
+                }
             }
         }
         
-        // Extraire le paramètre MIDI selon le type de message
-        if (role == "potentiometer" || role == "Potentiomètre") {
+        // Extraire les paramètres MIDI selon les paramètres définis dans MidiMessageDef
+        if (msgDef) {
+            channel = JSONParser::extractInt(pinConfig, "rtpChan", 1);
+            
+            // Parcourir les paramètres du message pour extraire la valeur appropriée
+            for (uint8_t i = 0; i < msgDef->paramCount && i < MAX_MIDI_PARAMS; i++) {
+                const MidiParamDef& param = msgDef->params[i];
+                if (param.id) {
+                    // Extraire selon le type de paramètre
+                    if (strcmp(param.id, "rtpNote") == 0) {
+                        midi_param = JSONParser::extractInt(pinConfig, "rtpNote", param.defaultValue ? atoi(param.defaultValue) : 60);
+                    } else if (strcmp(param.id, "rtpCc") == 0) {
+                        midi_param = JSONParser::extractInt(pinConfig, "rtpCc", param.defaultValue ? atoi(param.defaultValue) : 7);
+                    } else if (strcmp(param.id, "rtpPc") == 0) {
+                        midi_param = JSONParser::extractInt(pinConfig, "rtpPc", param.defaultValue ? atoi(param.defaultValue) : 0);
+                    }
+                    // Les autres paramètres (rtpChan, rtpVel, etc.) sont lus ailleurs
+                }
+            }
+        } else {
+            // Fallback si pas de définition de message
+            channel = JSONParser::extractInt(pinConfig, "rtpChan", 1);
             if (msg_type == MidiMessageType::CONTROL_CHANGE) {
                 midi_param = JSONParser::extractInt(pinConfig, "rtpCc", 7);
             } else if (msg_type == MidiMessageType::PROGRAM_CHANGE) {
@@ -85,22 +139,10 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             } else if (msg_type == MidiMessageType::NOTE || msg_type == MidiMessageType::NOTE_VELOCITY || msg_type == MidiMessageType::NOTE_SWEEP) {
                 midi_param = JSONParser::extractInt(pinConfig, "rtpNote", 60);
             }
-        } else if (role == "button" || role == "Bouton") {
-            if (msg_type == MidiMessageType::NOTE || msg_type == MidiMessageType::NOTE_VELOCITY || msg_type == MidiMessageType::NOTE_SWEEP) {
-                midi_param = JSONParser::extractInt(pinConfig, "rtpNote", 60);
-            } else if (msg_type == MidiMessageType::CONTROL_CHANGE) {
-                midi_param = JSONParser::extractInt(pinConfig, "rtpCc", 7);
-            } else if (msg_type == MidiMessageType::PROGRAM_CHANGE) {
-                midi_param = JSONParser::extractInt(pinConfig, "rtpPc", 0);
-            }
         }
         
-        channel = JSONParser::extractInt(pinConfig, "rtpChan", 1);
-        
-        // Ajouter le composant
-        ComponentType type = ComponentType::POTENTIOMETER;
-        if (role == "button" || role == "Bouton") type = ComponentType::BUTTON;
-        else if (role == "led" || role == "LED") type = ComponentType::LED;
+        // Ajouter le composant en utilisant le type depuis la définition
+        ComponentType type = def->type;
         
         bool success = manager.addComponent(gpio, type, midi_param, channel, msg_type);
         
@@ -144,27 +186,65 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                                       pinLabel.c_str(), config->osc_address);
                     }
                     
-                    // Lire btnMode pour les boutons
-                    if (role == "Bouton") {
-                        String btnModeStr = JSONParser::extractStr(pinConfig, "btnMode", "press_release");
-                        if (btnModeStr.length() > 0) {
-                            strncpy(config->btnMode, btnModeStr.c_str(), sizeof(config->btnMode) - 1);
-                            config->btnMode[sizeof(config->btnMode) - 1] = '\0';
-                        }
-                        // Lire btnPulseTiming pour mode pulse
-                        String btnPulseTimingStr = JSONParser::extractStr(pinConfig, "btnPulseTiming", "release");
-                        if (btnPulseTimingStr.length() > 0) {
-                            strncpy(config->btnPulseTiming, btnPulseTimingStr.c_str(), sizeof(config->btnPulseTiming) - 1);
-                            config->btnPulseTiming[sizeof(config->btnPulseTiming) - 1] = '\0';
-                        }
-                    }
-                    
-                    // Lire ledMode pour les LEDs
-                    if (role == "led" || role == "LED") {
-                        String ledModeStr = JSONParser::extractStr(pinConfig, "ledMode", "onoff");
-                        if (ledModeStr.length() > 0) {
-                            strncpy(config->ledMode, ledModeStr.c_str(), sizeof(config->ledMode) - 1);
-                            config->ledMode[sizeof(config->ledMode) - 1] = '\0';
+                    // Lire dynamiquement tous les formFields depuis la définition
+                    if (def && def->formFields) {
+                        uint8_t customFieldIndex = 0;  // Index pour mapper vers customField1/customField2
+                        uint8_t customIntIndex = 0;   // Index pour mapper vers customInt1/customInt2
+                        
+                        for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                            const FormFieldDef& field = def->formFields[i];
+                            if (field.id) {
+                                // Mapper les champs spécifiques existants
+                                if (strcmp(field.id, "btnMode") == 0) {
+                                    String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
+                                    if (fieldValue.length() > 0) {
+                                        strncpy(config->btnMode, fieldValue.c_str(), sizeof(config->btnMode) - 1);
+                                        config->btnMode[sizeof(config->btnMode) - 1] = '\0';
+                                    }
+                                } else if (strcmp(field.id, "btnPulseTiming") == 0) {
+                                    String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
+                                    if (fieldValue.length() > 0) {
+                                        strncpy(config->btnPulseTiming, fieldValue.c_str(), sizeof(config->btnPulseTiming) - 1);
+                                        config->btnPulseTiming[sizeof(config->btnPulseTiming) - 1] = '\0';
+                                    }
+                                } else if (strcmp(field.id, "ledMode") == 0) {
+                                    String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
+                                    if (fieldValue.length() > 0) {
+                                        strncpy(config->ledMode, fieldValue.c_str(), sizeof(config->ledMode) - 1);
+                                        config->ledMode[sizeof(config->ledMode) - 1] = '\0';
+                                    }
+                                } else if (strcmp(field.id, "filterIntensity") == 0) {
+                                    uint8_t filter_intensity = JSONParser::extractInt(pinConfig, "filterIntensity", field.defaultValue ? atoi(field.defaultValue) : 5);
+                                    if (filter_intensity < 1) filter_intensity = 1;
+                                    if (filter_intensity > 10) filter_intensity = 10;
+                                    config->filter_intensity = filter_intensity;
+                                } else {
+                                    // Mapper vers les champs génériques pour les nouveaux composants
+                                    if (field.type == FieldType::TEXT || field.type == FieldType::SELECT || field.type == FieldType::CHECKBOX) {
+                                        String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
+                                        if (fieldValue.length() > 0) {
+                                            if (customFieldIndex == 0) {
+                                                strncpy(config->customField1, fieldValue.c_str(), sizeof(config->customField1) - 1);
+                                                config->customField1[sizeof(config->customField1) - 1] = '\0';
+                                                customFieldIndex++;
+                                            } else if (customFieldIndex == 1) {
+                                                strncpy(config->customField2, fieldValue.c_str(), sizeof(config->customField2) - 1);
+                                                config->customField2[sizeof(config->customField2) - 1] = '\0';
+                                                customFieldIndex++;
+                                            }
+                                        }
+                                    } else if (field.type == FieldType::NUMBER || field.type == FieldType::RANGE) {
+                                        int fieldValue = JSONParser::extractInt(pinConfig, field.id, field.defaultValue ? atoi(field.defaultValue) : 0);
+                                        if (customIntIndex == 0) {
+                                            config->customInt1 = fieldValue;
+                                            customIntIndex++;
+                                        } else if (customIntIndex == 1) {
+                                            config->customInt2 = fieldValue;
+                                            customIntIndex++;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     

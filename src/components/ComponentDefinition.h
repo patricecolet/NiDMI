@@ -45,6 +45,8 @@ struct MidiMessageDef {
     const char* id;              // Identifiant (ex: "cc", "note", "pc")
     const char* displayName;     // Nom affiché (ex: "Control Change", "Note")
     const char* statusTemplate;  // Template pour le texte de statut (ex: "CC#{cc}", "Note {note}")
+    uint8_t paramCount;          // Nombre de paramètres requis pour ce message
+    MidiParamDef params[MAX_MIDI_PARAMS]; // Paramètres requis
 };
 
 /**
@@ -58,9 +60,47 @@ static constexpr uint8_t MAX_ADDITIONAL_PINS = 6;
 static constexpr uint8_t MAX_MIDI_MESSAGES = 8;
 
 /**
+ * @brief Nombre max de paramètres MIDI par type de message
+ */
+static constexpr uint8_t MAX_MIDI_PARAMS = 10;
+
+/**
  * @brief Nombre max de champs de formulaire par composant
  */
 static constexpr uint8_t MAX_FORM_FIELDS = 20;
+
+/**
+ * @brief Description d'un paramètre MIDI
+ */
+struct MidiParamDef {
+    const char* id;              // ID du paramètre (ex: "rtpNote", "rtpCc", "rtpChan")
+    const char* label;           // Label affiché
+    FieldType type;             // Type de champ (NUMBER, RANGE, INFO)
+    int min;                    // Valeur minimale (pour NUMBER/RANGE)
+    int max;                    // Valeur maximale (pour NUMBER/RANGE)
+    const char* placeholder;    // Placeholder (pour NUMBER)
+    const char* defaultValue;   // Valeur par défaut (string)
+    const char* defaultMin;     // Valeur min par défaut (pour RANGE)
+    const char* defaultMax;      // Valeur max par défaut (pour RANGE)
+    const char* separator;       // Séparateur (pour RANGE, défaut: "→")
+    const char* hint;            // Hint/commentaire (pour INFO)
+    const char* hintClass;      // Classe CSS pour hint
+    uint16_t width;             // Largeur en px (0 = auto)
+    const char* dependsOnRole;   // JSON array de rôles qui affichent ce paramètre (null = tous)
+    
+    // Constructeur explicite pour permettre l'initialisation par accolades
+    MidiParamDef(const char* id = nullptr, const char* label = nullptr, FieldType type = FieldType::NUMBER,
+                 int min = 0, int max = 0,
+                 const char* placeholder = nullptr, const char* defaultValue = nullptr,
+                 const char* defaultMin = nullptr, const char* defaultMax = nullptr,
+                 const char* separator = nullptr,
+                 const char* hint = nullptr, const char* hintClass = nullptr,
+                 uint16_t width = 0, const char* dependsOnRole = nullptr)
+        : id(id), label(label), type(type), min(min), max(max),
+          placeholder(placeholder), defaultValue(defaultValue),
+          defaultMin(defaultMin), defaultMax(defaultMax), separator(separator),
+          hint(hint), hintClass(hintClass), width(width), dependsOnRole(dependsOnRole) {}
+};
 
 /**
  * @brief Type de champ de formulaire
@@ -238,6 +278,101 @@ struct ComponentDefinition {
                         ",\"statusTemplate\":\"%s\"",
                         midiMessages[i].statusTemplate
                     );
+                }
+                // Ajouter les paramètres MIDI
+                if (midiMessages[i].paramCount > 0 && written < (int)bufferSize - 50) {
+                    written += snprintf(buffer + written, bufferSize - written, ",\"params\":[");
+                    for (uint8_t j = 0; j < midiMessages[i].paramCount && j < MAX_MIDI_PARAMS; j++) {
+                        if (j > 0) {
+                            written += snprintf(buffer + written, bufferSize - written, ",");
+                        }
+                        const MidiParamDef& param = midiMessages[i].params[j];
+                        written += snprintf(buffer + written, bufferSize - written,
+                            "{\"id\":\"%s\",\"type\":%d",
+                            param.id ? param.id : "",
+                            static_cast<int>(param.type)
+                        );
+                        
+                        if (param.label) {
+                            written += snprintf(buffer + written, bufferSize - written,
+                                ",\"label\":\"%s\"",
+                                param.label
+                            );
+                        }
+                        
+                        if (param.type == FieldType::NUMBER || param.type == FieldType::RANGE) {
+                            written += snprintf(buffer + written, bufferSize - written,
+                                ",\"min\":%d,\"max\":%d",
+                                param.min,
+                                param.max
+                            );
+                        }
+                        
+                        if (param.placeholder) {
+                            written += snprintf(buffer + written, bufferSize - written,
+                                ",\"placeholder\":\"%s\"",
+                                param.placeholder
+                            );
+                        }
+                        
+                        if (param.defaultValue) {
+                            written += snprintf(buffer + written, bufferSize - written,
+                                ",\"defaultValue\":\"%s\"",
+                                param.defaultValue
+                            );
+                        }
+                        
+                        if (param.type == FieldType::RANGE) {
+                            if (param.defaultMin) {
+                                written += snprintf(buffer + written, bufferSize - written,
+                                    ",\"defaultMin\":\"%s\"",
+                                    param.defaultMin
+                                );
+                            }
+                            if (param.defaultMax) {
+                                written += snprintf(buffer + written, bufferSize - written,
+                                    ",\"defaultMax\":\"%s\"",
+                                    param.defaultMax
+                                );
+                            }
+                            if (param.separator) {
+                                written += snprintf(buffer + written, bufferSize - written,
+                                    ",\"separator\":\"%s\"",
+                                    param.separator
+                                );
+                            }
+                        }
+                        
+                        if (param.type == FieldType::INFO && param.hint) {
+                            written += snprintf(buffer + written, bufferSize - written,
+                                ",\"hint\":\"%s\"",
+                                param.hint
+                            );
+                            if (param.hintClass) {
+                                written += snprintf(buffer + written, bufferSize - written,
+                                    ",\"hintClass\":\"%s\"",
+                                    param.hintClass
+                                );
+                            }
+                        }
+                        
+                        if (param.dependsOnRole) {
+                            written += snprintf(buffer + written, bufferSize - written,
+                                ",\"dependsOnRole\":%s",
+                                param.dependsOnRole
+                            );
+                        }
+                        
+                        if (param.width > 0) {
+                            written += snprintf(buffer + written, bufferSize - written,
+                                ",\"width\":%d",
+                                param.width
+                            );
+                        }
+                        
+                        written += snprintf(buffer + written, bufferSize - written, "}");
+                    }
+                    written += snprintf(buffer + written, bufferSize - written, "]");
                 }
                 written += snprintf(buffer + written, bufferSize - written, "}");
             }

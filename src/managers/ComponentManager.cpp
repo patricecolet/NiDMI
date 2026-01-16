@@ -9,6 +9,7 @@
 #include "../utils/JSONParser.h"
 #include "../processors/ProcessorRegistry.h"
 #include "../processors/Processors.h"  // Centralise tous les processeurs pour l'enregistrement automatique
+#include "../components/ComponentRegistry.h"  // Pour trouver les définitions de composants
 #include "../utils/PinMapper.h"
 #include "../osc/OSCCalibrationHandler.h"
 #include "../osc/OSCConfigLoader.h"
@@ -126,9 +127,10 @@ void ComponentManager::update() {
         }
         
         // Utiliser le registre de processeurs (extensible pour des centaines de composants)
-        // Pour les potentiomètres, vérifier ADC avant de traiter
+        // Vérifier les capacités de la pin selon la définition du composant
+        const ComponentDefinition* def = ComponentRegistry::findByType(config.type);
         AnalogFilter* filter_ptr = nullptr;
-        if (config.type == ComponentType::POTENTIOMETER) {
+        if (def && def->pinType == static_cast<uint8_t>(PinType::PIN_ANALOG)) {
             if (!PinMapper::hasAdc(config.gpio)) {
                 continue; // Pas d'ADC, ignorer
             }
@@ -174,12 +176,13 @@ bool ComponentManager::addComponent(uint8_t gpio, ComponentType type, uint8_t mi
         return false;
     }
     
-    // Vérifier que la pin a un ADC si c'est un potentiomètre
-    if (type == ComponentType::POTENTIOMETER) {
+    // Vérifier que la pin a les capacités requises selon la définition du composant
+    const ComponentDefinition* def = ComponentRegistry::findByType(type);
+    if (def && def->pinType == static_cast<uint8_t>(PinType::PIN_ANALOG)) {
         if (is_mux_gpio) {
             // Les pins MUX ont toujours ADC (vérifié dans hasAdc)
         } else if (!PinMapper::hasAdc(gpio)) {
-            Serial.printf("[ComponentManager] ERROR: GPIO %d does not have ADC for potentiometer\n", gpio);
+            Serial.printf("[ComponentManager] ERROR: GPIO %d does not have ADC for component type %d\n", gpio, static_cast<int>(type));
             return false;
         }
     }
@@ -276,14 +279,47 @@ void ComponentManager::printStats() {
     for (uint8_t i = 0; i < component_count; i++) {
         const ComponentConfig& config = configs[i];
         String typeStr = "Unknown";
-        switch (config.type) {
-            case ComponentType::POTENTIOMETER: typeStr = "Pot"; break;
-            case ComponentType::BUTTON: typeStr = "Btn"; break;
-            case ComponentType::LED: typeStr = "LED"; break;
+        String msgTypeStr = "Note";
+        
+        // Utiliser ComponentDefinition pour obtenir le nom court et le type de message par défaut
+        const ComponentDefinition* def = ComponentRegistry::findByType(config.type);
+        if (def) {
+            // Utiliser displayName ou créer un nom court depuis l'ID
+            if (def->displayName) {
+                // Créer un nom court (premiers 3-4 caractères)
+                typeStr = String(def->displayName);
+                if (typeStr.length() > 4) {
+                    typeStr = typeStr.substring(0, 4);
+                }
+            } else if (def->id) {
+                typeStr = String(def->id);
+            }
+            
+            // Déterminer le type de message par défaut depuis le premier message MIDI
+            if (def->midiMessageCount > 0 && def->midiMessages[0].id) {
+                String firstMsgId = def->midiMessages[0].id;
+                if (firstMsgId == "cc") {
+                    msgTypeStr = "CC";
+                } else if (firstMsgId == "note" || firstMsgId == "notevel" || firstMsgId == "notesweep") {
+                    msgTypeStr = "Note";
+                } else if (firstMsgId == "pc") {
+                    msgTypeStr = "PC";
+                } else {
+                    msgTypeStr = "Note"; // Défaut
+                }
+            }
+        } else {
+            // Fallback : utiliser le switch case si définition non disponible
+            switch (config.type) {
+                case ComponentType::POTENTIOMETER: typeStr = "Pot"; msgTypeStr = "CC"; break;
+                case ComponentType::BUTTON: typeStr = "Btn"; msgTypeStr = "Note"; break;
+                case ComponentType::LED: typeStr = "LED"; msgTypeStr = "Note"; break;
+            }
         }
+        
         Serial.printf("  [%d] %s GPIO%d → %s %d (ch%d)\n", 
             i, typeStr.c_str(), config.gpio, 
-            config.type == ComponentType::POTENTIOMETER ? "CC" : "Note",
+            msgTypeStr.c_str(),
             config.midi_param, config.midi_channel);
     }
 }

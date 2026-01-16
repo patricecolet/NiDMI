@@ -68,8 +68,24 @@ struct Led {
         
         // Messages MIDI que la LED peut recevoir
         def.midiMessageCount = 2;
-        def.midiMessages[0] = {"note", "Note", "Note {note}"};
-        def.midiMessages[1] = {"cc", "Control Change", "CC#{cc}"};
+        
+        // Note
+        def.midiMessages[0] = MidiMessageDef{
+            "note", "Note", "Note {note}", 2,
+            {
+                MidiParamDef{"rtpNote", "{{t.pins.note}}:", FieldType::NUMBER, 0, 127, "60", "60", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr}
+            }
+        };
+        
+        // Control Change
+        def.midiMessages[1] = MidiMessageDef{
+            "cc", "Control Change", "CC#{cc}", 2,
+            {
+                MidiParamDef{"rtpCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+                MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr}
+            }
+        };
         
         // Template par défaut si pas de MIDI configuré
         def.statusTextTemplate = nullptr;

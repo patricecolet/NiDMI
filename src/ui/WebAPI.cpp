@@ -60,16 +60,76 @@ String getDefaultConfig(String pin) {
         }
     }
     
-    if (pin == "D0") return "{\"role\":\"button\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":60,\"rtpChan\":1,\"btnMode\":\"pulse\",\"btnPulseTiming\":\"release\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "D1") return "{\"role\":\"button\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":61,\"rtpChan\":1,\"btnMode\":\"pulse\",\"btnPulseTiming\":\"release\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "D2") return "{\"role\":\"button\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":62,\"rtpChan\":1,\"btnMode\":\"pulse\",\"btnPulseTiming\":\"release\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "D3") return "{\"role\":\"button\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":63,\"rtpChan\":1,\"btnMode\":\"pulse\",\"btnPulseTiming\":\"release\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    // Exemples dynamiques basés sur les composants disponibles
+    // Chercher les composants pour générer des exemples
+    const ComponentDefinition* buttonDef = ComponentRegistry::findById("button");
+    const ComponentDefinition* ledDef = ComponentRegistry::findById("led");
     
-    // LEDs spéciales
-    if (pin == "D7") return "{\"role\":\"LED\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":36,\"rtpChan\":1,\"ledMode\":\"onoff\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "D8") return "{\"role\":\"LED\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":37,\"rtpChan\":1,\"ledMode\":\"onoff\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "D9") return "{\"role\":\"LED\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":38,\"rtpChan\":1,\"ledMode\":\"onoff\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "D10") return "{\"role\":\"LED\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",\"rtpCc\":10,\"rtpChan\":1,\"ledMode\":\"pwm\",\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    // Générer des exemples pour D0-D3 avec button
+    if (buttonDef && (pin == "D0" || pin == "D1" || pin == "D2" || pin == "D3")) {
+        int pinNum = pin.charAt(1) - '0';
+        int noteVal = 60 + pinNum;
+        String example = "{\"role\":\"button\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":" + String(noteVal) + ",\"rtpChan\":1";
+        if (buttonDef->formFieldCount > 0) {
+            for (uint8_t i = 0; i < buttonDef->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                const FormFieldDef& field = buttonDef->formFields[i];
+                if (field.id && field.defaultValue) {
+                    example += ",\"" + String(field.id) + "\":\"" + String(field.defaultValue) + "\"";
+                }
+            }
+        }
+        example += ",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+        return example;
+    }
+    
+    // Générer des exemples pour D7-D10 avec LED
+    if (ledDef && (pin == "D7" || pin == "D8" || pin == "D9" || pin == "D10")) {
+        int noteVal = 36;
+        if (pin == "D8") noteVal = 37;
+        else if (pin == "D9") noteVal = 38;
+        
+        String rtpType = "Note";
+        String rtpParam = "\"rtpNote\":" + String(noteVal);
+        
+        // Pour D10, utiliser CC
+        if (pin == "D10") {
+            rtpType = "Control Change";
+            rtpParam = "\"rtpCc\":10";
+            // Chercher le message CC
+            for (uint8_t i = 0; i < ledDef->midiMessageCount && i < MAX_MIDI_MESSAGES; i++) {
+                if (ledDef->midiMessages[i].id && strcmp(ledDef->midiMessages[i].id, "cc") == 0) {
+                    rtpType = ledDef->midiMessages[i].displayName ? ledDef->midiMessages[i].displayName : "Control Change";
+                    break;
+                }
+            }
+        }
+        
+        String example = "{\"role\":\"led\",\"rtpEnabled\":true,\"rtpType\":\"" + rtpType + "\"," + rtpParam + ",\"rtpChan\":1";
+        
+        // Ajouter les formFields par défaut
+        if (ledDef->formFieldCount > 0) {
+            for (uint8_t i = 0; i < ledDef->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                const FormFieldDef& field = ledDef->formFields[i];
+                if (field.id) {
+                    if (pin == "D10" && strcmp(field.id, "ledMode") == 0 && field.options) {
+                        // Pour D10, utiliser "pwm" si disponible
+                        String options = field.options;
+                        if (options.indexOf("pwm") >= 0) {
+                            example += ",\"ledMode\":\"pwm\"";
+                        } else if (field.defaultValue) {
+                            example += ",\"ledMode\":\"" + String(field.defaultValue) + "\"";
+                        }
+                    } else if (field.defaultValue) {
+                        example += ",\"" + String(field.id) + "\":\"" + String(field.defaultValue) + "\"";
+                    }
+                }
+            }
+        }
+        
+        String oscAddr = (pin == "D10") ? "/ctl" : "/note";
+        example += ",\"oscEnabled\":true,\"oscAddress\":\"" + oscAddr + "\",\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+        return example;
+    }
     
     // Bus
     if (pin == "SDA" || pin == "SCL") return "{\"role\":\"I2C\",\"rtpEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";

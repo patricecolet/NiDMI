@@ -44,10 +44,18 @@ struct ComponentConfig {
     uint8_t rtpNoteMax;   // Note max pour balayage (NOTE_SWEEP)
     uint8_t rtpNoteVelFix; // Vélocité fixe pour balayage (NOTE_SWEEP)
     uint16_t rtpNoteSweepAutoOffDelay; // Délai auto-off en ms (0 = désactivé, max 65535)
+    
+    // Champs spécifiques existants (pour compatibilité/rétrocompatibilité)
     char btnMode[16];     // Mode bouton: "pulse", "press_release", "toggle"
     char btnPulseTiming[16]; // Timing pour mode pulse: "press" ou "release"
     char ledMode[16];     // Mode LED: "onoff", "pwm"
     uint8_t filter_intensity; // Intensité du filtrage (1-10): 1=rapide, 10=stable (défaut: 5)
+    
+    // Champs génériques pour nouveaux composants (extensible sans modifier la structure)
+    char customField1[16];  // Champ générique réutilisable (ex: encoderDirection, touchThreshold, etc.)
+    char customField2[16];  // Champ générique réutilisable (ex: encoderMode, touchMode, etc.)
+    uint8_t customInt1;     // Valeur numérique générique (ex: encoderSteps, touchSensitivity, etc.)
+    uint8_t customInt2;     // Valeur numérique générique supplémentaire
 };
 
 // État runtime d'un composant

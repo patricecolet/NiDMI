@@ -361,19 +361,13 @@ async function saveAll(){
  p.set('role',c.role);
  if(c.rtpEnabled) p.set('rtpEnabled','true');
  if(c.rtpType) p.set('rtpType',c.rtpType);
- if(c.rtpNote) p.set('rtpNote',c.rtpNote);
- if(c.rtpCc) p.set('rtpCc',c.rtpCc);
- if(c.rtpPc) p.set('rtpPc',c.rtpPc);
- if(c.rtpChan) p.set('rtpChan',c.rtpChan);
- if(c.rtpCcOn) p.set('rtpCcOn',c.rtpCcOn);
- if(c.rtpCcOff) p.set('rtpCcOff',c.rtpCcOff);
- if(c.rtpVel) p.set('rtpVel',c.rtpVel);
- if(c.rtpCcMin) p.set('rtpCcMin',c.rtpCcMin);
- if(c.rtpCcMax) p.set('rtpCcMax',c.rtpCcMax);
- if(c.rtpNoteMin) p.set('rtpNoteMin',c.rtpNoteMin);
- if(c.rtpNoteMax) p.set('rtpNoteMax',c.rtpNoteMax);
- if(c.rtpNoteVelFix) p.set('rtpNoteVelFix',c.rtpNoteVelFix);
- if(c.rtpNoteSweepAutoOffDelay) p.set('rtpNoteSweepAutoOffDelay',c.rtpNoteSweepAutoOffDelay);
+ 
+ // Envoyer dynamiquement tous les paramètres MIDI (tous les champs qui commencent par 'rtp' sauf rtpEnabled et rtpType)
+ Object.keys(c).forEach(key => {
+  if(key.startsWith('rtp') && key !== 'rtpEnabled' && key !== 'rtpType' && c[key] !== undefined && c[key] !== null && c[key] !== '') {
+   p.set(key, c[key]);
+  }
+ });
  if(c.ledMode) p.set('ledMode',c.ledMode);
  if(c.btnMode) p.set('btnMode',c.btnMode);
  if(c.btnPulseTiming) p.set('btnPulseTiming',c.btnPulseTiming);

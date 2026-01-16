@@ -1,5 +1,7 @@
 #include "ComponentInitializer.h"
 #include "../components/ComponentTypes.h"  // Définitions communes
+#include "../components/ComponentRegistry.h"  // Pour obtenir les définitions
+#include "../components/ComponentDefinition.h"  // Pour FormFieldDef, FieldType, MAX_FORM_FIELDS
 #include "../midi/MidiMessageType.h"
 
 void ComponentInitializer::initializeConfig(
@@ -23,13 +25,63 @@ void ComponentInitializer::initializeConfig(
     config.rtpNoteMax = 72;  // Défaut: C5
     config.rtpNoteVelFix = 100; // Défaut: vélocité fixe
     config.rtpNoteSweepAutoOffDelay = 0; // Défaut: désactivé
-    strncpy(config.btnMode, "press_release", sizeof(config.btnMode)); // Défaut: press/release
-    config.btnMode[sizeof(config.btnMode)-1] = '\0';
-    strncpy(config.btnPulseTiming, "release", sizeof(config.btnPulseTiming)); // Défaut: release
-    config.btnPulseTiming[sizeof(config.btnPulseTiming)-1] = '\0';
-    strncpy(config.ledMode, "onoff", sizeof(config.ledMode)); // Défaut: on/off
-    config.ledMode[sizeof(config.ledMode)-1] = '\0';
-    config.filter_intensity = 5; // Défaut: filtre modéré (bon compromis)
+    
+    // Initialiser les champs génériques à zéro/vide
+    config.customField1[0] = '\0';
+    config.customField2[0] = '\0';
+    config.customInt1 = 0;
+    config.customInt2 = 0;
+    
+    // Initialiser les champs spécifiques depuis ComponentDefinition.formFields
+    const ComponentDefinition* def = ComponentRegistry::findByType(type);
+    if (def && def->formFields) {
+        for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+            const FormFieldDef& field = def->formFields[i];
+            if (field.id && field.defaultValue) {
+                // Mapper vers les champs de ComponentConfig
+                if (strcmp(field.id, "btnMode") == 0) {
+                    strncpy(config.btnMode, field.defaultValue, sizeof(config.btnMode) - 1);
+                    config.btnMode[sizeof(config.btnMode) - 1] = '\0';
+                } else if (strcmp(field.id, "btnPulseTiming") == 0) {
+                    strncpy(config.btnPulseTiming, field.defaultValue, sizeof(config.btnPulseTiming) - 1);
+                    config.btnPulseTiming[sizeof(config.btnPulseTiming) - 1] = '\0';
+                } else if (strcmp(field.id, "ledMode") == 0) {
+                    strncpy(config.ledMode, field.defaultValue, sizeof(config.ledMode) - 1);
+                    config.ledMode[sizeof(config.ledMode) - 1] = '\0';
+                } else if (strcmp(field.id, "filterIntensity") == 0) {
+                    config.filter_intensity = atoi(field.defaultValue);
+                } else {
+                    // Mapper vers les champs génériques pour les nouveaux composants
+                    // Utiliser customField1 et customField2 pour les champs string
+                    // Utiliser customInt1 et customInt2 pour les champs numériques
+                    if (field.type == FieldType::TEXT || field.type == FieldType::SELECT || field.type == FieldType::CHECKBOX) {
+                        if (config.customField1[0] == '\0') {
+                            strncpy(config.customField1, field.defaultValue, sizeof(config.customField1) - 1);
+                            config.customField1[sizeof(config.customField1) - 1] = '\0';
+                        } else if (config.customField2[0] == '\0') {
+                            strncpy(config.customField2, field.defaultValue, sizeof(config.customField2) - 1);
+                            config.customField2[sizeof(config.customField2) - 1] = '\0';
+                        }
+                    } else if (field.type == FieldType::NUMBER || field.type == FieldType::RANGE) {
+                        if (config.customInt1 == 0) {
+                            config.customInt1 = atoi(field.defaultValue);
+                        } else if (config.customInt2 == 0) {
+                            config.customInt2 = atoi(field.defaultValue);
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // Fallback : valeurs par défaut hardcodées si ComponentDefinition non disponible
+        strncpy(config.btnMode, "press_release", sizeof(config.btnMode));
+        config.btnMode[sizeof(config.btnMode)-1] = '\0';
+        strncpy(config.btnPulseTiming, "release", sizeof(config.btnPulseTiming));
+        config.btnPulseTiming[sizeof(config.btnPulseTiming)-1] = '\0';
+        strncpy(config.ledMode, "onoff", sizeof(config.ledMode));
+        config.ledMode[sizeof(config.ledMode)-1] = '\0';
+        config.filter_intensity = 5;
+    }
 }
 
 void ComponentInitializer::initializeState(ComponentState& state) {
@@ -49,16 +101,43 @@ void ComponentInitializer::initializeState(ComponentState& state) {
 }
 
 void ComponentInitializer::setupGpio(uint8_t gpio, ComponentType type) {
-    switch (type) {
-        case ComponentType::POTENTIOMETER:
-            // ADC auto
+    const ComponentDefinition* def = ComponentRegistry::findByType(type);
+    if (!def) {
+        // Fallback : comportement par défaut si définition non disponible
+        pinMode(gpio, INPUT);
+        return;
+    }
+    
+    // Configurer le GPIO selon le pinType de la définition
+    PinType pinType = static_cast<PinType>(def->pinType);
+    switch (pinType) {
+        case PinType::PIN_ANALOG:
+            // ADC auto, pas de configuration nécessaire
             break;
-        case ComponentType::BUTTON:
-            pinMode(gpio, INPUT_PULLUP);
+        case PinType::PIN_DIGITAL:
+            // Pour les composants digitaux, déterminer INPUT ou OUTPUT selon le type
+            if (type == ComponentType::BUTTON) {
+                pinMode(gpio, INPUT_PULLUP);
+            } else if (type == ComponentType::LED) {
+                pinMode(gpio, OUTPUT);
+                digitalWrite(gpio, LOW);
+            } else {
+                // Par défaut pour les autres composants digitaux
+                pinMode(gpio, INPUT);
+            }
             break;
-        case ComponentType::LED:
-            pinMode(gpio, OUTPUT);
-            digitalWrite(gpio, LOW);
+        case PinType::PIN_ANALOG_OR_DIGITAL:
+            // Utiliser comme digital par défaut (peut être changé selon le composant)
+            pinMode(gpio, INPUT);
+            break;
+        case PinType::PIN_PWM:
+            // PWM peut être INPUT ou OUTPUT selon le composant
+            if (type == ComponentType::LED) {
+                pinMode(gpio, OUTPUT);
+                digitalWrite(gpio, LOW);
+            } else {
+                pinMode(gpio, INPUT);
+            }
             break;
     }
 }
