@@ -38,10 +38,10 @@ function updateMuxListUI(){
  // La liste est mise à jour via updatePinsList() dans pins.js
 }
 
-function showMuxForm(muxId=null){
- // Si on est dans le panneau pins (cardMux visible), utiliser loadMuxConfigIntoForm
- const cardMux=$('#cardMux');
- if(cardMux&&cardMux.style.display!=='none'){
+async function showMuxForm(muxId=null){
+ // Vérifier si on est dans le panneau pins (componentFormCard visible)
+ const componentFormCard=$('#componentFormCard');
+ if(componentFormCard&&componentFormCard.style.display!=='none'){
   // On est déjà dans le panneau pins, juste charger la config
   if(muxId!==null){
    const mux=muxList.find(m=>m.id==muxId);
@@ -52,50 +52,88 @@ function showMuxForm(muxId=null){
   return;
  }
  
- // Sinon, utiliser la modal (pour compatibilité avec l'ancien code)
+ // Sinon, utiliser la modal
  const overlay=$('#muxModalOverlay');
- if(overlay) overlay.classList.add('active');
- const idSel=$('#muxId');
- if(idSel&&muxId!==null){
- idSel.value=muxId;
- idSel.disabled=true;
- } else if(idSel){
- idSel.value='';
- idSel.disabled=false;
+ const modalCard=$('#muxModalFormCard');
+ if(!overlay || !modalCard) return;
+ 
+ overlay.classList.add('active');
+ modalCard.innerHTML = ''; // Vider le conteneur
+ 
+ // Trouver la définition MUX (premier composant complexe trouvé)
+ let muxDef = null;
+ if(typeof componentDefinitions !== 'undefined' && componentDefinitions) {
+  muxDef = componentDefinitions.find(def => def.isComplex);
  }
+ 
+ if(!muxDef) {
+  console.warn('[showMuxForm] Définition MUX non trouvée');
+  return;
+ }
+ 
+ // Préparer la configuration actuelle
+ const currentCfg = {};
  if(muxId!==null){
- const mux=muxList.find(m=>m.id==muxId);
- if(mux){
- if($('#muxEn')) $('#muxEn').value=mux.en||255;
- if($('#muxCcBase')) $('#muxCcBase').value=mux.ccBase||1;
- if($('#muxMidiChan')) $('#muxMidiChan').value=mux.midiChan||1;
- if($('#muxOscBase')) $('#muxOscBase').value=mux.oscBase||'/mux'+muxId;
- if($('#muxMin')) $('#muxMin').value=mux.min!==undefined?mux.min:0;
- if($('#muxMax')) $('#muxMax').value=mux.max!==undefined?mux.max:4095;
- if($('#muxOscFormat')){
- const oscFormatValue=mux.oscFormat||'float';
- $('#muxOscFormat').value=oscFormatValue;
+  const mux=muxList.find(m=>m.id==muxId);
+  if(mux){
+   // Mapper les champs MUX vers les IDs attendus
+   currentCfg.muxId = mux.id;
+   currentCfg.muxSig = mux.sig;
+   currentCfg.muxS0 = mux.s0;
+   currentCfg.muxS1 = mux.s1;
+   currentCfg.muxS2 = mux.s2;
+   currentCfg.muxS3 = mux.s3;
+   currentCfg.muxEn = mux.en!==undefined?mux.en:255;
+   currentCfg.muxMin = mux.min!==undefined?mux.min:0;
+   currentCfg.muxMax = mux.max!==undefined?mux.max:4095;
+   currentCfg.muxFilterIntensity = mux.filterIntensity!==undefined?mux.filterIntensity:5;
+   currentCfg.rtpCc = mux.ccBase||1;
+   currentCfg.rtpChan = mux.midiChan||1;
+   currentCfg.rtpMsgType = 'Control Change';
+   currentCfg.oscAddress = mux.oscBase||'/mux'+muxId;
+   currentCfg.oscFormat = mux.oscFormat||'float';
+   currentCfg.rtpEnabled2 = true;
+   currentCfg.oscEnabled2 = true;
+  }
+ } else {
+  // Valeurs par défaut pour nouveau MUX
+  const idSel = muxId!==null ? muxId : 0;
+  currentCfg.muxId = idSel;
+  currentCfg.muxSig = '';
+  currentCfg.muxEn = 255;
+  currentCfg.muxCcBase = 1;
+  currentCfg.muxMidiChan = 1;
+  currentCfg.muxOscBase = '/mux'+idSel;
+  currentCfg.muxMin = 0;
+  currentCfg.muxMax = 4095;
+  currentCfg.muxOscFormat = 'float';
+  currentCfg.muxFilterIntensity = 5;
  }
- if($('#muxFilterIntensity')) $('#muxFilterIntensity').value=mux.filterIntensity!==undefined?mux.filterIntensity:5;
+ 
+ // Générer les champs de formulaire
+ if(typeof generateFormFields === 'function' && muxDef.formFields && muxDef.formFields.length > 0) {
+  generateFormFields(muxDef, 'muxModalFormCard', currentCfg);
  }
- } else{
- if($('#muxSig')) $('#muxSig').value='';
- if($('#muxEn')) $('#muxEn').value=255;
- if($('#muxCcBase')) $('#muxCcBase').value=1;
- if($('#muxMidiChan')) $('#muxMidiChan').value=1;
- if($('#muxOscBase')) $('#muxOscBase').value='/mux'+(idSel?idSel.value:'0');
- if($('#muxMin')) $('#muxMin').value=0;
- if($('#muxMax')) $('#muxMax').value=4095;
- if($('#muxOscFormat')) $('#muxOscFormat').value='float';
- if($('#muxFilterIntensity')) $('#muxFilterIntensity').value=5;
+ 
+ // Générer les pins additionnelles
+ if(typeof generateAdditionalPins === 'function' && muxDef.isComplex && muxDef.additionalPins && muxDef.additionalPins.length > 0) {
+  generateAdditionalPins(muxDef, 'muxModalFormCard', currentCfg);
  }
- populateMuxPinSelects();
- if(muxId!==null){
- const mux=muxList.find(m=>m.id==muxId);
- if(mux&&$('#muxSig')){
- $('#muxSig').value=mux.sig;
+ 
+ // Générer la section RTP-MIDI dans le modal
+ const rtpSection = document.createElement('div');
+ rtpSection.id = 'muxModalRtpSection';
+ modalCard.appendChild(rtpSection);
+ if(typeof generateRtpMidiSection === 'function') {
+  generateRtpMidiSection(muxDef, currentCfg, 'muxModalRtpSection');
  }
- }
+ 
+ // Populate pins après un court délai pour que les selects soient créés
+ setTimeout(() => {
+  if(typeof populateMuxPinSelects === 'function') {
+   populateMuxPinSelects();
+  }
+ }, 100);
 }
 
 function hideMuxForm(){

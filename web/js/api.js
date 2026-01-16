@@ -354,8 +354,7 @@ async function saveAll(){
  const role = migrateRole(c.role);
  const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
  if(def && def.isComplex) return;
- const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
- if(def && def.isComplex) return;
+ 
  const p=new URLSearchParams();
  p.set('pinLabel',lbl);
  p.set('role',c.role);
@@ -368,10 +367,36 @@ async function saveAll(){
    p.set(key, c[key]);
   }
  });
- if(c.ledMode) p.set('ledMode',c.ledMode);
- if(c.btnMode) p.set('btnMode',c.btnMode);
- if(c.btnPulseTiming) p.set('btnPulseTiming',c.btnPulseTiming);
- if(c.filterIntensity) p.set('filterIntensity',c.filterIntensity);
+ 
+ // Envoyer dynamiquement tous les formFields depuis la définition
+ if(def && def.formFields && Array.isArray(def.formFields)) {
+  def.formFields.forEach(field => {
+   if(field.id && !field.id.startsWith('_')) {
+    const value = c[field.id];
+    if(value !== undefined && value !== null && value !== '') {
+     if(field.type === 3) { // CHECKBOX
+      if(value === true || value === 'true') {
+       p.set(field.id, 'true');
+      }
+     } else if(field.type === 4) { // RANGE
+      if(c[field.id + 'Min'] !== undefined && c[field.id + 'Min'] !== null && c[field.id + 'Min'] !== '') {
+       p.set(field.id + 'Min', c[field.id + 'Min']);
+      }
+      if(c[field.id + 'Max'] !== undefined && c[field.id + 'Max'] !== null && c[field.id + 'Max'] !== '') {
+       p.set(field.id + 'Max', c[field.id + 'Max']);
+      }
+     } else {
+      p.set(field.id, value);
+     }
+    }
+   }
+  });
+ }
+ 
+ // Envoyer les additionalPins si composant complexe (mais ici c'est déjà filtré, donc ne devrait pas arriver)
+ // Les composants complexes utilisent /api/mux/add qui a sa propre logique
+ 
+ // Champs OSC et Debug (communs à tous)
  if(c.oscEnabled) p.set('oscEnabled','true');
  if(c.oscAddress) p.set('oscAddress',c.oscAddress);
  if(c.oscFormat) p.set('oscFormat',c.oscFormat);

@@ -6,15 +6,16 @@
  * @param {string} role - ID du rôle (ex: "potentiometer", "hc4067")
  */
 function showRoleCards(role, currentCfg = {}){
- // Masquer toutes les cartes en utilisant les cardId du backend
- if(typeof componentDefinitions !== 'undefined' && componentDefinitions) {
-  componentDefinitions.forEach(def => {
-   if(def.cardId) {
-    const card = $('#' + def.cardId);
-    if(card) card.style.display = 'none';
-   }
-  });
+ // Utiliser un seul conteneur générique pour tous les composants
+ const card = $('#componentFormCard');
+ if(!card) {
+  console.warn('[showRoleCards] Conteneur componentFormCard non trouvé');
+  return;
  }
+ 
+ // Masquer et vider le conteneur par défaut
+ card.style.display = 'none';
+ card.innerHTML = '';
  
  if(!role) return;
  
@@ -23,20 +24,31 @@ function showRoleCards(role, currentCfg = {}){
  
  // Trouver la définition du composant
  const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(migratedRole) : null;
- if(def && def.cardId) {
-  const card = $('#' + def.cardId);
-  if(card) {
-   card.style.display = 'block';
-   // Générer les champs de formulaire dynamiquement
-   if(typeof generateFormFields === 'function' && def.formFields && def.formFields.length > 0) {
-    generateFormFields(def, def.cardId, currentCfg);
-   }
+ if(!def) {
+  console.warn('[showRoleCards] Définition non trouvée pour:', migratedRole);
+  return;
+ }
+ 
+ // Afficher le conteneur
+ card.style.display = 'block';
+ 
+ // Générer les champs de formulaire dynamiquement
+ if(def.formFields && Array.isArray(def.formFields) && def.formFields.length > 0) {
+  if(typeof generateFormFields === 'function') {
+   generateFormFields(def, 'componentFormCard', currentCfg);
+  }
+ }
+ 
+ // Générer les pins additionnelles si composant complexe
+ if(def.isComplex && def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0) {
+  if(typeof generateAdditionalPins === 'function') {
+   generateAdditionalPins(def, 'componentFormCard', currentCfg);
   }
  }
  
  // Générer la section RTP-MIDI dynamiquement
- if(def && typeof generateRtpMidiSection === 'function') {
-  generateRtpMidiSection(def, currentCfg);
+ if(typeof generateRtpMidiSection === 'function') {
+  generateRtpMidiSection(def, currentCfg, 'rtpMidiSection');
  }
 }
 
@@ -477,8 +489,20 @@ function getAllFieldIds() {
  // Ajouter les champs OSC et Debug
  ids.push('#oscEnabled2', '#oscAddress', '#oscFormat', '#dbgEnabled', '#dbgHeader');
  
- // Ajouter les champs MUX (gérés séparément mais nécessaires)
- ids.push('#muxS0', '#muxS1', '#muxS2', '#muxS3', '#muxEnManual');
+ // Collecter les IDs des additionalPins depuis toutes les définitions
+ if(typeof componentDefinitions !== 'undefined' && componentDefinitions) {
+  componentDefinitions.forEach(def => {
+   if(def.isComplex && def.additionalPins && Array.isArray(def.additionalPins)) {
+    def.additionalPins.forEach(additionalPin => {
+     if(additionalPin.id) {
+      // ID du champ : préfixe "mux" + id en capital (ex: s0 -> muxS0)
+      const fieldId = '#mux' + additionalPin.id.charAt(0).toUpperCase() + additionalPin.id.slice(1);
+      if(!ids.includes(fieldId)) ids.push(fieldId);
+     }
+    });
+   }
+  });
+ }
  
  return ids;
 }
@@ -894,45 +918,106 @@ function loadMuxConfigIntoForm(mux){
 }
 
 async function saveMuxFromPin(){
- const id=$('#muxId').value;
- const sig=parseInt($('#muxSig').value);
- const ccBase=parseInt($('#rtpCc').value)||1;
- const midiChan=parseInt($('#rtpChan').value)||1;
- const oscBase=$('#oscAddress').value||'/mux'+id;
- if(!sig||isNaN(sig)){
+ // Trouver la définition MUX
+ const funcSelectValue = $('#funcSelect')?.value || '';
+ const migratedRole = typeof migrateRole === 'function' ? migrateRole(funcSelectValue) : funcSelectValue;
+ const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(migratedRole) : null;
+ 
+ if(!def || !def.isComplex) {
+  console.warn('[saveMuxFromPin] Définition MUX non trouvée ou composant non complexe');
+  return;
+ }
+ 
+ // Lire le MUX ID (peut être dans un champ formField ou généré automatiquement)
+ let muxId = null;
+ const muxIdField = $('#muxId');
+ if(muxIdField) {
+  muxId = muxIdField.value;
+ } else {
+  // Générer un ID disponible
+  const existingIds = (muxList || []).map(m => parseInt(m.id)).filter(id => !isNaN(id));
+  muxId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 0;
+ }
+ 
+ // Lire dynamiquement les additionalPins
+ const additionalPinValues = {};
+ if(def.additionalPins && Array.isArray(def.additionalPins)) {
+  def.additionalPins.forEach(additionalPin => {
+   if(additionalPin.id) {
+    // ID du champ : préfixe "mux" + id en capital (ex: s0 -> muxS0)
+    const fieldId = 'mux' + additionalPin.id.charAt(0).toUpperCase() + additionalPin.id.slice(1);
+    const field = $('#' + fieldId);
+    if(field && field.value) {
+     additionalPinValues[additionalPin.id] = parseInt(field.value);
+    } else if(additionalPin.defaultValue !== undefined && additionalPin.defaultValue !== null) {
+     additionalPinValues[additionalPin.id] = parseInt(additionalPin.defaultValue);
+    } else if(additionalPin.optional) {
+     additionalPinValues[additionalPin.id] = 255; // Non connecté par défaut
+    }
+   }
+  });
+ }
+ 
+ const sig = additionalPinValues.sig || parseInt($('#muxSig')?.value);
+ if(!sig || isNaN(sig)){
   $('#muxMsg').textContent='Erreur: Veuillez choisir un pin analogique';
   $('#muxMsg').style.color='#ef4444';
   return;
  }
- // Toujours utiliser les valeurs manuelles
- const s0=parseInt($('#muxS0')?.value);
- const s1=parseInt($('#muxS1')?.value);
- const s2=parseInt($('#muxS2')?.value);
- const s3=parseInt($('#muxS3')?.value);
- let en=255;
- const enManual=$('#muxEnManual');
- if(enManual&&enManual.value&&enManual.value!=='255'){
-  en=parseInt(enManual.value);
+ 
+ const s0 = additionalPinValues.s0 || parseInt($('#muxS0')?.value);
+ const s1 = additionalPinValues.s1 || parseInt($('#muxS1')?.value);
+ const s2 = additionalPinValues.s2 || parseInt($('#muxS2')?.value);
+ const s3 = additionalPinValues.s3 || parseInt($('#muxS3')?.value);
+ const en = additionalPinValues.en !== undefined ? additionalPinValues.en : (parseInt($('#muxEnManual')?.value) || 255);
+ 
+ // Lire dynamiquement les formFields
+ const formFieldValues = {};
+ if(def.formFields && Array.isArray(def.formFields)) {
+  def.formFields.forEach(field => {
+   if(field.id && !field.id.startsWith('_')) {
+    const el = $('#' + field.id);
+    if(el) {
+     if(field.type === 3) { // CHECKBOX
+      formFieldValues[field.id] = el.checked ? 'true' : 'false';
+     } else if(field.type === 4) { // RANGE
+      const elMin = $('#' + field.id + 'Min');
+      const elMax = $('#' + field.id + 'Max');
+      if(elMin) formFieldValues[field.id + 'Min'] = elMin.value || field.defaultValue || '0';
+      if(elMax) formFieldValues[field.id + 'Max'] = elMax.value || field.defaultValue || '4095';
+     } else {
+      formFieldValues[field.id] = el.value || field.defaultValue || '';
+     }
+    }
+   }
+  });
  }
- const min=parseInt($('#muxMin').value)||0;
- const max=parseInt($('#muxMax').value)||4095;
- const oscFormat=$('#oscFormat').value||'float';
- const filterIntensity=parseInt($('#muxFilterIntensity').value)||5;
+ 
+ const min = parseInt(formFieldValues.muxMin || $('#muxMin')?.value || '0');
+ const max = parseInt(formFieldValues.muxMax || $('#muxMax')?.value || '4095');
+ const filterIntensity = parseInt(formFieldValues.muxFilterIntensity || $('#muxFilterIntensity')?.value || '5');
+ 
+ // Lire les paramètres RTP-MIDI dynamiquement
+ const rtpCc = parseInt($('#rtpCc')?.value || $('#rtpNote')?.value || $('#rtpPc')?.value || '1');
+ const rtpChan = parseInt($('#rtpChan')?.value || '1');
+ const oscAddress = $('#oscAddress')?.value || '/mux' + muxId;
+ const oscFormat = $('#oscFormat')?.value || 'float';
+ 
  const formData=new URLSearchParams();
- formData.append('id',id);
- formData.append('sig',sig);
- formData.append('s0',s0);
- formData.append('s1',s1);
- formData.append('s2',s2);
- formData.append('s3',s3);
- formData.append('en',en);
- formData.append('ccBase',ccBase);
- formData.append('midiChan',midiChan);
- formData.append('oscBase',oscBase);
- formData.append('min',min);
- formData.append('max',max);
- formData.append('oscFormat',oscFormat);
- formData.append('filterIntensity',filterIntensity);
+ formData.append('id', muxId);
+ formData.append('sig', sig);
+ formData.append('s0', s0);
+ formData.append('s1', s1);
+ formData.append('s2', s2);
+ formData.append('s3', s3);
+ formData.append('en', en);
+ formData.append('ccBase', rtpCc);
+ formData.append('midiChan', rtpChan);
+ formData.append('oscBase', oscAddress);
+ formData.append('min', min);
+ formData.append('max', max);
+ formData.append('oscFormat', oscFormat);
+ formData.append('filterIntensity', filterIntensity);
  try{
  const r=await fetch('/api/mux/add',{method:'POST',body:formData});
  const d=await r.json();
@@ -1190,13 +1275,136 @@ function generateFormFields(def, containerId, currentCfg = {}) {
 }
 
 /**
+ * Obtient les pins disponibles filtrées par type
+ * @param {number} pinType - Type de pin (0=PIN_ANALOG, 1=PIN_DIGITAL, 2=PIN_ANALOG_OR_DIGITAL, 3=PIN_PWM)
+ * @param {Array} excludeGpios - Liste des GPIOs à exclure (optionnel)
+ * @returns {Array} Liste des pins disponibles
+ */
+function getPinsByType(pinType, excludeGpios = []) {
+ if(!caps || !caps.pins) return [];
+ 
+ const excludeSet = new Set(excludeGpios);
+ 
+ return caps.pins.filter(pin => {
+  // Exclure les pins déjà utilisées
+  if(excludeSet.has(parseInt(pin.gpio))) return false;
+  
+  // Filtrer selon pinType
+  switch(pinType) {
+   case 0: // PIN_ANALOG
+    return pin.caps && pin.caps.adc === true;
+   case 1: // PIN_DIGITAL
+    return true; // Toutes les pins peuvent être digitales
+   case 2: // PIN_ANALOG_OR_DIGITAL
+    return true; // Toutes les pins
+   case 3: // PIN_PWM
+    return pin.caps && pin.caps.pwm === true;
+   default:
+    return false;
+  }
+ });
+}
+
+/**
+ * Génère dynamiquement les champs pour les pins additionnelles (composants complexes)
+ * @param {Object} def - Définition du composant depuis le backend
+ * @param {string} containerId - ID du conteneur (ex: "componentFormCard")
+ * @param {Object} currentCfg - Configuration actuelle (optionnel)
+ */
+function generateAdditionalPins(def, containerId, currentCfg = {}) {
+ const container = $('#' + containerId);
+ if(!container || !def || !def.additionalPins || !Array.isArray(def.additionalPins) || def.additionalPins.length === 0) {
+  return;
+ }
+ 
+ // Créer une section pour les pins additionnelles
+ const section = document.createElement('div');
+ section.className = 'f';
+ section.style.marginTop = '20px';
+ 
+ const sectionTitle = document.createElement('h4');
+ sectionTitle.style.marginTop = '0';
+ sectionTitle.textContent = 'Configuration des pins';
+ section.appendChild(sectionTitle);
+ 
+ // Obtenir les GPIOs déjà utilisées (pour exclusion)
+ const usedGpios = typeof getUsedGpios === 'function' ? getUsedGpios() : [];
+ const currentPinLabel = $('#selPin')?.textContent || '';
+ const currentPin = caps?.pins?.find(p => p.label === currentPinLabel);
+ const currentPinGpio = currentPin ? parseInt(currentPin.gpio) : null;
+ 
+ def.additionalPins.forEach(additionalPin => {
+  if(!additionalPin.id) return;
+  
+  const wrapper = document.createElement('div');
+  wrapper.className = 'f';
+  
+  const label = document.createElement('label');
+  label.textContent = additionalPin.displayName || additionalPin.id;
+  if(additionalPin.optional) {
+   label.textContent += ' (optionnel)';
+  }
+  wrapper.appendChild(label);
+  
+  const select = document.createElement('select');
+  // ID du champ : préfixe "mux" + id en capital (ex: s0 -> muxS0, en -> muxEn)
+  const fieldId = 'mux' + additionalPin.id.charAt(0).toUpperCase() + additionalPin.id.slice(1);
+  select.id = fieldId;
+  select.style.width = '200px';
+  
+  // Ajouter option "Non connecté" pour les pins optionnelles
+  if(additionalPin.optional) {
+   const optNone = document.createElement('option');
+   optNone.value = '255';
+   optNone.textContent = 'Non connecté';
+   select.appendChild(optNone);
+  }
+  
+  // Remplir avec les pins disponibles selon pinType
+  const pinType = additionalPin.pinType !== undefined ? additionalPin.pinType : 1; // Défaut: PIN_DIGITAL
+  const availablePins = getPinsByType(pinType, usedGpios);
+  
+  availablePins.forEach(pin => {
+   // Ne pas inclure la pin principale (si elle est digitale)
+   if(currentPinGpio && parseInt(pin.gpio) === currentPinGpio && pinType === 1) {
+    return; // Skip
+   }
+   
+   const option = document.createElement('option');
+   option.value = pin.gpio;
+   option.textContent = pin.label + ' (GPIO' + pin.gpio + ')';
+   select.appendChild(option);
+  });
+  
+  // Pré-remplir avec currentCfg ou defaultValue
+  const cfgValue = currentCfg[fieldId] || currentCfg[additionalPin.id];
+  if(cfgValue !== undefined && cfgValue !== null && cfgValue !== '') {
+   select.value = cfgValue.toString();
+  } else if(additionalPin.defaultValue !== undefined && additionalPin.defaultValue !== null) {
+   select.value = additionalPin.defaultValue.toString();
+  } else if(additionalPin.optional) {
+   select.value = '255'; // Non connecté par défaut pour optionnel
+  }
+  
+  wrapper.appendChild(select);
+  section.appendChild(wrapper);
+ });
+ 
+ container.appendChild(section);
+}
+
+/**
  * Génère dynamiquement la section RTP-MIDI depuis les définitions du backend
  * @param {Object} def - Définition du composant
  * @param {Object} currentCfg - Configuration actuelle
+ * @param {string} containerId - ID du conteneur (optionnel, défaut: "rtpMidiSection")
  */
-function generateRtpMidiSection(def, currentCfg = {}) {
- const container = $('#rtpMidiSection');
- if(!container) return;
+function generateRtpMidiSection(def, currentCfg = {}, containerId = 'rtpMidiSection') {
+ const container = $('#' + containerId);
+ if(!container) {
+  console.warn('[generateRtpMidiSection] Conteneur non trouvé:', containerId);
+  return;
+ }
  
  // Vider le conteneur
  container.innerHTML = '';
