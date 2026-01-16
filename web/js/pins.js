@@ -1,34 +1,43 @@
 /* Fonctions de gestion des pins et affichage du board */
 
+/**
+ * Détermine le type de pin pour le CSS
+ * Utilise les données du backend (caps) au lieu du hardcode
+ * @param {string} lbl - Label de la pin
+ * @returns {string} Type CSS (analog, digital, uart, i2c, spi)
+ */
 function pType(lbl){
- if(['TX','RX'].includes(lbl)) return 'uart';
- if(lbl.startsWith('A')) return 'analog';
- if(['SDA','SCL','I2C'].includes(lbl)) return 'i2c';
- if(['MOSI','MISO','SCK','SPI'].includes(lbl)) return 'spi';
+ // Utiliser les données du backend si disponibles
+ if(typeof caps !== 'undefined' && caps && caps.pins) {
+  const pin = caps.pins.find(p => p.label === lbl);
+  if(pin) {
+   // Vérifier le type spécial via le label
+   if(pin.label === 'TX' || pin.label === 'RX') return 'uart';
+   if(pin.label === 'SDA' || pin.label === 'SCL') return 'i2c';
+   if(pin.label === 'MOSI' || pin.label === 'MISO' || pin.label === 'SCK') return 'spi';
+   // Utiliser le flag adc du backend
+   if(pin.adc) return 'analog';
+   return 'digital';
+  }
+ }
+ // Fallback si caps pas encore chargé
+ if(lbl && lbl.startsWith('A')) return 'analog';
  return 'digital';
 }
 
 function getRoleDisplayLabel(role){
  if(!role) return '';
  
- // Utiliser les définitions dynamiques si disponibles
+ // Extraire l'ID de base (pour MUX: mux:HC4067 -> mux)
+ const baseRole = role.includes(':') ? role.split(':')[0] : role;
+ 
+ // Utiliser les définitions du backend
  if(typeof getComponentDefinition === 'function') {
-  // Pour les rôles MUX, extraire l'ID de base
-  const baseRole = role.startsWith('mux:') ? 'mux' : role;
   const def = getComponentDefinition(baseRole);
-  if(def) {
-   return def.displayName;
-  }
+  if(def) return def.displayName;
  }
  
- // Fallback vers les valeurs codées en dur
- if(role==='potentiometer') return 'Potentiomètre';
- if(role==='button') return 'Bouton';
- if(role==='led') return 'LED';
- if(role==='i2c') return 'I2C';
- if(role==='spi') return 'SPI';
- if(role==='uart') return 'UART';
- if(role.startsWith('mux:')) return role.split(':')[1];
+ // Fallback: retourner le rôle tel quel
  return role;
 }
 
@@ -125,7 +134,6 @@ function updateBusVisuals(){
  }
  
  // 3. Ajouter les GPIOs de l'édition en cours (pas encore sauvegardés)
- // Parcourir pcfg pour les composants non sauvegardés
  Object.keys(pcfg).forEach(lbl => {
   const cfg = pcfg[lbl];
   const pin = caps.pins.find(p => p.label === lbl);
@@ -134,19 +142,22 @@ function updateBusVisuals(){
   const gpio = parseInt(pin.gpio);
   if(!isNaN(gpio)) usedGpios.add(gpio);
   
-  // Pour les MUX, ajouter les pins d'adresse depuis le formulaire
-  if(cfg && cfg.role && cfg.role.startsWith('mux:')) {
-   const s0 = $('#muxS0') ? parseInt($('#muxS0').value) : NaN;
-   const s1 = $('#muxS1') ? parseInt($('#muxS1').value) : NaN;
-   const s2 = $('#muxS2') ? parseInt($('#muxS2').value) : NaN;
-   const s3 = $('#muxS3') ? parseInt($('#muxS3').value) : NaN;
-   const en = $('#muxEnManual') ? parseInt($('#muxEnManual').value) : NaN;
+  // Pour les composants complexes, utiliser les additionalPins du backend
+  if(cfg && cfg.role && typeof getComponentDefinition === 'function') {
+   const baseRole = cfg.role.includes(':') ? cfg.role.split(':')[0] : cfg.role;
+   const def = getComponentDefinition(baseRole);
    
-   if(!isNaN(s0)) usedGpios.add(s0);
-   if(!isNaN(s1)) usedGpios.add(s1);
-   if(!isNaN(s2)) usedGpios.add(s2);
-   if(!isNaN(s3)) usedGpios.add(s3);
-   if(!isNaN(en) && en !== 255) usedGpios.add(en);
+   if(def && def.additionalPins && def.additionalPinCount > 0) {
+    def.additionalPins.forEach(pinDef => {
+     // Chercher la valeur dans le formulaire via l'ID de la pin
+     const formId = 'mux' + pinDef.id.charAt(0).toUpperCase() + pinDef.id.slice(1);
+     const formEl = $('#' + formId);
+     if(formEl) {
+      const val = parseInt(formEl.value);
+      if(!isNaN(val) && val !== 255) usedGpios.add(val);
+     }
+    });
+   }
   }
  });
  
@@ -224,11 +235,15 @@ function drawBoard(){
  };
  
  const getPinColor=(label)=>{
- if(['TX','RX'].includes(label))return FC.UART;
- if(label.startsWith('A'))return FC.ANALOG;
- if(['SDA','SCL'].includes(label))return FC.I2C;
- if(['MOSI','MISO','SCK'].includes(label))return FC.SPI;
- return FC.DIGITAL;
+ // Utiliser pType qui utilise les données du backend
+ const type = pType(label);
+ switch(type) {
+  case 'uart': return FC.UART;
+  case 'analog': return FC.ANALOG;
+  case 'i2c': return FC.I2C;
+  case 'spi': return FC.SPI;
+  default: return FC.DIGITAL;
+ }
  };
  
  const pins=caps.pins;

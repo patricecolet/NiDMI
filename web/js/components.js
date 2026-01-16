@@ -1,22 +1,39 @@
 /* Fonctions de gestion des composants et configurations */
 
+/**
+ * Mapping entre ID de composant et ID de carte HTML
+ * Ce mapping est nécessaire car les IDs HTML existants ne correspondent pas aux IDs backend
+ */
+const cardMapping = {
+ 'button': 'cardBtn',
+ 'led': 'cardLed',
+ 'potentiometer': 'cardPot',
+ 'mux': 'cardMux'
+};
+
+/**
+ * Affiche la carte de configuration correspondant au rôle sélectionné
+ * Utilise les définitions du backend pour déterminer le type de carte
+ * @param {string} role - ID du rôle (ex: "potentiometer", "mux:HC4067")
+ */
 function showRoleCards(role){
- const b=$('#cardBtn'), l=$('#cardLed'), p=$('#cardPot'), m=$('#cardMux');
- 
  // Masquer toutes les cartes par défaut
- if(b) b.style.display='none';
- if(l) l.style.display='none';
- if(p) p.style.display='none';
- if(m) m.style.display='none';
+ Object.values(cardMapping).forEach(cardId => {
+  const card = $('#' + cardId);
+  if(card) card.style.display = 'none';
+ });
+ 
+ if(!role) return;
+ 
+ // Extraire l'ID de base (mux:HC4067 -> mux)
+ const baseRole = role.includes(':') ? role.split(':')[0] : role;
  
  // Afficher la carte correspondante
- if(role==='button' && b) b.style.display='block';
- else if(role==='led' && l) l.style.display='block';
- else if(role==='potentiometer' && p) p.style.display='block';
- else if(role && role.startsWith('mux:') && m) m.style.display='block';
- 
- // Pour les composants non implémentés, on pourrait afficher un message
- // Pour l'instant, on masque simplement toutes les cartes
+ const cardId = cardMapping[baseRole];
+ if(cardId) {
+  const card = $('#' + cardId);
+  if(card) card.style.display = 'block';
+ }
 }
 
 function updFunc(lbl){
@@ -26,93 +43,51 @@ function updFunc(lbl){
  // Toujours vider le formulaire MUX au début pour éviter les valeurs résiduelles
  if($('#muxSig')) $('#muxSig').value='';
  
- const isI2C=(lbl==='SDA'||lbl==='SCL');
- const isSPI=(lbl==='MOSI'||lbl==='MISO'||lbl==='SCK');
- const isUART=(lbl==='TX'||lbl==='RX');
- const isMuxPin=lbl.startsWith('M');
- 
- // Gérer les rôles spéciaux (bus)
- if(isI2C){
-  setOptions(sel,{'i2c':'I2C'},0);
-  showRoleCards(sel.value||'');
-  updateRtpForRole(sel.value||'');
-  return;
- }
- if(isSPI){
-  setOptions(sel,{'spi':'SPI'},0);
-  showRoleCards(sel.value||'');
-  updateRtpForRole(sel.value||'');
-  return;
- }
- if(isUART){
-  setOptions(sel,{'uart':'UART'},0);
-  showRoleCards(sel.value||'');
-  updateRtpForRole(sel.value||'');
-  return;
- }
- 
- // Déterminer le type de pin pour les composants dynamiques
- let pinType = null;
+ // Utiliser pType() qui utilise les données du backend
+ const type = typeof pType === 'function' ? pType(lbl) : 'digital';
  const pin = caps?.pins?.find(p => p.label === lbl);
  
- if(/^A\d+$/.test(lbl) || isMuxPin) {
-  pinType = 0; // PIN_ANALOG
- } else if(/^D\d+$/.test(lbl)) {
-  // Vérifier si c'est une pin PWM pour déterminer le type
-  if(pin && pin.has_pwm) {
-   pinType = 3; // PIN_PWM
-  } else {
-   pinType = 1; // PIN_DIGITAL
-  }
+ // Gérer les bus (I2C, SPI, UART) - rôles spéciaux
+ if(type === 'i2c' || type === 'spi' || type === 'uart') {
+  const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(type) : null;
+  const displayName = def ? def.displayName : type.toUpperCase();
+  const options = {};
+  options[type] = displayName;
+  setOptions(sel, options, 0);
+  showRoleCards(sel.value || '');
+  updateRtpForRole(sel.value || '');
+  return;
  }
  
- // Générer les options dynamiquement depuis les définitions
+ // Convertir le type de pin en pinType numérique pour le filtre
+ let pinType = null;
+ if(type === 'analog') {
+  pinType = 0; // PIN_ANALOG
+ } else if(type === 'digital') {
+  pinType = pin && pin.has_pwm ? 3 : 1; // PIN_PWM ou PIN_DIGITAL
+ }
+ 
+ // Générer les options dynamiquement depuis les définitions du backend
  const options = {};
  
  if(pinType !== null && typeof getComponentsForPinType === 'function') {
-  const compatibleComponents = getComponentsForPinType(pinType, true); // implementedOnly = true
+  const compatibleComponents = getComponentsForPinType(pinType, true);
   
   compatibleComponents.forEach(def => {
-   // Gestion spéciale pour MUX (composant complexe)
+   // Gestion spéciale pour MUX (composant complexe avec sous-options)
    if(def.id === 'mux' && pinType === 0) {
     const muxAvailable = pin ? areMuxAddressPinsAvailable(pin.gpio) : false;
     options['mux'] = {
-     label: 'Multiplexeur Analogique',
+     label: def.displayName,
      items: [
       {value: 'mux:HC4067', label: 'HC4067 (16 canaux)', disabled: !muxAvailable},
-      {value: 'mux:HC4051', label: 'HC4051 (8 canaux)', disabled: true} // Pas encore implémenté
+      {value: 'mux:HC4051', label: 'HC4051 (8 canaux)', disabled: true}
      ]
     };
-   } else {
-    // Composants simples : utiliser displayName depuis la définition
-    // Si le composant n'est pas implémenté, on ne l'ajoute pas aux options pour l'instant
-    // (on pourrait l'ajouter comme disabled dans une version future)
-    if(def.implemented) {
-     options[def.id] = def.displayName;
-    }
+   } else if(def.implemented) {
+    options[def.id] = def.displayName;
    }
   });
-  
-  // Pour l'instant, on n'affiche pas les composants non implémentés
-  // (on pourrait les ajouter avec disabled=true dans une version future)
- } else {
-  // Fallback si les définitions ne sont pas chargées (valeur par défaut)
-  if(pinType === 0) {
-   const muxAvailable = pin ? areMuxAddressPinsAvailable(pin.gpio) : false;
-   options['potentiometer'] = 'Potentiomètre';
-   options['mux'] = {
-    label: 'Multiplexeur Analogique',
-    items: [
-     {value: 'mux:HC4067', label: 'HC4067 (16 canaux)', disabled: !muxAvailable},
-     {value: 'mux:HC4051', label: 'HC4051 (8 canaux)', disabled: true}
-    ]
-   };
-  } else if(pinType === 1 || pinType === 3) {
-   options['button'] = 'Bouton';
-   if(pinType === 3) {
-    options['led'] = 'LED';
-   }
-  }
  }
  
  if(Object.keys(options).length > 0) {

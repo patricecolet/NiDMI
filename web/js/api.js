@@ -254,8 +254,8 @@ function getCachedUsedGpios() {
 
 /**
  * Ajoute les GPIOs d'un composant en cours d'édition au cache
- * Utilisé pour le grisage pendant l'édition avant sauvegarde
- * @param {Object} config - Configuration du composant en cours d'édition
+ * Utilise les additionalPins du backend pour les composants complexes
+ * @param {Object} editingConfig - Configuration du composant en cours d'édition
  * @returns {Set<number>} Set mis à jour des GPIOs utilisés
  */
 function getUsedGpiosWithEditing(editingConfig) {
@@ -268,22 +268,46 @@ function getUsedGpiosWithEditing(editingConfig) {
   gpios.add(parseInt(editingConfig.gpio));
  }
  
- // Pour les composants complexes (MUX), ajouter les pins additionnelles
- if(editingConfig.role && editingConfig.role.startsWith('mux:')) {
-  if(editingConfig.s0 !== undefined) gpios.add(parseInt(editingConfig.s0));
-  if(editingConfig.s1 !== undefined) gpios.add(parseInt(editingConfig.s1));
-  if(editingConfig.s2 !== undefined) gpios.add(parseInt(editingConfig.s2));
-  if(editingConfig.s3 !== undefined) gpios.add(parseInt(editingConfig.s3));
-  if(editingConfig.en !== undefined && editingConfig.en !== 255) {
-   gpios.add(parseInt(editingConfig.en));
+ // Pour les composants complexes, utiliser les additionalPins du backend
+ if(editingConfig.role && typeof getComponentDefinition === 'function') {
+  const baseRole = editingConfig.role.includes(':') ? editingConfig.role.split(':')[0] : editingConfig.role;
+  const def = getComponentDefinition(baseRole);
+  
+  if(def && def.additionalPins && def.additionalPinCount > 0) {
+   // Parcourir les pins additionnelles définies par le backend
+   def.additionalPins.forEach(pinDef => {
+    const pinId = pinDef.id; // ex: "s0", "s1", "en"
+    const gpio = editingConfig[pinId];
+    if(gpio !== undefined && gpio !== null && gpio !== 255) {
+     gpios.add(parseInt(gpio));
+    }
+   });
   }
  }
  
  return gpios;
 }
 
+/**
+ * Migre les anciens noms de rôle vers les IDs backend
+ * Utilise les définitions du backend pour la migration
+ * @param {string} role - Ancien nom ou ID de rôle
+ * @returns {string} ID de rôle normalisé
+ */
 function migrateRole(role){
- const migration={
+ if(!role) return role;
+ 
+ // Si c'est déjà un ID valide (minuscule, pas d'accent), retourner tel quel
+ if(/^[a-z0-9:_-]+$/.test(role)) return role;
+ 
+ // Chercher dans les définitions du backend par displayName
+ if(typeof componentDefinitions !== 'undefined' && componentDefinitions.length > 0) {
+  const def = componentDefinitions.find(d => d.displayName === role);
+  if(def) return def.id;
+ }
+ 
+ // Fallback legacy pour compatibilité
+ const legacy = {
   'Potentiomètre':'potentiometer',
   'Bouton':'button',
   'LED':'led',
@@ -292,7 +316,7 @@ function migrateRole(role){
   'SPI':'spi',
   'UART':'uart'
  };
- return migration[role]||role;
+ return legacy[role] || role;
 }
 
 async function loadConfiguredPins(){
