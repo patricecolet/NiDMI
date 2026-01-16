@@ -136,22 +136,25 @@ function updateRtpForRole(role){
  const rtpEnable = $('#rtpEnabled2');
  const rtpType = $('#rtpMsgType');
  const rtpParams = $('#rtpParams');
- let enabled = true;
+ 
+ // Extraire l'ID de base (mux:HC4067 -> mux)
+ const baseRole = role && role.includes(':') ? role.split(':')[0] : role;
+ 
+ // Obtenir la définition du composant depuis le backend
+ const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(baseRole) : null;
+ 
+ // Déterminer si MIDI est supporté et quels messages
+ let enabled = false;
  let types = [];
- if(role==='potentiometer'){
- types = ['Control Change','Pitch Bend','Aftertouch (Channel)','Note + vélocité','Note (balayage)'];
- } else if(role==='button'){
- types = ['Note','Control Change','Program Change','Clock','Tap Tempo'];
- } else if(role==='led'){
- types = ['Note','Control Change'];
- } else if(role.startsWith('mux:')){
- enabled = true; // Réactiver pour utiliser les sections standard
- types = ['Control Change']; // Type par défaut pour multiplexeur
- } else if(role==='i2c' || role==='spi' || role==='uart'){
- enabled = false;
- } else if(!role){
- enabled = false;
+ 
+ if(def) {
+  enabled = def.supportsMidi && def.midiMessages && def.midiMessages.length > 0;
+  if(enabled) {
+   // Construire la liste des types depuis les définitions backend
+   types = def.midiMessages.map(m => m.displayName);
+  }
  }
+ 
  if(rtpEnable){ rtpEnable.checked = enabled; rtpEnable.disabled = !enabled; }
  if(rtpType){
  if(enabled){

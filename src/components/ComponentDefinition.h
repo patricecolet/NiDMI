@@ -12,6 +12,7 @@
  * - La validation (type de pin requis, fonction de validation)
  * - L'état d'implémentation (composant disponible ou grisé)
  * - Les pins utilisées (pour le grisage)
+ * - Les messages MIDI supportés
  */
 
 /**
@@ -26,9 +27,22 @@ struct AdditionalPinDef {
 };
 
 /**
+ * @brief Description d'un type de message MIDI
+ */
+struct MidiMessageDef {
+    const char* id;              // Identifiant (ex: "cc", "note", "pc")
+    const char* displayName;     // Nom affiché (ex: "Control Change", "Note")
+};
+
+/**
  * @brief Nombre max de pins additionnelles par composant
  */
 static constexpr uint8_t MAX_ADDITIONAL_PINS = 6;
+
+/**
+ * @brief Nombre max de types de messages MIDI par composant
+ */
+static constexpr uint8_t MAX_MIDI_MESSAGES = 8;
 
 /**
  * @struct ComponentDefinition
@@ -42,10 +56,16 @@ struct ComponentDefinition {
     PinType pinType;             // Type de pin principale
     bool implemented;            // true = disponible, false = grisé dans l'UI
     bool isComplex;              // true = nécessite un manager (ex: MUX)
+    bool supportsMidi;           // true = peut envoyer/recevoir MIDI
+    bool supportsOsc;            // true = peut envoyer/recevoir OSC
     
     // Pins additionnelles pour composants complexes
     uint8_t additionalPinCount;  // Nombre de pins additionnelles (0 pour simple)
     AdditionalPinDef additionalPins[MAX_ADDITIONAL_PINS]; // Description des pins
+    
+    // Messages MIDI supportés
+    uint8_t midiMessageCount;    // Nombre de types de messages MIDI supportés
+    MidiMessageDef midiMessages[MAX_MIDI_MESSAGES]; // Types de messages supportés
     
     /**
      * @brief Convertit la définition en JSON pour l'API
@@ -55,12 +75,15 @@ struct ComponentDefinition {
      */
     int toJson(char* buffer, size_t bufferSize) const {
         int written = snprintf(buffer, bufferSize,
-            "{\"id\":\"%s\",\"displayName\":\"%s\",\"pinType\":%d,\"implemented\":%s,\"isComplex\":%s,\"additionalPinCount\":%d",
+            "{\"id\":\"%s\",\"displayName\":\"%s\",\"pinType\":%d,\"implemented\":%s,\"isComplex\":%s,"
+            "\"supportsMidi\":%s,\"supportsOsc\":%s,\"additionalPinCount\":%d",
             id,
             displayName,
             static_cast<int>(pinType),
             implemented ? "true" : "false",
             isComplex ? "true" : "false",
+            supportsMidi ? "true" : "false",
+            supportsOsc ? "true" : "false",
             additionalPinCount
         );
         
@@ -77,6 +100,22 @@ struct ComponentDefinition {
                     additionalPins[i].displayName,
                     static_cast<int>(additionalPins[i].pinType),
                     additionalPins[i].optional ? "true" : "false"
+                );
+            }
+            written += snprintf(buffer + written, bufferSize - written, "]");
+        }
+        
+        // Ajouter les messages MIDI supportés
+        if (midiMessageCount > 0 && written < (int)bufferSize - 50) {
+            written += snprintf(buffer + written, bufferSize - written, ",\"midiMessages\":[");
+            for (uint8_t i = 0; i < midiMessageCount && i < MAX_MIDI_MESSAGES; i++) {
+                if (i > 0) {
+                    written += snprintf(buffer + written, bufferSize - written, ",");
+                }
+                written += snprintf(buffer + written, bufferSize - written,
+                    "{\"id\":\"%s\",\"displayName\":\"%s\"}",
+                    midiMessages[i].id,
+                    midiMessages[i].displayName
                 );
             }
             written += snprintf(buffer + written, bufferSize - written, "]");

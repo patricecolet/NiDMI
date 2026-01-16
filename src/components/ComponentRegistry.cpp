@@ -25,7 +25,17 @@ void ComponentRegistry::init() {
         def.pinType = PinType::PIN_ANALOG;
         def.implemented = true;
         def.isComplex = false;
-        def.additionalPinCount = 0;  // Pas de pins additionnelles
+        def.supportsMidi = true;
+        def.supportsOsc = true;
+        def.additionalPinCount = 0;
+        
+        // Messages MIDI supportés par le potentiomètre
+        def.midiMessageCount = 4;
+        def.midiMessages[0] = {"cc", "Control Change"};
+        def.midiMessages[1] = {"pc", "Program Change"};
+        def.midiMessages[2] = {"pitchbend", "Pitch Bend"};
+        def.midiMessages[3] = {"aftertouch", "Aftertouch (Channel)"};
+        
         definitions_.push_back(def);
     }
     
@@ -39,7 +49,19 @@ void ComponentRegistry::init() {
         def.pinType = PinType::PIN_DIGITAL;
         def.implemented = true;
         def.isComplex = false;
+        def.supportsMidi = true;
+        def.supportsOsc = true;
         def.additionalPinCount = 0;
+        
+        // Messages MIDI supportés par le bouton
+        def.midiMessageCount = 6;
+        def.midiMessages[0] = {"note", "Note"};
+        def.midiMessages[1] = {"cc", "Control Change"};
+        def.midiMessages[2] = {"pc", "Program Change"};
+        def.midiMessages[3] = {"notevel", "Note + vélocité"};
+        def.midiMessages[4] = {"notesweep", "Note (balayage)"};
+        def.midiMessages[5] = {"clock", "Clock"};
+        
         definitions_.push_back(def);
     }
     
@@ -50,25 +72,33 @@ void ComponentRegistry::init() {
         def.displayName = "Multiplexeur";
         def.icon = nullptr;
         def.type = ComponentType::MUX;
-        def.pinType = PinType::PIN_ANALOG;  // Pin principale (SIG)
+        def.pinType = PinType::PIN_ANALOG;
         def.implemented = true;
         def.isComplex = true;
-        def.additionalPinCount = 5;  // S0, S1, S2, S3, EN
+        def.supportsMidi = true;
+        def.supportsOsc = true;
+        def.additionalPinCount = 5;
         
         // Pins d'adresse (obligatoires)
         def.additionalPins[0] = {"s0", "S0", PinType::PIN_DIGITAL, false, 255};
         def.additionalPins[1] = {"s1", "S1", PinType::PIN_DIGITAL, false, 255};
         def.additionalPins[2] = {"s2", "S2", PinType::PIN_DIGITAL, false, 255};
         def.additionalPins[3] = {"s3", "S3", PinType::PIN_DIGITAL, false, 255};
-        // Pin Enable (optionnelle)
         def.additionalPins[4] = {"en", "Enable", PinType::PIN_DIGITAL, true, 255};
+        
+        // Messages MIDI supportés par le MUX (même que potentiomètre)
+        def.midiMessageCount = 4;
+        def.midiMessages[0] = {"cc", "Control Change"};
+        def.midiMessages[1] = {"pc", "Program Change"};
+        def.midiMessages[2] = {"pitchbend", "Pitch Bend"};
+        def.midiMessages[3] = {"aftertouch", "Aftertouch (Channel)"};
         
         definitions_.push_back(def);
     }
     
     // === COMPOSANTS DE SORTIE ===
     
-    // LED - composant simple, 1 pin PWM
+    // LED - composant simple, 1 pin PWM (reçoit MIDI, n'envoie pas)
     {
         ComponentDefinition def = {};
         def.id = "led";
@@ -78,6 +108,13 @@ void ComponentRegistry::init() {
         def.pinType = PinType::PIN_PWM;
         def.implemented = true;
         def.isComplex = false;
+        def.supportsMidi = true;  // Reçoit MIDI pour contrôler la LED
+        def.supportsOsc = false;
+        
+        // Messages MIDI que la LED peut recevoir
+        def.midiMessageCount = 2;
+        def.midiMessages[0] = {"note", "Note"};
+        def.midiMessages[1] = {"cc", "Control Change"};
         def.additionalPinCount = 0;
         definitions_.push_back(def);
     }
@@ -93,9 +130,12 @@ void ComponentRegistry::init() {
         def.type = ComponentType::BUTTON;  // Type générique pour l'instant
         def.pinType = PinType::PIN_DIGITAL;
         def.implemented = true;
-        def.isComplex = true;  // Complexe car multi-pin
-        def.additionalPinCount = 1;  // SCL est la pin additionnelle
+        def.isComplex = true;
+        def.supportsMidi = false;  // Bus, pas de MIDI direct
+        def.supportsOsc = false;
+        def.additionalPinCount = 1;
         def.additionalPins[0] = {"scl", "SCL", PinType::PIN_DIGITAL, false, 255};
+        def.midiMessageCount = 0;
         definitions_.push_back(def);
     }
     
@@ -109,9 +149,12 @@ void ComponentRegistry::init() {
         def.pinType = PinType::PIN_DIGITAL;
         def.implemented = true;
         def.isComplex = true;
-        def.additionalPinCount = 2;  // MISO et SCK sont les pins additionnelles
+        def.supportsMidi = false;
+        def.supportsOsc = false;
+        def.additionalPinCount = 2;
         def.additionalPins[0] = {"miso", "MISO", PinType::PIN_DIGITAL, false, 255};
         def.additionalPins[1] = {"sck", "SCK", PinType::PIN_DIGITAL, false, 255};
+        def.midiMessageCount = 0;
         definitions_.push_back(def);
     }
     
@@ -125,8 +168,11 @@ void ComponentRegistry::init() {
         def.pinType = PinType::PIN_DIGITAL;
         def.implemented = true;
         def.isComplex = true;
-        def.additionalPinCount = 1;  // RX est la pin additionnelle
+        def.supportsMidi = true;  // UART peut être utilisé pour MIDI série
+        def.supportsOsc = false;
+        def.additionalPinCount = 1;
         def.additionalPins[0] = {"rx", "RX", PinType::PIN_DIGITAL, false, 255};
+        def.midiMessageCount = 0;  // Messages gérés différemment pour UART
         definitions_.push_back(def);
     }
     

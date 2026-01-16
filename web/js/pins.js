@@ -2,26 +2,28 @@
 
 /**
  * Détermine le type de pin pour le CSS
- * Utilise les données du backend (caps) au lieu du hardcode
+ * Utilise les données du backend (caps.bus) pour les bus
  * @param {string} lbl - Label de la pin
  * @returns {string} Type CSS (analog, digital, uart, i2c, spi)
  */
 function pType(lbl){
- // Utiliser les données du backend si disponibles
- if(typeof caps !== 'undefined' && caps && caps.pins) {
-  const pin = caps.pins.find(p => p.label === lbl);
-  if(pin) {
-   // Vérifier le type spécial via le label
-   if(pin.label === 'TX' || pin.label === 'RX') return 'uart';
-   if(pin.label === 'SDA' || pin.label === 'SCL') return 'i2c';
-   if(pin.label === 'MOSI' || pin.label === 'MISO' || pin.label === 'SCK') return 'spi';
-   // Utiliser le flag adc du backend
-   if(pin.adc) return 'analog';
-   return 'digital';
-  }
+ if(typeof caps === 'undefined' || !caps) return 'digital';
+ 
+ const pin = caps.pins?.find(p => p.label === lbl);
+ if(!pin) return 'digital';
+ 
+ const gpio = pin.gpio;
+ 
+ // Vérifier les bus via caps.bus (données du backend)
+ if(caps.bus) {
+  if(caps.bus.uart && (gpio === caps.bus.uart.tx || gpio === caps.bus.uart.rx)) return 'uart';
+  if(caps.bus.i2c && (gpio === caps.bus.i2c.sda || gpio === caps.bus.i2c.scl)) return 'i2c';
+  if(caps.bus.spi && (gpio === caps.bus.spi.mosi || gpio === caps.bus.spi.miso || gpio === caps.bus.spi.sck)) return 'spi';
  }
- // Fallback si caps pas encore chargé
- if(lbl && lbl.startsWith('A')) return 'analog';
+ 
+ // Utiliser le flag adc du backend (caps.adc ou pin.adc selon la structure)
+ if(pin.adc || pin.caps?.adc) return 'analog';
+ 
  return 'digital';
 }
 
@@ -41,31 +43,55 @@ function getRoleDisplayLabel(role){
  return role;
 }
 
+/**
+ * Génère un résumé court de la configuration d'un composant
+ * Utilise les définitions du backend pour déterminer le support MIDI
+ * @param {Object} cfg - Configuration du composant
+ * @param {string} pinLabel - Label de la pin
+ * @returns {string} Résumé court (ex: "CC#7", "Note 60")
+ */
 function stat(cfg, pinLabel){
- if(cfg.role==='potentiometer') {
- if(!cfg.rtpEnabled) return 'Raw';
- if(cfg.rtpType === 'Control Change') return `CC#${cfg.rtpCc||7}`;
- if(cfg.rtpType === 'Program Change') return `PC#${cfg.rtpPc||0}`;
- if(cfg.rtpType === 'Pitch Bend') return 'Pitch Bend';
- if(cfg.rtpType === 'Aftertouch (Channel)') return 'Aftertouch';
- return cfg.rtpType || `CC#${cfg.rtpCc||7}`;
+ if(!cfg || !cfg.role) return '';
+ 
+ // Extraire l'ID de base (mux:HC4067 -> mux)
+ const baseRole = cfg.role.includes(':') ? cfg.role.split(':')[0] : cfg.role;
+ 
+ // Obtenir la définition du composant depuis le backend
+ const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(baseRole) : null;
+ 
+ // Si le composant supporte MIDI et est activé
+ if(def && def.supportsMidi && cfg.rtpEnabled) {
+  // Formatage basé sur le type de message MIDI
+  const type = cfg.rtpType;
+  if(type === 'Control Change') return `CC#${cfg.rtpCc||7}`;
+  if(type === 'Note') return `Note ${cfg.rtpNote||60}`;
+  if(type === 'Program Change') return `PC#${cfg.rtpPc||0}`;
+  if(type === 'Pitch Bend') return 'Pitch Bend';
+  if(type === 'Aftertouch (Channel)') return 'Aftertouch';
+  if(type === 'Note + vélocité') return `Note ${cfg.rtpNote||60} +vel`;
+  if(type === 'Note (balayage)') return `Note ${cfg.rtpNote||60} scan`;
+  if(type === 'Clock') return 'Clock';
+  if(type === 'Tap Tempo') return 'Tap Tempo';
+  return type || 'MIDI';
  }
- if(cfg.role==='button') {
- if(!cfg.rtpEnabled) return 'Digital';
- if(cfg.rtpType === 'Note') return `Note ${cfg.rtpNote||60}`;
- if(cfg.rtpType === 'Control Change') return `CC#${cfg.rtpCc||7}`;
- if(cfg.rtpType === 'Program Change') return `PC#${cfg.rtpPc||0}`;
- if(cfg.rtpType === 'Note + vélocité') return `Note ${cfg.rtpNote||60} +vel`;
- if(cfg.rtpType === 'Note (balayage)') return `Note ${cfg.rtpNote||60} scan`;
- if(cfg.rtpType === 'Clock') return 'Clock';
- if(cfg.rtpType === 'Tap Tempo') return 'Tap Tempo';
- return cfg.rtpType || `Note ${cfg.rtpNote||60}`;
+ 
+ // Cas spéciaux pour les composants sans MIDI activé
+ if(baseRole === 'potentiometer' && !cfg.rtpEnabled) return 'Raw';
+ if(baseRole === 'button' && !cfg.rtpEnabled) return 'Digital';
+ if(baseRole === 'led') return cfg.ledMode === 'pwm' ? 'PWM' : 'On/Off';
+ 
+ // Pour les bus, utiliser caps pour déterminer la pin spécifique
+ if(baseRole === 'uart') {
+  const pin = caps?.pins?.find(p => p.label === pinLabel);
+  if(pin && caps?.bus?.uart) {
+   return pin.gpio === caps.bus.uart.tx ? 'TX' : 'RX';
+  }
  }
- if(cfg.role==='led') return cfg.ledMode==='pwm' ? 'PWM' : 'On/Off';
- if(cfg.role==='i2c') return 'I2C';
- if(cfg.role==='spi') return 'SPI';
- if(cfg.role==='uart') return pinLabel?.includes('TX') ? 'TX' : 'RX';
- return cfg.role||'';
+ 
+ // Utiliser le displayName du backend si disponible
+ if(def) return def.displayName;
+ 
+ return cfg.role || '';
 }
 
 function setOptions(sel,options,pre=0){
@@ -259,8 +285,16 @@ function drawBoard(){
  };
  
  const getBus=(gpio)=>{
- const ps=gpioMap.get(gpio)||[];
- return ps.find(p=>['SDA','SCL','TX','RX','MOSI','MISO','SCK'].includes(p.label))?.label||'';
+ // Utiliser caps.bus pour identifier les pins de bus
+ const bus = caps.bus || {};
+ if(bus.i2c && gpio === bus.i2c.sda) return 'SDA';
+ if(bus.i2c && gpio === bus.i2c.scl) return 'SCL';
+ if(bus.uart && gpio === bus.uart.tx) return 'TX';
+ if(bus.uart && gpio === bus.uart.rx) return 'RX';
+ if(bus.spi && gpio === bus.spi.mosi) return 'MOSI';
+ if(bus.spi && gpio === bus.spi.miso) return 'MISO';
+ if(bus.spi && gpio === bus.spi.sck) return 'SCK';
+ return '';
  };
  
  if(isS3){
@@ -351,10 +385,17 @@ function drawBoard(){
  L.appendChild(f);
  };
  
- const analogPins=pins.filter(p=>p.label.startsWith('A')&&p.caps.adc).sort((a,b)=>a.label.localeCompare(b.label));
- const i2cPins=pins.filter(p=>['SDA','SCL'].includes(p.label)).sort((a,b)=>a.label==='SDA'?-1:1);
- const uartPins=pins.filter(p=>['TX','RX'].includes(p.label)).sort((a,b)=>a.label==='TX'?-1:1);
- const digitalPins=pins.filter(p=>p.label.startsWith('D')&&!['SDA','SCL','MOSI','MISO','SCK','TX','RX'].some(bus=>pins.find(bp=>bp.label===bus&&bp.gpio===p.gpio))).sort((a,b)=>{
+ // Utiliser caps.bus pour identifier les pins de bus (données du backend)
+ const bus = caps.bus || {};
+ const busGpios = new Set();
+ if(bus.i2c) { busGpios.add(bus.i2c.sda); busGpios.add(bus.i2c.scl); }
+ if(bus.spi) { busGpios.add(bus.spi.mosi); busGpios.add(bus.spi.miso); busGpios.add(bus.spi.sck); }
+ if(bus.uart) { busGpios.add(bus.uart.tx); busGpios.add(bus.uart.rx); }
+ 
+ const analogPins=pins.filter(p=>p.label.startsWith('A')&&p.caps?.adc).sort((a,b)=>a.label.localeCompare(b.label));
+ const i2cPins=pins.filter(p=>bus.i2c && (p.gpio===bus.i2c.sda || p.gpio===bus.i2c.scl)).sort((a,b)=>a.gpio===bus.i2c?.sda?-1:1);
+ const uartPins=pins.filter(p=>bus.uart && (p.gpio===bus.uart.tx || p.gpio===bus.uart.rx)).sort((a,b)=>a.gpio===bus.uart?.tx?-1:1);
+ const digitalPins=pins.filter(p=>p.label.startsWith('D')&&!busGpios.has(p.gpio)).sort((a,b)=>{
  const na=parseInt(a.label.substring(1));
  const nb=parseInt(b.label.substring(1));
  return na-nb;
@@ -381,7 +422,8 @@ function drawBoard(){
  displayedGpios.add(p.gpio);
  });
  
- const uartTx=uartPins.find(p=>p.label==='TX');
+ // UART TX depuis caps.bus
+ const uartTx=bus.uart ? uartPins.find(p=>p.gpio===bus.uart.tx) : null;
  if(uartTx){
  leftPins.push({gpio:uartTx.gpio,label:uartTx.label,color:getPinColor(uartTx.label),dLabel:getAlias(uartTx.gpio,'D')});
  displayedGpios.add(uartTx.gpio);
@@ -407,15 +449,17 @@ function drawBoard(){
  return f;
  };
  
- const spiPins=pins.filter(p=>['MOSI','MISO','SCK'].includes(p.label)).sort((a,b)=>{
- const o={MOSI:0,MISO:1,SCK:2};
- return (o[a.label]||99)-(o[b.label]||99);
+ // Pins SPI depuis caps.bus
+ const spiPins=pins.filter(p=>bus.spi && (p.gpio===bus.spi.mosi || p.gpio===bus.spi.miso || p.gpio===bus.spi.sck)).sort((a,b)=>{
+ const order = [bus.spi?.mosi, bus.spi?.miso, bus.spi?.sck];
+ return order.indexOf(a.gpio) - order.indexOf(b.gpio);
  });
  spiPins.forEach(p=>{
  R.appendChild(right(rightRow++,getAlias(p.gpio,'D'),p.label,getPinColor(p.label)));
  });
  
- const uartRx=pins.find(p=>p.label==='RX');
+ // UART RX depuis caps.bus
+ const uartRx=bus.uart ? pins.find(p=>p.gpio===bus.uart.rx) : null;
  if(uartRx){
  R.appendChild(right(rightRow++,getAlias(uartRx.gpio,'D'),uartRx.label,getPinColor(uartRx.label)));
  }
