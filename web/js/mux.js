@@ -21,12 +21,14 @@ async function loadMuxList(){
  updateMuxListUI();
  updatePinsList();
  if(caps&&caps.pins) drawBoard();
+ if(typeof updateBusVisuals === 'function') updateBusVisuals();
  } catch(e){
  console.error('Erreur chargement mux:',e);
  muxList=[];
  updateMuxListUI();
  updatePinsList();
  if(caps&&caps.pins) drawBoard();
+ if(typeof updateBusVisuals === 'function') updateBusVisuals();
  }
 }
 
@@ -64,10 +66,6 @@ function showMuxForm(muxId=null){
  if(muxId!==null){
  const mux=muxList.find(m=>m.id==muxId);
  if(mux){
- if($('#muxPinGroup')&&mux.s0!==undefined){
- const firstD=getDFromGpio(mux.s0);
- if(firstD!==null) $('#muxPinGroup').value=firstD;
- }
  if($('#muxEn')) $('#muxEn').value=mux.en||255;
  if($('#muxCcBase')) $('#muxCcBase').value=mux.ccBase||1;
  if($('#muxMidiChan')) $('#muxMidiChan').value=mux.midiChan||1;
@@ -82,7 +80,6 @@ function showMuxForm(muxId=null){
  }
  } else{
  if($('#muxSig')) $('#muxSig').value='';
- if($('#muxPinGroup')) $('#muxPinGroup').value='';
  if($('#muxEn')) $('#muxEn').value=255;
  if($('#muxCcBase')) $('#muxCcBase').value=1;
  if($('#muxMidiChan')) $('#muxMidiChan').value=1;
@@ -112,109 +109,43 @@ function populateMuxPinSelects(){
  const currentMuxIdValue=idSel?parseInt(idSel.value):null;
  const currentMuxExists=currentMuxIdValue!==null&&muxList.find(m=>m.id===currentMuxIdValue);
  const currentMuxId=currentMuxExists?currentMuxIdValue:null;
- const usedGpiosForSigAndEn=getUsedGpios(['muxSig','muxEn']);
+ // Simplifié : montrer toutes les pins disponibles sans filtrage
  const analogPins=caps.pins.filter(p=>p.label&&p.label.startsWith('A')&&p.caps&&p.caps.adc);
- let availableSig=analogPins.filter(p=>!usedGpiosForSigAndEn.has(p.gpio));
- if(currentMuxId!==null){
- const currentMux=muxList.find(m=>m.id===currentMuxId);
- if(currentMux&&currentMux.sig!==undefined&&currentMux.sig!==null){
- const currentSigPin=analogPins.find(p=>p.gpio===currentMux.sig);
- if(currentSigPin&&!availableSig.find(p=>p.gpio===currentMux.sig)){
- availableSig.push(currentSigPin);
- }
- }
- }
  const sigSel=$('#muxSig');
  if(sigSel){
-  sigSel.innerHTML=availableSig.map(p=>`<option value="${p.gpio}">${p.label} (GPIO${p.gpio})</option>`).join('');
+  sigSel.innerHTML=analogPins.map(p=>`<option value="${p.gpio}">${p.label} (GPIO${p.gpio})</option>`).join('');
   // Préserver la valeur actuelle si elle est valide
   const currentSigValue = sigSel.value;
-  const currentSigValid = currentSigValue && availableSig.find(p=>p.gpio===parseInt(currentSigValue));
+  const currentSigValid = currentSigValue && analogPins.find(p=>p.gpio===parseInt(currentSigValue));
   if(currentSigValid){
    sigSel.value = currentSigValue;
   } else {
-   // Ne pas utiliser de GPIO hardcodés, utiliser A0 si disponible (fonctionne sur C3 et S3)
-   // ou le premier pin analogique disponible
-   const a0Pin = availableSig.find(p=>p.label==='A0');
+   const a0Pin = analogPins.find(p=>p.label==='A0');
    if(a0Pin){
     sigSel.value = a0Pin.gpio;
-   } else if(availableSig.length>0){
-    sigSel.value=availableSig[0].gpio;
+   } else if(analogPins.length>0){
+    sigSel.value=analogPins[0].gpio;
    }
   }
  }
- const allDPins=caps.pins.filter(p=>p.label&&p.label.startsWith('D')).sort((a,b)=>{
- const numA=parseInt(a.label.substring(1));
- const numB=parseInt(b.label.substring(1));
- return numA-numB;
- });
- const usedGpiosForGroups=getUsedGpios(['muxSig','muxEn']);
- const pinGroupSel=$('#muxPinGroup');
- if(pinGroupSel){
- const groups=[];
- for(let i=0;i<allDPins.length-3;i++){
- const d1=allDPins[i];
- const d2=allDPins[i+1];
- const d3=allDPins[i+2];
- const d4=allDPins[i+3];
- const num1=parseInt(d1.label.substring(1));
- const num2=parseInt(d2.label.substring(1));
- const num3=parseInt(d3.label.substring(1));
- const num4=parseInt(d4.label.substring(1));
- if(num2===num1+1&&num3===num2+1&&num4===num3+1){
- const allAvailable=[d1.gpio,d2.gpio,d3.gpio,d4.gpio].every(g=>!usedGpiosForGroups.has(g));
- if(allAvailable){
- groups.push({firstD:num1,label:`${d1.label}-${d4.label}`,gpios:[d1.gpio,d2.gpio,d3.gpio,d4.gpio]});
- }
- }
- }
- const currentValue=pinGroupSel.value;
- const currentValueValid=currentValue&&groups.find(g=>g.firstD===parseInt(currentValue));
- pinGroupSel.innerHTML='<option value="">Choisir...</option>'+groups.map(g=>`<option value="${g.firstD}">${g.label}</option>`).join('');
- if(currentValueValid){
- pinGroupSel.value=currentValue;
- } else{
- const selectedMuxId=idSel?parseInt(idSel.value):null;
- if(selectedMuxId===0&&groups.find(g=>g.firstD===3)){
- pinGroupSel.value=3;
- } else if(selectedMuxId===1&&groups.find(g=>g.firstD===7)){
- pinGroupSel.value=7;
- } else if(groups.length>0){
- pinGroupSel.value=groups[0].firstD;
- }
- }
- }
+ const allDPins=typeof getAllDigitalPins === 'function' ? getAllDigitalPins() : [];
  const enSel=$('#muxEn');
  if(enSel){
- enSel.innerHTML='<option value="255">Non connecte</option>';
- const otherMuxUsesEn=muxList.some(m=>{
- if(currentMuxId!==null&&m.id==currentMuxId) return false;
- return m.en!==undefined&&m.en!==null&&m.en!==255;
- });
- if(!otherMuxUsesEn&&pinGroupSel&&pinGroupSel.value){
- const firstD=parseInt(pinGroupSel.value);
- const enD=firstD+4;
- const enPin=allDPins.find(p=>{
- const num=parseInt(p.label.substring(1));
- return num===enD&&!usedGpiosForSigAndEn.has(p.gpio);
- });
- if(enPin){
- enSel.innerHTML+=`<option value="${enPin.gpio}">${enPin.label} (GPIO${enPin.gpio})</option>`;
- }
- }
- if(!enSel.value||enSel.value===''){
- enSel.value=255;
- }
+  enSel.innerHTML='<option value="255">Non connecte</option>';
+  allDPins.forEach(pin=>{
+   enSel.innerHTML+=`<option value="${pin.gpio}">${pin.label} (GPIO${pin.gpio})</option>`;
+  });
+  if(!enSel.value||enSel.value===''){
+   enSel.value=255;
+  }
  }
  if(idSel){
  if(currentMuxId===null){
  const mux0=muxList.find(m=>m.id===0);
  const mux1=muxList.find(m=>m.id===1);
- const usedGpiosForMux1=getUsedGpios([]);
- const availableSigForMux1=analogPins.filter(p=>!usedGpiosForMux1.has(p.gpio));
  const availableMuxIds=[0,1].filter(id=>{
  if(id===0) return!mux0;
- if(id===1) return!mux1&&availableSigForMux1.length>0;
+ if(id===1) return!mux1;
  return false;
  });
  idSel.innerHTML=availableMuxIds.map(id=>`<option value="${id}">MUX${id}</option>`).join('');
@@ -226,42 +157,70 @@ function populateMuxPinSelects(){
  idSel.disabled=true;
  }
  }
- if(pinGroupSel&&!pinGroupSel.dataset.listener){
- pinGroupSel.dataset.listener='true';
- pinGroupSel.addEventListener('change',populateMuxPinSelects);
- }
  if(idSel&&!idSel.dataset.listenerMuxId){
  idSel.dataset.listenerMuxId='true';
  idSel.addEventListener('change',()=>{
- if($('#muxPinGroup')) $('#muxPinGroup').value='';
  if($('#muxSig')) $('#muxSig').value='';
  populateMuxPinSelects();
  });
+ }
+
+ // Simplifié : montrer toutes les pins digitales sans filtrage
+ const manualOptions=allDPins.map(p=>`<option value="${p.gpio}">${p.label} (GPIO${p.gpio})</option>`).join('');
+ ['muxS0','muxS1','muxS2','muxS3'].forEach(id=>{
+  const sel=$('#'+id);
+  if(sel){
+   const current=sel.value;
+   sel.innerHTML=manualOptions;
+   if(current&&allDPins.find(p=>p.gpio===parseInt(current))){
+    sel.value=current;
+   }
+  }
+ });
+ const enManual=$('#muxEnManual');
+ if(enManual){
+  const current=enManual.value;
+  enManual.innerHTML=`<option value="255">Non connecte</option>${manualOptions}`;
+  if(current&&current!=='255'&&allDPins.find(p=>p.gpio===parseInt(current))){
+   enManual.value=current;
+  } else if(!enManual.value){
+   enManual.value='255';
+  }
  }
 }
 
 async function saveMux(e){
  e.preventDefault();
  const id=$('#muxId').value;
- const sig=$('#muxSig').value;
- const pinGroup=parseInt($('#muxPinGroup').value);
- const en=$('#muxEn').value;
+ const sig=parseInt($('#muxSig').value);
+ const autoEnabled=typeof isMuxAutoPinsEnabled === 'function' ? isMuxAutoPinsEnabled() : true;
+ let en=255;
  const ccBase=parseInt($('#muxCcBase').value)||1;
  const midiChan=parseInt($('#muxMidiChan').value)||1;
  const oscBase=$('#muxOscBase').value||'/mux'+id;
- if(!pinGroup){
- $('#muxMsg').textContent='Erreur: Veuillez choisir un groupe de pins';
+ if(!sig||isNaN(sig)){
+ $('#muxMsg').textContent='Erreur: Veuillez choisir un pin analogique';
  $('#muxMsg').style.color='#ef4444';
  return;
  }
- const s0=getGpioFromD(pinGroup);
- const s1=getGpioFromD(pinGroup+1);
- const s2=getGpioFromD(pinGroup+2);
- const s3=getGpioFromD(pinGroup+3);
- if(!s0||!s1||!s2||!s3){
- $('#muxMsg').textContent='Erreur: Groupe de pins invalide';
- $('#muxMsg').style.color='#ef4444';
- return;
+ let s0,s1,s2,s3;
+ if(autoEnabled){
+  const addrPins=calculateMuxAddressPins(sig);
+  s0=addrPins.s0;
+  s1=addrPins.s1;
+  s2=addrPins.s2;
+  s3=addrPins.s3;
+  const enSel=$('#muxEn');
+  en=enSel?enSel.value:255;
+ } else {
+  s0=parseInt($('#muxS0')?.value);
+  s1=parseInt($('#muxS1')?.value);
+  s2=parseInt($('#muxS2')?.value);
+  s3=parseInt($('#muxS3')?.value);
+  const enManual=$('#muxEnManual');
+  if(enManual&&enManual.value&&enManual.value!=='255'){
+   en=parseInt(enManual.value);
+  }
  }
  const min=parseInt($('#muxMin').value)||0;
  const max=parseInt($('#muxMax').value)||4095;

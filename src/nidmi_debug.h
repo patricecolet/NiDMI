@@ -1,5 +1,4 @@
-#ifndef NIDMI_DEBUG_H
-#define NIDMI_DEBUG_H
+#pragma once
 
 #include <Arduino.h>
 
@@ -98,5 +97,3 @@
 #else
 #define debug_api(fmt, ...) do {} while(0)
 #endif
-
-#endif // NIDMI_DEBUG_H

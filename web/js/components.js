@@ -2,54 +2,81 @@
 
 function showRoleCards(role){
  const b=$('#cardBtn'), l=$('#cardLed'), p=$('#cardPot'), m=$('#cardMux');
- if(b) b.style.display=(role==='Bouton')?'block':'none';
- if(l) l.style.display=(role==='LED')?'block':'none';
- if(p) p.style.display=(role==='Potentiomètre')?'block':'none';
- if(m) m.style.display=(role==='Multiplexeur')?'block':'none';
+ if(b) b.style.display=(role==='button')?'block':'none';
+ if(l) l.style.display=(role==='led')?'block':'none';
+ if(p) p.style.display=(role==='potentiometer')?'block':'none';
+ if(m) m.style.display=(role.startsWith('mux:'))?'block':'none';
 }
 
 function updFunc(lbl){
  const sel=$('#funcSelect');
  if(!sel) return;
+ 
+ // Toujours vider le formulaire MUX au début pour éviter les valeurs résiduelles
+ if($('#muxSig')) $('#muxSig').value='';
+ 
  const isI2C=(lbl==='SDA'||lbl==='SCL');
  const isSPI=(lbl==='MOSI'||lbl==='MISO'||lbl==='SCK');
  const isUART=(lbl==='TX'||lbl==='RX');
  const isMuxPin=lbl.startsWith('M');
  if(/^A\d+$/.test(lbl)||isMuxPin){
- setOptions(sel,['Potentiomètre','Analog in (raw)','Multiplexeur'],0);
+  // Vérifier la disponibilité des pins d'adressage pour le multiplexeur
+  const pin=caps?.pins?.find(p=>p.label===lbl);
+  const muxAvailable=pin?areMuxAddressPinsAvailable(pin.gpio):false;
+  setOptions(sel,{
+   'potentiometer':'Potentiomètre',
+   'mux':{
+    label:'Multiplexeur Analogique',
+    items:[
+     {value:'mux:HC4067',label:'HC4067 (16 canaux)',disabled:!muxAvailable},
+     {value:'mux:HC4051',label:'HC4051 (8 canaux)',disabled:true}
+    ]
+   }
+  },0);
  } else if(/^D\d+$/.test(lbl) && !isI2C && !isSPI && !isUART){
- setOptions(sel,['Bouton','LED','Digital in/out'],0);
+ setOptions(sel,{
+  'button':'Bouton',
+  'led':'LED'
+ },0);
  } else if(isI2C){
- setOptions(sel,['I2C'],0);
+ setOptions(sel,{'i2c':'I2C'},0);
  } else if(isSPI){
- setOptions(sel,['SPI'],0);
+ setOptions(sel,{'spi':'SPI'},0);
  } else if(isUART){
- setOptions(sel,['UART'],0);
+ setOptions(sel,{'uart':'UART'},0);
  } else {
  setOptions(sel,[],0);
  }
  showRoleCards(sel.value||'');
  updateRtpForRole(sel.value||'');
  
- // Si Multiplexeur est sélectionné, initialiser le formulaire
- if(sel.value==='Multiplexeur'){
+ // Si multiplexeur est sélectionné, initialiser le formulaire
+ if(sel.value && sel.value.startsWith('mux:')){
   initMuxFormForPin(lbl);
  }
  
  const updateConfig=()=>{
  showRoleCards(sel.value||'');
  updateRtpForRole(sel.value||'');
+ updateRtpParamsVisibility();
  updateBtnPulseTimingVisibility();
+ // Si multiplexeur est sélectionné, initialiser le formulaire MUX
+ if(sel.value&&sel.value.startsWith('mux:')&&cur){
+  initMuxFormForPin(cur);
+ } else {
+  // Effacer les valeurs du formulaire MUX pour ne pas polluer getUsedGpios
+  if($('#muxSig')) $('#muxSig').value='';
+ }
  if(cur){
- pcfg[cur]=readCfg();
- updatePinsList();
- updateBusVisuals();
+  pcfg[cur]=readCfg();
+  updatePinsList();
+  updateBusVisuals();
  }
  };
  
  sel.onchange=updateConfig;
  
- const inputs=['#btnMode','#btnPulseTiming','#ledMode','#potFilter','#filterIntensity','#rtpEnabled2','#rtpMsgType','#rtpNote','#rtpCc','#rtpPc','#rtpChan','#rtpCcOn','#rtpCcOff','#rtpVel','#rtpCcMin','#rtpCcMax','#rtpNoteMin','#rtpNoteMax','#rtpNoteVelFix','#rtpNoteSweepAutoOffDelay','#oscEnabled2','#oscAddress','#oscFormat','#dbgEnabled','#dbgHeader'];
+ const inputs=['#btnMode','#btnPulseTiming','#ledMode','#filterIntensity','#rtpEnabled2','#rtpMsgType','#rtpNote','#rtpCc','#rtpPc','#rtpChan','#rtpCcOn','#rtpCcOff','#rtpVel','#rtpCcMin','#rtpCcMax','#rtpNoteMin','#rtpNoteMax','#rtpNoteVelFix','#rtpNoteSweepAutoOffDelay','#oscEnabled2','#oscAddress','#oscFormat','#dbgEnabled','#dbgHeader','#muxS0','#muxS1','#muxS2','#muxS3','#muxEnManual'];
  inputs.forEach(id=>{
  const el=$(id);
  if(el) el.addEventListener('change',updateConfig);
@@ -63,22 +90,31 @@ function updateRtpForRole(role){
  const rtpParams = $('#rtpParams');
  let enabled = true;
  let types = [];
- if(role==='Potentiomètre'){
+ if(role==='potentiometer'){
  types = ['Control Change','Pitch Bend','Aftertouch (Channel)','Note + vélocité','Note (balayage)'];
- } else if(role==='Bouton'){
+ } else if(role==='button'){
  types = ['Note','Control Change','Program Change','Clock','Tap Tempo'];
- } else if(role==='LED'){
+ } else if(role==='led'){
  types = ['Note','Control Change'];
- } else if(role==='Multiplexeur'){
- enabled = false; // Le multiplexeur gère son propre MIDI/OSC
- } else if(role==='I2C' || role==='SPI' || role==='UART' || role==='Analog in (raw)' || role==='Digital in/out'){
+ } else if(role.startsWith('mux:')){
+ enabled = true; // Réactiver pour utiliser les sections standard
+ types = ['Control Change']; // Type par défaut pour multiplexeur
+ } else if(role==='i2c' || role==='spi' || role==='uart'){
  enabled = false;
  } else if(!role){
  enabled = false;
  }
  if(rtpEnable){ rtpEnable.checked = enabled; rtpEnable.disabled = !enabled; }
  if(rtpType){
- if(enabled){ setOptions(rtpType, types); }
+ if(enabled){
+  // Sauvegarder la valeur actuelle avant de recréer les options
+  const currentValue = rtpType.value;
+  setOptions(rtpType, types);
+  // Restaurer la valeur si elle existe dans les nouvelles options
+  if(types.includes(currentValue)){
+   rtpType.value = currentValue;
+  }
+ }
  rtpType.disabled = !enabled;
  }
  if(rtpParams){ rtpParams.style.display = enabled ? 'block' : 'none'; }
@@ -106,13 +142,13 @@ function updateRtpParamsVisibility(){
  if(noteRow) noteRow.style.display='flex';
  if(chanRow) chanRow.style.display='flex';
  const role = roleSel ? roleSel.value : '';
- if(role==='Bouton' && velRow){ velRow.style.display='flex'; }
+ if(role==='button' && velRow){ velRow.style.display='flex'; }
  } else if(v==='Control Change'){
  if(ccRow) ccRow.style.display='flex';
  if(chanRow) chanRow.style.display='flex';
  const role = roleSel ? roleSel.value : '';
- if(role==='Potentiomètre' && ccRangeRow){ ccRangeRow.style.display='flex'; }
- if(role==='Bouton' && ccOnOffRow){ ccOnOffRow.style.display='flex'; }
+ if(role==='potentiometer' && ccRangeRow){ ccRangeRow.style.display='flex'; }
+ if(role==='button' && ccOnOffRow){ ccOnOffRow.style.display='flex'; }
  } else if(v==='Program Change'){
  if(pcRow) pcRow.style.display='flex';
  if(chanRow) chanRow.style.display='flex';
@@ -144,7 +180,6 @@ function readCfg(){
  c.btnMode=$('#btnMode')?.value||'';
  c.btnPulseTiming=$('#btnPulseTiming')?.value||'';
  c.ledMode=$('#ledMode')?.value||'';
- c.potFilter=$('#potFilter')?.value||'';
  c.filterIntensity=$('#filterIntensity')?.value||'5';
  c.rtpEnabled=!!$('#rtpEnabled2')?.checked;
  c.rtpType=$('#rtpMsgType')?.value||'';
@@ -186,7 +221,6 @@ function applyCfg(c){
  setV('btnPulseTiming',c.btnPulseTiming);
  updateBtnPulseTimingVisibility();
  setV('ledMode',c.ledMode);
- setV('potFilter',c.potFilter);
  setV('filterIntensity',c.filterIntensity||'5');
  setC('rtpEnabled2',c.rtpEnabled);
  setV('rtpMsgType',c.rtpType);
@@ -223,39 +257,177 @@ function getDFromGpio(gpio){
  return pin?parseInt(pin.label.substring(1)):null;
 }
 
+function getDigitalPinByGpio(gpio){
+ if(!caps||!caps.pins) return null;
+ return caps.pins.find(p=>p.gpio===gpio&&p.label&&p.label.startsWith('D'))||null;
+}
+
+function isDigitalPinAvailable(gpio, usedGpios){
+ return !!getDigitalPinByGpio(gpio) && !usedGpios.has(gpio);
+}
+
+// Calculer automatiquement les pins d'adressage S0-S3 en prenant les 4 premières pins digitales disponibles
+function calculateMuxAddressPins(sigGpio, usedGpiosOverride=null){
+ // Obtenir les GPIO déjà utilisés (sauf le SIG actuel)
+ const usedGpios = usedGpiosOverride || getUsedGpios([]);
+ usedGpios.delete(sigGpio);
+ 
+ // Obtenir toutes les pins digitales disponibles
+ const availablePins = getAvailableDigitalPins(usedGpios);
+ 
+ // Prendre les 4 premières
+ const result = {
+  s0: availablePins[0] ? parseInt(availablePins[0].gpio) : null,
+  s1: availablePins[1] ? parseInt(availablePins[1].gpio) : null,
+  s2: availablePins[2] ? parseInt(availablePins[2].gpio) : null,
+  s3: availablePins[3] ? parseInt(availablePins[3].gpio) : null
+ };
+ 
+ return result;
+}
+
+// Obtenir toutes les pins digitales uniques (dédupliquées par GPIO)
+function getAllDigitalPins(){
+ if(!caps||!caps.pins) return [];
+ const allDPinsRaw=caps.pins.filter(p=>p.label&&p.label.startsWith('D'));
+ const uniqueDPinsMap=new Map();
+ allDPinsRaw.forEach(p=>{
+  if(!uniqueDPinsMap.has(p.gpio)){
+   uniqueDPinsMap.set(p.gpio,p);
+  }
+ });
+ return Array.from(uniqueDPinsMap.values()).sort((a,b)=>{
+  const numA=parseInt(a.label.substring(1));
+  const numB=parseInt(b.label.substring(1));
+  return numA-numB;
+ });
+}
+
+// Obtenir les pins digitales disponibles (filtrées par usedGpios, avec exception pour currentValues)
+function getAvailableDigitalPins(usedGpios, currentValues=null){
+ const allDPins=getAllDigitalPins();
+ const currentSet=currentValues instanceof Set ? currentValues : new Set();
+ return allDPins.filter(p=>{
+  return !usedGpios.has(p.gpio) || currentSet.has(p.gpio);
+ });
+}
+
+// Vérifier la disponibilité du mode auto pour un MUX
+function checkMuxAutoAvailability(sigGpio, usedGpios){
+ if(!caps||!caps.pins) return false;
+ const sigPin=caps.pins.find(p=>p.gpio===sigGpio);
+ if(!sigPin) return false;
+ const usedGpiosCopy=new Set(usedGpios);
+ usedGpiosCopy.delete(sigGpio);
+ return areMuxAddressPinsAvailable(sigGpio, usedGpiosCopy);
+}
+
+// Vérifier la disponibilité de la pin EN pour un MUX
+function checkMuxEnAvailability(sigGpio, usedGpios){
+ const enGpio=sigGpio+5;
+ const enPin=getDigitalPinByGpio(enGpio);
+ if(!enPin) return false;
+ const usedGpiosCopy=new Set(usedGpios);
+ usedGpiosCopy.delete(sigGpio);
+ const addrPins=calculateMuxAddressPins(sigGpio);
+ usedGpiosCopy.delete(addrPins.s0);
+ usedGpiosCopy.delete(addrPins.s1);
+ usedGpiosCopy.delete(addrPins.s2);
+ usedGpiosCopy.delete(addrPins.s3);
+ return !usedGpiosCopy.has(enGpio);
+}
+
+// Obtenir toutes les informations de disponibilité pour un MUX (auto + EN)
+function getMuxAvailabilityInfo(sigGpio, usedGpios){
+ const autoAvailable=checkMuxAutoAvailability(sigGpio, usedGpios);
+ const enGpio=sigGpio+5;
+ const enPin=getDigitalPinByGpio(enGpio);
+ const enAvailable=enPin&&checkMuxEnAvailability(sigGpio, usedGpios);
+ return {autoAvailable, enAvailable, enGpio, enPin};
+}
+
+
+// Vérifier si les pins d'adressage sont disponibles pour un GPIO SIG donné
+function areMuxAddressPinsAvailable(sigGpio, excludeUsedGpios=null){
+ if(!caps||!caps.pins) return false;
+ const sigPin=caps.pins.find(p=>p.gpio===sigGpio);
+ if(!sigPin) return false;
+ const usedGpios=excludeUsedGpios||getUsedGpios([]);
+ // Exclure le GPIO SIG lui-même
+ usedGpios.delete(sigGpio);
+ // Vérifier qu'il y a au moins 4 pins digitales disponibles
+ const availablePins = getAvailableDigitalPins(usedGpios);
+ return availablePins.length >= 4;
+}
+
 function getUsedGpios(additionalSelectIds=[]){
  const usedGpios=new Set();
+ 
+ // Ajouter les GPIO des pins configurées
  Object.keys(pcfg).forEach(lbl=>{
+  const cfg=pcfg[lbl];
   const pin=caps.pins.find(p=>p.label===lbl);
-  if(pin) usedGpios.add(pin.gpio);
+  if(!pin) return;
+  
+  // Pour les MUX temporaires, ajouter aussi les pins d'adresse
+  if(cfg && cfg.role && cfg.role.startsWith('mux:')){
+   const sigGpio=parseInt(pin.gpio);
+   usedGpios.add(sigGpio);
+   // Calculer et ajouter les pins d'adresse (mode auto)
+   // Passer usedGpios pour éviter une boucle infinie
+   const addrPins=calculateMuxAddressPins(sigGpio, usedGpios);
+   if(addrPins.s0 !== null) usedGpios.add(addrPins.s0);
+   if(addrPins.s1 !== null) usedGpios.add(addrPins.s1);
+   if(addrPins.s2 !== null) usedGpios.add(addrPins.s2);
+   if(addrPins.s3 !== null) usedGpios.add(addrPins.s3);
+  } else {
+   usedGpios.add(pin.gpio);
+  }
  });
- const currentMuxId=$('#muxId')?parseInt($('#muxId').value):null;
+ 
+ // Ne pas exclure le MUX en cours d'édition sauf si on est vraiment en train d'éditer un MUX
+ const isEditingMux = $('#funcSelect') && $('#funcSelect').value && $('#funcSelect').value.startsWith('mux:');
+ const currentMuxId = (isEditingMux && $('#muxId')) ? parseInt($('#muxId').value) : null;
  if(typeof muxList !== 'undefined' && Array.isArray(muxList)){
   muxList.forEach(m=>{
-   if(currentMuxId!==null&&m.id==currentMuxId) return;
-   if(m.sig!==undefined&&m.sig!==null) usedGpios.add(m.sig);
-   if(m.s0!==undefined&&m.s0!==null) usedGpios.add(m.s0);
-   if(m.s1!==undefined&&m.s1!==null) usedGpios.add(m.s1);
-   if(m.s2!==undefined&&m.s2!==null) usedGpios.add(m.s2);
-   if(m.s3!==undefined&&m.s3!==null) usedGpios.add(m.s3);
-   if(m.en!==undefined&&m.en!==null&&m.en!==255) usedGpios.add(m.en);
+   // Exclure seulement si on édite vraiment ce MUX spécifique
+   if(isEditingMux && currentMuxId!==null && m.id===currentMuxId) return;
+   const sig=parseInt(m.sig), s0=parseInt(m.s0), s1=parseInt(m.s1), s2=parseInt(m.s2), s3=parseInt(m.s3), en=parseInt(m.en);
+   if(!isNaN(sig)) usedGpios.add(sig);
+   if(!isNaN(s0)) usedGpios.add(s0);
+   if(!isNaN(s1)) usedGpios.add(s1);
+   if(!isNaN(s2)) usedGpios.add(s2);
+   if(!isNaN(s3)) usedGpios.add(s3);
+   if(!isNaN(en) && en!==255) usedGpios.add(en);
   });
  }
  additionalSelectIds.forEach(id=>{
- const sel=$('#'+id);
- if(!sel||!sel.value||sel.value==='255') return;
- if(id==='muxPinGroup'){
- const firstD=parseInt(sel.value);
- const s0=getGpioFromD(firstD);
- const s1=getGpioFromD(firstD+1);
- const s2=getGpioFromD(firstD+2);
- const s3=getGpioFromD(firstD+3);
- if(s0) usedGpios.add(s0);
- if(s1) usedGpios.add(s1);
- if(s2) usedGpios.add(s2);
- if(s3) usedGpios.add(s3);
+ if(id==='muxEnManual'){
+  const sel=$('#muxEnManual');
+  if(sel&&sel.value&&sel.value!=='255'){
+   const gpio=parseInt(sel.value);
+   if(!isNaN(gpio)) usedGpios.add(gpio);
+  }
  } else{
- usedGpios.add(parseInt(sel.value));
+  const sel=$('#'+id);
+  if(!sel||!sel.value||sel.value==='255') return;
+  if(id==='muxSig'){
+   const sigGpio=parseInt(sel.value);
+   if(!isNaN(sigGpio)){
+    usedGpios.add(sigGpio);
+    // Toujours utiliser les valeurs manuelles (S0-S3)
+    ['muxS0','muxS1','muxS2','muxS3'].forEach(selId=>{
+     const manualSel=$('#'+selId);
+     if(manualSel&&manualSel.value){
+      const gpio=parseInt(manualSel.value);
+      if(!isNaN(gpio)) usedGpios.add(gpio);
+     }
+    });
+   }
+  } else{
+   const gpio=parseInt(sel.value);
+   if(!isNaN(gpio)) usedGpios.add(gpio);
+  }
  }
  });
  return usedGpios;
@@ -266,71 +438,93 @@ function initMuxFormForPin(pinLabel){
  if(!caps||!caps.pins) return;
  const pin=caps.pins.find(p=>p.label===pinLabel);
  if(!pin) return;
+ const sigGpio=pin.gpio;
+ 
+ const usedGpios=getUsedGpios([]);
+ const availInfo=getMuxAvailabilityInfo(sigGpio, usedGpios);
+ 
+ if(typeof populateMuxPinSelects === 'function') populateMuxPinSelects();
  
  // Trouver un multiplexeur existant qui utilise ce pin comme SIG, ou créer un nouveau
- const existingMux=muxList.find(m=>m.sig===pin.gpio);
+ const existingMux=muxList.find(m=>m.sig===sigGpio);
  if(existingMux){
   // Charger la configuration existante
   loadMuxConfigIntoForm(existingMux);
  } else {
   // Nouveau multiplexeur - initialiser avec des valeurs par défaut
-  if(typeof populateMuxPinSelects === 'function') populateMuxPinSelects();
-  if($('#muxSig')) $('#muxSig').value=pin.gpio;
+  if($('#muxSig')) $('#muxSig').value=sigGpio;
+  const addrPins=calculateMuxAddressPins(sigGpio, usedGpios);
+  if($('#muxS0') && addrPins.s0 !== null) $('#muxS0').value=addrPins.s0;
+  if($('#muxS1') && addrPins.s1 !== null) $('#muxS1').value=addrPins.s1;
+  if($('#muxS2') && addrPins.s2 !== null) $('#muxS2').value=addrPins.s2;
+  if($('#muxS3') && addrPins.s3 !== null) $('#muxS3').value=addrPins.s3;
+  if($('#muxEnManual')) $('#muxEnManual').value='255';
+  let muxId=0;
   if($('#muxId')){
    // Trouver le premier ID disponible
    const usedIds=muxList.map(m=>m.id);
    const availableId=[0,1].find(id=>!usedIds.includes(id));
-   if(availableId!==undefined) $('#muxId').value=availableId;
+   if(availableId!==undefined){
+    $('#muxId').value=availableId;
+    muxId=availableId;
+   }
   }
+  // Initialiser l'adresse OSC avec /mux[ID]
+  if($('#oscAddress')) $('#oscAddress').value='/mux'+muxId;
+  // Mettre à jour la visualisation des pins
+  if(typeof updateBusVisuals === 'function') updateBusVisuals();
  }
 }
 
 function loadMuxConfigIntoForm(mux){
+ if(typeof populateMuxPinSelects === 'function') populateMuxPinSelects();
  if($('#muxId')) $('#muxId').value=mux.id;
  if($('#muxSig')) $('#muxSig').value=mux.sig;
- if($('#muxPinGroup')&&mux.s0!==undefined){
-  const firstD=getDFromGpio(mux.s0);
-  if(firstD!==null) $('#muxPinGroup').value=firstD;
- }
- if($('#muxEn')) $('#muxEn').value=mux.en||255;
- if($('#muxCcBase')) $('#muxCcBase').value=mux.ccBase||1;
- if($('#muxMidiChan')) $('#muxMidiChan').value=mux.midiChan||1;
- if($('#muxOscBase')) $('#muxOscBase').value=mux.oscBase||'/mux'+mux.id;
+ const sigGpio=mux.sig;
+ 
+ if($('#muxS0')) $('#muxS0').value=mux.s0;
+ if($('#muxS1')) $('#muxS1').value=mux.s1;
+ if($('#muxS2')) $('#muxS2').value=mux.s2;
+ if($('#muxS3')) $('#muxS3').value=mux.s3;
+ if($('#muxEnManual')) $('#muxEnManual').value=mux.en!==undefined?mux.en:255;
  if($('#muxMin')) $('#muxMin').value=mux.min!==undefined?mux.min:0;
  if($('#muxMax')) $('#muxMax').value=mux.max!==undefined?mux.max:4095;
- if($('#muxOscFormat')){
-  const oscFormatValue=mux.oscFormat||'float';
-  $('#muxOscFormat').value=oscFormatValue;
- }
  if($('#muxFilterIntensity')) $('#muxFilterIntensity').value=mux.filterIntensity!==undefined?mux.filterIntensity:5;
- if(typeof populateMuxPinSelects === 'function') populateMuxPinSelects();
+ if($('#rtpCc')) $('#rtpCc').value=mux.ccBase||1;
+ if($('#rtpChan')) $('#rtpChan').value=mux.midiChan||1;
+ if($('#rtpMsgType')) $('#rtpMsgType').value='Control Change';
+ if($('#oscAddress')) $('#oscAddress').value=mux.oscBase||'/mux'+mux.id;
+ if($('#oscFormat')) $('#oscFormat').value=mux.oscFormat||'float';
+ if($('#rtpEnabled2')) $('#rtpEnabled2').checked=true;
+ if($('#oscEnabled2')) $('#oscEnabled2').checked=true;
+ // Mettre à jour la visualisation des pins
+ if(typeof updateBusVisuals === 'function') updateBusVisuals();
 }
 
 async function saveMuxFromPin(){
  const id=$('#muxId').value;
- const sig=$('#muxSig').value;
- const pinGroup=parseInt($('#muxPinGroup').value);
- const en=$('#muxEn').value;
- const ccBase=parseInt($('#muxCcBase').value)||1;
- const midiChan=parseInt($('#muxMidiChan').value)||1;
- const oscBase=$('#muxOscBase').value||'/mux'+id;
- if(!pinGroup){
- $('#muxMsg').textContent='Erreur: Veuillez choisir un groupe de pins';
- $('#muxMsg').style.color='#ef4444';
- return;
+ const sig=parseInt($('#muxSig').value);
+ const ccBase=parseInt($('#rtpCc').value)||1;
+ const midiChan=parseInt($('#rtpChan').value)||1;
+ const oscBase=$('#oscAddress').value||'/mux'+id;
+ if(!sig||isNaN(sig)){
+  $('#muxMsg').textContent='Erreur: Veuillez choisir un pin analogique';
+  $('#muxMsg').style.color='#ef4444';
+  return;
  }
- const s0=getGpioFromD(pinGroup);
- const s1=getGpioFromD(pinGroup+1);
- const s2=getGpioFromD(pinGroup+2);
- const s3=getGpioFromD(pinGroup+3);
- if(!s0||!s1||!s2||!s3){
- $('#muxMsg').textContent='Erreur: Groupe de pins invalide';
- $('#muxMsg').style.color='#ef4444';
- return;
+ // Toujours utiliser les valeurs manuelles
+ const s0=parseInt($('#muxS0')?.value);
+ const s1=parseInt($('#muxS1')?.value);
+ const s2=parseInt($('#muxS2')?.value);
+ const s3=parseInt($('#muxS3')?.value);
+ let en=255;
+ const enManual=$('#muxEnManual');
+ if(enManual&&enManual.value&&enManual.value!=='255'){
+  en=parseInt(enManual.value);
  }
  const min=parseInt($('#muxMin').value)||0;
  const max=parseInt($('#muxMax').value)||4095;
- const oscFormat=$('#muxOscFormat').value||'float';
+ const oscFormat=$('#oscFormat').value||'float';
  const filterIntensity=parseInt($('#muxFilterIntensity').value)||5;
  const formData=new URLSearchParams();
  formData.append('id',id);
@@ -353,6 +547,13 @@ async function saveMuxFromPin(){
  if(d.status==='ok'){
  $('#muxMsg').textContent='Multiplexeur enregistré!';
  $('#muxMsg').style.color='#10b981';
+ // Supprimer l'entrée de pcfg pour la pin SIG (le MUX est géré via muxList)
+ if(caps && caps.pins){
+  const sigPin=caps.pins.find(p=>p.gpio===sig);
+  if(sigPin && sigPin.label && pcfg[sigPin.label] && pcfg[sigPin.label].role && pcfg[sigPin.label].role.startsWith('mux:')){
+   delete pcfg[sigPin.label];
+  }
+ }
  if(typeof loadMuxList === 'function') await loadMuxList();
  if(typeof loadCaps === 'function') await loadCaps();
  if(typeof updatePinsList === 'function') updatePinsList();

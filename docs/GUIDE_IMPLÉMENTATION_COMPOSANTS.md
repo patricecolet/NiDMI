@@ -5,410 +5,393 @@ Ce guide s'adresse aux stagiaires et développeurs qui souhaitent ajouter de nou
 ## 📋 Table des matières
 
 1. [Architecture des composants](#architecture-des-composants)
-2. [Création d'un nouveau composant](#création-dun-nouveau-composant)
-3. [Intégration dans ComponentManager](#intégration-dans-componentmanager)
-4. [Ajout à l'interface web](#ajout-à-linterface-web)
-5. [Bonnes pratiques](#bonnes-pratiques)
+2. [Composants simples vs complexes](#composants-simples-vs-complexes)
+3. [Création d'un composant simple](#création-dun-composant-simple)
+4. [Création d'un composant complexe](#création-dun-composant-complexe)
+5. [Intégration dans l'UI](#intégration-dans-lui)
+6. [Bonnes pratiques](#bonnes-pratiques)
 
 ## 🏗️ Architecture des composants
 
-### Structure actuelle
+### Structure des fichiers
 
 ```
 src/
-├── components/
-│   ├── Button.h           # Bouton poussoir (Note On/Off)
-│   ├── Potentiometer.h    # Potentiomètre (CC MIDI)
-│   ├── Led.h              # LED (réception MIDI)
-│   └── AnalogMux.h        # Multiplexeur HC4067
-├── ComponentManager.h/cpp # Gestionnaire central des composants
-└── PinMapper.h/cpp        # Mapping pins ESP32
+├── components/                    # Définitions des composants
+│   ├── ComponentTypes.h           # Types de base (ComponentType, ComponentConfig, ComponentState)
+│   ├── ComponentDefinition.h      # Structure de définition pour l'UI
+│   ├── ComponentRegistry.h/cpp    # Registre central des composants
+│   ├── ValidationRegistry.h/cpp   # Registre des validators
+│   ├── input/                     # Composants d'entrée
+│   │   ├── PotentiometerDef.h     # Définition potentiomètre
+│   │   ├── ButtonDef.h            # Définition bouton
+│   │   └── MuxDef.h/cpp           # Définition multiplexeur
+│   └── output/                    # Composants de sortie
+│       └── LedDef.h               # Définition LED
+├── processors/                    # Logique de traitement
+│   ├── ProcessorRegistry.h/cpp    # Dispatch dynamique
+│   ├── PotentiometerProcessor.h/cpp
+│   ├── ButtonProcessor.h/cpp
+│   └── LedProcessor.h/cpp
+├── managers/                      # Gestion des composants complexes
+│   ├── ComponentManager.h/cpp     # Manager central
+│   ├── MuxManager.h/cpp           # Manager spécifique MUX
+│   └── MuxValidator.h/cpp         # Validation MUX
+└── hardware/
+    └── AnalogMux.h                # Driver hardware MUX
 ```
 
-### Composants existants (exemples)
-
-#### `Button.h` - Bouton poussoir
-- **Fonctionnalité** : Détecte appui/relâchement → Note On/Off MIDI
-- **Caractéristiques** :
-  - Anti-rebond temporel (défaut 25ms)
-  - INPUT_PULLUP (actif à LOW)
-  - Note MIDI configurable
-
-#### `Potentiometer.h` - Potentiomètre
-- **Fonctionnalité** : Lecture analogique → CC MIDI
-- **Caractéristiques** :
-  - Filtre passe-bas avec hystérésis (réduit jitter)
-  - Mapping 0-4095 → 0-127
-  - CC MIDI configurable
-
-#### `AnalogMux.h` - Multiplexeur HC4067
-- **Fonctionnalité** : 16 canaux analogiques via 1 pin
-- **Caractéristiques** :
-  - 4 pins de sélection (S0-S3)
-  - Pin EN optionnelle (active LOW)
-  - Discard first reading pour stabilité
-
-### Types de composants supportés
+### Types de composants
 
 ```cpp
+// src/components/ComponentTypes.h
 enum class ComponentType : uint8_t {
     POTENTIOMETER = 0,  // Potentiomètre analogique
     BUTTON = 1,         // Bouton poussoir
-    LED = 2             // LED (réception MIDI)
+    LED = 2,            // LED (sortie)
+    MUX = 3             // Multiplexeur analogique
     // Ajouter votre nouveau type ici
 };
-```
 
-## 🔧 Création d'un nouveau composant
-
-### Étape 1 : Définir le composant dans `components/`
-
-Créer un fichier header `src/components/VotreComposant.h` :
-
-```cpp
-#pragma once
-
-#include <Arduino.h>
-#include "../midi/MidiSender.h"
-
-/**
- * @brief Description courte du composant
- * 
- * Exemple: EncoderRotary(D2, D3, 7, 1, router) enverra CC 7 sur canal 1.
- */
-class EncoderRotary {
-public:
-    /**
-     * @param pinA    Pin A de l'encodeur
-     * @param pinB    Pin B de l'encodeur
-     * @param cc      Numéro de CC MIDI (0-127)
-     * @param channel Canal MIDI (1-16)
-     * @param out     Routeur MIDI/OSC
-     */
-    EncoderRotary(uint8_t pinA, uint8_t pinB, uint8_t cc, uint8_t channel, MidiSender& out)
-        : pinA(pinA), pinB(pinB), cc(cc), channel(channel), out(out), 
-          position(0), lastA(false) {}
-
-    /**
-     * @brief Initialiser les pins
-     */
-    void begin() {
-        pinMode(pinA, INPUT_PULLUP);
-        pinMode(pinB, INPUT_PULLUP);
-        lastA = digitalRead(pinA);
-    }
-
-    /**
-     * @brief Mettre à jour l'état (appelé dans loop())
-     */
-    void update() {
-        bool currentA = digitalRead(pinA);
-        bool currentB = digitalRead(pinB);
-        
-        // Détecter changement (pattern quadrature)
-        if (currentA != lastA) {
-            if (currentA == currentB) {
-                position++;
-            } else {
-                position--;
-            }
-            // Envoyer CC MIDI (clamp 0-127)
-            uint8_t value = constrain(position, 0, 127);
-            out.sendControlChange(channel, cc, value);
-        }
-        lastA = currentA;
-    }
-
-private:
-    uint8_t pinA, pinB;
-    uint8_t cc, channel;
-    MidiSender& out;
-    int16_t position;  // Position relative
-    bool lastA;        // État précédent pinA
+enum class PinType : uint8_t {
+    PIN_ANALOG = 0,          // Pin analogique (ADC)
+    PIN_DIGITAL = 1,         // Pin digitale
+    PIN_ANALOG_OR_DIGITAL = 2,
+    PIN_PWM = 3              // Pin avec PWM
 };
 ```
 
-### Étape 2 : Ajouter le type dans `ComponentManager.h`
+### Structure de définition
+
+Chaque composant a une définition qui décrit ses caractéristiques pour l'UI :
 
 ```cpp
-// Types de composants supportés
+// src/components/ComponentDefinition.h
+struct ComponentDefinition {
+    const char* id;              // "potentiometer", "button", etc.
+    const char* displayName;     // "Potentiomètre", "Bouton", etc.
+    const char* icon;            // Icône (optionnel)
+    ComponentType type;          // Type enum
+    PinType pinType;             // Type de pin requis
+    bool implemented;            // true = disponible, false = grisé
+    bool isComplex;              // true = nécessite un manager
+};
+```
+
+## 📦 Composants simples vs complexes
+
+| Aspect | Simple | Complexe |
+|--------|--------|----------|
+| **Exemples** | Potentiomètre, Bouton, LED | MUX, Matrice de boutons |
+| **Pins** | 1 seule pin | Plusieurs pins |
+| **Fichiers** | Définition + Processor | Définition + Processor + Manager + Validator |
+| **Gestion** | ComponentManager | Manager dédié (ex: MuxManager) |
+
+## 🔧 Création d'un composant simple
+
+### Exemple : Encoder rotatif
+
+#### Étape 1 : Ajouter le type dans `ComponentTypes.h`
+
+```cpp
 enum class ComponentType : uint8_t {
     POTENTIOMETER = 0,
     BUTTON = 1,
     LED = 2,
-    ENCODER = 3  // ← Nouveau type
+    MUX = 3,
+    ENCODER = 4  // ← Nouveau
 };
 ```
 
-### Étape 3 : Ajouter la gestion dans `ComponentManager.cpp`
-
-#### 3.1 Dans `update()` - Ajouter le traitement
+#### Étape 2 : Créer la définition dans `components/input/`
 
 ```cpp
-void ComponentManager::update() {
-    for (uint8_t i = 0; i < component_count; i++) {
-        ComponentState& state = states[i];
-        ComponentConfig& config = configs[i];
-        
-        switch (config.type) {
-            case ComponentType::POTENTIOMETER:
-                processPotentiometer(i);
-                break;
-            case ComponentType::BUTTON:
-                processButton(i);
-                break;
-            case ComponentType::LED:
-                // LED est traité par réception MIDI
-                break;
-            case ComponentType::ENCODER:  // ← Nouveau
-                processEncoder(i);
-                break;
-        }
-    }
-}
-```
+// src/components/input/EncoderDef.h
+#pragma once
 
-#### 3.2 Créer la fonction `processEncoder()`
+#include "../ComponentDefinition.h"
 
-```cpp
-void ComponentManager::processEncoder(uint8_t index) {
-    ComponentState& state = states[index];
-    ComponentConfig& config = configs[index];
+namespace Components {
+
+struct Encoder {
+    // Identifiants
+    static constexpr const char* ID = "encoder";
+    static constexpr const char* DISPLAY_NAME = "Encodeur";
     
-    // Votre logique ici
-    // Exemple: lire l'encodeur et envoyer CC MIDI
-    // Note: Les pins sont dans config.gpio (ou deux pins séparées selon votre design)
+    // Configuration
+    static constexpr ComponentType TYPE = ComponentType::ENCODER;
+    static constexpr PinType PIN_TYPE = PinType::PIN_DIGITAL;
+    static constexpr bool IMPLEMENTED = true;
+    static constexpr bool IS_COMPLEX = false;
     
-    // Envoyer CC MIDI si changement détecté
-    if (/* changement détecté */) {
-        midi_sender->sendControlChange(
-            config.midi_channel, 
-            config.midi_param, 
-            /* valeur */
-        );
+    // Valeurs par défaut
+    static constexpr uint8_t DEFAULT_CC = 1;
+    static constexpr uint8_t DEFAULT_CHANNEL = 1;
+    
+    // Validation inline
+    static bool validate(uint8_t gpio) {
+        return gpio < 48;  // N'importe quel GPIO valide
     }
     
-    // OSC si activé
-    if (config.flags & 0x02) {  // Flag OSC activé
-        String oscAddress = (config.osc_address[0] != '\0') ? 
-            String(config.osc_address) : "/encoder";
-        // Envoyer OSC...
+    // Créer la définition
+    static ComponentDefinition createDefinition() {
+        return {
+            ID, DISPLAY_NAME, nullptr,
+            TYPE, PIN_TYPE, IMPLEMENTED, IS_COMPLEX
+        };
     }
-}
-```
-
-#### 3.3 Dans `addComponent()` - Validation des pins
-
-```cpp
-bool ComponentManager::addComponent(uint8_t gpio, ComponentType type, 
-                                    uint8_t midi_param, uint8_t channel, 
-                                    MidiMessageType msg_type) {
-    // ... validations existantes ...
-    
-    // Validation spécifique pour ENCODER
-    if (type == ComponentType::ENCODER) {
-        // Vérifier que les pins sont digitales et disponibles
-        if (!pinMapper->isDigitalPin(gpio)) {
-            Serial.printf("[ComponentManager] ERROR: GPIO %d is not digital\n", gpio);
-            return false;
-        }
-        // Si vous avez besoin de 2 pins, ajoutez une validation supplémentaire
-    }
-    
-    // ... reste du code ...
-}
-```
-
-#### 3.4 Dans `loadFromNVS()` - Mapping rôle → type
-
-```cpp
-ComponentType type = ComponentType::POTENTIOMETER;
-if (role == "Bouton") type = ComponentType::BUTTON;
-else if (role == "LED") type = ComponentType::LED;
-else if (role == "Encodeur") type = ComponentType::ENCODER;  // ← Ajouter
-```
-
-### Étape 4 : Ajouter à l'interface web
-
-#### 4.1 Dans `web/js/components.js` - Ajouter le rôle
-
-```javascript
-function showRoleCards() {
-    // ... code existant ...
-    
-    // Ajouter "Encodeur" dans les rôles disponibles
-    // (selon le type de pin : digital ou analogique)
-}
-```
-
-#### 4.2 Dans `web/index.html` - UI optionnelle
-
-Si votre composant nécessite des paramètres supplémentaires, ajoutez-les dans le formulaire de configuration.
-
-## 📐 Exemples concrets
-
-### Exemple 1 : Encodeur rotatif (2 pins digitales)
-
-```cpp
-class EncoderRotary {
-    // Voir exemple ci-dessus
 };
+
+} // namespace Components
 ```
 
-**Points importants** :
-- Détection quadrature (A/B)
-- Anti-rebond (utiliser `Debounce` comme `Button`)
-- Accumulation de position (incrément/décrément)
-
-### Exemple 2 : Capteur touch ESP32-S3 (1 pin)
+#### Étape 3 : Créer le processor dans `processors/`
 
 ```cpp
-#include <driver/touch_sensor.h>
+// src/processors/EncoderProcessor.h
+#pragma once
 
-class TouchSensor {
+#include "../components/ComponentTypes.h"
+
+class MidiSender;
+class OSCQueue;
+
+class EncoderProcessor {
 public:
-    TouchSensor(uint8_t pin, uint8_t note, uint8_t channel, MidiSender& out)
-        : touchPin(pin), note(note), channel(channel), out(out), 
-          threshold(50), touched(false) {}
-
-    void begin() {
-        touchAttachInterrupt(touchPin, [](){}, threshold);
-    }
-
-    void update() {
-        uint16_t value = touchRead(touchPin);
-        bool isTouching = value < threshold;
-        
-        if (isTouching != touched) {
-            touched = isTouching;
-            if (touched) {
-                out.sendNoteOn(channel, note, 127);
-            } else {
-                out.sendNoteOff(channel, note, 0);
-            }
-        }
-    }
-
+    static void process(
+        ComponentConfig& config,
+        ComponentState& state,
+        MidiSender* midi_sender,
+        OSCQueue& osc_queue
+    );
+    
 private:
-    uint8_t touchPin;
-    uint8_t note, channel;
-    MidiSender& out;
-    uint16_t threshold;
-    bool touched;
+    static constexpr uint32_t DEBOUNCE_MS = 5;
 };
 ```
+
+```cpp
+// src/processors/EncoderProcessor.cpp
+#include "EncoderProcessor.h"
+#include "../midi/MidiSender.h"
+#include "../osc/OSCQueue.h"
+
+void EncoderProcessor::process(
+    ComponentConfig& config,
+    ComponentState& state,
+    MidiSender* midi_sender,
+    OSCQueue& osc_queue
+) {
+    // Votre logique ici
+    // Lire les pins, détecter rotation, envoyer MIDI/OSC
+    
+    // Exemple simplifié :
+    uint16_t value = /* lire l'encodeur */;
+    
+    if (value != state.last_value) {
+        state.last_value = value;
+        
+        // Envoyer MIDI
+        if (config.flags & 0x01 && midi_sender) {
+            midi_sender->sendControlChange(
+                config.midi_channel,
+                config.midi_param,
+                value & 0x7F
+            );
+        }
+        
+        // Envoyer OSC
+        if (config.flags & 0x02) {
+            osc_queue.enqueueFloat(config.osc_address, value / 127.0f);
+        }
+    }
+}
+```
+
+#### Étape 4 : Enregistrer dans `ProcessorRegistry`
+
+```cpp
+// src/processors/ProcessorRegistry.cpp
+#include "EncoderProcessor.h"
+
+void ProcessorRegistry::processComponent(...) {
+    switch (config.type) {
+        // ... cas existants ...
+        case ComponentType::ENCODER:
+            EncoderProcessor::process(config, state, midi_sender, osc_queue);
+            break;
+    }
+}
+```
+
+#### Étape 5 : Enregistrer dans `ComponentRegistry`
+
+```cpp
+// src/components/ComponentRegistry.cpp
+void ComponentRegistry::init() {
+    // ... composants existants ...
+    
+    // Encodeur
+    definitions_.push_back({
+        "encoder",
+        "Encodeur",
+        nullptr,
+        ComponentType::ENCODER,
+        PinType::PIN_DIGITAL,
+        true,     // implémenté
+        false     // simple
+    });
+}
+```
+
+#### Étape 6 : Ajouter le validator
+
+```cpp
+// src/components/ValidationRegistry.cpp
+void ValidationRegistry::init() {
+    // ... validators existants ...
+    
+    registerValidator("encoder", [](uint8_t gpio, const void*) {
+        return gpio < 48;  // Validation simple
+    });
+}
+```
+
+## 🔧 Création d'un composant complexe
+
+### Exemple : Matrice de boutons
+
+Un composant complexe nécessite :
+1. **Définition** (`components/input/MatrixDef.h`)
+2. **Manager** (`managers/MatrixManager.h/cpp`)
+3. **Validator** (`managers/MatrixValidator.h/cpp`)
+4. **Processor** (optionnel, peut être intégré au Manager)
+
+#### Structure
+
+```cpp
+// src/components/input/MatrixDef.h
+struct Matrix {
+    static constexpr const char* ID = "matrix";
+    static constexpr const char* DISPLAY_NAME = "Matrice";
+    static constexpr ComponentType TYPE = ComponentType::MATRIX;
+    static constexpr bool IS_COMPLEX = true;  // ← Indique un composant complexe
+    
+    static constexpr uint8_t MAX_ROWS = 8;
+    static constexpr uint8_t MAX_COLS = 8;
+};
+
+// src/managers/MatrixValidator.h
+class MatrixValidator {
+public:
+    struct ValidationResult {
+        bool valid;
+        String error_message;
+    };
+    
+    static ValidationResult validatePins(
+        const uint8_t* row_pins, uint8_t num_rows,
+        const uint8_t* col_pins, uint8_t num_cols
+    );
+};
+
+// src/managers/MatrixManager.h
+class MatrixManager {
+public:
+    bool addMatrix(...);
+    bool removeMatrix(...);
+    void update();
+    // ...
+};
+```
+
+## 🌐 Intégration dans l'UI
+
+### API Backend
+
+Les composants sont exposés au frontend via l'API :
+
+```
+GET /api/components/definitions
+→ [
+    {"id":"potentiometer","displayName":"Potentiomètre","pinType":0,"implemented":true,"isComplex":false},
+    {"id":"button","displayName":"Bouton","pinType":1,"implemented":true,"isComplex":false},
+    ...
+  ]
+```
+
+### Frontend
+
+Le frontend utilise ces définitions pour générer dynamiquement les options dans l'UI.
+
+Les composants avec `implemented: false` sont affichés en grisé.
 
 ## ✅ Bonnes pratiques
 
-### Performance temps réel
+### Performance
 
-1. **Pas de délais dans `update()`**
+1. **Pas de `delay()` dans les processors**
    ```cpp
    // ❌ MAUVAIS
-   void update() {
-       delay(10);  // Bloque le système
-   }
+   void process(...) { delay(10); }
    
    // ✅ BON
-   void update() {
-       static uint32_t lastTime = 0;
-       uint32_t now = millis();
-       if (now - lastTime < 10) return;  // Rate limiting
-       lastTime = now;
-       // ...
+   void process(...) {
+       if (millis() - state.last_time < 10) return;
+       state.last_time = millis();
    }
    ```
 
-2. **Utiliser des filtres pour analogique**
+2. **Filtrage pour l'analogique**
    ```cpp
-   // Filtre passe-bas (déjà présent dans Potentiometer)
-   float filtered = alpha * raw + (1.0f - alpha) * filtered;
+   float filtered = alpha * raw + (1.0f - alpha) * state.filtered;
    ```
 
-3. **Anti-rebond pour digital**
+3. **Anti-rebond pour le digital**
    ```cpp
-   // Utiliser la classe Debounce (comme Button)
-   Debounce deb(25);  // 25ms de délai
-   bool stable = deb.process(digitalRead(pin));
+   if (millis() - state.last_change_time < DEBOUNCE_MS) return;
    ```
 
-### Gestion mémoire
+### Mémoire
 
 1. **Pas de `malloc/free` dans `loop()`**
-   - Allouer au setup ou statiquement
+2. **Utiliser des buffers statiques**
+3. **Éviter les `String` Arduino (préférer `char[]`)**
 
-2. **Utiliser des buffers fixes**
+### MIDI/OSC
+
+1. **Toujours utiliser `MidiSender`**
+2. **Vérifier les flags avant d'envoyer**
    ```cpp
-   uint16_t buffer[16];  // ✅ Fixe
-   // Pas: uint16_t* buffer = malloc(16 * sizeof(uint16_t));  // ❌
-   ```
-
-### Messages MIDI/OSC
-
-1. **Utiliser `MidiSender`** pour l'envoi
-   ```cpp
-   midi_sender->sendControlChange(channel, cc, value);
-   midi_sender->sendNoteOn(channel, note, velocity);
-   ```
-
-2. **Support OSC optionnel**
-   ```cpp
-   if (config.flags & 0x02) {  // Flag OSC activé
-       osc_queue.enqueueFloat("/address", value);
-   }
+   if (config.flags & 0x01) midi_sender->sendCC(...);
+   if (config.flags & 0x02) osc_queue.enqueue(...);
    ```
 
 ### Configuration
 
-1. **Utiliser `ComponentConfig`** pour les paramètres
-   ```cpp
-   ComponentConfig config;
-   config.gpio = pin;
-   config.type = ComponentType::ENCODER;
-   config.midi_param = 7;
-   config.midi_channel = 1;
-   ```
+1. **Utiliser `ComponentConfig` pour les paramètres**
+2. **Valider les pins dans le Validator**
+3. **NVS est géré automatiquement par `ConfigLoader`**
 
-2. **Sauvegarder dans NVS** automatiquement
-   - `ComponentManager` gère déjà la sauvegarde
-   - Ajouter le mapping rôle → type dans `loadFromNVS()`
+## 🎯 Checklist
 
-## 🐛 Débogage
+### Composant simple
+- [ ] Ajouter `ComponentType::XXX` dans `ComponentTypes.h`
+- [ ] Créer `components/input/XxxDef.h` ou `components/output/XxxDef.h`
+- [ ] Créer `processors/XxxProcessor.h/cpp`
+- [ ] Ajouter dans `ProcessorRegistry::processComponent()`
+- [ ] Ajouter dans `ComponentRegistry::init()`
+- [ ] Ajouter dans `ValidationRegistry::init()`
+- [ ] Mettre à jour le script `nidmi.sh` si nouveau dossier
+- [ ] Tester compilation
+- [ ] Tester avec moniteur MIDI/OSC
 
-### Serial logs
-
-```cpp
-Serial.printf("[VotreComposant] GPIO %d, valeur: %d\n", pin, value);
-```
-
-### Vérifications
-
-1. **Pin correctement configurée** (`pinMode`)
-2. **Valeurs dans les bonnes plages** (0-127 pour MIDI, 0-4095 pour analogique)
-3. **Messages MIDI envoyés** (vérifier avec un moniteur MIDI)
-4. **NVS sauvegardé** (redémarrer l'ESP32 et vérifier que la config persiste)
-
-## 📚 Références
-
-- `src/components/Button.h` : Exemple simple (digital + anti-rebond)
-- `src/components/Potentiometer.h` : Exemple analogique (filtre + hystérésis)
-- `src/components/AnalogMux.h` : Exemple complexe (multiplexeur)
-- `src/ComponentManager.cpp` : Intégration complète
-
-## 🎯 Checklist d'implémentation
-
-- [ ] Créer `src/components/VotreComposant.h`
-- [ ] Ajouter `ComponentType::VOTRE_TYPE` dans `ComponentManager.h`
-- [ ] Ajouter `case` dans `ComponentManager::update()`
-- [ ] Créer `processVotreComposant()` dans `ComponentManager.cpp`
-- [ ] Ajouter validation dans `addComponent()`
-- [ ] Ajouter mapping rôle → type dans `loadFromNVS()`
-- [ ] Ajouter le rôle dans l'interface web (`components.js`)
-- [ ] Tester avec un moniteur MIDI/OSC
-- [ ] Vérifier sauvegarde NVS (redémarrage)
-- [ ] Documenter les paramètres spécifiques
+### Composant complexe
+- [ ] Tout ce qui précède, plus :
+- [ ] Créer `managers/XxxManager.h/cpp`
+- [ ] Créer `managers/XxxValidator.h/cpp`
+- [ ] Intégrer dans l'API si nécessaire
 
 ---
 
-*Guide créé pour faciliter l'ajout de nouveaux composants*
-*Basé sur l'architecture existante de NiDMI*
+*Guide mis à jour pour l'architecture v2.0 avec ComponentRegistry*

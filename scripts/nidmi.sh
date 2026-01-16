@@ -20,6 +20,8 @@ ARDUINO_CACHE_DIR="/Users/patricecolet/Library/Caches/arduino/sketches"
 BOARD_TYPE="s3"  # Par défaut: S3
 BOARD="esp32:esp32:XIAO_ESP32S3"
 DEFAULT_SKETCH="nidmi_basic"
+NVS_RESET_SKETCH="nidmi_clear_nvs"
+CLEAR_NVS=false
 
 # Langue par défaut (français)
 LANG_CODE="fr"
@@ -36,6 +38,10 @@ while [[ $# -gt 0 ]]; do
             BOARD_TYPE="$2"
             shift 2
             ;;
+        --clear-nvs)
+            CLEAR_NVS=true
+            shift
+            ;;
         *)
             ARGS+=("$1")
             shift
@@ -49,6 +55,12 @@ set -- "${ARGS[@]}"
 # Définir le nom du sketch APRÈS le parsing des arguments
 SKETCH_NAME="${2:-$DEFAULT_SKETCH}"  # Utiliser le 2ème argument ou le défaut
 SKETCH_PATH="$ARDUINO_LIB_DIR/examples/$SKETCH_NAME/$SKETCH_NAME.ino"
+
+# Fonction pour forcer un sketch
+set_sketch() {
+    SKETCH_NAME="$1"
+    SKETCH_PATH="$ARDUINO_LIB_DIR/examples/$SKETCH_NAME/$SKETCH_NAME.ino"
+}
 
 # Validation de la langue
 if [ "$LANG_CODE" != "fr" ] && [ "$LANG_CODE" != "en" ]; then
@@ -99,9 +111,11 @@ show_help() {
     echo "  --board BOARD - Type de carte ESP32 (c3|s3, défaut: s3)"
     echo "                  c3 = XIAO ESP32-C3"
     echo "                  s3 = XIAO ESP32-S3"
+    echo "  --clear-nvs   - Utiliser le sketch de reset NVS"
     echo ""
     echo "Sketches disponibles:"
     echo "  nidmi_basic (défaut)"
+    echo "  nidmi_clear_nvs (reset NVS)"
     echo ""
     echo "Exemples:"
     echo "  ./scripts/nidmi.sh sync                    # Synchroniser (français, S3 par défaut)"
@@ -110,6 +124,7 @@ show_help() {
     echo "  ./scripts/nidmi.sh upload --board s3       # Uploader sur ESP32-S3"
     echo "  ./scripts/nidmi.sh build                   # Build (S3 par défaut)"
     echo "  ./scripts/nidmi.sh upload nidmi_osc        # Upload sketch OSC"
+    echo "  ./scripts/nidmi.sh upload --clear-nvs      # Upload sketch reset NVS"
     echo "  ./scripts/nidmi.sh monitor                 # Ouvrir le moniteur série"
     echo "  ./scripts/nidmi.sh all                     # Tout faire + test"
     echo "  ./scripts/nidmi.sh clean                   # Nettoyer le cache"
@@ -141,14 +156,49 @@ sync_files() {
         echo "   ⚠️  Script de minification non trouvé, synchronisation sans minification"
     fi
     
-    # Copier tous les fichiers source
-    cp -f $REPO_DIR/src/*.cpp $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/*.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
+    # Nettoyer les anciens fichiers source (pour éviter les conflits après réorganisation)
+    rm -rf $ARDUINO_LIB_DIR/src/* 2>/dev/null || true
+    
+    # Créer le dossier src/ et tous les sous-dossiers
+    mkdir -p $ARDUINO_LIB_DIR/src
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/input,components/output,config,hardware,managers,midi,network,osc,processors,server,ui,utils}
+    
+    # Copier les fichiers de la racine src/
+    cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/nidmi_debug.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/Globals.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/NiDMI.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/NiDMI.cpp $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
+    
+    # Copier les sous-dossiers
     cp -f $REPO_DIR/src/api/*.cpp $ARDUINO_LIB_DIR/src/api/ 2>/dev/null || true
     cp -f $REPO_DIR/src/api/*.h $ARDUINO_LIB_DIR/src/api/ 2>/dev/null || true
     cp -f $REPO_DIR/src/components/*.h $ARDUINO_LIB_DIR/src/components/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/*.cpp $ARDUINO_LIB_DIR/src/components/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/input/*.h $ARDUINO_LIB_DIR/src/components/input/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/input/*.cpp $ARDUINO_LIB_DIR/src/components/input/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/output/*.h $ARDUINO_LIB_DIR/src/components/output/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/output/*.cpp $ARDUINO_LIB_DIR/src/components/output/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/config/*.cpp $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/config/*.h $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/hardware/*.cpp $ARDUINO_LIB_DIR/src/hardware/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/hardware/*.h $ARDUINO_LIB_DIR/src/hardware/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/managers/*.cpp $ARDUINO_LIB_DIR/src/managers/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/managers/*.h $ARDUINO_LIB_DIR/src/managers/ 2>/dev/null || true
     cp -f $REPO_DIR/src/midi/*.cpp $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true
     cp -f $REPO_DIR/src/midi/*.h $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/network/*.cpp $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/network/*.h $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/osc/*.cpp $ARDUINO_LIB_DIR/src/osc/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/osc/*.h $ARDUINO_LIB_DIR/src/osc/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/processors/*.cpp $ARDUINO_LIB_DIR/src/processors/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/processors/*.h $ARDUINO_LIB_DIR/src/processors/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/server/*.cpp $ARDUINO_LIB_DIR/src/server/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/server/*.h $ARDUINO_LIB_DIR/src/server/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/ui/*.cpp $ARDUINO_LIB_DIR/src/ui/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/ui/*.h $ARDUINO_LIB_DIR/src/ui/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/utils/*.cpp $ARDUINO_LIB_DIR/src/utils/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/utils/*.h $ARDUINO_LIB_DIR/src/utils/ 2>/dev/null || true
     
     # Copier les exemples
     mkdir -p $ARDUINO_LIB_DIR/examples
@@ -432,6 +482,9 @@ upload_sketch() {
 
 # Fonction principale
 main() {
+    if [ "$CLEAR_NVS" = true ]; then
+        set_sketch "$NVS_RESET_SKETCH"
+    fi
     case "${1:-help}" in
         "sync")
             echo "🚀 NiDMI - Synchronisation"

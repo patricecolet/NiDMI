@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script simple qui minifie web/index.html et génère src/ui_index.cpp
+# Script simple qui minifie web/index.html et génère src/ui/ui_index.cpp
 # Intègre web/app.js entre les marqueurs <!--JS-->...<!--/JS-->
 # Ne modifie PAS le code, juste la minification (commentaires + espaces)
 # Utilise uniquement sed/awk pour la portabilité (pas de Python)
@@ -248,56 +248,56 @@ fi
 
 echo "✅ HTML minifié vers build/index.min.html"
 
+# Créer le dossier src/ui s'il n'existe pas
+mkdir -p src/ui
+
 # Générer le C++ avec le HTML minifié
-echo "🔨 Génération de src/ui_index.cpp..."
+echo "🔨 Génération de src/ui/ui_index.cpp..."
 {
   echo '#include "ui_index.h"'
   echo 'const char INDEX_HTML[] PROGMEM = R"rawliteral('
   cat build/index.min.html
   echo ')rawliteral";'
-} > src/ui_index.cpp
+} > src/ui/ui_index.cpp
 
 # Générer le bundle C++ avec xxd (format wvr)
-echo "🔨 Génération de src/ui_bundle.h..."
-xxd -i build/bundle.js.gz > src/ui_bundle.h.tmp
+echo "🔨 Génération de src/ui/ui_bundle.h..."
+xxd -i build/bundle.js.gz > src/ui/ui_bundle.h.tmp
 
 # Extraire le nom du tableau et la longueur
-BUNDLE_NAME=$(grep -o '^unsigned char [^[]*\[\]' src/ui_bundle.h.tmp | sed 's/unsigned char //; s/\[\]//')
-BUNDLE_LEN=$(grep -o 'unsigned int.*_len = [0-9]*' src/ui_bundle.h.tmp | grep -o '[0-9]*$')
+BUNDLE_NAME=$(grep -o '^unsigned char [^[]*\[\]' src/ui/ui_bundle.h.tmp | sed 's/unsigned char //; s/\[\]//')
+BUNDLE_LEN=$(grep -o 'unsigned int.*_len = [0-9]*' src/ui/ui_bundle.h.tmp | grep -o '[0-9]*$')
 
 if [ -z "$BUNDLE_NAME" ] || [ -z "$BUNDLE_LEN" ]; then
     echo "❌ Erreur: Impossible d'extraire le nom ou la longueur du bundle"
-    rm -f src/ui_bundle.h.tmp "$TEMP_JS"
+    rm -f src/ui/ui_bundle.h.tmp "$TEMP_JS"
     exit 1
 fi
 
 # Générer le fichier final avec PROGMEM et BUNDLE_LEN (format wvr)
 {
-    echo '#ifndef UI_BUNDLE_H'
-    echo '#define UI_BUNDLE_H'
+    echo '#pragma once'
     echo ''
     echo "#define BUNDLE_LEN $BUNDLE_LEN"
-    sed -E "s/unsigned char ${BUNDLE_NAME}\[\] =/const uint8_t BUNDLE[] PROGMEM =/" src/ui_bundle.h.tmp | grep -v "^unsigned int"
-    echo ''
-    echo '#endif'
-} > src/ui_bundle.h
+    sed -E "s/unsigned char ${BUNDLE_NAME}\[\] =/const uint8_t BUNDLE[] PROGMEM =/" src/ui/ui_bundle.h.tmp | grep -v "^unsigned int"
+} > src/ui/ui_bundle.h
 
-rm -f src/ui_bundle.h.tmp "$TEMP_JS"
+rm -f src/ui/ui_bundle.h.tmp "$TEMP_JS"
 
-if [ ! -s src/ui_bundle.h ]; then
+if [ ! -s src/ui/ui_bundle.h ]; then
     echo "❌ Erreur: La génération ui_bundle.h a échoué"
     rm -f "$TEMP_HTML"
     exit 1
 fi
 
-echo "✅ Bundle généré dans src/ui_bundle.h (BUNDLE_LEN=$BUNDLE_LEN)"
+echo "✅ Bundle généré dans src/ui/ui_bundle.h (BUNDLE_LEN=$BUNDLE_LEN)"
 
 # Afficher les tailles
 HTML_SIZE=$(wc -c < web/index.html)
 MIN_SIZE=$(wc -c < build/index.min.html)
 BUNDLE_SIZE=$(wc -c < build/bundle.js.gz)
-CPP_HTML_SIZE=$(wc -c < src/ui_index.cpp)
-CPP_BUNDLE_SIZE=$(wc -c < src/ui_bundle.h)
+CPP_HTML_SIZE=$(wc -c < src/ui/ui_index.cpp)
+CPP_BUNDLE_SIZE=$(wc -c < src/ui/ui_bundle.h)
 
 COMBINED_SIZE=$((HTML_SIZE + JS_SIZE))
 
@@ -327,7 +327,7 @@ echo "  Total minifié:      $((MIN_SIZE + BUNDLE_SIZE)) bytes"
 echo "  Réduction totale:   $REDUCTION%"
 echo ""
 echo "📁 Fichiers générés:"
-echo "  build/index.min.html  (HTML minimal)"
-echo "  build/bundle.js.gz    (JS compressé)"
-echo "  src/ui_index.cpp      (HTML minimal en C++)"
-echo "  src/ui_bundle.h       (Bundle JS gzipé en C++)"
+echo "  build/index.min.html     (HTML minimal)"
+echo "  build/bundle.js.gz       (JS compressé)"
+echo "  src/ui/ui_index.cpp      (HTML minimal en C++)"
+echo "  src/ui/ui_bundle.h       (Bundle JS gzipé en C++)"

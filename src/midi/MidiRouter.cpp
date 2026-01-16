@@ -2,10 +2,9 @@
 #include <Arduino.h>
 
 // Dépendances vers le serveur core
-#include "../ServerCore.h"
-#include "../ComponentManager.h"
-
-extern ServerCore serverCore;
+#include "../server/ServerCore.h"
+#include "../managers/ComponentManager.h"
+#include "../Globals.h"
 
 MidiRouter::MidiRouter()
     : rtpEnabled(true), oscEnabled(true), bluetoothEnabled(true), oscToSta(true), oscPort(8000), defaultChannel(1) {}
@@ -143,19 +142,16 @@ void MidiRouter::setMidiChannel(uint8_t channel) { defaultChannel = channel; }
 
 void MidiRouter::handleMidiNoteOn(uint8_t channel, uint8_t note, uint8_t velocity) {
     // Transmettre au ComponentManager pour piloter les LEDs
-    extern ComponentManager g_componentManager;
     g_componentManager.handleMidiNoteOn(channel, note, velocity);
 }
 
 void MidiRouter::handleMidiNoteOff(uint8_t channel, uint8_t note, uint8_t velocity) {
     // Transmettre au ComponentManager pour piloter les LEDs
-    extern ComponentManager g_componentManager;
     g_componentManager.handleMidiNoteOff(channel, note, velocity);
 }
 
 void MidiRouter::handleMidiControlChange(uint8_t channel, uint8_t control, uint8_t value) {
     // Transmettre au ComponentManager pour piloter les LEDs
-    extern ComponentManager g_componentManager;
     g_componentManager.handleMidiControlChange(channel, control, value);
 }
 

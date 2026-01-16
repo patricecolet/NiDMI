@@ -80,7 +80,12 @@
     "enable": "Enable",
     "header": "Header",
     "noteVelocity": "Note + Velocity",
-    "noteSweep": "Note (Sweep)"
+    "noteSweep": "Note (Sweep)",
+    "potentiometer": "Potentiometer",
+    "button": "Button",
+    "analogMux": "Analog Multiplexer",
+    "muxHC4067": "HC4067 (16 channels)",
+    "muxHC4051": "HC4051 (8 channels)"
   },
   "components": {
     "muxTitle": "Analog multiplexers",
@@ -89,6 +94,11 @@
     "muxConfig": "HC4067 Configuration",
     "mux": "Multiplexer:",
     "sigPin": "SIG pin (analog):",
+    "autoPins": "Auto (SIG \u2192 S0\u2013S3)",
+    "s0Pin": "S0 pin:",
+    "s1Pin": "S1 pin:",
+    "s2Pin": "S2 pin:",
+    "s3Pin": "S3 pin:",
     "selectPins": "Selection pins (S0-S3):",
     "enPin": "EN pin (optional):",
     "notConnected": "Not connected",

@@ -1,5 +1,5 @@
 #include "APICommon.h"
-#include "NiDMIServer.h" /* Pour nidmi_requestReloadOsc */
+#include "../server/ServerCallbacks.h"/* Pour nidmi_requestReloadOsc */
 
 void setupOSC_API(AsyncWebServer& server) {
     /* API - Configuration OSC */

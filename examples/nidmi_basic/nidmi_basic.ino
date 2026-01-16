@@ -21,7 +21,7 @@
  * Usage :
  * 1. Sélectionner le board : XIAO_ESP32C3 ou XIAO_ESP32S3 dans Arduino IDE
  * 2. Uploader ce sketch
- * 3. Se connecter au WiFi "esp32rtpmidi" (mot de passe: "esp32pass")
+ * 3. Se connecter au WiFi "nidmi" (mot de passe: "nidmipass")
  * 4. Ouvrir http://192.168.4.1 dans Firefox (recommandé)
  * 5. Configurer les pins via l'interface web
  * 6. Les composants envoient automatiquement du MIDI
@@ -31,35 +31,19 @@
  * - Interface web compatible avec tous les navigateurs
  * - Brave/Chrome fonctionnent aussi pour la configuration
  * 
- * Option NVS Clear :
- * - Décommentez la ligne CLEAR_NVS ci-dessous pour forcer le reset
- * - Utile si des anciens réglages persistent
  */
 
-#include "NiDMIServer.h"
-#include <Preferences.h>
-
-// Décommentez la ligne suivante pour forcer le nettoyage NVS
-// #define CLEAR_NVS
+#include <NiDMI.h>
 
 void setup() {
     Serial.begin(115200);
     delay(100);
     
-    #ifdef CLEAR_NVS
-    Serial.println("[NiDMI] Clearing NVS...");
-    Preferences preferences;
-    preferences.begin("nidmi", false);
-    preferences.clear();
-    preferences.end();
-    Serial.println("[NiDMI] NVS cleared!");
-    #endif
-    
     // Initialisation automatique (détection MCU automatique)
     nidmi.begin();
     
     // Le système est maintenant prêt :
-    // - WiFi AP "esp32rtpmidi" actif
+    // - WiFi AP "nidmi" actif (mot de passe: "nidmipass")
     // - Interface web sur http://192.168.4.1
     // - RTP-MIDI initialisé automatiquement
     // - ComponentManager prêt à recevoir des configurations

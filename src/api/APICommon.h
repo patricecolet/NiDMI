@@ -1,20 +1,12 @@
-#ifndef API_COMMON_H
-#define API_COMMON_H
+#pragma once
 
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <WiFi.h>
 #include <Preferences.h>
 #include "../nidmi_debug.h"
-#include "../ConfigCache.h"
-
-/* Variable globale pour le cache de configuration */
-extern ConfigCache g_configCache;
-
-#endif // API_COMMON_H
-
-
-
+#include "../Globals.h"
+#include "../config/ConfigCache.h"
 
 
 

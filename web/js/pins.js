@@ -8,8 +8,20 @@ function pType(lbl){
  return 'digital';
 }
 
+function getRoleDisplayLabel(role){
+ if(!role) return '';
+ if(role==='potentiometer') return 'Potentiomètre';
+ if(role==='button') return 'Bouton';
+ if(role==='led') return 'LED';
+ if(role==='i2c') return 'I2C';
+ if(role==='spi') return 'SPI';
+ if(role==='uart') return 'UART';
+ if(role.startsWith('mux:')) return role.split(':')[1];
+ return role;
+}
+
 function stat(cfg, pinLabel){
- if(cfg.role==='Potentiomètre') {
+ if(cfg.role==='potentiometer') {
  if(!cfg.rtpEnabled) return 'Raw';
  if(cfg.rtpType === 'Control Change') return `CC#${cfg.rtpCc||7}`;
  if(cfg.rtpType === 'Program Change') return `PC#${cfg.rtpPc||0}`;
@@ -17,7 +29,7 @@ function stat(cfg, pinLabel){
  if(cfg.rtpType === 'Aftertouch (Channel)') return 'Aftertouch';
  return cfg.rtpType || `CC#${cfg.rtpCc||7}`;
  }
- if(cfg.role==='Bouton') {
+ if(cfg.role==='button') {
  if(!cfg.rtpEnabled) return 'Digital';
  if(cfg.rtpType === 'Note') return `Note ${cfg.rtpNote||60}`;
  if(cfg.rtpType === 'Control Change') return `CC#${cfg.rtpCc||7}`;
@@ -28,16 +40,59 @@ function stat(cfg, pinLabel){
  if(cfg.rtpType === 'Tap Tempo') return 'Tap Tempo';
  return cfg.rtpType || `Note ${cfg.rtpNote||60}`;
  }
- if(cfg.role==='LED') return cfg.ledMode==='pwm' ? 'PWM' : 'On/Off';
- if(cfg.role==='I2C') return 'I2C';
- if(cfg.role==='SPI') return 'SPI';
- if(cfg.role==='UART') return pinLabel?.includes('TX') ? 'TX' : 'RX';
+ if(cfg.role==='led') return cfg.ledMode==='pwm' ? 'PWM' : 'On/Off';
+ if(cfg.role==='i2c') return 'I2C';
+ if(cfg.role==='spi') return 'SPI';
+ if(cfg.role==='uart') return pinLabel?.includes('TX') ? 'TX' : 'RX';
  return cfg.role||'';
 }
 
-function setOptions(sel,arr,pre=0){
+function setOptions(sel,options,pre=0){
  if(!sel) return;
- sel.innerHTML=arr.map((o,i)=>`<option ${i===pre?'selected':''}>${o}</option>`).join('');
+ let html='';
+ let firstValue=null;
+ let selectedValue=null;
+ if(Array.isArray(options)){
+  html=options.map((o,i)=>{
+   if(i===0) firstValue=o;
+   if(i===pre) selectedValue=o;
+   return `<option ${i===pre?'selected':''}>${o}</option>`;
+  }).join('');
+ }else{
+  let isFirst=true;
+  Object.keys(options).forEach(groupKey=>{
+   const group=options[groupKey];
+   if(typeof group==='string'){
+    if(firstValue===null) firstValue=groupKey;
+    const shouldSelect=(pre===0&&isFirst)||(typeof pre==='string'&&groupKey===pre);
+    if(shouldSelect) selectedValue=groupKey;
+    html+=`<option value="${groupKey}" ${shouldSelect?'selected':''}>${group}</option>`;
+    if(isFirst) isFirst=false;
+   }else if(group.items&&Array.isArray(group.items)){
+    html+=`<optgroup label="${group.label}">`;
+    group.items.forEach((item)=>{
+     const selected=(typeof pre==='string'&&item.value===pre)?'selected':'';
+     if(selected) selectedValue=item.value;
+     const disabled=item.disabled?'disabled':'';
+     html+=`<option value="${item.value}" ${selected} ${disabled}>${item.label}</option>`;
+    });
+    html+=`</optgroup>`;
+   }else{
+    if(firstValue===null) firstValue=groupKey;
+    const shouldSelect=(pre===0&&isFirst)||(typeof pre==='string'&&groupKey===pre);
+    if(shouldSelect) selectedValue=groupKey;
+    html+=`<option value="${groupKey}" ${shouldSelect?'selected':''}>${group}</option>`;
+    if(isFirst) isFirst=false;
+   }
+  });
+ }
+ sel.innerHTML=html;
+ // Définir explicitement sel.value après avoir mis le HTML
+ if(selectedValue!==null){
+  sel.value=selectedValue;
+ }else if(firstValue!==null){
+  sel.value=firstValue;
+ }
 }
 
 function updateBusVisuals(){
@@ -62,16 +117,18 @@ function updateBusVisuals(){
  r.classList.add('busDisabled');
  });
  }
-// Griser les pins utilisées par les multiplexeurs
+// Griser les pins configurées ET les pins du MUX en cours d'édition
 if(typeof getUsedGpios === 'function' && caps && caps.pins){
-    const usedGpios = getUsedGpios([]);
-    // Créer un map GPIO -> labels (comme dans drawBoard)
+    const usedGpios = getUsedGpios(['muxSig', 'muxEnCheckbox', 'muxEnManual']);
+    // Créer un map GPIO -> labels
     const gpioMap = new Map();
     caps.pins.forEach(p=>{
-     if(!gpioMap.has(p.gpio))gpioMap.set(p.gpio,[]);
-     gpioMap.get(p.gpio).push(p);
+     const gpio = parseInt(p.gpio);
+     if(isNaN(gpio)) return;
+     if(!gpioMap.has(gpio)) gpioMap.set(gpio,[]);
+     gpioMap.get(gpio).push(p);
     });
-    // Griser tous les labels associés aux GPIO utilisés
+    // Griser TOUTES les pins dont le GPIO est utilisé
     usedGpios.forEach(gpio=>{
      const pinsForGpio = gpioMap.get(gpio) || [];
      pinsForGpio.forEach(pin=>{
@@ -119,6 +176,10 @@ function drawBoard(){
  r.dataset.label=label;
  prect[label]=r;
  r.addEventListener('click',()=>{
+ // Ne pas permettre le clic si la pin est grisée (déjà configurée)
+ if(r.classList.contains('busDisabled')){
+  return;
+ }
  if(window._selRect) window._selRect.classList.remove('selectedSquare');
  window._selRect=r;
  r.classList.add('selectedSquare');
@@ -328,75 +389,116 @@ function updatePinsList(){
  const pl=$('#pinsList');
  if(!pl) return;
  pl.innerHTML='';
- Object.keys(pcfg).forEach(lbl=>{
- const cfg=pcfg[lbl];
- if(!cfg||!cfg.role) return;
- const isMuxPin=lbl.startsWith('M');
- if(isMuxPin) return;
- const it=document.createElement('div');
- it.className=`item ${pType(lbl)}`;
- it.innerHTML=`<span class="lbl">${lbl}</span><span class="role">${cfg.role}</span><span class="stat">${stat(cfg, lbl)}</span><button class="del-btn">×</button>`;
- it.onclick=()=>{
  
- if(window._selRect) window._selRect.classList.remove('selectedSquare');
- const r=prect[lbl];
- if(r){
- window._selRect=r;
- r.classList.add('selectedSquare');
+ // Collecter les GPIOs des MUX sauvegardés pour éviter les doublons
+ const savedMuxSigGpios = new Set();
+ if(typeof muxList !== 'undefined' && Array.isArray(muxList)){
+  muxList.forEach(m => savedMuxSigGpios.add(parseInt(m.sig)));
  }
  
- cur=lbl;
- $('#selPin').textContent=lbl;
- 
- updFunc(lbl);
- if(pcfg[lbl]) applyCfg(pcfg[lbl]);
- };
- const delBtn=it.querySelector('.del-btn');
- if(delBtn) delBtn.onclick=(e)=>{
- e.stopPropagation();
- delete pcfg[lbl];
- updatePinsList();
- updateBusVisuals();
- };
- pl.appendChild(it);
- });
- 
- // Ajouter les multiplexeurs configurés à la liste
- if(typeof muxList !== 'undefined' && Array.isArray(muxList)){
- muxList.forEach(mux=>{
- const it=document.createElement('div');
- it.className='item mux';
- it.innerHTML=`<span class="lbl">MUX${mux.id}</span><span class="role">HC4067</span><span class="stat">16 canaux</span><button class="del-btn">×</button>`;
- it.onclick=()=>{
- // Trouver le pin SIG correspondant et le sélectionner
- if(caps&&caps.pins&&mux.sig!==undefined){
-  const sigPin=caps.pins.find(p=>p.gpio===mux.sig);
-  if(sigPin&&sigPin.label){
-   // Sélectionner le pin dans l'interface
+ // Afficher les pins configurées
+ Object.keys(pcfg).forEach(lbl=>{
+  const cfg=pcfg[lbl];
+  if(!cfg||!cfg.role) return;
+  // Ignorer les pins avec préfixe M (anciennes pins MUX)
+  if(lbl.startsWith('M')) return;
+  
+  // Pour les rôles MUX : afficher comme MUX si pas déjà dans muxList
+  if(cfg.role && cfg.role.startsWith('mux:')){
+   if(caps && caps.pins){
+    const pin=caps.pins.find(p=>p.label===lbl);
+    // Si ce GPIO est déjà dans un MUX sauvegardé, ne pas afficher
+    if(pin && savedMuxSigGpios.has(parseInt(pin.gpio))) return;
+    
+    // Afficher comme MUX temporaire (non sauvegardé)
+    const muxType=cfg.role.split(':')[1]||'HC4067';
+    const muxId=$('#muxId')?$('#muxId').value:'0';
+    const it=document.createElement('div');
+    it.className='item mux';
+    it.innerHTML=`<span class="lbl">MUX${muxId}</span><span class="role">${muxType}</span><span class="stat">non sauvé</span><button class="del-btn">×</button>`;
+    it.onclick=()=>{
+     if(window._selRect) window._selRect.classList.remove('selectedSquare');
+     const r=prect[lbl];
+     if(r){
+      window._selRect=r;
+      r.classList.add('selectedSquare');
+     }
+     cur=lbl;
+     $('#selPin').textContent=lbl;
+     updFunc(lbl);
+     if(pcfg[lbl]) applyCfg(pcfg[lbl]);
+    };
+    const delBtn=it.querySelector('.del-btn');
+    if(delBtn) delBtn.onclick=(e)=>{
+     e.stopPropagation();
+     delete pcfg[lbl];
+     updatePinsList();
+     updateBusVisuals();
+    };
+    pl.appendChild(it);
+   }
+   return;
+  }
+  
+  // Afficher les pins normales (non-MUX)
+  const it=document.createElement('div');
+  it.className=`item ${pType(lbl)}`;
+  it.innerHTML=`<span class="lbl">${lbl}</span><span class="role">${getRoleDisplayLabel(cfg.role)}</span><span class="stat">${stat(cfg, lbl)}</span><button class="del-btn">×</button>`;
+  it.onclick=()=>{
    if(window._selRect) window._selRect.classList.remove('selectedSquare');
-   const r=prect[sigPin.label];
+   const r=prect[lbl];
    if(r){
     window._selRect=r;
     r.classList.add('selectedSquare');
    }
-   cur=sigPin.label;
-   $('#selPin').textContent=sigPin.label;
-   // Mettre à jour le menu déroulant pour afficher "Multiplexeur"
-   if($('#funcSelect')){
-    $('#funcSelect').value='Multiplexeur';
-    if(typeof updFunc === 'function') updFunc(sigPin.label);
-   }
-   // Charger la configuration du multiplexeur
-   if(typeof loadMuxConfigIntoForm === 'function') loadMuxConfigIntoForm(mux);
-  }
- }
- };
- const delBtn=it.querySelector('.del-btn');
- if(delBtn) delBtn.onclick=(e)=>{
- e.stopPropagation();
- if(typeof deleteMux === 'function') deleteMux(mux.id, e);
- };
- pl.appendChild(it);
+   cur=lbl;
+   $('#selPin').textContent=lbl;
+   updFunc(lbl);
+   if(pcfg[lbl]) applyCfg(pcfg[lbl]);
+  };
+  const delBtn=it.querySelector('.del-btn');
+  if(delBtn) delBtn.onclick=(e)=>{
+   e.stopPropagation();
+   delete pcfg[lbl];
+   updatePinsList();
+   updateBusVisuals();
+  };
+  pl.appendChild(it);
  });
+ 
+ // Ajouter les multiplexeurs sauvegardés à la liste (depuis muxList)
+ if(typeof muxList !== 'undefined' && Array.isArray(muxList)){
+  muxList.forEach(mux=>{
+   const it=document.createElement('div');
+   it.className='item mux';
+   it.innerHTML=`<span class="lbl">MUX${mux.id}</span><span class="role">HC4067</span><span class="stat">16 canaux</span><button class="del-btn">×</button>`;
+   it.onclick=()=>{
+    // Trouver le pin SIG correspondant et le sélectionner
+    if(caps&&caps.pins&&mux.sig!==undefined){
+     const sigPin=caps.pins.find(p=>p.gpio===mux.sig);
+     if(sigPin&&sigPin.label){
+      if(window._selRect) window._selRect.classList.remove('selectedSquare');
+      const r=prect[sigPin.label];
+      if(r){
+       window._selRect=r;
+       r.classList.add('selectedSquare');
+      }
+      cur=sigPin.label;
+      $('#selPin').textContent=sigPin.label;
+      if($('#funcSelect')){
+       $('#funcSelect').value='mux:HC4067';
+       if(typeof updFunc === 'function') updFunc(sigPin.label);
+      }
+      if(typeof loadMuxConfigIntoForm === 'function') loadMuxConfigIntoForm(mux);
+     }
+    }
+   };
+   const delBtn=it.querySelector('.del-btn');
+   if(delBtn) delBtn.onclick=(e)=>{
+    e.stopPropagation();
+    if(typeof deleteMux === 'function') deleteMux(mux.id, e);
+   };
+   pl.appendChild(it);
+  });
  }
 }

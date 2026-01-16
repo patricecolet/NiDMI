@@ -280,6 +280,9 @@ arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32C3 examples/nidmi_basic/nidmi_b
 # Build complet + upload
 ./scripts/nidmi.sh upload
 
+# Reset NVS (utiliser le sketch nidmi_clear_nvs)
+./scripts/nidmi.sh upload --clear-nvs
+
 # Moniteur série pour logs
 ./scripts/nidmi.sh monitor
 ```

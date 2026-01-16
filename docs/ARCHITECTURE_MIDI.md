@@ -231,6 +231,27 @@ public:
 
 ## Multiplexeurs
 
+### Configuration des pins ESP32 (mode auto / manuel)
+
+L'architecture MUX concerne uniquement les **pins ESP32** (SIG, S0–S3, EN) et
+ne modifie pas la logique des canaux internes du multiplexeur. Le MUX continue
+d'envoyer une valeur MIDI ou un tableau OSC comme aujourd'hui.
+
+Deux modes de configuration sont prévus :
+- **Mode auto** : assignation rapide avec un groupe de pins contiguës.
+  - SIG est choisi, puis S0–S3 sont déduites (SIG, SIG+1, SIG+2, SIG+3).
+  - EN reste optionnelle.
+  - Avantage : configuration rapide et légère côté interface.
+  - Limite : nécessite un bloc de GPIO disponibles et contigus.
+- **Mode manuel** : sélection explicite de SIG, S0–S3 et EN.
+  - Permet d'utiliser des GPIO non contigus.
+  - Recommandé quand les pins disponibles sont rares.
+
+Contraintes générales (validation attendue) :
+- **SIG doit avoir un ADC**.
+- **Pins distinctes** pour SIG, S0–S3 et EN (si utilisée).
+- **EN optionnelle** : si absente, le MUX reste actif.
+
 ### Multiplexeur 16:1 (CD4067)
 ```cpp
 class Multiplexer16 {

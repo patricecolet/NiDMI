@@ -1,11 +1,13 @@
 #include "APICommon.h"
-#include "PinMapper.h"
-#include "ComponentManager.h"
-#include "NiDMIServer.h" /* Pour nidmi_requestReloadPins */
+#include "../utils/PinMapper.h"
+#include "../managers/ComponentManager.h"
+#include "../server/ServerCallbacks.h" /* Pour nidmi_requestReloadPins */
+#include "../hardware/MuxConstants.h"
+#include "../Globals.h"
+#include "../config/ConfigCache.h"
 
 /* Forward declarations */
 String getDefaultConfig(String pin);
-extern ComponentManager g_componentManager;
 
 void setupPinAPI(AsyncWebServer& server) {
     /* API - Capacités des pins (dynamique selon MCU) */
@@ -70,18 +72,15 @@ void setupPinAPI(AsyncWebServer& server) {
         request->send(200, "application/json", json);
     });
 
-    /* API - Liste des pins configurées */
-    server.on("/api/pins/configured", HTTP_GET, [](AsyncWebServerRequest *request){
-        debug_network( "[PinAPI] /api/pins/configured appelé\n");
+    /* API - Liste des pins configurées (format pour saveAll avec pinLabel) */
+    server.on("/api/pins/list", HTTP_GET, [](AsyncWebServerRequest *request){
         String json = "{";
         json += "\"pins\":[";
         
         Preferences preferences;
         preferences.begin("nidmi", true);
         
-        /* Scanner toutes les clés pin_* - Utiliser PinMapper pour obtenir dynamiquement toutes les pins */
         bool first = true;
-        int pinCount = 0;
         
         /* Obtenir toutes les pins disponibles pour ce MCU */
         PinMapper::detectMcu();
@@ -91,42 +90,87 @@ void setupPinAPI(AsyncWebServer& server) {
         for (size_t i = 0; i < mapping_count; i++) {
             String pinLabel = String(mappings[i].label);
             String key = "pin_" + pinLabel;
-            String config = preferences.getString(key.c_str(), "");
-            if (!config.isEmpty()) {
-                debug_network( "[PinAPI] Pin trouvée: %s -> %s\n", pinLabel.c_str(), config.c_str());
+            String configStr = preferences.getString(key.c_str(), "");
+            if (!configStr.isEmpty()) {
                 if (!first) json += ",";
-                json += "{\"pin\":\"" + pinLabel + "\",\"config\":" + config + "}";
+                json += configStr;  // Le config est déjà un JSON complet avec pinLabel
                 first = false;
-                pinCount++;
             }
         }
         
         preferences.end();
         json += "]}";
         
-        debug_network( "[PinAPI] Retourne %d pins configurées\n", pinCount);
-        debug_network( "[PinAPI] JSON: %s\n", json.c_str());
-        
         request->send(200, "application/json", json);
     });
 
-    /* API - Configuration d'une pin */
-    server.on("/api/pins/config", HTTP_POST, [](AsyncWebServerRequest *request){
-        if(request->hasParam("pin", true) && request->hasParam("config", true)){
-            String pin = request->getParam("pin", true)->value();
-            String config = request->getParam("config", true)->value();
-            
-            /* Sauvegarder en NVS */
-            Preferences preferences;
-            preferences.begin("nidmi", false);
-            String key = "pin_" + pin;
-            preferences.putString(key.c_str(), config);
-            preferences.end();
-            
-            request->send(200, "application/json", "{\"status\":\"ok\"}");
-        } else {
-            request->send(400, "application/json", "{\"error\":\"pin and config required\"}");
+    /* API - Configuration d'une pin (format paramètres URL pour saveAll) */
+    server.on("/api/pins/set", HTTP_POST, [](AsyncWebServerRequest *request){
+        if(!request->hasParam("pinLabel", true) || !request->hasParam("role", true)){
+            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"pinLabel and role required\"}");
+            return;
         }
+        
+        String pinLabel = request->getParam("pinLabel", true)->value();
+        String role = request->getParam("role", true)->value();
+        
+        /* Construire le JSON à partir des paramètres */
+        String json = "{";
+        json += "\"pinLabel\":\"" + pinLabel + "\",";
+        json += "\"role\":\"" + role + "\"";
+        
+        auto addParam = [&](const char* name) {
+            if(request->hasParam(name, true)) {
+                String val = request->getParam(name, true)->value();
+                if(val == "true" || val == "false") {
+                    json += ",\"" + String(name) + "\":" + val;
+                } else if(val.length() > 0 && (val[0] >= '0' && val[0] <= '9')) {
+                    json += ",\"" + String(name) + "\":" + val;
+                } else {
+                    json += ",\"" + String(name) + "\":\"" + val + "\"";
+                }
+            }
+        };
+        
+        addParam("rtpEnabled");
+        addParam("rtpType");
+        addParam("rtpNote");
+        addParam("rtpCc");
+        addParam("rtpPc");
+        addParam("rtpChan");
+        addParam("rtpCcOn");
+        addParam("rtpCcOff");
+        addParam("rtpVel");
+        addParam("rtpCcMin");
+        addParam("rtpCcMax");
+        addParam("rtpNoteMin");
+        addParam("rtpNoteMax");
+        addParam("rtpNoteVelFix");
+        addParam("rtpNoteSweepAutoOffDelay");
+        addParam("ledMode");
+        addParam("btnMode");
+        addParam("btnPulseTiming");
+        addParam("filterIntensity");
+        addParam("oscEnabled");
+        addParam("oscAddress");
+        addParam("oscFormat");
+        addParam("dbgEnabled");
+        addParam("dbgHeader");
+        
+        json += "}";
+        
+        /* Sauvegarder en NVS */
+        Preferences preferences;
+        preferences.begin("nidmi", false);
+        String key = "pin_" + pinLabel;
+        preferences.putString(key.c_str(), json);
+        preferences.end();
+        
+        /* Mettre à jour ConfigCache */
+        g_configCache.setConfigClean(pinLabel, json);
+        nidmi_requestReloadPins();
+        
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
 
     /* API - Suppression d'une pin */
@@ -149,9 +193,6 @@ void setupPinAPI(AsyncWebServer& server) {
         String json = "{\"muxes\":[";
         bool first = true;
         
-        Preferences prefs;
-        prefs.begin("nidmi", true);
-        
         for (uint8_t i = 0; i < MAX_MUXES; i++) {
             const MuxConfig* cfg = g_componentManager.getMuxConfig(i);
             if (cfg && cfg->enabled) {
@@ -164,14 +205,17 @@ void setupPinAPI(AsyncWebServer& server) {
                 json += "\"s2\":" + String(cfg->s2) + ",";
                 json += "\"s3\":" + String(cfg->s3) + ",";
                 json += "\"en\":" + String(cfg->en_pin) + ",";
-                // Retourner min/max du premier canal (interface web simplifiée)
-                // Si tous les canaux ont la même valeur, retourner cette valeur unique
                 uint16_t min_val = cfg->analog_min[0];
                 uint16_t max_val = cfg->analog_max[0];
                 json += "\"min\":" + String(min_val) + ",";
                 json += "\"max\":" + String(max_val) + ",";
                 json += "\"filterIntensity\":" + String(cfg->filter_intensity) + ",";
-                // Format OSC : "raw", "float", "midi"
+                json += "\"ccBase\":" + String(cfg->cc_base) + ",";
+                json += "\"midiChan\":" + String(cfg->midi_channel) + ",";
+                
+                String oscBase = (cfg->osc_base[0] != '\0') ? String(cfg->osc_base) : "/mux" + String(i);
+                json += "\"oscBase\":\"" + oscBase + "\",";
+                
                 String oscFormatStr = "float";
                 if (cfg->osc_format == MuxOSCFormat::RAW) {
                     oscFormatStr = "raw";
@@ -180,69 +224,10 @@ void setupPinAPI(AsyncWebServer& server) {
                 }
                 json += "\"oscFormat\":\"" + oscFormatStr + "\"";
                 
-                /* Extraire oscBase, ccBase, midiChan depuis la première pin MUX (M0_0, M1_0) */
-                String pinLabel = "M" + String(i) + "_0";
-                String pinKey = "pin_" + pinLabel;
-                if (prefs.isKey(pinKey.c_str())) {
-                    String pinConfig = prefs.getString(pinKey.c_str(), "");
-                    if (pinConfig.length() > 0) {
-                        /* Extraire oscAddress et reconstruire oscBase */
-                        int oscAddrStart = pinConfig.indexOf("\"oscAddress\":\"");
-                        if (oscAddrStart >= 0) {
-                            oscAddrStart += 14; /* Longueur de "oscAddress":" */
-                            int oscAddrEnd = pinConfig.indexOf("\"", oscAddrStart);
-                            if (oscAddrEnd > oscAddrStart) {
-                                String oscAddr = pinConfig.substring(oscAddrStart, oscAddrEnd);
-                                /* Reconstruire oscBase : enlever /0 ou /ch à la fin */
-                                String oscBase = oscAddr;
-                                /* Chercher le dernier / et enlever tout ce qui suit */
-                                int lastSlash = oscBase.lastIndexOf('/');
-                                if (lastSlash > 0) {
-                                    oscBase = oscBase.substring(0, lastSlash);
-                                } else if (oscBase.endsWith("0")) {
-                                    /* Si c'est /mux0 sans slash final, enlever le 0 */
-                                    oscBase = oscBase.substring(0, oscBase.length() - 1);
-                                }
-                                /* Si oscBase est /mux, reconstruire avec le numéro du MUX */
-                                if (oscBase == "/mux") {
-                                    oscBase = "/mux" + String(i);
-                                }
-                                json += ",\"oscBase\":\"" + oscBase + "\"";
-                            }
-                        }
-                        
-                        /* Extraire rtpCc pour ccBase */
-                        int ccStart = pinConfig.indexOf("\"rtpCc\":");
-                        if (ccStart >= 0) {
-                            ccStart += 8;
-                            int ccEnd = pinConfig.indexOf(",", ccStart);
-                            if (ccEnd < 0) ccEnd = pinConfig.indexOf("}", ccStart);
-                            if (ccEnd > ccStart) {
-                                String ccStr = pinConfig.substring(ccStart, ccEnd);
-                                json += ",\"ccBase\":" + ccStr;
-                            }
-                        }
-                        
-                        /* Extraire rtpChan pour midiChan */
-                        int chanStart = pinConfig.indexOf("\"rtpChan\":");
-                        if (chanStart >= 0) {
-                            chanStart += 10;
-                            int chanEnd = pinConfig.indexOf(",", chanStart);
-                            if (chanEnd < 0) chanEnd = pinConfig.indexOf("}", chanStart);
-                            if (chanEnd > chanStart) {
-                                String chanStr = pinConfig.substring(chanStart, chanEnd);
-                                json += ",\"midiChan\":" + chanStr;
-                            }
-                        }
-                    }
-                }
-                
                 json += "}";
                 first = false;
             }
         }
-        
-        prefs.end();
         
         json += "],\"count\":" + String(g_componentManager.getMuxCount()) + "}";
         request->send(200, "application/json", json);
@@ -314,14 +299,15 @@ void setupPinAPI(AsyncWebServer& server) {
             return;
         }
         
-        if (g_componentManager.addMux(mux_id, sig, s0, s1, s2, s3, en, analog_min, analog_max, 
-                                     hysteresis_enabled, osc_format, filter_intensity, oscBase.c_str())) {
+        if (g_componentManager.addMux(mux_id, sig, s0, s1, s2, s3, en, analog_min, analog_max,
+                                     hysteresis_enabled, osc_format, filter_intensity, ccBase, midiChan, oscBase.c_str())) {
             // Sauvegarder en NVS (config principale sans seuils)
             Preferences prefs;
             prefs.begin("nidmi", false);
             String key = "mux_" + String(mux_id);
-            String config = String(sig) + "," + String(s0) + "," + String(s1) + "," + 
+            String config = String(sig) + "," + String(s0) + "," + String(s1) + "," +
                            String(s2) + "," + String(s3) + "," + String(en) + "," +
+                           String(ccBase) + "," + String(midiChan) + "," +
                            String(hysteresis_enabled ? 1 : 0) + "," + String((int)osc_format) + "," +
                            String(filter_intensity) + "," + String(oscBase);
             prefs.putString(key.c_str(), config);
@@ -335,39 +321,6 @@ void setupPinAPI(AsyncWebServer& server) {
             buffer[3] = analog_max & 0xFF;
             buffer[4] = (analog_max >> 8) & 0xFF;
             prefs.putBytes(thresh_key.c_str(), buffer, 5);
-            
-            // Générer et sauvegarder les 16 configurations de pins MUX
-            for (uint8_t ch = 0; ch < 16; ch++) {
-                String pinLabel = "M" + String(mux_id) + "_" + String(ch);
-                uint8_t cc = ccBase + ch;
-                if (cc > 127) cc = 127; // Limiter à 127
-                
-                // Construire l'adresse OSC : utiliser oscBase directement (sans ajouter le canal)
-                // Le canal sera envoyé comme float dans le message OSC
-                String oscAddr = oscBase;
-                
-                // Construire la configuration JSON
-                String pinConfig = "{";
-                pinConfig += "\"role\":\"Potentiomètre\",";
-                pinConfig += "\"rtpEnabled\":true,";
-                pinConfig += "\"rtpType\":\"Control Change\",";
-                pinConfig += "\"rtpCc\":" + String(cc) + ",";
-                pinConfig += "\"rtpChan\":" + String(midiChan) + ",";
-                pinConfig += "\"potFilter\":\"lowpass\",";
-                pinConfig += "\"oscEnabled\":true,";
-                pinConfig += "\"oscAddress\":\"" + oscAddr + "\",";
-                pinConfig += "\"oscFormat\":\"float\",";
-                pinConfig += "\"dbgEnabled\":false,";
-                pinConfig += "\"dbgHeader\":\"\"";
-                pinConfig += "}";
-                
-                // Sauvegarder en NVS
-                String pinKey = "pin_" + pinLabel;
-                prefs.putString(pinKey.c_str(), pinConfig);
-                
-                // Mettre en cache (sans marquer dirty car vient de NVS)
-                g_configCache.setConfigClean(pinLabel, pinConfig);
-            }
             
             prefs.end();
             

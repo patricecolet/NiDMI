@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{t.title}} - Test</title>
+<title>NiDMI</title>
 <style>
 :root{--cd:#3B82F6;--ca:#EC4899;--ci:#10B981;--cu:#6B7280;--cs:#8B5CF6;--cp:#EF4444;--cg:#000;--bg:#f9fafb;--bd:#e5e7eb;--tx:#374151;--mt:#6b7280}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -42,7 +42,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .subcard{background:#f9fafb;border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:8px}
 .subcard .r{margin:6px 0}
 .switch{display:flex;align-items:center;gap:8px}
-.busDisabled{opacity:0.45;filter:grayscale(100%);cursor:not-allowed}
+.busDisabled{opacity:0.45;filter:grayscale(100%);cursor:not-allowed;pointer-events:none}
 .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
 .modal-overlay.active{display:flex}
 .modal{background:#fff;border-radius:8px;padding:25px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,.3)}
@@ -52,13 +52,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <!--/JS-->
 </head>
 <body>
- <div class="h"><h1>{{t.title}}</h1><p>{{t.subtitle}}</p></div>
+ <div class="h"><h1>NiDMI</h1><p>{{t.subtitle}}</p></div>
  <div class="t"><div class="tab active" data-t="status">{{t.tabs.status}}</div><div class="tab" data-t="connection">{{t.tabs.connection}}</div><div class="tab" data-t="pins">{{t.tabs.pins}}</div></div>
  <div class="p active" id="panel-status">
  <div class="g"><div class="card"><h3>{{t.status.accessPoint}}</h3><p><strong>SSID:</strong> <span id="apSsid">-</span></p><p><strong>IP:</strong> <span id="apIp">-</span></p></div><div class="card"><h3>{{t.status.station}}</h3><p><strong>SSID:</strong> <span id="staSsid">-</span></p><p><strong>IP:</strong> <span id="staIp">-</span></p><p><strong>{{t.tabs.status}}:</strong> <span id="staStatus">-</span></p></div><div class="card"><h3>{{t.status.mdns}}</h3><p><strong>{{t.status.address}}:</strong> <span id="mdnsAddress">-</span></p></div><div class="card"><h3>{{t.status.osc}}</h3><p><strong>{{t.status.config}}:</strong> <span id="oscConfig">-</span></p></div></div>
  </div>
  <div class="p" id="panel-connection">
- <div class="f"><h3>{{t.forms.server}}</h3><form id="mdns"><div class="f"><label for="mdnsName">{{t.forms.serverName}}</label><input type="text" id="mdnsName" placeholder="esp32rtpmidi" required><div class="hint"><small>{{t.forms.serverHint}}</small></div></div><button type="submit" class="btn">{{t.forms.save}}</button><div class="hint" id="mdnsMsg"></div></form></div>
+ <div class="f"><h3>{{t.forms.server}}</h3><form id="mdns"><div class="f"><label for="mdnsName">{{t.forms.serverName}}</label><input type="text" id="mdnsName" placeholder="nidmi" required><div class="hint"><small>{{t.forms.serverHint}}</small></div></div><button type="submit" class="btn">{{t.forms.save}}</button><div class="hint" id="mdnsMsg"></div></form></div>
  <div class="f"><h3>{{t.forms.osc}}</h3><form id="osc"><div class="f"><label for="oscTarget">{{t.forms.destination}}</label><select id="oscTarget"><option value="ip">{{t.forms.ipSpecific}}</option><option value="ap">{{t.forms.broadcastAp}}</option><option value="sta" id="oscStaOption">{{t.forms.broadcastSta}}</option></select></div><div class="f" id="oscIpRow"><label for="oscIp">{{t.forms.ipAddress}}</label><input type="text" id="oscIp" placeholder="192.168.1.100" pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"></div><div class="f"><label for="oscPort">{{t.forms.port}}</label><input type="number" id="oscPort" value="8000" min="1024" max="65535" required></div><div class="f"><label><input type="checkbox" id="oscBroadcast"> {{t.forms.broadcastMode}}</label><div class="hint">{{t.forms.broadcastHint}}</div></div><button type="submit" class="btn">{{t.forms.save}}</button><div class="hint" id="oscMsg"></div></form></div>
  <div class="f"><h3>{{t.forms.wifiStation}}</h3><form id="sta"><div class="f"><label for="ssid">{{t.forms.ssid}}</label><input type="text" id="ssid" placeholder="{{t.forms.networkName}}" required></div><div class="f"><label for="pass">{{t.forms.password}}</label><input type="password" id="pass" placeholder="{{t.forms.password}}"></div><button type="submit" class="btn">{{t.forms.connect}}</button><div class="hint" id="staMsg"></div></form></div>
  </div>
@@ -75,25 +75,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div class="r"><label>{{t.pins.pin}}:</label><span id="selPin">-</span><select id="funcSelect"></select></div>
  <div id="cardBtn" class="subcard" style="display:none;"><div class="r"><label>{{t.pins.buttonMode}}:</label><select id="btnMode"><option value="pulse">{{t.pins.push}}</option><option value="press_release">{{t.pins.pressRelease}}</option><option value="toggle">{{t.pins.toggle}}</option></select></div><div class="r" id="btnPulseTimingRow" style="display:none;"><label>{{t.pins.timingPush}}:</label><select id="btnPulseTiming"><option value="press">{{t.pins.onPress}}</option><option value="release">{{t.pins.onRelease}}</option></select></div></div>
  <div id="cardLed" class="subcard" style="display:none;"><div class="r"><label>{{t.pins.led}}:</label><select id="ledMode"><option value="onoff">{{t.pins.onOff}}</option><option value="pwm">PWM</option></select></div></div>
- <div id="cardPot" class="subcard" style="display:none;"><div class="r"><label>{{t.pins.filter}}:</label><select id="potFilter"><option value="none">{{t.pins.none}}</option><option value="lowpass">{{t.pins.lowpass}}</option><option value="median">{{t.pins.median}}</option></select></div><div class="r"><label>{{t.pins.filterIntensity}}</label><input type="number" id="filterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">{{t.pins.filterHint}}</span></div></div>
- <div id="cardMux" class="subcard" style="display:none;">
- <h4 style="margin-top:0;">{{t.components.muxConfig}}</h4>
- <div class="f"><label>{{t.components.mux}}:</label><select id="muxId"><option value="0">MUX0</option><option value="1">MUX1</option></select></div>
- <div class="f"><label>{{t.components.sigPin}}</label><select id="muxSig"></select></div>
- <div class="f"><label>{{t.components.selectPins}}</label><select id="muxPinGroup"></select></div>
- <div class="f"><label>{{t.components.enPin}}</label><select id="muxEn"><option value="255">{{t.components.notConnected}}</option></select></div>
- <h4 style="margin-top:20px;">{{t.components.midiConfig}}</h4>
- <div class="f"><label>{{t.components.baseCc}}</label><input type="number" id="muxCcBase" min="0" max="127" value="1" style="width:100px;"></div>
- <div class="f"><label>{{t.components.midiChannel}}</label><input type="number" id="muxMidiChan" min="1" max="16" value="1" style="width:100px;"></div>
- <div class="f"><label>{{t.components.oscBase}}</label><input type="text" id="muxOscBase" placeholder="/mux0" style="width:200px;"></div>
- <h4 style="margin-top:20px;">{{t.components.analogConfig}}</h4>
+ <div id="cardPot" class="subcard" style="display:none;"><div class="r"><label>{{t.pins.filterIntensity}}</label><input type="number" id="filterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">{{t.pins.filterHint}}</span></div></div>
+<div id="cardMux" class="subcard" style="display:none;">
+<h4 style="margin-top:0;">{{t.components.muxConfig}}</h4>
+<div class="f" style="display:none;"><label>{{t.components.mux}}:</label><select id="muxId"><option value="0">MUX0</option><option value="1">MUX1</option></select></div>
+<div class="f" style="display:none;"><label>{{t.components.sigPin}}</label><select id="muxSig"></select></div>
+<div class="f"><label>{{t.components.s0Pin}}</label><select id="muxS0"></select></div>
+<div class="f"><label>{{t.components.s1Pin}}</label><select id="muxS1"></select></div>
+<div class="f"><label>{{t.components.s2Pin}}</label><select id="muxS2"></select></div>
+<div class="f"><label>{{t.components.s3Pin}}</label><select id="muxS3"></select></div>
+<div class="f"><label>{{t.components.enPin}}</label><select id="muxEnManual"><option value="255">{{t.components.notConnected}}</option></select></div>
+<h4 style="margin-top:20px;">{{t.components.analogConfig}}</h4>
  <div class="f"><label>{{t.components.minThreshold}}</label><input type="number" id="muxMin" min="0" max="4095" value="0" style="width:100px;"></div>
  <div class="f"><label>{{t.components.maxThreshold}}</label><input type="number" id="muxMax" min="0" max="4095" value="4095" style="width:100px;"></div>
- <div class="hint">OSC: /mux/ID/cal/min [CH] /mux/ID/cal/max [CH] /mux/ID/cal/reset [CH] (CH=0-15 comme valeur)</div>
- <div class="f"><label>{{t.components.oscFormat}}</label><select id="muxOscFormat"><option value="float">{{t.pins.float}}</option><option value="raw">{{t.components.raw}}</option><option value="midi">{{t.pins.midi}}</option></select></div>
+ <div class="hint">Adresses OSC pour le calibrage: /mux[ID]/cal/min [CH] /mux[ID]/cal/max [CH] /mux[ID]/cal/reset [CH] (CH=0-15)</div>
  <div class="f"><label>{{t.pins.filterIntensity}}</label><input type="number" id="muxFilterIntensity" min="1" max="10" value="5" style="width:60px;"><span style="margin-left:8px;font-size:0.9em;color:#666;">{{t.pins.filterHint}}</span></div>
- <button type="button" class="btn" onclick="saveMuxFromPin()">{{t.forms.save}}</button>
- <div class="hint" id="muxMsg"></div>
  </div>
  <h4>RTP‑MIDI</h4>
  <div class="r switch"><input type="checkbox" id="rtpEnabled2"><label for="rtpEnabled2">{{t.pins.activate}}</label><label>{{t.pins.type}}:</label><select id="rtpMsgType"><option>Note</option><option>Control Change</option><option>Program Change</option><option>Pitch Bend</option><option>Aftertouch (Channel)</option><option>{{t.pins.noteVelocity}}</option><option>{{t.pins.noteSweep}}</option><option>Clock</option><option>Tap Tempo</option></select></div>
@@ -123,9 +119,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <h3>{{t.components.muxConfig}}</h3>
  <form id="muxForm">
  <div class="f"><label>{{t.components.mux}}:</label><select id="muxId"><option value="0">MUX0</option><option value="1">MUX1</option></select></div>
- <div class="f"><label>{{t.components.sigPin}}</label><select id="muxSig"></select></div>
- <div class="f"><label>{{t.components.selectPins}}</label><select id="muxPinGroup"></select></div>
- <div class="f"><label>{{t.components.enPin}}</label><select id="muxEn"><option value="255">{{t.components.notConnected}}</option></select></div>
+<div class="f"><label>{{t.components.sigPin}}</label><select id="muxSig"></select></div>
+<div class="f"><label>{{t.components.s0Pin}}</label><select id="muxS0"></select></div>
+<div class="f"><label>{{t.components.s1Pin}}</label><select id="muxS1"></select></div>
+<div class="f"><label>{{t.components.s2Pin}}</label><select id="muxS2"></select></div>
+<div class="f"><label>{{t.components.s3Pin}}</label><select id="muxS3"></select></div>
+<div class="f"><label>{{t.components.enPin}}</label><select id="muxEnManual"><option value="255">{{t.components.notConnected}}</option></select></div>
  <h4 style="margin-top:20px;">{{t.components.midiConfig}}</h4>
  <div class="f"><label>{{t.components.baseCc}}</label><input type="number" id="muxCcBase" min="0" max="127" value="1" style="width:100px;"></div>
  <div class="f"><label>{{t.components.midiChannel}}</label><input type="number" id="muxMidiChan" min="1" max="16" value="1" style="width:100px;"></div>

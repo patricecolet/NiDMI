@@ -159,6 +159,19 @@ async function loadCaps(){
  caps=await r.json();
 }
 
+function migrateRole(role){
+ const migration={
+  'Potentiomètre':'potentiometer',
+  'Bouton':'button',
+  'LED':'led',
+  'Multiplexeur':'mux:HC4067',
+  'I2C':'i2c',
+  'SPI':'spi',
+  'UART':'uart'
+ };
+ return migration[role]||role;
+}
+
 async function loadConfiguredPins(){
  try {
  const r=await fetch('/api/pins/list');
@@ -166,7 +179,8 @@ async function loadConfiguredPins(){
  if(d.pins && Array.isArray(d.pins)) {
  d.pins.forEach(pinData => {
  if(pinData.pinLabel && pinData.role) {
- pcfg[pinData.pinLabel] = pinData;
+  pinData.role=migrateRole(pinData.role);
+  pcfg[pinData.pinLabel] = pinData;
  }
  });
  updatePinsList();
@@ -181,9 +195,16 @@ async function saveAll(){
  const msg=$('#saveAllMsg');
  msg.textContent='Enregistrement...';
  try{
+ // Sauvegarder le MUX en cours d'édition s'il y en a un
+ if(typeof saveMuxFromPin === 'function' && $('#funcSelect') && $('#funcSelect').value && $('#funcSelect').value.startsWith('mux:') && $('#muxSig') && $('#muxSig').value){
+  await saveMuxFromPin();
+ }
+ 
  const ps=Object.keys(pcfg).map(async lbl=>{
  const c=pcfg[lbl];
  if(!c||!c.role) return;
+ // Ne pas sauvegarder les pins MUX via l'API pins (elles sont gérées via l'API mux)
+ if(c.role && c.role.startsWith('mux:')) return;
  const p=new URLSearchParams();
  p.set('pinLabel',lbl);
  p.set('role',c.role);
@@ -205,7 +226,6 @@ async function saveAll(){
  if(c.ledMode) p.set('ledMode',c.ledMode);
  if(c.btnMode) p.set('btnMode',c.btnMode);
  if(c.btnPulseTiming) p.set('btnPulseTiming',c.btnPulseTiming);
- if(c.potFilter) p.set('potFilter',c.potFilter);
  if(c.filterIntensity) p.set('filterIntensity',c.filterIntensity);
  if(c.oscEnabled) p.set('oscEnabled','true');
  if(c.oscAddress) p.set('oscAddress',c.oscAddress);
@@ -217,7 +237,21 @@ async function saveAll(){
  await Promise.all(ps);
  
  const listRes=await fetch('/api/pins/list');
- const listData=await listRes.json();
+ if(!listRes.ok){
+  throw new Error('Erreur lors de la récupération de la liste des pins: '+listRes.status);
+ }
+ const text=await listRes.text();
+ if(!text || text.trim().length===0){
+  console.warn('Réponse vide de /api/pins/list');
+  var listData={pins:[]};
+ }else{
+  try{
+   var listData=JSON.parse(text);
+  }catch(e){
+   console.error('Erreur parsing JSON /api/pins/list:',e,'Réponse:',text);
+   throw e;
+  }
+ }
  const serverPins=new Set();
  if(listData.pins && Array.isArray(listData.pins)){
  listData.pins.forEach(p=>{

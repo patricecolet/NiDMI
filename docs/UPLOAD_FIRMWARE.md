@@ -30,6 +30,14 @@ cd /Users/patricecolet/repo/NiDMI
 ./scripts/nidmi.sh upload
 ```
 
+### Reset NVS (sketch dédié)
+
+Pour effacer la NVS, utiliser le sketch `nidmi_clear_nvs` via l'option `--clear-nvs` :
+
+```bash
+./scripts/nidmi.sh upload --clear-nvs
+```
+
 ### Compiler et générer le fichier binaire
 
 ```bash

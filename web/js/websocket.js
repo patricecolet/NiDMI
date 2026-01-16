@@ -34,24 +34,24 @@ function applyPinReplacementLogic(pin){
 
 function handlePinClickLocal(label){
  if(label.startsWith('A') || label.startsWith('M')){
- pcfg[label] = {role: 'Potentiomètre'};
+ pcfg[label] = {role: 'potentiometer'};
  if(label.startsWith('A')){
  const dLabel = label.replace('A', 'D');
  if(pcfg[dLabel]) delete pcfg[dLabel];
  }
  } else if(['D0','D1','D2','D3'].includes(label)){
- pcfg[label] = {role: 'Bouton'};
+ pcfg[label] = {role: 'button'};
  const aLabel = label.replace('D', 'A');
  if(pcfg[aLabel]) delete pcfg[aLabel];
  } else if(['SDA','SCL'].includes(label)){
- pcfg['I2C'] = {role: 'I2C'};
+ pcfg['I2C'] = {role: 'i2c'};
  if(pcfg['D4']) delete pcfg['D4'];
  if(pcfg['D5']) delete pcfg['D5'];
  if(pcfg['SDA']) delete pcfg['SDA'];
  if(pcfg['SCL']) delete pcfg['SCL'];
  label = 'I2C';
  } else if(['MOSI','MISO','SCK'].includes(label)){
- pcfg['SPI'] = {role: 'SPI'};
+ pcfg['SPI'] = {role: 'spi'};
  if(pcfg['D8']) delete pcfg['D8'];
  if(pcfg['D9']) delete pcfg['D9'];
  if(pcfg['D10']) delete pcfg['D10'];
@@ -60,29 +60,24 @@ function handlePinClickLocal(label){
  if(pcfg['SCK']) delete pcfg['SCK'];
  label = 'SPI';
  } else if(label === 'TX' || label === 'RX'){
- pcfg[label] = {role: 'UART'};
+ pcfg[label] = {role: 'uart'};
  if(label === 'TX' && pcfg['D6']) delete pcfg['D6'];
  if(label === 'RX' && pcfg['D7']) delete pcfg['D7'];
  } else if(['D4','D5'].includes(label)){
  if(pcfg['I2C']) delete pcfg['I2C'];
- pcfg[label] = {role: 'Bouton'};
+ pcfg[label] = {role: 'button'};
  } else if(['D8','D9','D10'].includes(label)){
  if(pcfg['SPI']) delete pcfg['SPI'];
- pcfg[label] = {role: 'Bouton'};
+ pcfg[label] = {role: 'button'};
  } else if(['D6','D7'].includes(label)){
- pcfg[label] = {role: 'Bouton'};
+ pcfg[label] = {role: 'button'};
  if(label === 'D6' && pcfg['TX']) delete pcfg['TX'];
  if(label === 'D7' && pcfg['RX']) delete pcfg['RX'];
  } else if(/^D\d+$/.test(label)){
- pcfg[label] = {role: 'Bouton'};
+ pcfg[label] = {role: 'button'};
  }
- updatePinsList();
- updateBusVisuals();
- const finalLabel = (label === 'I2C' || label === 'SPI') ? label : label;
- if(cur === finalLabel){
- updFunc(finalLabel);
- if(pcfg[finalLabel] || pcfg[cur]) applyCfg(pcfg[finalLabel] || pcfg[cur]);
- }
+updatePinsList();
+updateBusVisuals();
 }
 
 function handlePinClick(label){
