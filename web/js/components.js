@@ -204,8 +204,7 @@ function updFunc(lbl){
   return;
  }
  
- // Toujours vider le formulaire MUX au début pour éviter les valeurs résiduelles
- if($('#muxSig')) $('#muxSig').value='';
+// Plus besoin de vider manuellement, les champs sont générés dynamiquement
  
  // Utiliser pType() qui utilise les données du backend
  const type = typeof pType === 'function' ? pType(lbl) : 'digital';
@@ -318,8 +317,7 @@ function updFunc(lbl){
  if(def && def.isComplex && cur && typeof initMuxFormForPin === 'function'){
   initMuxFormForPin(cur);
  } else {
-  // Effacer les valeurs du formulaire MUX pour ne pas polluer getUsedGpios
-  if($('#muxSig')) $('#muxSig').value='';
+  // Plus besoin d'effacer manuellement, les champs sont générés dynamiquement
  }
  if(cur){
   pcfg[cur]=readCfg();
@@ -344,7 +342,7 @@ function updFunc(lbl){
    showRoleCards('');
    updateRtpForRole('');
    updateRtpParamsVisibility();
-   if($('#muxSig')) $('#muxSig').value='';
+   // Plus besoin d'effacer manuellement, les champs sont générés dynamiquement
   }
  };
  familySel.addEventListener('change', newHandler);
@@ -799,16 +797,23 @@ function getUsedGpios(additionalSelectIds=[]){
   }
  });
  
- // Ne pas exclure le MUX en cours d'édition sauf si on est vraiment en train d'éditer un MUX
+ // Ne pas exclure le composant complexe en cours d'édition sauf si on est vraiment en train de l'éditer
  const funcSelectValue = $('#funcSelect')?.value || '';
- // Vérifier si le composant sélectionné est complexe (MUX)
- const funcDef = typeof getComponentDefinition === 'function' ? getComponentDefinition(funcSelectValue) : null;
- const isEditingMux = funcDef && funcDef.isComplex;
- const currentMuxId = (isEditingMux && $('#muxId')) ? parseInt($('#muxId').value) : null;
+ // Vérifier si le composant sélectionné est complexe
+ const migratedRole = typeof migrateRole === 'function' ? migrateRole(funcSelectValue) : funcSelectValue;
+ const funcDef = typeof getComponentDefinition === 'function' ? getComponentDefinition(migratedRole) : null;
+ const isEditingComplex = funcDef && funcDef.isComplex;
+ // Obtenir l'ID du composant complexe en cours d'édition dynamiquement
+ let currentComplexId = null;
+ if(isEditingComplex && funcDef) {
+  const idFieldId = getFieldId(funcDef, 'id');
+  const idField = $(idFieldId ? '#' + idFieldId : null);
+  if(idField) currentComplexId = parseInt(idField.value);
+ }
  if(typeof muxList !== 'undefined' && Array.isArray(muxList)){
   muxList.forEach(m=>{
-   // Exclure seulement si on édite vraiment ce MUX spécifique
-   if(isEditingMux && currentMuxId!==null && m.id===currentMuxId) return;
+   // Exclure seulement si on édite vraiment ce composant complexe spécifique
+   if(isEditingComplex && currentComplexId!==null && m.id===currentComplexId) return;
    const sig=parseInt(m.sig), s0=parseInt(m.s0), s1=parseInt(m.s1), s2=parseInt(m.s2), s3=parseInt(m.s3), en=parseInt(m.en);
    if(!isNaN(sig)) usedGpios.add(sig);
    if(!isNaN(s0)) usedGpios.add(s0);
@@ -818,102 +823,204 @@ function getUsedGpios(additionalSelectIds=[]){
    if(!isNaN(en) && en!==255) usedGpios.add(en);
   });
  }
- additionalSelectIds.forEach(id=>{
- if(id==='muxEnManual'){
-  const sel=$('#muxEnManual');
-  if(sel&&sel.value&&sel.value!=='255'){
-   const gpio=parseInt(sel.value);
-   if(!isNaN(gpio)) usedGpios.add(gpio);
-  }
- } else{
-  const sel=$('#'+id);
-  if(!sel||!sel.value||sel.value==='255') return;
-  if(id==='muxSig'){
-   const sigGpio=parseInt(sel.value);
-   if(!isNaN(sigGpio)){
-    usedGpios.add(sigGpio);
-    // Toujours utiliser les valeurs manuelles (S0-S3)
-    ['muxS0','muxS1','muxS2','muxS3'].forEach(selId=>{
-     const manualSel=$('#'+selId);
-     if(manualSel&&manualSel.value){
-      const gpio=parseInt(manualSel.value);
-      if(!isNaN(gpio)) usedGpios.add(gpio);
+ // Traiter les IDs de champs supplémentaires depuis les définitions du composant complexe en cours d'édition
+ if(isEditingComplex && funcDef && funcDef.additionalPins && Array.isArray(funcDef.additionalPins)) {
+  funcDef.additionalPins.forEach(additionalPin => {
+   if(additionalPin.id) {
+    const fieldId = getFieldId(funcDef, additionalPin.id);
+    const sel = $('#' + fieldId);
+    if(sel && sel.value) {
+     const val = parseInt(sel.value);
+     if(!isNaN(val)) {
+      // Si c'est le pin SIG, aussi ajouter les pins d'adresse (S0-S3) qui sont sélectionnées manuellement
+      if(additionalPin.id === 'sig') {
+       usedGpios.add(val);
+       // Chercher les pins d'adresse dans additionalPins
+       funcDef.additionalPins.forEach(pin => {
+        if(pin.id && (pin.id === 's0' || pin.id === 's1' || pin.id === 's2' || pin.id === 's3')) {
+         const addrFieldId = getFieldId(funcDef, pin.id);
+         const addrSel = $('#' + addrFieldId);
+         if(addrSel && addrSel.value) {
+          const addrVal = parseInt(addrSel.value);
+          if(!isNaN(addrVal) && addrVal !== 255) usedGpios.add(addrVal);
+         }
+        }
+       });
+      } else if(val !== 255) {
+       // Pour les autres pins (sauf optionnelles non connectées)
+       usedGpios.add(val);
+      }
      }
-    });
+    }
    }
-  } else{
+  });
+ }
+ 
+ // Traiter aussi les IDs passés en paramètre (pour compatibilité)
+ additionalSelectIds.forEach(id=>{
+  const sel=$('#'+id);
+  if(sel && sel.value && sel.value!=='255') {
    const gpio=parseInt(sel.value);
    if(!isNaN(gpio)) usedGpios.add(gpio);
   }
- }
  });
  return usedGpios;
 }
 
-// Nouvelle fonction pour initialiser le formulaire multiplexeur depuis un pin
+// Fonction pour initialiser le formulaire d'un composant complexe depuis un pin
 function initMuxFormForPin(pinLabel){
  if(!caps||!caps.pins) return;
  const pin=caps.pins.find(p=>p.label===pinLabel);
  if(!pin) return;
- const sigGpio=pin.gpio;
  
+ // Trouver la définition du composant complexe sélectionné
+ const funcSelectValue = $('#funcSelect')?.value || '';
+ const migratedRole = typeof migrateRole === 'function' ? migrateRole(funcSelectValue) : funcSelectValue;
+ const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(migratedRole) : null;
+ 
+ if(!def || !def.isComplex) {
+  console.warn('[initMuxFormForPin] Composant non complexe ou définition non trouvée');
+  return;
+ }
+ 
+ const sigGpio=parseInt(pin.gpio);
  const usedGpios=getUsedGpios([]);
  const availInfo=getMuxAvailabilityInfo(sigGpio, usedGpios);
  
  if(typeof populateMuxPinSelects === 'function') populateMuxPinSelects();
  
- // Trouver un multiplexeur existant qui utilise ce pin comme SIG, ou créer un nouveau
- const existingMux=muxList.find(m=>m.sig===sigGpio);
- if(existingMux){
+ // Trouver un composant complexe existant qui utilise ce pin comme SIG, ou créer un nouveau
+ const existingComplex = muxList.find(m=>m.sig===sigGpio);
+ if(existingComplex){
   // Charger la configuration existante
-  loadMuxConfigIntoForm(existingMux);
+  loadMuxConfigIntoForm(existingComplex);
  } else {
-  // Nouveau multiplexeur - initialiser avec des valeurs par défaut
-  if($('#muxSig')) $('#muxSig').value=sigGpio;
+  // Nouveau composant complexe - initialiser avec des valeurs par défaut
+  // Initialiser le pin SIG
+  const sigFieldId = getFieldId(def, 'sig');
+  const sigField = $('#' + sigFieldId);
+  if(sigField) sigField.value = sigGpio;
+  
+  // Calculer les pins d'adresse si nécessaire (spécifique aux MUX)
   const addrPins=calculateMuxAddressPins(sigGpio, usedGpios);
-  if($('#muxS0') && addrPins.s0 !== null) $('#muxS0').value=addrPins.s0;
-  if($('#muxS1') && addrPins.s1 !== null) $('#muxS1').value=addrPins.s1;
-  if($('#muxS2') && addrPins.s2 !== null) $('#muxS2').value=addrPins.s2;
-  if($('#muxS3') && addrPins.s3 !== null) $('#muxS3').value=addrPins.s3;
-  if($('#muxEnManual')) $('#muxEnManual').value='255';
-  let muxId=0;
-  if($('#muxId')){
+  
+  // Initialiser les additionalPins avec leurs valeurs par défaut ou calculées
+  if(def.additionalPins && Array.isArray(def.additionalPins)) {
+   def.additionalPins.forEach(additionalPin => {
+    if(additionalPin.id) {
+     const fieldId = getFieldId(def, additionalPin.id);
+     const field = $('#' + fieldId);
+     if(field) {
+      // Pour les pins d'adresse MUX, utiliser les valeurs calculées si disponibles
+      if(additionalPin.id === 's0' && addrPins.s0 !== null) field.value = addrPins.s0;
+      else if(additionalPin.id === 's1' && addrPins.s1 !== null) field.value = addrPins.s1;
+      else if(additionalPin.id === 's2' && addrPins.s2 !== null) field.value = addrPins.s2;
+      else if(additionalPin.id === 's3' && addrPins.s3 !== null) field.value = addrPins.s3;
+      // Pour les pins optionnelles comme EN, utiliser la valeur par défaut
+      else if(additionalPin.optional) field.value = additionalPin.defaultValue !== undefined ? additionalPin.defaultValue : '255';
+      else if(additionalPin.defaultValue !== undefined) field.value = additionalPin.defaultValue;
+     }
+    }
+   });
+  }
+  
+  // Initialiser l'ID du composant
+  const idFieldId = getFieldId(def, 'id');
+  const idField = $('#' + idFieldId);
+  if(idField) {
    // Trouver le premier ID disponible
-   const usedIds=muxList.map(m=>m.id);
-   const availableId=[0,1].find(id=>!usedIds.includes(id));
-   if(availableId!==undefined){
-    $('#muxId').value=availableId;
-    muxId=availableId;
+   const usedIds = (muxList || []).map(m => parseInt(m.id)).filter(id => !isNaN(id));
+   const availableId = [0,1].find(id => !usedIds.includes(id));
+   if(availableId !== undefined) {
+    idField.value = availableId;
    }
   }
-  // Initialiser l'adresse OSC avec /mux[ID]
-  if($('#oscAddress')) $('#oscAddress').value='/mux'+muxId;
+  
+  // Initialiser l'adresse OSC avec un préfixe basé sur l'ID du composant
+  const oscField = $('#oscAddress');
+  if(oscField && idField) {
+   const prefix = def.id ? def.id : 'complex';
+   oscField.value = '/' + prefix + (idField.value || '0');
+  }
+  
   // Mettre à jour la visualisation des pins
   if(typeof updateBusVisuals === 'function') updateBusVisuals();
  }
 }
 
 function loadMuxConfigIntoForm(mux){
+ // Cette fonction charge une configuration de composant complexe depuis muxList dans le formulaire
+ // Utilise les définitions pour construire dynamiquement les IDs de champs
  if(typeof populateMuxPinSelects === 'function') populateMuxPinSelects();
- if($('#muxId')) $('#muxId').value=mux.id;
- if($('#muxSig')) $('#muxSig').value=mux.sig;
- const sigGpio=mux.sig;
  
- if($('#muxS0')) $('#muxS0').value=mux.s0;
- if($('#muxS1')) $('#muxS1').value=mux.s1;
- if($('#muxS2')) $('#muxS2').value=mux.s2;
- if($('#muxS3')) $('#muxS3').value=mux.s3;
- if($('#muxEnManual')) $('#muxEnManual').value=mux.en!==undefined?mux.en:255;
- if($('#muxMin')) $('#muxMin').value=mux.min!==undefined?mux.min:0;
- if($('#muxMax')) $('#muxMax').value=mux.max!==undefined?mux.max:4095;
- if($('#muxFilterIntensity')) $('#muxFilterIntensity').value=mux.filterIntensity!==undefined?mux.filterIntensity:5;
- if($('#rtpCc')) $('#rtpCc').value=mux.ccBase||1;
- if($('#rtpChan')) $('#rtpChan').value=mux.midiChan||1;
- if($('#rtpMsgType')) $('#rtpMsgType').value='Control Change';
- if($('#oscAddress')) $('#oscAddress').value=mux.oscBase||'/mux'+mux.id;
- if($('#oscFormat')) $('#oscFormat').value=mux.oscFormat||'float';
- if($('#rtpEnabled2')) $('#rtpEnabled2').checked=true;
- if($('#oscEnabled2')) $('#oscEnabled2').checked=true;
+ // Trouver la définition du composant complexe (premier composant complexe disponible)
+ const complexDefs = typeof componentDefinitions !== 'undefined' && componentDefinitions 
+  ? componentDefinitions.filter(d => d.isComplex && d.implemented)
+  : [];
+ const def = complexDefs.length > 0 ? complexDefs[0] : null;
+ 
+ if(!def) {
+  console.warn('[loadMuxConfigIntoForm] Définition de composant complexe non trouvée');
+  return;
+ }
+ 
+ // Mapper les valeurs depuis l'objet mux vers les champs HTML
+ const fieldMap = {};
+ 
+ // ID du composant
+ const idFieldId = getFieldId(def, 'id');
+ fieldMap[idFieldId] = mux.id;
+ 
+ // Mapper les additionalPins depuis l'objet mux (qui utilise des noms courts: sig, s0, s1, s2, s3, en)
+ if(def.additionalPins && Array.isArray(def.additionalPins)) {
+  def.additionalPins.forEach(additionalPin => {
+   if(additionalPin.id) {
+    const fieldId = getFieldId(def, additionalPin.id);
+    // Mapper depuis l'objet mux
+    if(additionalPin.id === 'sig') fieldMap[fieldId] = mux.sig;
+    else if(additionalPin.id === 's0') fieldMap[fieldId] = mux.s0;
+    else if(additionalPin.id === 's1') fieldMap[fieldId] = mux.s1;
+    else if(additionalPin.id === 's2') fieldMap[fieldId] = mux.s2;
+    else if(additionalPin.id === 's3') fieldMap[fieldId] = mux.s3;
+    else if(additionalPin.id === 'en') fieldMap[fieldId] = mux.en !== undefined ? mux.en : 255;
+   }
+  });
+ }
+ 
+ // Mapper les formFields
+ if(def.formFields && Array.isArray(def.formFields)) {
+  def.formFields.forEach(field => {
+   if(field.id && !field.id.startsWith('_')) {
+    if(field.id === 'muxMin' || field.id === 'min') fieldMap[field.id] = mux.min !== undefined ? mux.min : 0;
+    else if(field.id === 'muxMax' || field.id === 'max') fieldMap[field.id] = mux.max !== undefined ? mux.max : 4095;
+    else if(field.id === 'muxFilterIntensity' || field.id === 'filterIntensity') fieldMap[field.id] = mux.filterIntensity !== undefined ? mux.filterIntensity : 5;
+   }
+  });
+ }
+ 
+ // Paramètres RTP-MIDI et OSC (communs)
+ fieldMap['rtpCc'] = mux.ccBase || 1;
+ fieldMap['rtpChan'] = mux.midiChan || 1;
+ fieldMap['rtpMsgType'] = 'Control Change';
+ const prefix = def.id ? def.id : 'complex';
+ fieldMap['oscAddress'] = mux.oscBase || '/' + prefix + mux.id;
+ fieldMap['oscFormat'] = mux.oscFormat || 'float';
+ fieldMap['rtpEnabled2'] = true;
+ fieldMap['oscEnabled2'] = true;
+ 
+ // Appliquer les valeurs aux champs HTML
+ Object.keys(fieldMap).forEach(fieldId => {
+  const field = $('#' + fieldId);
+  if(field) {
+   const value = fieldMap[fieldId];
+   if(field.type === 'checkbox') {
+    field.checked = value === true || value === 'true';
+   } else {
+    field.value = value;
+   }
+  }
+ });
+ 
  // Mettre à jour la visualisation des pins
  if(typeof updateBusVisuals === 'function') updateBusVisuals();
 }
@@ -929,15 +1036,16 @@ async function saveMuxFromPin(){
   return;
  }
  
- // Lire le MUX ID (peut être dans un champ formField ou généré automatiquement)
- let muxId = null;
- const muxIdField = $('#muxId');
- if(muxIdField) {
-  muxId = muxIdField.value;
+ // Lire l'ID du composant complexe (peut être dans un champ formField ou généré automatiquement)
+ let complexId = null;
+ const idFieldId = getFieldId(def, 'id');
+ const idField = $('#' + idFieldId);
+ if(idField) {
+  complexId = idField.value;
  } else {
   // Générer un ID disponible
   const existingIds = (muxList || []).map(m => parseInt(m.id)).filter(id => !isNaN(id));
-  muxId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 0;
+  complexId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 0;
  }
  
  // Lire dynamiquement les additionalPins
@@ -960,18 +1068,24 @@ async function saveMuxFromPin(){
   });
  }
  
- const sig = additionalPinValues.sig || parseInt($('#muxSig')?.value);
+ const sigFieldId = getFieldId(def, 'sig');
+ const sig = additionalPinValues.sig || parseInt($('#' + sigFieldId)?.value);
  if(!sig || isNaN(sig)){
   $('#muxMsg').textContent='Erreur: Veuillez choisir un pin analogique';
   $('#muxMsg').style.color='#ef4444';
   return;
  }
  
- const s0 = additionalPinValues.s0 || parseInt($('#muxS0')?.value);
- const s1 = additionalPinValues.s1 || parseInt($('#muxS1')?.value);
- const s2 = additionalPinValues.s2 || parseInt($('#muxS2')?.value);
- const s3 = additionalPinValues.s3 || parseInt($('#muxS3')?.value);
- const en = additionalPinValues.en !== undefined ? additionalPinValues.en : (parseInt($('#muxEnManual')?.value) || 255);
+ const s0FieldId = getFieldId(def, 's0');
+ const s1FieldId = getFieldId(def, 's1');
+ const s2FieldId = getFieldId(def, 's2');
+ const s3FieldId = getFieldId(def, 's3');
+ const enFieldId = getFieldId(def, 'en');
+ const s0 = additionalPinValues.s0 || parseInt($('#' + s0FieldId)?.value);
+ const s1 = additionalPinValues.s1 || parseInt($('#' + s1FieldId)?.value);
+ const s2 = additionalPinValues.s2 || parseInt($('#' + s2FieldId)?.value);
+ const s3 = additionalPinValues.s3 || parseInt($('#' + s3FieldId)?.value);
+ const en = additionalPinValues.en !== undefined ? additionalPinValues.en : (parseInt($('#' + enFieldId)?.value) || 255);
  
  // Lire dynamiquement les formFields
  const formFieldValues = {};
@@ -995,18 +1109,30 @@ async function saveMuxFromPin(){
   });
  }
  
- const min = parseInt(formFieldValues.muxMin || $('#muxMin')?.value || '0');
- const max = parseInt(formFieldValues.muxMax || $('#muxMax')?.value || '4095');
- const filterIntensity = parseInt(formFieldValues.muxFilterIntensity || $('#muxFilterIntensity')?.value || '5');
+ // Chercher les champs min/max dans formFields
+ let minFieldId = 'muxMin';
+ let maxFieldId = 'muxMax';
+ let filterFieldId = 'muxFilterIntensity';
+ if(def.formFields && Array.isArray(def.formFields)) {
+  def.formFields.forEach(field => {
+   if(field.id && (field.id.includes('min') || field.id.includes('Min'))) minFieldId = field.id;
+   else if(field.id && (field.id.includes('max') || field.id.includes('Max'))) maxFieldId = field.id;
+   else if(field.id && (field.id.includes('filter') || field.id.includes('Filter'))) filterFieldId = field.id;
+  });
+ }
+ const min = parseInt(formFieldValues[minFieldId] || $('#' + minFieldId)?.value || '0');
+ const max = parseInt(formFieldValues[maxFieldId] || $('#' + maxFieldId)?.value || '4095');
+ const filterIntensity = parseInt(formFieldValues[filterFieldId] || $('#' + filterFieldId)?.value || '5');
  
  // Lire les paramètres RTP-MIDI dynamiquement
  const rtpCc = parseInt($('#rtpCc')?.value || $('#rtpNote')?.value || $('#rtpPc')?.value || '1');
  const rtpChan = parseInt($('#rtpChan')?.value || '1');
- const oscAddress = $('#oscAddress')?.value || '/mux' + muxId;
+ const prefix = def.id ? def.id : 'complex';
+ const oscAddress = $('#oscAddress')?.value || '/' + prefix + complexId;
  const oscFormat = $('#oscFormat')?.value || 'float';
  
  const formData=new URLSearchParams();
- formData.append('id', muxId);
+ formData.append('id', complexId);
  formData.append('sig', sig);
  formData.append('s0', s0);
  formData.append('s1', s1);
@@ -1277,6 +1403,18 @@ function generateFormFields(def, containerId, currentCfg = {}) {
 }
 
 /**
+ * Construit l'ID d'un champ HTML depuis la définition du composant et l'ID de la pin/field
+ * @param {Object} def - Définition du composant
+ * @param {string} fieldId - ID de la pin additionnelle ou du formField (ex: "s0", "sig", "en")
+ * @returns {string} ID du champ HTML (ex: "hc4067S0", "hc4067Sig")
+ */
+function getFieldId(def, fieldId) {
+ if(!def || !fieldId) return '';
+ const prefix = def.id ? def.id : 'comp';
+ return prefix + fieldId.charAt(0).toUpperCase() + fieldId.slice(1);
+}
+
+/**
  * Obtient les pins disponibles filtrées par type
  * @param {number} pinType - Type de pin (0=PIN_ANALOG, 1=PIN_DIGITAL, 2=PIN_ANALOG_OR_DIGITAL, 3=PIN_PWM)
  * @param {Array} excludeGpios - Liste des GPIOs à exclure (optionnel)
@@ -1350,8 +1488,7 @@ function generateAdditionalPins(def, containerId, currentCfg = {}) {
   
   const select = document.createElement('select');
   // ID du champ : préfixe depuis l'ID du composant + id en capital (ex: s0 -> hc4067S0, en -> hc4067En)
-  const prefix = def.id ? def.id : 'comp';
-  const fieldId = prefix + additionalPin.id.charAt(0).toUpperCase() + additionalPin.id.slice(1);
+  const fieldId = getFieldId(def, additionalPin.id);
   select.id = fieldId;
   select.style.width = '200px';
   
