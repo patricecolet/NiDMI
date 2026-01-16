@@ -5,29 +5,40 @@ Ce guide s'adresse aux stagiaires et développeurs qui souhaitent ajouter de nou
 ## 📋 Table des matières
 
 1. [Architecture des composants](#architecture-des-composants)
-2. [Composants simples vs complexes](#composants-simples-vs-complexes)
-3. [Création d'un composant simple](#création-dun-composant-simple)
-4. [Création d'un composant complexe](#création-dun-composant-complexe)
-5. [Intégration dans l'UI](#intégration-dans-lui)
-6. [Bonnes pratiques](#bonnes-pratiques)
+2. [Familles de composants](#familles-de-composants)
+3. [Composants simples vs complexes](#composants-simples-vs-complexes)
+4. [Création d'un composant simple](#création-dun-composant-simple)
+5. [Création d'un composant complexe](#création-dun-composant-complexe)
+6. [Intégration dans l'UI](#intégration-dans-lui)
+7. [Bonnes pratiques](#bonnes-pratiques)
+8. [TODO - Prochaines étapes](#todo---prochaines-étapes)
 
 ## 🏗️ Architecture des composants
 
-### Structure des fichiers
+### Structure des fichiers (cible)
 
 ```
 src/
 ├── components/                    # Définitions des composants
 │   ├── ComponentTypes.h           # Types de base (ComponentType, ComponentConfig, ComponentState)
-│   ├── ComponentDefinition.h      # Structure de définition pour l'UI
+│   ├── ComponentDefinition.h      # Structure de définition pour l'UI + ComponentFamily enum
 │   ├── ComponentRegistry.h/cpp    # Registre central des composants
 │   ├── ValidationRegistry.h/cpp   # Registre des validators
-│   ├── input/                     # Composants d'entrée
-│   │   ├── PotentiometerDef.h     # Définition potentiomètre
-│   │   ├── ButtonDef.h            # Définition bouton
-│   │   └── MuxDef.h/cpp           # Définition multiplexeur
-│   └── output/                    # Composants de sortie
-│       └── LedDef.h               # Définition LED
+│   │
+│   ├── basic/                     # Famille BASIC (composants simples)
+│   │   ├── PotentiometerDef.h     # Potentiomètre analogique
+│   │   ├── ButtonDef.h            # Bouton poussoir
+│   │   └── LedDef.h               # LED (sortie PWM)
+│   │
+│   ├── multiplexer/               # Famille MULTIPLEXER
+│   │   └── MuxDef.h               # HC4067, HC4051 (via héritage MuxBase)
+│   │
+│   ├── encoder/                   # Famille ENCODER (futur)
+│   │   └── QuadratureDef.h
+│   │
+│   └── display/                   # Famille DISPLAY (futur)
+│       └── SSD1306Def.h
+│
 ├── processors/                    # Logique de traitement
 │   ├── ProcessorRegistry.h/cpp    # Dispatch dynamique
 │   ├── PotentiometerProcessor.h/cpp
@@ -41,7 +52,53 @@ src/
     └── AnalogMux.h                # Driver hardware MUX
 ```
 
-### Types de composants
+## 🏠 Familles de composants
+
+Les composants sont organisés en **familles** (categories). Chaque famille a son propre dossier.
+
+### Enum ComponentFamily
+
+```cpp
+// src/components/ComponentDefinition.h
+enum class ComponentFamily : uint8_t {
+    BASIC = 0,        // Potentiomètre, Bouton, LED
+    MULTIPLEXER = 1,  // HC4067, HC4051, CD4052...
+    ENCODER = 2,      // Encodeurs rotatifs
+    DISPLAY = 3       // Écrans OLED, LCD
+    // Ajouter de nouvelles familles ici
+};
+```
+
+### Structure dans l'UI
+
+Le frontend affiche **deux menus déroulants** :
+
+1. **Famille** : Basic, Multiplexeur, Encodeur, Écran...
+2. **Composant** : liste filtrée selon la famille sélectionnée
+
+```
+[Famille ▼]           [Composant ▼]
+   Basic                 Potentiomètre
+   Multiplexeur          Bouton
+   Encodeur              LED
+   Écran
+```
+
+Quand on sélectionne "Multiplexeur" :
+```
+[Famille ▼]           [Composant ▼]
+   Multiplexeur          HC4067 (16 canaux)
+                         HC4051 (8 canaux) [grisé si non implémenté]
+```
+
+### Avantages
+
+1. **Organisation claire** : un dossier par famille
+2. **Extensibilité** : ajouter un composant = créer un fichier dans le bon dossier
+3. **UI cohérente** : toujours 2 menus
+4. **Pas de format `id:variant`** : chaque modèle a son propre `id`
+
+### Types et enums
 
 ```cpp
 // src/components/ComponentTypes.h
@@ -68,13 +125,26 @@ Chaque composant a une définition qui décrit ses caractéristiques pour l'UI :
 ```cpp
 // src/components/ComponentDefinition.h
 struct ComponentDefinition {
-    const char* id;              // "potentiometer", "button", etc.
-    const char* displayName;     // "Potentiomètre", "Bouton", etc.
+    const char* id;              // "potentiometer", "hc4067", etc. (unique)
+    const char* displayName;     // "Potentiomètre", "HC4067 (16 canaux)"
     const char* icon;            // Icône (optionnel)
+    const char* cardId;          // ID de la carte HTML ("cardPot", "cardMux")
+    ComponentFamily family;      // BASIC, MULTIPLEXER, ENCODER, DISPLAY
+    const char* familyName;      // "Basic", "Multiplexeur" (pour l'UI)
     ComponentType type;          // Type enum
     PinType pinType;             // Type de pin requis
     bool implemented;            // true = disponible, false = grisé
     bool isComplex;              // true = nécessite un manager
+    bool supportsMidi;           // true = peut envoyer/recevoir MIDI
+    bool supportsOsc;            // true = peut envoyer/recevoir OSC
+    
+    // Pins additionnelles (pour composants complexes)
+    uint8_t additionalPinCount;
+    AdditionalPinDef additionalPins[MAX_ADDITIONAL_PINS];
+    
+    // Messages MIDI supportés
+    uint8_t midiMessageCount;
+    MidiMessageDef midiMessages[MAX_MIDI_MESSAGES];
 };
 ```
 
@@ -392,6 +462,71 @@ Les composants avec `implemented: false` sont affichés en grisé.
 - [ ] Créer `managers/XxxValidator.h/cpp`
 - [ ] Intégrer dans l'API si nécessaire
 
+## 📝 TODO - Prochaines étapes
+
+### Refactoring architecture family (en cours)
+
+L'architecture actuelle utilise encore `input/` et `output/` comme dossiers. La migration vers l'architecture `family` est en cours.
+
+#### Backend
+
+- [ ] Ajouter `ComponentFamily` enum dans `ComponentDefinition.h`
+- [ ] Ajouter `family` et `familyName` dans `ComponentDefinition`
+- [ ] Retirer le système `variants` (remplacé par composants séparés)
+- [ ] Créer le dossier `basic/` (déplacer depuis `input/` et `output/`)
+- [ ] Créer le dossier `multiplexer/` avec `MuxDef.h`
+  - Structure avec `MuxBase` + `HC4067` + `HC4051` (héritage)
+  - Chaque modèle a son propre `id` (`hc4067`, `hc4051`)
+- [ ] Mettre à jour `ComponentRegistry.cpp` pour charger depuis les nouveaux dossiers
+- [ ] Mettre à jour le script `nidmi.sh` pour synchroniser les nouveaux dossiers
+
+#### Frontend
+
+- [ ] Ajouter le menu "Famille" dans l'UI
+- [ ] Filtrer le menu "Composant" selon la famille sélectionnée
+- [ ] Retirer la logique `id:variant` (ex: `mux:HC4067`)
+- [ ] Utiliser `family` et `familyName` depuis l'API `/api/components/definitions`
+
+#### API
+
+- [ ] Ajouter `family` et `familyName` dans la réponse JSON de `/api/components/definitions`
+- [ ] Optionnel : endpoint `/api/components/families` pour lister les familles
+
+### Structure MUX avec héritage
+
+```cpp
+// src/components/multiplexer/MuxDef.h
+namespace Components::Multiplexer {
+
+struct MuxBase {
+    // Code commun à tous les MUX
+    static constexpr uint8_t NUM_ADDRESS_PINS = 4;
+    static constexpr PinType PIN_TYPE = PinType::PIN_ANALOG;
+    static constexpr bool IS_COMPLEX = true;
+    // ...
+};
+
+struct HC4067 : MuxBase {
+    static constexpr const char* ID = "hc4067";
+    static constexpr const char* DISPLAY_NAME = "HC4067 (16 canaux)";
+    static constexpr uint8_t NUM_CHANNELS = 16;
+    static constexpr bool IMPLEMENTED = true;
+    
+    static ComponentDefinition createDefinition();
+};
+
+struct HC4051 : MuxBase {
+    static constexpr const char* ID = "hc4051";
+    static constexpr const char* DISPLAY_NAME = "HC4051 (8 canaux)";
+    static constexpr uint8_t NUM_CHANNELS = 8;
+    static constexpr bool IMPLEMENTED = false;  // Pas encore implémenté
+    
+    static ComponentDefinition createDefinition();
+};
+
+} // namespace
+```
+
 ---
 
-*Guide mis à jour pour l'architecture v2.0 avec ComponentRegistry*
+*Guide mis à jour pour l'architecture v3.0 avec ComponentFamily*
