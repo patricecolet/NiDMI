@@ -397,7 +397,13 @@ function drawBoard(){
  R.appendChild(f);
  };
  
- const dPins=pins.filter(p=>p.label.startsWith('D')).sort((a,b)=>{
+ // Filtrer les pins D en évitant les doublons par GPIO (un GPIO = une seule pin D)
+ // Prendre la première pin avec label "D" pour chaque GPIO
+ const dPinsMap=new Map();
+ pins.filter(p=>p.label.startsWith('D')).forEach(p=>{
+  if(!dPinsMap.has(p.gpio))dPinsMap.set(p.gpio,p);
+ });
+ const dPins=Array.from(dPinsMap.values()).sort((a,b)=>{
  const na=parseInt(a.label.substring(1));
  const nb=parseInt(b.label.substring(1));
  return na-nb;
@@ -453,17 +459,43 @@ function drawBoard(){
  // Utiliser caps.bus pour identifier les pins de bus (données du backend)
  const bus = caps.bus || {};
  const busGpios = new Set();
- if(bus.i2c) { busGpios.add(bus.i2c.sda); busGpios.add(bus.i2c.scl); }
- if(bus.spi) { busGpios.add(bus.spi.mosi); busGpios.add(bus.spi.miso); busGpios.add(bus.spi.sck); }
- if(bus.uart) { busGpios.add(bus.uart.tx); busGpios.add(bus.uart.rx); }
+ // Convertir en nombre pour éviter les problèmes de type (string vs number)
+ if(bus.i2c) { 
+  busGpios.add(Number(bus.i2c.sda)); 
+  busGpios.add(Number(bus.i2c.scl)); 
+ }
+ if(bus.spi) { 
+  busGpios.add(Number(bus.spi.mosi)); 
+  busGpios.add(Number(bus.spi.miso)); 
+  busGpios.add(Number(bus.spi.sck)); 
+ }
+ if(bus.uart) { 
+  busGpios.add(Number(bus.uart.tx)); 
+  busGpios.add(Number(bus.uart.rx)); 
+ }
  
  const analogPins=pins.filter(p=>p.label.startsWith('A')&&p.caps?.adc).sort((a,b)=>a.label.localeCompare(b.label));
  const i2cPins=pins.filter(p=>bus.i2c && (p.gpio===bus.i2c.sda || p.gpio===bus.i2c.scl)).sort((a,b)=>a.gpio===bus.i2c?.sda?-1:1);
  const uartPins=pins.filter(p=>bus.uart && (p.gpio===bus.uart.tx || p.gpio===bus.uart.rx)).sort((a,b)=>a.gpio===bus.uart?.tx?-1:1);
- const digitalPins=pins.filter(p=>p.label.startsWith('D')&&!busGpios.has(p.gpio)).sort((a,b)=>{
- const na=parseInt(a.label.substring(1));
- const nb=parseInt(b.label.substring(1));
- return na-nb;
+ // Filtrer les pins D en évitant les doublons par label ET par GPIO
+ // Sur C3, getAllMappings() peut retourner des doublons (même label "D4" plusieurs fois)
+ // Utiliser une Map avec label comme clé unique pour garantir un seul exemplaire par label
+ const digitalPinsMap=new Map();
+ const seenGpioForD=new Set();
+ // Convertir p.gpio en nombre pour la comparaison
+ pins.filter(p=>p.label.startsWith('D')&&!busGpios.has(Number(p.gpio))).forEach(p=>{
+  // Utiliser le label comme clé unique pour éviter les doublons de label
+  // Si plusieurs pins ont le même label "D4", on garde seulement la première
+  // ET éviter aussi les doublons par GPIO (un GPIO = une seule pin D affichée)
+  if(!digitalPinsMap.has(p.label)&&!seenGpioForD.has(p.gpio)){
+   digitalPinsMap.set(p.label,p);
+   seenGpioForD.add(p.gpio);
+  }
+ });
+ const digitalPins=Array.from(digitalPinsMap.values()).sort((a,b)=>{
+  const na=parseInt(a.label.substring(1));
+  const nb=parseInt(b.label.substring(1));
+  return na-nb;
  });
  
  const leftPins=[];
@@ -472,26 +504,29 @@ function drawBoard(){
  
  analogPins.forEach(p=>{
  leftPins.push({gpio:p.gpio,label:p.label,color:getPinColor(p.label),dLabel:getAlias(p.gpio,'D')});
- displayedGpios.add(p.gpio);
+ displayedGpios.add(Number(p.gpio));
  });
- 
+
  digitalPins.forEach(p=>{
- if(!displayedGpios.has(p.gpio)){
+ if(!displayedGpios.has(Number(p.gpio))){
  leftPins.push({gpio:p.gpio,label:'',color:FC.DIGITAL,dLabel:p.label});
- displayedGpios.add(p.gpio);
+ displayedGpios.add(Number(p.gpio));
  }
  });
  
  i2cPins.forEach(p=>{
- leftPins.push({gpio:p.gpio,label:p.label,color:getPinColor(p.label),dLabel:getAlias(p.gpio,'D')});
- displayedGpios.add(p.gpio);
+ // Éviter les doublons : vérifier que le GPIO n'a pas déjà été affiché
+ if(!displayedGpios.has(Number(p.gpio))){
+  leftPins.push({gpio:p.gpio,label:p.label,color:getPinColor(p.label),dLabel:getAlias(p.gpio,'D')});
+  displayedGpios.add(Number(p.gpio));
+ }
  });
  
  // UART TX depuis caps.bus
  const uartTx=bus.uart ? uartPins.find(p=>p.gpio===bus.uart.tx) : null;
- if(uartTx){
+ if(uartTx&&!displayedGpios.has(Number(uartTx.gpio))){
  leftPins.push({gpio:uartTx.gpio,label:uartTx.label,color:getPinColor(uartTx.label),dLabel:getAlias(uartTx.gpio,'D')});
- displayedGpios.add(uartTx.gpio);
+ displayedGpios.add(Number(uartTx.gpio));
  }
  
  leftPins.sort((a,b)=>a.gpio-b.gpio);
@@ -520,13 +555,18 @@ function drawBoard(){
  return order.indexOf(a.gpio) - order.indexOf(b.gpio);
  });
  spiPins.forEach(p=>{
- R.appendChild(right(rightRow++,getAlias(p.gpio,'D'),p.label,getPinColor(p.label)));
+ // Éviter les doublons : vérifier que le GPIO n'a pas déjà été affiché
+ if(!displayedGpios.has(Number(p.gpio))){
+  R.appendChild(right(rightRow++,getAlias(p.gpio,'D'),p.label,getPinColor(p.label)));
+  displayedGpios.add(Number(p.gpio));
+ }
  });
  
  // UART RX depuis caps.bus
  const uartRx=bus.uart ? pins.find(p=>p.gpio===bus.uart.rx) : null;
- if(uartRx){
+ if(uartRx&&!displayedGpios.has(Number(uartRx.gpio))){
  R.appendChild(right(rightRow++,getAlias(uartRx.gpio,'D'),uartRx.label,getPinColor(uartRx.label)));
+ displayedGpios.add(Number(uartRx.gpio));
  }
  }
  
@@ -544,36 +584,37 @@ function updatePinsList(){
  if(!pl) return;
  pl.innerHTML='';
  
- // Collecter les GPIOs des MUX sauvegardés pour éviter les doublons
- const savedMuxSigGpios = new Set();
- if(typeof muxList !== 'undefined' && Array.isArray(muxList)){
-  muxList.forEach(m => savedMuxSigGpios.add(parseInt(m.sig)));
+ // Collecter les GPIOs des composants complexes sauvegardés pour éviter les doublons
+ const savedComplexSigGpios = new Set();
+ if(typeof ComplexComponents !== 'undefined' && ComplexComponents.list && Array.isArray(ComplexComponents.list)){
+  ComplexComponents.list.forEach(m => savedComplexSigGpios.add(parseInt(m.sig)));
  }
  
  // Afficher les pins configurées
  Object.keys(pcfg).forEach(lbl=>{
   const cfg=pcfg[lbl];
   if(!cfg||!cfg.role) return;
-  // Ignorer les pins avec préfixe M (anciennes pins MUX)
+  // Ignorer les pins avec préfixe M (anciennes pins avec préfixe historique)
   if(lbl.startsWith('M')) return;
   
-  // Pour les composants complexes (MUX) : afficher comme MUX si pas déjà dans muxList
+  // Pour les composants complexes : afficher si pas déjà sauvegardé
   const role = typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role;
   const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
   if(def && def.isComplex){
    if(caps && caps.pins){
     const pin=caps.pins.find(p=>p.label===lbl);
-    // Si ce GPIO est déjà dans un MUX sauvegardé, ne pas afficher
-    if(pin && savedMuxSigGpios.has(parseInt(pin.gpio))) return;
+    // Si ce GPIO est déjà dans un composant complexe sauvegardé, ne pas afficher
+    if(pin && savedComplexSigGpios.has(parseInt(pin.gpio))) return;
     
     // Afficher comme composant complexe temporaire (non sauvegardé)
     const componentType = def ? def.displayName : role;
     // Générer un préfixe depuis l'ID du composant (ex: "hc4067" -> "HC4", "hc4051" -> "HC4")
     const prefix = def && def.id ? def.id.toUpperCase().substring(0, 3) : 'COMP';
-    const muxId=$('#muxId')?$('#muxId').value:'0';
+    /* ID par défaut pour les composants complexes non sauvegardés */
+    const complexId = '0';
     const it=document.createElement('div');
-    it.className='item mux';
-    it.innerHTML=`<span class="lbl">${prefix}${muxId}</span><span class="role">${componentType}</span><span class="stat">non sauvé</span><button class="del-btn">×</button>`;
+    it.className='item complex';
+    it.innerHTML=`<span class="lbl">${prefix}${complexId}</span><span class="role">${componentType}</span><span class="stat">non sauvé</span><button class="del-btn">×</button>`;
     it.onclick=()=>{
      if(window._selRect) window._selRect.classList.remove('selectedSquare');
      const r=prect[lbl];
@@ -598,7 +639,17 @@ function updatePinsList(){
    return;
   }
   
-  // Afficher les pins normales (non-MUX)
+  /* Vérifier si cette pin est utilisée par un composant complexe comme SIG */
+  /* Si oui, ne pas afficher le composant simple (le complexe a priorité) */
+  if(caps && caps.pins) {
+    const pin = caps.pins.find(p => p.label === lbl);
+    if(pin && savedComplexSigGpios.has(parseInt(pin.gpio))) {
+      /* Cette pin est utilisée par un composant complexe, ne pas afficher le simple */
+      return;
+    }
+  }
+  
+  // Afficher les pins simples (non complexes)
   const it=document.createElement('div');
   it.className=`item ${pType(lbl)}`;
   it.innerHTML=`<span class="lbl">${lbl}</span><span class="role">${getRoleDisplayLabel(cfg.role)}</span><span class="stat">${stat(cfg, lbl)}</span><button class="del-btn">×</button>`;
@@ -624,36 +675,34 @@ function updatePinsList(){
   pl.appendChild(it);
  });
  
- // Ajouter les composants complexes sauvegardés à la liste (depuis muxList)
- // Note: muxList est un nom historique, mais il contient tous les composants complexes
- if(typeof muxList !== 'undefined' && Array.isArray(muxList)){
-  muxList.forEach(mux=>{
-   // Trouver le type de composant complexe depuis les définitions
-   // Utiliser isComplex au lieu de family === 1 pour être générique
-   const complexDefs = typeof componentDefinitions !== 'undefined' && componentDefinitions 
-    ? componentDefinitions.filter(d => d.isComplex && d.implemented)
+ // Ajouter les composants complexes sauvegardés à la liste (depuis ComplexComponents.list)
+ if(typeof ComplexComponents !== 'undefined' && ComplexComponents.list && Array.isArray(ComplexComponents.list)){
+  ComplexComponents.list.forEach(component=>{
+   // Trouver la définition du composant complexe depuis le backend
+   const complexDefs = typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.cache 
+    ? ComponentDefinitions.cache.filter(d => d.isComplex && d.implemented)
     : [];
    
-   // Essayer de trouver la définition correspondante par ID ou par rôle
-   // Pour l'instant, on prend le premier composant complexe trouvé
-   // TODO: améliorer en faisant correspondre avec l'ID du mux si disponible
-   const firstComplex = complexDefs.length > 0 ? complexDefs[0] : null;
-   const componentType = firstComplex ? firstComplex.displayName : 'Complex';
+   // Essayer de trouver la définition correspondante par rôle ou ID
+   // Pour l'instant, utiliser le premier composant complexe trouvé
+   // TODO: améliorer en faisant correspondre avec le rôle du composant si disponible
+   const componentDef = complexDefs.length > 0 ? complexDefs[0] : null;
+   const componentType = componentDef ? componentDef.displayName : 'Complex';
    
    // Générer un préfixe depuis l'ID du composant (ex: "hc4067" -> "HC4")
-   const prefix = firstComplex && firstComplex.id ? firstComplex.id.toUpperCase().substring(0, 3) : 'MUX';
+   const prefix = componentDef && componentDef.id ? componentDef.id.toUpperCase().substring(0, 3) : 'COMP';
    
    // Le statut (nombre de canaux, etc.) devrait venir du backend si nécessaire
    // Pour l'instant, on laisse vide car c'est spécifique au type de composant
    const stat = '';
    
    const it=document.createElement('div');
-   it.className='item mux';
-   it.innerHTML=`<span class="lbl">${prefix}${mux.id}</span><span class="role">${componentType}</span><span class="stat">${stat}</span><button class="del-btn">×</button>`;
+   it.className='item complex';
+   it.innerHTML=`<span class="lbl">${prefix}${component.id}</span><span class="role">${componentType}</span><span class="stat">${stat}</span><button class="del-btn">×</button>`;
    it.onclick=()=>{
     // Trouver le pin SIG correspondant et le sélectionner
-    if(caps&&caps.pins&&mux.sig!==undefined){
-     const sigPin=caps.pins.find(p=>p.gpio===mux.sig);
+    if(caps&&caps.pins&&component.sig!==undefined){
+     const sigPin=caps.pins.find(p=>p.gpio===component.sig);
      if(sigPin&&sigPin.label){
       if(window._selRect) window._selRect.classList.remove('selectedSquare');
       const r=prect[sigPin.label];
@@ -664,30 +713,39 @@ function updatePinsList(){
       cur=sigPin.label;
       $('#selPin').textContent=sigPin.label;
       if($('#funcSelect')){
-       // Récupérer le premier composant complexe implémenté depuis le backend
-       // Utiliser isComplex au lieu de family === 1
-       const complexDefs = typeof componentDefinitions !== 'undefined' && componentDefinitions 
-        ? componentDefinitions.filter(d => d.isComplex && d.implemented)
+       // Trouver la définition du composant complexe depuis le backend
+       const complexDefs = typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.cache 
+        ? ComponentDefinitions.cache.filter(d => d.isComplex && d.implemented)
         : [];
-       const firstComplex = complexDefs.length > 0 ? complexDefs[0] : null;
-       if(firstComplex && $('#funcSelect')){
+       // Pour l'instant, utiliser le premier composant complexe trouvé
+       // TODO: améliorer en faisant correspondre avec le type du composant sauvegardé
+       const componentDef = complexDefs.length > 0 ? complexDefs[0] : null;
+       if(componentDef && $('#funcSelect')){
         // Sélectionner la famille depuis la définition du composant
-        if($('#familySelect') && firstComplex.family !== undefined) {
-         $('#familySelect').value = firstComplex.family;
+        if($('#familySelect') && componentDef.family !== undefined) {
+         $('#familySelect').value = componentDef.family;
         }
         // Sélectionner le composant
-        $('#funcSelect').value = firstComplex.id;
+        $('#funcSelect').value = componentDef.id;
        }
        if(typeof updFunc === 'function') updFunc(sigPin.label);
       }
-      if(typeof loadMuxConfigIntoForm === 'function') loadMuxConfigIntoForm(mux);
+      if(typeof ComplexComponents !== 'undefined' && ComplexComponents.loadConfig) {
+       ComplexComponents.loadConfig(component);
+      } else {
+       console.warn('[pins.js] ComplexComponents non disponible');
+      }
      }
     }
    };
    const delBtn=it.querySelector('.del-btn');
    if(delBtn) delBtn.onclick=(e)=>{
     e.stopPropagation();
-    if(typeof deleteMux === 'function') deleteMux(mux.id, e);
+    if(typeof ComplexComponents !== 'undefined' && ComplexComponents.delete) {
+     ComplexComponents.delete(component.id, e);
+    } else {
+     console.warn('[pins.js] ComplexComponents.delete non disponible');
+    }
    };
    pl.appendChild(it);
   });

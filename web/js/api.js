@@ -352,6 +352,20 @@ async function loadConfiguredPins(){
   pcfg[pinData.pinLabel] = pinData;
  }
  });
+ 
+ /* Nettoyer les conflits : supprimer pcfg si un composant complexe utilise cette pin comme SIG */
+ if(caps && caps.pins && typeof ComplexComponents !== 'undefined' && ComplexComponents.list) {
+   ComplexComponents.list.forEach(complexComp => {
+     if(complexComp.sig !== undefined) {
+       const sigPin = caps.pins.find(p => p.gpio === parseInt(complexComp.sig));
+       if(sigPin && sigPin.label && pcfg[sigPin.label]) {
+         console.log(`[loadConfiguredPins] Suppression de pcfg[${sigPin.label}] (conflit avec composant complexe SIG ${complexComp.sig})`);
+         delete pcfg[sigPin.label];
+       }
+     }
+   });
+ }
+ 
  updatePinsList();
  updateBusVisuals();
  }
@@ -364,22 +378,48 @@ async function saveAll(){
  const msg=$('#saveAllMsg');
  msg.textContent='Enregistrement...';
  try{
- // Sauvegarder le MUX en cours d'édition s'il y en a un
+ /* Sauvegarder le composant complexe en cours d'édition s'il y en a un */
  const funcSelectValue = $('#funcSelect')?.value || '';
- // Si composant complexe (MUX) sélectionné, sauvegarder via saveMuxFromPin
- const funcDef = typeof getComponentDefinition === 'function' ? getComponentDefinition(funcSelectValue) : null;
- if(typeof saveMuxFromPin === 'function' && $('#funcSelect') && funcDef && funcDef.isComplex && $('#muxSig') && $('#muxSig').value){
-  await saveMuxFromPin();
+ /* Migrer le rôle si nécessaire (comme dans ComplexComponents.saveFromPin) */
+ const migratedRoleValue = typeof migrateRole === 'function' ? migrateRole(funcSelectValue) : funcSelectValue;
+ /* Si composant complexe sélectionné, sauvegarder via ComplexComponents.saveFromPin */
+ const funcDef = typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.getById
+   ? ComponentDefinitions.getById(migratedRoleValue)
+   : null;
+ if(funcDef && funcDef.isComplex) {
+   if(typeof ComplexComponents === 'undefined' || !ComplexComponents.saveFromPin) {
+     console.warn('[saveAll] ComplexComponents.saveFromPin non disponible');
+   } else {
+     /* Appeler saveFromPin() qui gère toute la validation interne */
+     await ComplexComponents.saveFromPin();
+   }
  }
  
  const ps=Object.keys(pcfg).map(async lbl=>{
  const c=pcfg[lbl];
  if(!c||!c.role) return;
- // Ne pas sauvegarder les composants complexes (MUX) via cette API, ils sont gérés via muxList
+ /* Ne pas sauvegarder les composants complexes via cette API, ils sont gérés via ComplexComponents */
  const role = migrateRole(c.role);
  const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
  if(def && def.isComplex) return;
  
+ /* Vérifier s'il y a un composant complexe qui utilise cette pin comme SIG et le supprimer */
+ /* Un composant simple remplace toujours le composant complexe sur cette pin */
+ if(caps && caps.pins) {
+   const currentPin = caps.pins.find(p => p.label === lbl);
+   if(currentPin) {
+     const existingComplex = typeof ComplexComponents !== 'undefined' && ComplexComponents.list
+       ? ComplexComponents.list.find(m => m.sig === parseInt(currentPin.gpio))
+       : null;
+     if(existingComplex) {
+       console.log(`[saveAll] Suppression du composant complexe ${existingComplex.id} sur pin SIG ${existingComplex.sig} (remplacé par ${lbl})`);
+       if(typeof ComplexComponents !== 'undefined' && ComplexComponents.delete) {
+         await ComplexComponents.delete(existingComplex.id, null, null);
+       }
+     }
+   }
+ }
+
  const p=new URLSearchParams();
  p.set('pinLabel',lbl);
  p.set('role',c.role);
@@ -419,7 +459,7 @@ async function saveAll(){
  }
  
  // Envoyer les additionalPins si composant complexe (mais ici c'est déjà filtré, donc ne devrait pas arriver)
- // Les composants complexes utilisent /api/mux/add qui a sa propre logique
+ // Les composants complexes utilisent /api/mux/add (nom d'endpoint historique, mais générique)
  
  // Champs OSC et Debug (communs à tous)
  if(c.oscEnabled) p.set('oscEnabled','true');

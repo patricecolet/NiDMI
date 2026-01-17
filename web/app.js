@@ -12,19 +12,18 @@ document.addEventListener('DOMContentLoaded', async ()=>{
  loadStaConfig();
  /* Initialiser les formulaires */
  initForms();
- /* Initialiser le formulaire de multiplexeur */
- initMuxForm();
- 
  /* Charger les définitions de composants AVANT de dessiner le board */
  loadComponentDefinitions().then(async () => {
   /* Charger les capacités de la carte, puis dessiner le board */
   await loadCaps();
   /* Dessiner le board SVG avec les pins */
   drawBoard();
-  /* Charger les pins déjà configurées */
+  /* Charger la liste des composants complexes AVANT loadConfiguredPins pour éviter les conflits */
+  if(typeof ComplexComponents !== 'undefined' && ComplexComponents.loadList) {
+   await ComplexComponents.loadList();
+  }
+  /* Charger les pins déjà configurées (après les complexes pour nettoyer les conflits) */
   await loadConfiguredPins();
-  /* Charger la liste des multiplexeurs */
-  await loadMuxList();
   /* Charger les GPIOs utilisés depuis le backend */
   await loadUsedGpiosFromBackend();
   /* Mettre à jour les visuels après chargement complet */
@@ -34,8 +33,11 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   // Continuer quand même avec le board (sans définitions)
   loadCaps().then(async ()=>{
    drawBoard();
+   /* Charger la liste des composants complexes AVANT loadConfiguredPins pour éviter les conflits */
+   if(typeof ComplexComponents !== 'undefined' && ComplexComponents.loadList) {
+    await ComplexComponents.loadList();
+   }
    await loadConfiguredPins();
-   await loadMuxList();
    await loadUsedGpiosFromBackend();
    updateBusVisuals();
   });

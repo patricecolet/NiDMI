@@ -18,8 +18,8 @@ const prect={};
 /* Codes couleur pour les différents types de pins */
 const FC={DIGITAL:'#3B82F6',ANALOG:'#EC4899',I2C:'#10B981',UART:'#6B7280',SPI:'#8B5CF6',TOUCH:'#F59E0B',POWER:'#EF4444',GND:'#000'};
 
-/* Liste des multiplexeurs configurés */
-let muxList=[];
+/* Compatibilité: muxList est maintenant un getter qui pointe vers ComplexComponents.list */
+/* Initialisé dans complex-components.js */
 
 /* Instance WebSocket pour synchronisation temps réel */
 let websocket=null;

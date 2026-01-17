@@ -19,8 +19,19 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
     // Augmenter la puissance WiFi pour XIAO_ESP32C3
     WiFi.setTxPower(WIFI_POWER_19_5dBm); // Puissance maximale
     
+    /* Configurer l'IP de l'AP explicitement à 192.168.4.1 */
+    IPAddress apIp = IPAddress(192, 168, 4, 1);
+    IPAddress apGateway = IPAddress(192, 168, 4, 1);
+    IPAddress apSubnet = IPAddress(255, 255, 255, 0);
+    WiFi.softAPConfig(apIp, apGateway, apSubnet);
+    
     WiFi.softAP(apSsid, apPass);
-    IPAddress apIp = WiFi.softAPIP();
+    
+    /* Attendre que l'AP soit prêt avant de continuer */
+    delay(100);
+    
+    /* Vérifier l'IP de l'AP (devrait être 192.168.4.1) */
+    apIp = WiFi.softAPIP();
     
     Serial.begin(115200);
     Serial.println();

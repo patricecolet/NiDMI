@@ -33,7 +33,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .plist{margin-top:20px;padding:15px;background:var(--bg);border-radius:8px}.plist h4{margin:0 0 10px;font-size:15px;color:var(--tx)}
 .list{display:flex;flex-direction:column;gap:4px}
 .item{display:flex;align-items:center;padding:8px 12px;background:#fff;border-radius:6px;border-left:4px solid var(--bd);cursor:pointer;transition:all .2s}
-.item:hover{background:var(--bg)}.item.analog{border-left-color:var(--ca)}.item.digital{border-left-color:var(--cd)}.item.i2c{border-left-color:var(--ci)}.item.spi{border-left-color:var(--cs)}.item.uart{border-left-color:var(--cu)}.item.touch{border-left-color:#F59E0B}.item.mux{border-left-color:#8B5CF6}
+.item:hover{background:var(--bg)}.item.analog{border-left-color:var(--ca)}.item.digital{border-left-color:var(--cd)}.item.i2c{border-left-color:var(--ci)}.item.spi{border-left-color:var(--cs)}.item.uart{border-left-color:var(--cu)}.item.touch{border-left-color:#F59E0B}.item.complex{border-left-color:#8B5CF6}
+.item.mux{border-left-color:#8B5CF6}
 .lbl{font-weight:700;min-width:40px;margin-right:12px}.role{flex:1;color:var(--tx)}.stat{font-size:.9em;color:var(--mt)}
 .del-btn{background:#ef4444;color:#fff;border:none;border-radius:3px;width:20px;height:20px;cursor:pointer;font-size:12px;margin-left:8px}
 .del-btn:hover{background:#dc2626}
@@ -76,9 +77,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div class="r"><label>Pin:</label><span id="selPin">-</span></div>
  <div class="r"><label>Famille:</label><select id="familySelect"></select></div>
  <div class="r"><label>Composant:</label><select id="funcSelect"></select></div>
- <div id="componentFormCard" class="subcard" style="display:none;"></div>
- <h4>RTP‑MIDI</h4>
- <div id="rtpMidiSection"></div>
+<div id="componentFormCard" class="subcard" style="display:none;"></div>
+<h4>MIDI</h4>
+<div id="rtpMidiSection"></div>
+<h4>Interfaces MIDI</h4>
+<div class="r switch"><input type="checkbox" id="rtpMidiEnabled"><label for="rtpMidiEnabled">RTP-MIDI</label></div>
+<div class="r switch"><input type="checkbox" id="usbMidiEnabled"><label for="usbMidiEnabled">USB-MIDI</label></div>
+<div class="r switch"><input type="checkbox" id="debugMidiEnabled"><label for="debugMidiEnabled">Debug MIDI</label></div>
  <h4>OSC</h4>
  <div class="r switch"><input type="checkbox" id="oscEnabled2"><label for="oscEnabled2">Activer</label><label>Addr:</label><input type="text" id="oscAddress" placeholder="/ctl"></div>
  <div class="r"><label>Format:</label><select id="oscFormat"><option value="float">Float (0-1)</option><option value="midi">MIDI (3 int)</option></select></div>

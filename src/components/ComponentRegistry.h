@@ -65,6 +65,6 @@ public:
     static void cleanup();
 
 private:
-    static std::vector<ComponentDefinition> definitions_;
+    static std::vector<ComponentDefinition>* definitions_ptr;  // Pointeur au lieu d'objet statique (évite crash au boot sur ESP32-C3)
     static bool initialized_;
 };

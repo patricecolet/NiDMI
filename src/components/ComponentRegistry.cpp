@@ -7,18 +7,32 @@
 #include <utility>  // pour std::move
 
 // Initialisation des membres statiques
-std::vector<ComponentDefinition> ComponentRegistry::definitions_;
+// Utiliser un pointeur pour éviter l'initialisation statique avant setup() (crash sur ESP32-C3)
+std::vector<ComponentDefinition>* ComponentRegistry::definitions_ptr = nullptr;
 bool ComponentRegistry::initialized_ = false;
 
 void ComponentRegistry::init() {
     if (initialized_) return;
     
+    // Créer le vector seulement maintenant (heap est prêt après setup())
+    // Cela évite les problèmes d'initialisation statique sur ESP32-C3
+    if (definitions_ptr == nullptr) {
+        definitions_ptr = new (std::nothrow) std::vector<ComponentDefinition>();
+        if (definitions_ptr == nullptr) {
+            // En mode production, Serial n'est peut-être pas encore initialisé
+            // mais on essaie quand même pour le debug
+            #ifdef ARDUINO
+            Serial.printf("[ComponentRegistry] CRITICAL: Failed to allocate vector\n");
+            #endif
+            return;
+        }
+        // Réserver l'espace dans le vector pour éviter les réallocations
+        // qui peuvent créer des copies temporaires
+        definitions_ptr->reserve(6);  // Augmenté à 6 pour permettre l'ajout futur
+    }
+    
     // Initialiser le ValidationRegistry d'abord
     ValidationRegistry::init();
-    
-    // Réserver l'espace dans le vector pour éviter les réallocations
-    // qui peuvent créer des copies temporaires
-    definitions_.reserve(5);
     
     // === FAMILLE BASIC ===
     // Composants simples : Potentiomètre, Bouton, LED
@@ -26,17 +40,23 @@ void ComponentRegistry::init() {
     
     {
         ComponentDefinition def = Components::Potentiometer::createDefinition();
-        definitions_.push_back(std::move(def));
+        if (def.id != nullptr) {
+            definitions_ptr->push_back(std::move(def));
+        }
     }
     
     {
         ComponentDefinition def = Components::Button::createDefinition();
-        definitions_.push_back(std::move(def));
+        if (def.id != nullptr) {
+            definitions_ptr->push_back(std::move(def));
+        }
     }
     
     {
         ComponentDefinition def = Components::Led::createDefinition();
-        definitions_.push_back(std::move(def));
+        if (def.id != nullptr) {
+            definitions_ptr->push_back(std::move(def));
+        }
     }
     
     // === FAMILLE MULTIPLEXER ===
@@ -44,12 +64,16 @@ void ComponentRegistry::init() {
     
     {
         ComponentDefinition def = Components::HC4067::createDefinition();
-        definitions_.push_back(std::move(def));
+        if (def.id != nullptr) {
+            definitions_ptr->push_back(std::move(def));
+        }
     }
     
     {
         ComponentDefinition def = Components::HC4051::createDefinition();
-        definitions_.push_back(std::move(def));
+        if (def.id != nullptr) {
+            definitions_ptr->push_back(std::move(def));
+        }
     }
     
     // === FAMILLES FUTURES ===
@@ -67,11 +91,17 @@ void ComponentRegistry::init() {
 }
 
 const std::vector<ComponentDefinition>& ComponentRegistry::getAll() {
-    return definitions_;
+    // Créer un vector vide si pas encore initialisé (éviter crash)
+    static std::vector<ComponentDefinition> empty_vector;
+    if (definitions_ptr == nullptr) {
+        return empty_vector;
+    }
+    return *definitions_ptr;
 }
 
 const ComponentDefinition* ComponentRegistry::findById(const char* id) {
-    for (const auto& def : definitions_) {
+    if (definitions_ptr == nullptr) return nullptr;
+    for (const auto& def : *definitions_ptr) {
         if (strcmp(def.id, id) == 0) {
             return &def;
         }
@@ -80,7 +110,8 @@ const ComponentDefinition* ComponentRegistry::findById(const char* id) {
 }
 
 const ComponentDefinition* ComponentRegistry::findByType(ComponentType type) {
-    for (const auto& def : definitions_) {
+    if (definitions_ptr == nullptr) return nullptr;
+    for (const auto& def : *definitions_ptr) {
         if (def.type == type) {
             return &def;
         }
@@ -89,13 +120,13 @@ const ComponentDefinition* ComponentRegistry::findByType(ComponentType type) {
 }
 
 int ComponentRegistry::toJsonArray(char* buffer, size_t bufferSize) {
-    if (bufferSize < 3) return 0;
+    if (bufferSize < 3 || definitions_ptr == nullptr) return 0;
     
     int written = 0;
     buffer[written++] = '[';
     
     bool first = true;
-    for (const auto& def : definitions_) {
+    for (const auto& def : *definitions_ptr) {
         if (!first) {
             if (written >= (int)bufferSize - 1) break;
             buffer[written++] = ',';
@@ -119,13 +150,18 @@ int ComponentRegistry::toJsonArray(char* buffer, size_t bufferSize) {
 }
 
 size_t ComponentRegistry::count() {
-    return definitions_.size();
+    if (definitions_ptr == nullptr) return 0;
+    return definitions_ptr->size();
 }
 
 void ComponentRegistry::cleanup() {
-    for (auto& def : definitions_) {
-        def.cleanup();
+    if (definitions_ptr != nullptr) {
+        for (auto& def : *definitions_ptr) {
+            def.cleanup();
+        }
+        definitions_ptr->clear();
+        delete definitions_ptr;
+        definitions_ptr = nullptr;
     }
-    definitions_.clear();
     initialized_ = false;
 }
