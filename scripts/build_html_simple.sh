@@ -93,7 +93,7 @@ if [ ! -f "web/app.js" ] && [ ! -f "web/js/core.js" ]; then
     exit 1
 fi
 
-# Concaténer les fichiers JS dans l'ordre : core.js, api.js, pins.js, components.js, websocket.js, mux.js, puis app.js
+# Concaténer les fichiers JS dans l'ordre : core.js, api.js, definitions.js, form-generator.js, midi-config.js, gpio-manager.js, complex-components.js, pins.js, components.js, websocket.js, puis app.js
 echo "📄 Concaténation des modules JavaScript..."
 TEMP_JS=$(mktemp)
 {
@@ -103,6 +103,26 @@ TEMP_JS=$(mktemp)
     if [ -f "web/js/api.js" ]; then
         echo ""
         cat web/js/api.js
+    fi
+    if [ -f "web/js/definitions.js" ]; then
+        echo ""
+        cat web/js/definitions.js
+    fi
+    if [ -f "web/js/form-generator.js" ]; then
+        echo ""
+        cat web/js/form-generator.js
+    fi
+    if [ -f "web/js/midi-config.js" ]; then
+        echo ""
+        cat web/js/midi-config.js
+    fi
+    if [ -f "web/js/gpio-manager.js" ]; then
+        echo ""
+        cat web/js/gpio-manager.js
+    fi
+    if [ -f "web/js/complex-components.js" ]; then
+        echo ""
+        cat web/js/complex-components.js
     fi
     if [ -f "web/js/pins.js" ]; then
         echo ""
@@ -115,10 +135,6 @@ TEMP_JS=$(mktemp)
     if [ -f "web/js/websocket.js" ]; then
         echo ""
         cat web/js/websocket.js
-    fi
-    if [ -f "web/js/mux.js" ]; then
-        echo ""
-        cat web/js/mux.js
     fi
     if [ -f "web/app.js" ]; then
         echo ""
