@@ -170,13 +170,29 @@ MuxManager::MuxManager() : mux_count(0) {
      }
  }
  
- void MuxManager::updateAllCaches() {
-     for (uint8_t mux_id = 0; mux_id < MAX_MUXES; mux_id++) {
-         if (muxes[mux_id] != nullptr && mux_configs[mux_id].enabled) {
-             updateMuxCache(mux_id);
-         }
-     }
- }
+void MuxManager::updateAllCaches() {
+    static uint32_t last_update = 0;
+    const uint32_t UPDATE_INTERVAL_MS = 10; // 10ms entre chaque lecture
+    
+    uint32_t now = millis();
+    if (now - last_update < UPDATE_INTERVAL_MS) {
+        return; // Trop tôt, skip cette fois
+    }
+    last_update = now;
+    
+    // Mettre à jour un seul multiplexeur par tour (round-robin)
+    static uint8_t current_mux = 0;
+    
+    for (uint8_t attempt = 0; attempt < MAX_MUXES; attempt++) {
+        uint8_t mux_id = current_mux;
+        current_mux = (current_mux + 1) % MAX_MUXES;
+        
+        if (muxes[mux_id] != nullptr && mux_configs[mux_id].enabled) {
+            updateMuxCache(mux_id);
+            break; // Un seul par appel
+        }
+    }
+}
  
  void MuxManager::sendOscBatches(OSCQueue& osc_queue) {
      for (uint8_t mux_id = 0; mux_id < MAX_MUXES; mux_id++) {

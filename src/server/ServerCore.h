@@ -7,6 +7,7 @@
 #include <IPAddress.h>
 #include "../network/RtpMidi.h"
 #include "../network/BluetoothManager.h"
+#include "../network/UsbMidiManager.h"
 
 /**
  * @brief Infrastructure serveur (WiFi, mDNS, RTP-MIDI, Web)
@@ -19,6 +20,7 @@
  * - WebSocket
  * - RTP-MIDI
  * - Bluetooth MIDI
+ * - USB MIDI (ESP32-S3 uniquement)
  */
 class ServerCore {
 private:
@@ -26,6 +28,7 @@ private:
     AsyncWebSocket ws;
     RtpMidi rtpMidiInstance;
     BluetoothManager bluetoothInstance;
+    UsbMidiManager usbMidiInstance;
     bool useStaticSta = false;
     IPAddress staIp, staGw, staSn;
     
@@ -43,6 +46,7 @@ public:
     AsyncWebSocket& websocket();
     RtpMidi& rtpMidi();
     BluetoothManager& bluetooth();
+    UsbMidiManager& usbMidi();
     
     // Mise à jour périodique
     void update();

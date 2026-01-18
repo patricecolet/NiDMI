@@ -165,6 +165,9 @@ void ServerCore::update() {
     
     // Mise à jour Bluetooth
     bluetoothInstance.update();
+    
+    // Mise à jour USB MIDI
+    usbMidiInstance.update();
 }
 
 void ServerCore::reconfigureMdns(const char* hostname) {
@@ -240,4 +243,8 @@ RtpMidi& ServerCore::rtpMidi() {
 
 BluetoothManager& ServerCore::bluetooth() { 
     return bluetoothInstance; 
+}
+
+UsbMidiManager& ServerCore::usbMidi() { 
+    return usbMidiInstance; 
 }

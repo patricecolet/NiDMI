@@ -1,0 +1,60 @@
+#pragma once
+
+#include <Arduino.h>
+
+// USB MIDI seulement pour ESP32-S3 avec USB-OTG activé
+#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV) || defined(ARDUINO_ESP32S3)
+#define NIDMI_USB_MIDI_SUPPORTED
+#endif
+
+#ifdef NIDMI_USB_MIDI_SUPPORTED
+#include <USB.h>
+#include <USBMIDI.h>
+#endif
+
+/**
+ * @brief Gestionnaire USB MIDI
+ * 
+ * Cette classe gère la communication MIDI via USB.
+ * Disponible uniquement sur ESP32-S3 avec USB-OTG activé (CONFIG_SOC_USB_OTG_SUPPORTED=y).
+ */
+class UsbMidiManager {
+private:
+#ifdef NIDMI_USB_MIDI_SUPPORTED
+    USBMIDI* usbMidi;
+    bool usbInitialized;
+#endif
+    bool isStarted;
+    bool available; // USB disponible
+    
+public:
+    UsbMidiManager();
+    ~UsbMidiManager();
+    
+    // Initialisation
+    bool begin();
+    void stop();
+    void update();
+    
+    // Envoi MIDI
+    void sendNoteOn(uint8_t channel, uint8_t note, uint8_t velocity);
+    void sendNoteOff(uint8_t channel, uint8_t note, uint8_t velocity);
+    void sendControlChange(uint8_t channel, uint8_t control, uint8_t value);
+    void sendProgramChange(uint8_t channel, uint8_t program);
+    void sendPitchBend(uint8_t channel, int bend);
+    void sendAftertouch(uint8_t channel, uint8_t pressure);
+    void sendClock();
+    void sendStart();
+    void sendStop();
+    void sendContinue();
+    
+    // État de connexion
+    bool isConnected() const;
+    bool isInitialized() const { return isStarted; }
+    bool isSupported() const;
+    
+private:
+    void sendMidiMessage(uint8_t status, uint8_t data1, uint8_t data2);
+    void sendMidiMessage(uint8_t status, uint8_t data1);
+    bool isUsbOtgEnabled() const;
+};

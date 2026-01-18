@@ -53,6 +53,9 @@ void nidmi_begin() {
     String staGwStr = preferences.getString("sta_gw", "");
     String staSnStr = preferences.getString("sta_sn", "");
     
+    // Charger l'état des interfaces MIDI depuis NVS
+    bool usbMidiEnabled = preferences.getBool("usbmidi_enabled", true); // Par défaut true
+    
     preferences.end();
     
     // Nettoyer le nom serveur (supprimer caractères invalides pour SSID WiFi)
@@ -94,7 +97,10 @@ void nidmi_begin() {
     // Démarre web + mDNS + AP (après connexion STA)
     serverCore.begin(apSsid, apPass, host);
     
-    // Initialiser MidiRouter
+    // Appliquer l'état sauvegardé des interfaces MIDI au MidiRouter
+    g_midiRouter.enableUsbMidi(usbMidiEnabled);
+    
+    // Initialiser MidiRouter (qui initialisera USB MIDI si activé et supporté)
     g_midiRouter.begin();
     
     // Initialiser RTP-MIDI

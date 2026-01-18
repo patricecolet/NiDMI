@@ -1,4 +1,4 @@
-#N canvas 249 153 1152 717 12;
+#N canvas 249 303 1152 717 12;
 #X obj 165 117 print RAW_OSC;
 #X obj 50 92 oscparse;
 #X obj 50 127 list trim;
@@ -135,7 +135,7 @@
 #X coords 0 -1 1 1 580 60 1 100 100;
 #X restore 542 483 pd mux1_min_max;
 #X obj 50 20 netreceive -u -b 8000;
-#N canvas 86 88 1006 430 ctlin 1;
+#N canvas 86 238 1006 430 ctlin 0;
 #X obj 38 20 inlet;
 #X obj 63 105 route 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16;
 #X obj 59 137 vsl 19 162 0 127 0 0 empty empty empty 0 -9 0 12 #fcfcfc #000000 #000000 0 1;

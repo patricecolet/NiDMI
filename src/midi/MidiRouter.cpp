@@ -7,12 +7,15 @@
 #include "../Globals.h"
 
 MidiRouter::MidiRouter()
-    : rtpEnabled(true), oscEnabled(true), bluetoothEnabled(true), oscToSta(true), oscPort(8000), defaultChannel(1) {}
+    : rtpEnabled(true), oscEnabled(true), bluetoothEnabled(true), usbMidiEnabled(true), oscToSta(true), oscPort(8000), defaultChannel(1) {}
 
 MidiRouter::~MidiRouter() {}
 
 void MidiRouter::begin() {
-    // Rien ici: on s'appuie sur nidmi pour RTP/OSC
+    // Initialiser USB MIDI si supporté et activé
+    if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
+        serverCore.usbMidi().begin();
+    }
 }
 
 void MidiRouter::update() {
@@ -27,6 +30,9 @@ void MidiRouter::sendNoteOn(uint8_t channel, uint8_t note, uint8_t velocity) {
     }
     if (bluetoothEnabled) {
         serverCore.bluetooth().sendNoteOn(ch, note, velocity);
+    }
+    if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
+        serverCore.usbMidi().sendNoteOn(ch, note, velocity);
     }
     // Optionnel: route OSC si disponible côté serveur
     // Activez avec -DNIDMI_ENABLE_OSC_ROUTER et implémentez les wrappers dans NiDMIServer
@@ -45,6 +51,9 @@ void MidiRouter::sendNoteOff(uint8_t channel, uint8_t note, uint8_t velocity) {
     if (bluetoothEnabled) {
         serverCore.bluetooth().sendNoteOff(ch, note, velocity);
     }
+    if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
+        serverCore.usbMidi().sendNoteOff(ch, note, velocity);
+    }
     #ifdef NIDMI_ENABLE_OSC_ROUTER
     if (oscEnabled) {
         serverCore.sendOscNoteOff(ch, note, velocity, oscToSta, oscPort);
@@ -59,6 +68,9 @@ void MidiRouter::sendControlChange(uint8_t channel, uint8_t control, uint8_t val
     }
     if (bluetoothEnabled) {
         serverCore.bluetooth().sendControlChange(ch, control, value);
+    }
+    if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
+        serverCore.usbMidi().sendControlChange(ch, control, value);
     }
     #ifdef NIDMI_ENABLE_OSC_ROUTER
     if (oscEnabled) {
@@ -75,6 +87,9 @@ void MidiRouter::sendProgramChange(uint8_t channel, uint8_t program) {
     if (bluetoothEnabled) {
         serverCore.bluetooth().sendProgramChange(ch, program);
     }
+    if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
+        serverCore.usbMidi().sendProgramChange(ch, program);
+    }
 }
 
 void MidiRouter::sendPitchBend(uint8_t channel, int bend) {
@@ -84,6 +99,9 @@ void MidiRouter::sendPitchBend(uint8_t channel, int bend) {
     }
     if (bluetoothEnabled) {
         serverCore.bluetooth().sendPitchBend(ch, bend);
+    }
+    if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
+        serverCore.usbMidi().sendPitchBend(ch, bend);
     }
 }
 
@@ -95,6 +113,9 @@ void MidiRouter::sendAftertouch(uint8_t channel, uint8_t pressure) {
     if (bluetoothEnabled) {
         // BluetoothManager n'a pas sendAftertouch, on peut l'ignorer ou l'implémenter plus tard
     }
+    if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
+        serverCore.usbMidi().sendAftertouch(ch, pressure);
+    }
 }
 
 void MidiRouter::sendClock() {
@@ -103,6 +124,9 @@ void MidiRouter::sendClock() {
     }
     if (bluetoothEnabled) {
         // BluetoothManager n'a pas sendClock, on peut l'ignorer ou l'implémenter plus tard
+    }
+    if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
+        serverCore.usbMidi().sendClock();
     }
 }
 
@@ -113,6 +137,9 @@ void MidiRouter::sendStart() {
     if (bluetoothEnabled) {
         // BluetoothManager n'a pas sendStart, on peut l'ignorer ou l'implémenter plus tard
     }
+    if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
+        serverCore.usbMidi().sendStart();
+    }
 }
 
 void MidiRouter::sendStop() {
@@ -121,6 +148,9 @@ void MidiRouter::sendStop() {
     }
     if (bluetoothEnabled) {
         // BluetoothManager n'a pas sendStop, on peut l'ignorer ou l'implémenter plus tard
+    }
+    if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
+        serverCore.usbMidi().sendStop();
     }
 }
 
@@ -131,11 +161,15 @@ void MidiRouter::sendContinue() {
     if (bluetoothEnabled) {
         // BluetoothManager n'a pas sendContinue, on peut l'ignorer ou l'implémenter plus tard
     }
+    if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
+        serverCore.usbMidi().sendContinue();
+    }
 }
 
 void MidiRouter::enableRtpMidi(bool enabled) { rtpEnabled = enabled; }
 void MidiRouter::enableOsc(bool enabled) { oscEnabled = enabled; }
 void MidiRouter::enableBluetooth(bool enabled) { bluetoothEnabled = enabled; }
+void MidiRouter::enableUsbMidi(bool enabled) { usbMidiEnabled = enabled; }
 void MidiRouter::setOscTargetSta(bool sta) { oscToSta = sta; }
 void MidiRouter::setOscPort(uint16_t port) { oscPort = port; }
 void MidiRouter::setMidiChannel(uint8_t channel) { defaultChannel = channel; }

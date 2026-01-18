@@ -5,6 +5,7 @@
 #include "../api/APICommon.h"
 #include "../api/NetworkAPI.h"
 #include "../api/RTPAPI.h"
+#include "../api/UsbMidiAPI.h"
 #include "../Globals.h"
 #include "../server/ServerCallbacks.h"
 #include "../components/ComponentRegistry.h"
@@ -226,6 +227,7 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     // Configurer les autres APIs
     setupNetworkAPI(server);
     setupRTPAPI(server);
+    setupUsbMidiAPI(server);
     setupPinAPI(server);
     setupOSC_API(server);
     setupCacheAPI(server);

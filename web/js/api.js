@@ -67,8 +67,32 @@ async function loadStaConfig(){
  }
  }
  } catch(err) {
- console.log('Erreur chargement STA:', err);
+  console.log('Erreur chargement STA:', err);
  }
+}
+
+async function loadMidiInterfaces(){
+  try {
+    // Charger l'état RTP-MIDI
+    const rtpRes = await fetch('/api/rtp/status');
+    if(rtpRes.ok) {
+      const rtpData = await rtpRes.json();
+      if($('#rtpMidiEnabled')) {
+        $('#rtpMidiEnabled').checked = !!rtpData.enabled;
+      }
+    }
+    
+    // Charger l'état USB MIDI
+    const usbRes = await fetch('/api/usbmidi/status');
+    if(usbRes.ok) {
+      const usbData = await usbRes.json();
+      if($('#usbMidiEnabled')) {
+        $('#usbMidiEnabled').checked = !!usbData.enabled;
+      }
+    }
+  } catch(err) {
+    console.log('Erreur chargement interfaces MIDI:', err);
+  }
 }
 
 function initForms(){
@@ -558,7 +582,26 @@ async function saveAll(){
  return fetch('/api/pins/delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
  });
  await Promise.all(deletePromises);
- 
+
+ // Sauvegarder les interfaces MIDI globales
+ try {
+   // Sauvegarder RTP-MIDI
+   if($('#rtpMidiEnabled')) {
+     const rtpFormData = new URLSearchParams();
+     rtpFormData.append('enable', $('#rtpMidiEnabled').checked ? 'true' : 'false');
+     await fetch('/api/rtp/enable', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: rtpFormData.toString()});
+   }
+   
+   // Sauvegarder USB MIDI
+   if($('#usbMidiEnabled')) {
+     const usbFormData = new URLSearchParams();
+     usbFormData.append('enable', $('#usbMidiEnabled').checked ? 'true' : 'false');
+     await fetch('/api/usbmidi/enable', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: usbFormData.toString()});
+   }
+ } catch(e) {
+   console.error('Erreur sauvegarde interfaces MIDI:', e);
+ }
+
  // Rafraîchir le cache des GPIOs utilisés depuis le backend
  await loadUsedGpiosFromBackend();
  updateBusVisuals();

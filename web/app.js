@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
  loadOscConfig();
  /* Charger la configuration Wi-Fi Station */
  loadStaConfig();
+ /* Charger l'état des interfaces MIDI globales */
+ loadMidiInterfaces();
  /* Initialiser les formulaires */
  initForms();
  /* Charger les définitions de composants AVANT de dessiner le board */
