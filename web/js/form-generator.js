@@ -19,7 +19,7 @@ const FormGenerator = {
   replaceTranslationTemplate(text) {
     if(!text) return '';
     
-    // Mapping des traductions (extrait de fr.json)
+    /* Mapping des traductions (extrait de fr.json) */
     const translations = {
       'cc': 'CC#',
       'channel': 'Canal',
@@ -35,7 +35,7 @@ const FormGenerator = {
       'type': 'Type'
     };
     
-    // Remplacer {{t.pins.xxx}}: (avec :) et {{t.pins.xxx}} (sans :)
+    /* Remplacer {{t.pins.xxx}}: (avec :) et {{t.pins.xxx}} (sans :) */
     return text.replace(/\{\{t\.pins\.(\w+)\}\}(:?)/g, (match, key, colon) => {
       const translation = translations[key] || key;
       return translation + (colon || '');
@@ -45,8 +45,8 @@ const FormGenerator = {
   /**
    * Construit l'ID d'un champ HTML depuis la définition du composant et l'ID de la pin/field
    * @param {Object} def - Définition du composant
-   * @param {string} fieldId - ID de la pin additionnelle ou du formField (ex: "s0", "sig", "en")
-   * @returns {string} ID du champ HTML (ex: "hc4067S0", "hc4067Sig")
+   * @param {string} fieldId - ID de la pin additionnelle ou du formField (ex: "s0", "en")
+   * @returns {string} ID du champ HTML (ex: "hc4067S0", "hc4067En")
    */
   getFieldId(def, fieldId) {
     if(!def || !fieldId) return '';
@@ -67,21 +67,21 @@ const FormGenerator = {
       return;
     }
     
-    // Vider le conteneur
+    /* Vider le conteneur */
     container.innerHTML = '';
     
-    // Parcourir tous les champs de formulaire
+    /* Parcourir tous les champs de formulaire */
     def.formFields.forEach((field, fieldIndex) => {
-      // Log pour debug
-      if(field.type === 2 && field.options) { // SELECT avec options
+      /* Log pour debug */
+      if(field.type === 2 && field.options) { /* SELECT avec options */
         console.log(`[FormGenerator] Field ${fieldIndex} (${field.id}): type=SELECT, options type=${typeof field.options}, value=`, field.options);
       }
-      // Gérer l'affichage conditionnel
+      /* Gérer l'affichage conditionnel */
       let fieldContainer = container;
       if(field.dependsOn && field.showWhen) {
         const dependsOnEl = $('#' + field.dependsOn);
         if(dependsOnEl) {
-          // Si showWhen est déjà un tableau, l'utiliser directement
+          /* Si showWhen est déjà un tableau, l'utiliser directement */
           let showWhenValues = [];
           if(Array.isArray(field.showWhen)) {
             showWhenValues = field.showWhen;
@@ -94,13 +94,13 @@ const FormGenerator = {
             }
           }
           const shouldShow = showWhenValues.includes(dependsOnEl.value);
-          // Créer un élément pour gérer l'affichage conditionnel
+          /* Créer un élément pour gérer l'affichage conditionnel */
           let hiddenWrapper = $('#' + field.id + 'Row');
           if(!hiddenWrapper) {
             hiddenWrapper = document.createElement('div');
             hiddenWrapper.id = field.id + 'Row';
             container.appendChild(hiddenWrapper);
-            // Ajouter l'écouteur d'événement
+            /* Ajouter l'écouteur d'événement */
             dependsOnEl.addEventListener('change', () => {
               const newValue = dependsOnEl.value;
               const shouldShowNow = showWhenValues.includes(newValue);
@@ -112,11 +112,11 @@ const FormGenerator = {
         }
       }
       
-      // Créer le wrapper
+      /* Créer le wrapper */
       const wrapper = document.createElement('div');
       wrapper.className = field.wrapperClass || 'r';
-      if(field.type === 5) { // INFO
-        // Pour INFO, pas de wrapper, juste la div.hint
+      if(field.type === 5) { /* INFO */
+        /* Pour INFO, pas de wrapper, juste la div.hint */
         const infoDiv = document.createElement('div');
         infoDiv.className = field.hintClass || 'hint';
         infoDiv.textContent = field.hint || '';
@@ -124,7 +124,7 @@ const FormGenerator = {
         return;
       }
       
-      // Label principal
+      /* Label principal */
       if(field.label) {
         const label = document.createElement('label');
         label.textContent = field.label;
@@ -132,18 +132,18 @@ const FormGenerator = {
         wrapper.appendChild(label);
       }
       
-      // Label avant (pour champs complexes)
+      /* Label avant (pour champs complexes) */
       if(field.labelBefore) {
         const labelBefore = document.createElement('span');
         labelBefore.textContent = field.labelBefore;
         wrapper.appendChild(labelBefore);
       }
       
-      // Créer l'input selon le type
+      /* Créer l'input selon le type */
       let input;
       
       switch(field.type) {
-        case 0: // TEXT
+        case 0: /* TEXT */
           input = document.createElement('input');
           input.type = 'text';
           input.id = field.id;
@@ -155,7 +155,7 @@ const FormGenerator = {
           else if(currentCfg[field.id]) input.value = currentCfg[field.id];
           break;
           
-        case 1: // NUMBER
+        case 1: /* NUMBER */
           input = document.createElement('input');
           input.type = 'number';
           input.id = field.id;
@@ -168,12 +168,12 @@ const FormGenerator = {
           else if(currentCfg[field.id] !== undefined) input.value = currentCfg[field.id];
           break;
           
-        case 2: // SELECT
+        case 2: /* SELECT */
           input = document.createElement('select');
           input.id = field.id;
           if(field.width > 0) input.style.width = field.width + 'px';
-          // Vérifier que field.options existe et n'est pas null/undefined/vide
-          // field.options peut être null, undefined, une string vide, ou la string "null"
+          /* Vérifier que field.options existe et n'est pas null/undefined/vide */
+          /* field.options peut être null, undefined, une string vide, ou la string "null" */
           if(field.options && 
              field.options !== null && 
              field.options !== undefined && 
@@ -181,31 +181,31 @@ const FormGenerator = {
              field.options !== 'undefined' &&
              (typeof field.options !== 'string' || field.options.trim().length > 0)) {
             try {
-              // Les options peuvent être déjà un objet JavaScript (après JSON.parse du backend)
-              // ou une string JSON (si double-encodé)
+              /* Les options peuvent être déjà un objet JavaScript (après JSON.parse du backend) */
+              /* ou une string JSON (si double-encodé) */
               let options = [];
               
               try {
-                // Vérifier d'abord si c'est déjà un tableau (cas le plus courant)
+                /* Vérifier d'abord si c'est déjà un tableau (cas le plus courant) */
                 if(Array.isArray(field.options)) {
                   options = field.options;
                 } else if(typeof field.options === 'string') {
-                  // Si c'est une string, la parser
+                  /* Si c'est une string, la parser */
                   let cleanedOptions = field.options.trim();
                   if(cleanedOptions && cleanedOptions.length > 0) {
-                    // Si la string commence et se termine par des guillemets, les retirer
+                    /* Si la string commence et se termine par des guillemets, les retirer */
                     if(cleanedOptions.startsWith('"') && cleanedOptions.endsWith('"') && cleanedOptions.length > 2) {
                       cleanedOptions = cleanedOptions.slice(1, -1);
                       cleanedOptions = cleanedOptions.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
                     }
-                    // Vérifier que cleanedOptions commence par '[' ou '{' (JSON valide)
+                    /* Vérifier que cleanedOptions commence par '[' ou '{' (JSON valide) */
                     if(cleanedOptions.startsWith('[') || cleanedOptions.startsWith('{')) {
                       options = JSON.parse(cleanedOptions);
                       if(!Array.isArray(options)) options = [];
                     }
                   }
                 } else if(typeof field.options === 'object' && field.options !== null) {
-                  // Si c'est un objet mais pas un tableau, essayer de le convertir
+                  /* Si c'est un objet mais pas un tableau, essayer de le convertir */
                   options = Object.keys(field.options).map(key => ({
                     value: key,
                     label: field.options[key]
@@ -232,7 +232,7 @@ const FormGenerator = {
               }
             } catch(e) {
               console.warn('[FormGenerator.generateFormFields] Erreur parsing options pour field:', field.id, 'erreur:', e.message, 'type:', typeof field.options, 'value:', field.options);
-              // En cas d'erreur, essayer de voir si c'est déjà un objet
+              /* En cas d'erreur, essayer de voir si c'est déjà un objet */
               if(typeof field.options === 'object' && Array.isArray(field.options)) {
                 field.options.forEach(opt => {
                   if(opt && opt.value !== undefined && opt.label !== undefined) {
@@ -245,14 +245,14 @@ const FormGenerator = {
               }
             }
           } else {
-            // Pas d'options définies - c'est normal pour certains champs SELECT
+            /* Pas d'options définies - c'est normal pour certains champs SELECT */
             console.warn('[FormGenerator.generateFormFields] Pas d\'options définies pour field SELECT:', field.id);
           }
           if(field.defaultValue && !currentCfg[field.id]) input.value = field.defaultValue;
           else if(currentCfg[field.id]) input.value = currentCfg[field.id];
           break;
           
-        case 3: // CHECKBOX
+        case 3: /* CHECKBOX */
           input = document.createElement('input');
           input.type = 'checkbox';
           input.id = field.id;
@@ -267,8 +267,8 @@ const FormGenerator = {
           }
           break;
           
-        case 4: // RANGE
-          // Pour RANGE, créer deux inputs number
+        case 4: /* RANGE */
+          /* Pour RANGE, créer deux inputs number */
           const rangeWrapper = document.createElement('span');
           const inputMin = document.createElement('input');
           inputMin.type = 'number';
@@ -277,7 +277,7 @@ const FormGenerator = {
           inputMin.max = field.max;
           if(field.step) inputMin.step = field.step;
           if(field.width > 0) inputMin.style.width = field.width + 'px';
-          // Pour RANGE, defaultValue est utilisé pour le min, max utilise field.max par défaut
+          /* Pour RANGE, defaultValue est utilisé pour le min, max utilise field.max par défaut */
           if(currentCfg[field.id + 'Min'] !== undefined) {
             inputMin.value = currentCfg[field.id + 'Min'];
           } else if(field.defaultValue) {
@@ -324,15 +324,15 @@ const FormGenerator = {
       
       wrapper.appendChild(input);
       
-      // Label après (pour champs complexes)
+      /* Label après (pour champs complexes) */
       if(field.labelAfter) {
         const labelAfter = document.createElement('span');
         labelAfter.textContent = field.labelAfter;
         wrapper.appendChild(labelAfter);
       }
       
-      // Hint inline
-      if(field.hintPosition === 1 && field.hint) { // INLINE
+      /* Hint inline */
+      if(field.hintPosition === 1 && field.hint) { /* INLINE */
         const hintSpan = document.createElement('span');
         hintSpan.textContent = field.hint;
         if(field.hintClass) {
@@ -347,8 +347,8 @@ const FormGenerator = {
       
       fieldContainer.appendChild(wrapper);
       
-      // Hint en dessous
-      if(field.hintPosition === 2 && field.hint) { // BELOW
+      /* Hint en dessous */
+      if(field.hintPosition === 2 && field.hint) { /* BELOW */
         const hintDiv = document.createElement('div');
         hintDiv.className = field.hintClass || 'hint';
         hintDiv.textContent = field.hint;
@@ -371,7 +371,7 @@ const FormGenerator = {
       return;
     }
     
-    // Créer une section pour les pins additionnelles
+    /* Créer une section pour les pins additionnelles */
     const section = document.createElement('div');
     section.className = 'f';
     section.style.marginTop = '20px';
@@ -381,12 +381,16 @@ const FormGenerator = {
     sectionTitle.textContent = 'Configuration des pins';
     section.appendChild(sectionTitle);
     
-    // Obtenir les GPIOs déjà utilisées (pour exclusion)
+    /* RESTRICTIONS DÉSACTIVÉES - On ne récupère plus les GPIOs utilisées pour exclusion */
+    /* Le code est conservé mais commenté pour référence */
+    /*
+    Obtenir les GPIOs déjà utilisées (pour exclusion)
     if(typeof GpioManager === 'undefined' || !GpioManager.getUsedGpios) {
       console.warn('[FormGenerator.generateAdditionalPins] GpioManager non disponible');
       return;
     }
     const usedGpios = GpioManager.getUsedGpios([]);
+    */
     const currentPinLabel = $('#selPin')?.textContent || '';
     const currentPin = caps?.pins?.find(p => p.label === currentPinLabel);
     const currentPinGpio = currentPin ? parseInt(currentPin.gpio) : null;
@@ -405,13 +409,13 @@ const FormGenerator = {
       wrapper.appendChild(label);
       
       const select = document.createElement('select');
-      // ID du champ : préfixe depuis l'ID du composant + id en capital (ex: s0 -> hc4067S0, en -> hc4067En)
+      /* ID du champ : préfixe depuis l'ID du composant + id en capital (ex: s0 -> hc4067S0, en -> hc4067En) */
       const fieldId = this.getFieldId(def, additionalPin.id);
       select.id = fieldId;
       select.style.width = '200px';
       console.log('[FormGenerator.generateAdditionalPins] Création champ, additionalPin.id:', additionalPin.id, 'fieldId:', fieldId);
       
-      // Ajouter option "Non connecté" pour les pins optionnelles
+      /* Ajouter option "Non connecté" pour les pins optionnelles */
       if(additionalPin.optional) {
         const optNone = document.createElement('option');
         optNone.value = '255';
@@ -419,19 +423,23 @@ const FormGenerator = {
         select.appendChild(optNone);
       }
       
-      // Remplir avec les pins disponibles selon pinType
-      const pinType = additionalPin.pinType !== undefined ? additionalPin.pinType : 1; // Défaut: PIN_DIGITAL
+      /* RESTRICTIONS DÉSACTIVÉES - Toutes les pins sont disponibles dans les selects */
+      const pinType = additionalPin.pinType !== undefined ? additionalPin.pinType : 1; /* Défaut: PIN_DIGITAL */
       if(typeof GpioManager === 'undefined' || !GpioManager.getPinsByType) {
         console.warn('[FormGenerator.generateAdditionalPins] GpioManager.getPinsByType non disponible');
         return;
       }
-      const availablePins = GpioManager.getPinsByType(pinType, Array.from(usedGpios));
+      /* Passer un tableau vide pour excludeGpios afin de ne filtrer aucune pin */
+      const availablePins = GpioManager.getPinsByType(pinType, []);
       
       availablePins.forEach(pin => {
-        // Ne pas inclure la pin principale (si elle est digitale)
+        /* RESTRICTIONS DÉSACTIVÉES - Ne plus exclure la pin principale */
+        /*
+        Ne pas inclure la pin principale (si elle est digitale)
         if(currentPinGpio && parseInt(pin.gpio) === currentPinGpio && pinType === 1) {
-          return; // Skip
+          return;
         }
+        */
         
         const option = document.createElement('option');
         option.value = pin.gpio;
@@ -439,17 +447,74 @@ const FormGenerator = {
         select.appendChild(option);
       });
       
-      // Restaurer la valeur actuelle si présente
-      const currentValue = currentCfg[fieldId] || currentCfg[additionalPin.id];
-      if(currentValue !== undefined && currentValue !== null) {
+      /* Si cette additionalPin correspond au type de la pin principale, initialiser automatiquement */
+      const currentPinLabel = $('#selPin')?.textContent || '';
+      const currentPin = caps?.pins?.find(p => p && p.label === currentPinLabel);
+      if(currentPin && currentPin.gpio !== undefined && currentPin.type !== undefined) {
+        const mainPinGpio = parseInt(currentPin.gpio);
+        const currentPinType = parseInt(currentPin.type);
+        if(!isNaN(mainPinGpio) && !isNaN(currentPinType) && additionalPin.pinType === currentPinType && !additionalPin.optional) {
+          select.value = String(mainPinGpio);
+          console.log('[FormGenerator.generateAdditionalPins] Pin principale initialisée automatiquement (type correspondant):', additionalPin.id, '=', mainPinGpio);
+        }
+      }
+      
+      /* Restaurer la valeur actuelle si présente */
+      /* Chercher dans currentCfg.additionalPins[additionalPin.id] (structure depuis le serveur) */
+      const currentValue = (currentCfg.additionalPins && currentCfg.additionalPins[additionalPin.id] !== undefined && currentCfg.additionalPins[additionalPin.id] !== null)
+        ? currentCfg.additionalPins[additionalPin.id]
+        : (currentCfg[fieldId] || currentCfg[additionalPin.id]);
+      if(currentValue !== undefined && currentValue !== null && select.value === '') {
         select.value = String(currentValue);
-      } else if(additionalPin.defaultValue !== undefined && additionalPin.defaultValue !== 255) {
+      } else if(select.value === '' && additionalPin.defaultValue !== undefined && additionalPin.defaultValue !== 255) {
         select.value = String(additionalPin.defaultValue);
+      }
+      
+      /* Attacher un event listener pour sauvegarder les modifications */
+      if(typeof updateConfig === 'function') {
+        select.addEventListener('change', updateConfig);
+        console.log('[FormGenerator.generateAdditionalPins] Event listener attaché pour', fieldId);
       }
       
       wrapper.appendChild(select);
       section.appendChild(wrapper);
     });
+    
+    /* Créer le champ ID du composant si nécessaire (pour les composants avec additionalPins) */
+    const idFieldId = this.getFieldId(def, 'id');
+    if (idFieldId && !$('#' + idFieldId)) {
+      const idWrapper = document.createElement('div');
+      idWrapper.className = 'f';
+      
+      const idLabel = document.createElement('label');
+      idLabel.textContent = 'ID du composant';
+      idWrapper.appendChild(idLabel);
+      
+      const idSelect = document.createElement('select');
+      idSelect.id = idFieldId;
+      idSelect.style.width = '200px';
+      
+      /* Options: 0, 1 */
+      for (let i = 0; i <= 1; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = i;
+        idSelect.appendChild(option);
+      }
+      
+      /* Restaurer la valeur actuelle si présente */
+      /* Note: complexId supprimé - plus besoin de restaurer le champ id */
+      
+      /* Attacher un event listener pour sauvegarder les modifications */
+      if (typeof updateConfig === 'function') {
+        idSelect.addEventListener('change', updateConfig);
+        console.log('[FormGenerator.generateAdditionalPins] Event listener attaché pour', idFieldId);
+      }
+      
+      idWrapper.appendChild(idSelect);
+      section.appendChild(idWrapper);
+      console.log('[FormGenerator.generateAdditionalPins] Champ id créé:', idFieldId);
+    }
     
     container.appendChild(section);
   }

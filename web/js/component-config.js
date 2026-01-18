@@ -28,9 +28,15 @@ function readAdditionalPins(def, c) {
       return;
     }
 
-    const field = $('#' + fieldId);
+    /* Vérifier si le champ existe dans le DOM */
+    const field = document.getElementById(fieldId);
     if (!field) {
-      console.warn('[readAdditionalPins] Champ non trouvé:', fieldId);
+      console.warn('[readAdditionalPins] Champ non trouvé dans le DOM:', fieldId);
+      /* Si le champ n'existe pas, vérifier s'il y a une valeur dans pcfg */
+      if (cur && pcfg && pcfg[cur] && pcfg[cur].additionalPins && pcfg[cur].additionalPins[additionalPin.id] !== undefined) {
+        c.additionalPins[additionalPin.id] = pcfg[cur].additionalPins[additionalPin.id];
+        console.log('[readAdditionalPins] additionalPin lu depuis pcfg:', additionalPin.id, '=', c.additionalPins[additionalPin.id]);
+      }
       return;
     }
 
@@ -38,23 +44,16 @@ function readAdditionalPins(def, c) {
       const value = parseInt(field.value);
       if (!isNaN(value)) {
         c.additionalPins[additionalPin.id] = value;
-        console.log('[readAdditionalPins] additionalPin lu:', additionalPin.id, '=', value);
+        console.log('[readAdditionalPins] additionalPin lu depuis le formulaire:', additionalPin.id, '=', value);
       }
+    } else if (cur && pcfg && pcfg[cur] && pcfg[cur].additionalPins && pcfg[cur].additionalPins[additionalPin.id] !== undefined) {
+      /* Si le champ est vide mais qu'il y a une valeur dans pcfg, utiliser celle-ci */
+      c.additionalPins[additionalPin.id] = pcfg[cur].additionalPins[additionalPin.id];
+      console.log('[readAdditionalPins] additionalPin lu depuis pcfg (champ vide):', additionalPin.id, '=', c.additionalPins[additionalPin.id]);
     }
   });
 
-  /* Lire complexId si présent */
-  const idFieldId = FormGenerator.getFieldId(def, 'id');
-  if (idFieldId) {
-    const idField = $('#' + idFieldId);
-    if (idField && idField.value !== undefined && idField.value !== null && idField.value !== '') {
-      const complexId = parseInt(idField.value);
-      if (!isNaN(complexId)) {
-        c.complexId = complexId;
-        console.log('[readAdditionalPins] complexId lu:', complexId);
-      }
-    }
-  }
+  /* Note: complexId supprimé - plus besoin de lire le champ id */
 }
 
 /**
@@ -65,7 +64,7 @@ function readAdditionalPins(def, c) {
  */
 function applyAdditionalPins(def, c, setV) {
   const hasAdditionalPinsFlag = hasAdditionalPins(def);
-  const hasAdditionalPinsInCfg = c.additionalPins && typeof c.additionalPins === 'object' && c.additionalPins.sig !== undefined;
+  const hasAdditionalPinsInCfg = c.additionalPins && typeof c.additionalPins === 'object' && Object.keys(c.additionalPins).length > 0;
 
   if (!hasAdditionalPinsFlag || !hasAdditionalPinsInCfg || !def.additionalPins || typeof FormGenerator === 'undefined' || !FormGenerator.getFieldId) {
     return;
@@ -81,11 +80,7 @@ function applyAdditionalPins(def, c, setV) {
     }
   });
 
-  /* Appliquer complexId si présent */
-  if (c.complexId !== undefined && def) {
-    const idFieldId = FormGenerator.getFieldId(def, 'id');
-    if (idFieldId) setV(idFieldId, c.complexId);
-  }
+  /* Note: complexId supprimé - plus besoin d'appliquer le champ id */
 }
 
 /**
@@ -149,7 +144,7 @@ function readCfg(roleOverride = null) {
     readAdditionalPins(def, c);
   }
 
-  console.log('[readCfg] additionalPins final:', c.additionalPins, 'complexId:', c.complexId);
+  console.log('[readCfg] additionalPins final:', c.additionalPins);
   return c;
 }
 
@@ -161,8 +156,12 @@ function applyCfg(c) {
   if (!c) return;
 
   const setV = (id, v) => {
-    const el = $(id);
-    if (el && v != null) el.value = v;
+    /* Gérer les IDs avec ou sans # */
+    const idStr = typeof id === 'string' ? (id[0] === '#' ? id : '#' + id) : id;
+    const el = $(idStr) || document.getElementById(id);
+    if (el && v != null && v !== undefined) {
+      el.value = String(v);
+    }
   };
 
   const setC = (id, b) => {
@@ -172,7 +171,7 @@ function applyCfg(c) {
 
   const migratedRole = migrateRoleValue(c.role);
   const def = migratedRole ? getComponentDef(migratedRole) : null;
-  const hasAdditionalPinsFlag = c.additionalPins && typeof c.additionalPins === 'object' && c.additionalPins.sig !== undefined;
+  const hasAdditionalPinsFlag = def && hasAdditionalPins(def) && c.additionalPins && typeof c.additionalPins === 'object' && Object.keys(c.additionalPins).length > 0;
 
   /* Restaurer la famille si le rôle est défini */
   if (def && def.family !== undefined && $('#familySelect')) {
@@ -188,14 +187,12 @@ function applyCfg(c) {
   const needToRegenerate = (currentRoleInSelect !== migratedRole || !card || card.innerHTML.trim() === '' || card.style.display === 'none');
   
   if (needToRegenerate) {
-    console.log('[applyCfg] Appel showRoleCards, currentRoleInSelect:', currentRoleInSelect, 'migratedRole:', migratedRole);
     showRoleCards(migratedRole, c);
     /* Attendre que les champs soient créés avant d'appliquer les valeurs */
     setTimeout(() => {
       applyConfigValues(c, def, setV, setC);
     }, 50);
   } else {
-    console.log('[applyCfg] showRoleCards déjà appelé pour ce rôle, appliquer directement');
     /* S'assurer que le conteneur est visible */
     if (card && card.style.display === 'none') {
       card.style.display = 'block';

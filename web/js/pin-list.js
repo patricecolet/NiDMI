@@ -12,13 +12,22 @@ function updatePinsList() {
   pl.innerHTML = '';
 
   /* Collecter les GPIOs des composants complexes sauvegardés depuis pcfg */
-  const savedComplexSigGpios = new Set();
-  if (typeof pcfg !== 'undefined' && pcfg) {
+  const savedComplexMainPinGpios = new Set();
+  if (typeof pcfg !== 'undefined' && pcfg && caps && caps.pins) {
     Object.keys(pcfg).forEach(lbl => {
       const cfg = pcfg[lbl];
-      if (cfg && cfg.additionalPins && typeof cfg.additionalPins === 'object' && cfg.additionalPins.sig !== undefined) {
-        const sigGpio = parseInt(cfg.additionalPins.sig);
-        if (!isNaN(sigGpio)) savedComplexSigGpios.add(sigGpio);
+      if (!cfg || !cfg.role) return;
+      const cfgRole = typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role;
+      const cfgDef = typeof getComponentDefinition === 'function' ? getComponentDefinition(cfgRole) : null;
+      const cfgHasAdditionalPins = cfgDef && cfgDef.additionalPins && Array.isArray(cfgDef.additionalPins) && cfgDef.additionalPins.length > 0
+        && cfg.additionalPins && typeof cfg.additionalPins === 'object' && Object.keys(cfg.additionalPins).length > 0;
+      if (cfgHasAdditionalPins) {
+        /* Pour les composants avec additionalPins, la pin principale est celle sur laquelle le composant est configuré */
+        const complexPin = caps.pins.find(p => p.label === lbl);
+        if (complexPin && complexPin.gpio !== undefined) {
+          const mainPinGpio = parseInt(complexPin.gpio);
+          if (!isNaN(mainPinGpio)) savedComplexMainPinGpios.add(mainPinGpio);
+        }
       }
     });
   }
@@ -31,19 +40,19 @@ function updatePinsList() {
     /* Ignorer les pins avec préfixe M (anciennes pins avec préfixe historique) */
     if (lbl.startsWith('M')) return;
 
-    /* Détecter composant avec additionalPins depuis pcfg.additionalPins */
-    const hasAdditionalPins = cfg.additionalPins && typeof cfg.additionalPins === 'object' && cfg.additionalPins.sig !== undefined;
+    /* Détecter composant avec additionalPins depuis la définition */
     const role = typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role;
     const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
-    const hasAdditionalPinsFromDef = def && (def.additionalPinCount > 0 || (def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0));
-    const isComplex = hasAdditionalPins || hasAdditionalPinsFromDef;
+    const hasAdditionalPinsFromDef = def && def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0;
+    const hasAdditionalPinsInCfg = cfg.additionalPins && typeof cfg.additionalPins === 'object' && Object.keys(cfg.additionalPins).length > 0;
+    const hasAdditionalPins = hasAdditionalPinsFromDef && hasAdditionalPinsInCfg;
 
     /* Pour les composants avec additionalPins : afficher depuis pcfg (unifié) */
-    if (isComplex && hasAdditionalPins) {
+    if (hasAdditionalPins) {
       if (caps && caps.pins) {
         const pin = caps.pins.find(p => p.label === lbl);
         /* Si ce GPIO est déjà dans un autre composant complexe sauvegardé, ne pas afficher */
-        if (pin && savedComplexSigGpios.has(parseInt(pin.gpio)) && parseInt(cfg.additionalPins.sig) !== parseInt(pin.gpio)) return;
+        if (pin && savedComplexMainPinGpios.has(parseInt(pin.gpio)) && parseInt(pin.gpio) !== parseInt(caps.pins.find(p => p.label === lbl)?.gpio || 0)) return;
 
         /* Afficher composant complexe depuis pcfg */
         const roleName = getRoleDisplayLabel(cfg.role);
@@ -81,11 +90,11 @@ function updatePinsList() {
       return;
     }
 
-    /* Vérifier si cette pin est utilisée par un composant complexe comme SIG (depuis pcfg) */
+    /* Vérifier si cette pin est utilisée par un composant complexe comme pin principale (depuis pcfg) */
     /* Si oui, ne pas afficher le composant simple (le complexe a priorité) */
     if (caps && caps.pins) {
       const pin = caps.pins.find(p => p.label === lbl);
-      if (pin && savedComplexSigGpios.has(parseInt(pin.gpio))) {
+      if (pin && savedComplexMainPinGpios.has(parseInt(pin.gpio))) {
         /* Cette pin est utilisée par un composant complexe, ne pas afficher le simple */
         return;
       }

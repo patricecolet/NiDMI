@@ -161,7 +161,7 @@ sync_files() {
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
-    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,config,hardware,managers,midi,network,osc,processors,server,ui,utils}
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,config,hardware,managers,managers/complex,managers/complex/multiplexer,midi,network,osc,processors,server,ui,utils}
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -185,6 +185,15 @@ sync_files() {
     cp -f $REPO_DIR/src/hardware/*.h $ARDUINO_LIB_DIR/src/hardware/ 2>/dev/null || true
     cp -f $REPO_DIR/src/managers/*.cpp $ARDUINO_LIB_DIR/src/managers/ 2>/dev/null || true
     cp -f $REPO_DIR/src/managers/*.h $ARDUINO_LIB_DIR/src/managers/ 2>/dev/null || true
+    # Copier les sous-dossiers de managers (complex, etc.)
+    if [ -d "$REPO_DIR/src/managers/complex" ]; then
+        cp -f $REPO_DIR/src/managers/complex/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/ 2>/dev/null || true
+        cp -f $REPO_DIR/src/managers/complex/*.h $ARDUINO_LIB_DIR/src/managers/complex/ 2>/dev/null || true
+        if [ -d "$REPO_DIR/src/managers/complex/multiplexer" ]; then
+            cp -f $REPO_DIR/src/managers/complex/multiplexer/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/multiplexer/ 2>/dev/null || true
+            cp -f $REPO_DIR/src/managers/complex/multiplexer/*.h $ARDUINO_LIB_DIR/src/managers/complex/multiplexer/ 2>/dev/null || true
+        fi
+    fi
     cp -f $REPO_DIR/src/midi/*.cpp $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true
     cp -f $REPO_DIR/src/midi/*.h $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true
     cp -f $REPO_DIR/src/network/*.cpp $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true

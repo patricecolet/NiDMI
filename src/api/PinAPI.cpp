@@ -6,6 +6,7 @@
 #include "../Globals.h"
 #include "../config/ConfigCache.h"
 #include "../components/ComponentRegistry.h"
+#include "../managers/complex/ComplexHandlerRegistry.h"
 
 /* Forward declarations */
 String getDefaultConfig(String pin);
@@ -149,7 +150,7 @@ void setupPinAPI(AsyncWebServer& server) {
                     if(!configStr.isEmpty()) {
                         /* Si la config existe dans NVS, l'utiliser directement (contient tous les paramètres MIDI, formFields, etc.) */
                         if (!first) json += ",";
-                        json += configStr;  // Le config est déjà un JSON complet avec pinLabel
+                        json += configStr;  /* Le config est déjà un JSON complet avec pinLabel */
                         first = false;
                     } else {
                         /* Fallback : construire depuis MuxConfig si pas trouvé dans NVS (compatibilité) */
@@ -168,61 +169,33 @@ void setupPinAPI(AsyncWebServer& server) {
                             role = "hc4067";
                         }
                         
-                        /* Construire le JSON unifié avec additionalPins */
-                        json += "{";
-                        json += "\"pinLabel\":\"" + sigPinLabel + "\",";
-                        json += "\"role\":\"" + role + "\",";
-                        json += "\"complexId\":" + String(i) + ",";
-                        /* Construire additionalPins dynamiquement depuis la définition du composant */
-                        const ComponentDefinition* compDef = ComponentRegistry::findById(role.c_str());
-                        json += "\"additionalPins\":{";
-                        if(compDef && compDef->additionalPinCount > 0 && compDef->additionalPins) {
-                            bool firstPin = true;
-                            /* Construire avec les valeurs du MuxConfig (spécifique MUX pour l'instant) */
-                            for(uint8_t j = 0; j < compDef->additionalPinCount && j < compDef->additionalPinsCapacity; j++) {
-                                if(!firstPin) json += ",";
-                                String pinId = String(compDef->additionalPins[j].id);
-                                /* Mapper les IDs des pins MUX vers les valeurs dans MuxConfig */
-                                uint8_t pinValue = 255;
-                                if(pinId == "sig") pinValue = cfg->sig_pin;
-                                else if(pinId == "s0") pinValue = cfg->s0;
-                                else if(pinId == "s1") pinValue = cfg->s1;
-                                else if(pinId == "s2") pinValue = cfg->s2;
-                                else if(pinId == "s3") pinValue = cfg->s3;
-                                else if(pinId == "en") pinValue = cfg->en_pin;
-                                json += "\"" + pinId + "\":" + String(pinValue);
-                                firstPin = false;
+                        /* Construire le JSON unifié avec additionalPins en utilisant le handler générique */
+                        ComplexHandler* handler = ComplexHandlerRegistry::getHandler(role.c_str());
+                        if(handler) {
+                            /* Utiliser le handler générique pour obtenir les infos */
+                            json += "{";
+                            json += "\"pinLabel\":\"" + sigPinLabel + "\",";
+                            json += "\"role\":\"" + role + "\",";
+                            String infoJson = "";
+                            if(handler->getComponentInfo(sigPinLabel.c_str(), cfg->sig_pin, infoJson)) {
+                                json += infoJson;  /* Ajoute additionalPins, formFields, midiParams, etc. */
+                            } else {
+                                /* Fallback si getComponentInfo échoue */
+                                json += "\"additionalPins\":{},";
+                                json += "\"min\":0,\"max\":4095,";
+                                json += "\"rtpCc\":1,\"rtpChan\":1,\"rtpEnabled\":true";
                             }
+                            json += "}";
                         } else {
-                            /* Fallback pour compatibilité : construire avec les valeurs hardcodées MUX */
-                            json += "\"sig\":" + String(cfg->sig_pin) + ",";
-                            json += "\"s0\":" + String(cfg->s0) + ",";
-                            json += "\"s1\":" + String(cfg->s1) + ",";
-                            json += "\"s2\":" + String(cfg->s2) + ",";
-                            json += "\"s3\":" + String(cfg->s3) + ",";
-                            json += "\"en\":" + String(cfg->en_pin);
+                            /* Fallback si handler non trouvé (ne devrait pas arriver) */
+                            json += "{";
+                            json += "\"pinLabel\":\"" + sigPinLabel + "\",";
+                            json += "\"role\":\"" + role + "\",";
+                            json += "\"additionalPins\":{},";
+                            json += "\"min\":0,\"max\":4095,";
+                            json += "\"rtpCc\":1,\"rtpChan\":1,\"rtpEnabled\":true";
+                            json += "}";
                         }
-                        json += "},";
-                        /* FormFields */
-                        uint16_t min_val = cfg->analog_min[0];
-                        uint16_t max_val = cfg->analog_max[0];
-                        json += "\"min\":" + String(min_val) + ",";
-                        json += "\"max\":" + String(max_val) + ",";
-                        json += "\"filterIntensity\":" + String(cfg->filter_intensity) + ",";
-                        /* MIDI/OSC config : mapper ccBase → rtpCc, midiChan → rtpChan, oscBase → oscAddress */
-                        json += "\"rtpCc\":" + String(cfg->cc_base) + ",";
-                        json += "\"rtpChan\":" + String(cfg->midi_channel) + ",";
-                        json += "\"rtpEnabled\":true,";
-                        String oscBase = (cfg->osc_base[0] != '\0') ? String(cfg->osc_base) : "/mux" + String(i);
-                        json += "\"oscAddress\":\"" + oscBase + "\",";
-                        String oscFormatStr = "float";
-                        if (cfg->osc_format == MuxOSCFormat::RAW) {
-                            oscFormatStr = "raw";
-                        } else if (cfg->osc_format == MuxOSCFormat::MIDI) {
-                            oscFormatStr = "midi";
-                        }
-                        json += "\"oscFormat\":\"" + oscFormatStr + "\"";
-                        json += "}";
                         first = false;
                     }
                 }
@@ -247,6 +220,18 @@ void setupPinAPI(AsyncWebServer& server) {
         
         /* Obtenir la définition du composant pour lecture dynamique des paramètres */
         const ComponentDefinition* def = ComponentRegistry::findById(role.c_str());
+        
+        /* Trouver le GPIO correspondant au pinLabel */
+        uint8_t sigGpio = 255;
+        PinMapper::detectMcu();
+        const PinMapping* mappings = PinMapper::getAllMappings();
+        size_t mapping_count = PinMapper::getMappingCount();
+        for (size_t i = 0; i < mapping_count; i++) {
+            if(String(mappings[i].label) == pinLabel) {
+                sigGpio = mappings[i].gpio;
+                break;
+            }
+        }
         
         /* Construire le JSON à partir des paramètres */
         String json = "{";
@@ -331,7 +316,9 @@ void setupPinAPI(AsyncWebServer& server) {
             hasAdditionalPins = true;
             for(uint8_t i = 0; i < def->additionalPinCount && i < def->additionalPinsCapacity; i++) {
                 if(!def->additionalPins[i].optional) {
-                    if(!request->hasParam(def->additionalPins[i].id, true)) {
+                    String pinId = String(def->additionalPins[i].id);
+                    bool hasParam = request->hasParam(pinId.c_str(), true);
+                    if(!hasParam) {
                         hasAdditionalPins = false;
                         break;
                     }
@@ -360,10 +347,7 @@ void setupPinAPI(AsyncWebServer& server) {
                 }
                 json += "}";
                 
-                /* Ajouter complexId si présent */
-                if(request->hasParam("complexId", true)) {
-                    json += ",\"complexId\":" + request->getParam("complexId", true)->value();
-                }
+                /* Note: complexId supprimé - plus besoin d'ID explicite */
             }
         }
         
@@ -375,144 +359,124 @@ void setupPinAPI(AsyncWebServer& server) {
         String key = "pin_" + pinLabel;
         preferences.putString(key.c_str(), json);
         
-        /* Si composant avec additionalPins, sauvegarder aussi le pinLabel et le rôle pour référence future */
-        if(hasAdditionalPins && request->hasParam("complexId", true)) {
-            String complexIdStr = request->getParam("complexId", true)->value();
-            String keyPinLabel = "pinLabel_complex_" + complexIdStr;
-            preferences.putString(keyPinLabel.c_str(), pinLabel);
-            /* Stocker le rôle pour pouvoir le retrouver lors du chargement */
-            String roleKey = "role_complex_" + complexIdStr;
-            preferences.putString(roleKey.c_str(), role);
-        }
+        /* Note: complexId supprimé - plus besoin de sauvegarder pinLabel/role avec ID explicite */
         
         preferences.end();
         
-        /* Si additionalPins présent, sauvegarder aussi dans le manager approprié (MuxManager pour les MUX) */
+        /* Si additionalPins présent, utiliser le handler générique pour ce type de composant */
         if(hasAdditionalPins && def) {
-            /* Lire dynamiquement les additionalPins depuis la requête */
-            /* D'abord, vérifier si c'est un composant MUX (hc4067, hc4051) */
-            bool isMuxComponent = (role == "hc4067" || role == "hc4051");
+            /* Obtenir le handler pour ce type de composant */
+            ComplexHandler* handler = ComplexHandlerRegistry::getHandler(role.c_str());
             
-            if(isMuxComponent) {
-                /* Pour les MUX, lire les pins depuis les additionalPins dynamiquement */
-                uint8_t sig = 255;
-                uint8_t s0 = 255, s1 = 255, s2 = 255, s3 = 255;
-                uint8_t en = 255;
+            if(handler) {
+                /* Construire ComplexComponentData depuis la requête HTTP */
+                ComplexComponentData data;
+                data.def = def;
+                data.pinLabel = pinLabel.c_str();
+                data.mainPinGpio = sigGpio;
                 
-                /* Lire dynamiquement depuis les additionalPins de la définition */
+                /* Allouer et remplir additionalPins */
+                data.additionalPinCount = def->additionalPinCount;
+                data.additionalPins = new ComplexComponentData::AdditionalPinValue[data.additionalPinCount];
                 for(uint8_t i = 0; i < def->additionalPinCount && i < def->additionalPinsCapacity; i++) {
                     const AdditionalPinDef& pinDef = def->additionalPins[i];
-                    String pinId = String(pinDef.id);
+                    data.additionalPins[i].id = pinDef.id;
                     
-                    if(request->hasParam(pinId.c_str(), true)) {
-                        uint8_t value = request->getParam(pinId.c_str(), true)->value().toInt();
-                        /* Mapper vers les variables locales pour addMux() */
-                        if(pinId == "sig") sig = value;
-                        else if(pinId == "s0") s0 = value;
-                        else if(pinId == "s1") s1 = value;
-                        else if(pinId == "s2") s2 = value;
-                        else if(pinId == "s3") s3 = value;
-                        else if(pinId == "en") en = value;
+                    if(request->hasParam(pinDef.id, true)) {
+                        data.additionalPins[i].gpio = request->getParam(pinDef.id, true)->value().toInt();
                     } else if(!pinDef.optional && pinDef.defaultValue != 255) {
-                        /* Pin requise absente, utiliser valeur par défaut */
-                        if(pinId == "sig") sig = pinDef.defaultValue;
-                        else if(pinId == "s0") s0 = pinDef.defaultValue;
-                        else if(pinId == "s1") s1 = pinDef.defaultValue;
-                        else if(pinId == "s2") s2 = pinDef.defaultValue;
-                        else if(pinId == "s3") s3 = pinDef.defaultValue;
-                        else if(pinId == "en") en = pinDef.defaultValue;
+                        data.additionalPins[i].gpio = pinDef.defaultValue;
+                    } else {
+                        data.additionalPins[i].gpio = pinDef.defaultValue;  /* 255 pour non connecté */
                     }
                 }
                 
-                /* Vérifier que les pins requises sont présentes */
-                bool hasRequiredPins = (sig != 255 && s0 != 255 && s1 != 255 && s2 != 255);
-                /* s3 peut être absent pour HC4051 (3 bits seulement) */
-                if(role == "hc4051") {
-                    hasRequiredPins = (sig != 255 && s0 != 255 && s1 != 255 && s2 != 255);
-                } else {
-                    hasRequiredPins = hasRequiredPins && (s3 != 255);
-                }
-                
-                if(!hasRequiredPins) {
-                    request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Missing required additionalPins\"}");
-                    return;
-                }
-                
-                /* Utiliser valeurs par défaut pour s3 si absent (HC4051) */
-                if(role == "hc4051" && s3 == 255) {
-                    s3 = 255; /* Pin s3 non utilisée pour HC4051 */
-                }
-                
-                /* ID du composant complexe */
-                uint8_t mux_id = request->hasParam("complexId", true) ? request->getParam("complexId", true)->value().toInt() : 0;
-                /* Générer un ID disponible si non fourni */
-                if(mux_id == 0) {
-                    for(uint8_t i = 0; i < MAX_MUXES; i++) {
-                        const MuxConfig* cfg = g_componentManager.getMuxConfig(i);
-                        if(!cfg || !cfg->enabled) {
-                            mux_id = i;
-                            break;
+                /* Allouer et remplir formFields */
+                data.formFieldCount = def->formFieldCount;
+                if(data.formFieldCount > 0) {
+                    data.formFields = new ComplexComponentData::FormFieldValue[data.formFieldCount];
+                    uint8_t fieldIndex = 0;
+                    for(uint8_t i = 0; i < def->formFieldCount && i < def->formFieldsCapacity && fieldIndex < data.formFieldCount; i++) {
+                        const FormFieldDef& field = def->formFields[i];
+                        if(field.id && strlen(field.id) > 0 && field.id[0] != '_') {
+                            data.formFields[fieldIndex].id = field.id;
+                            if(request->hasParam(field.id, true)) {
+                                data.formFields[fieldIndex].value = request->getParam(field.id, true)->value();
+                            } else if(field.defaultValue && strlen(field.defaultValue) > 0) {
+                                data.formFields[fieldIndex].value = String(field.defaultValue);
+                            } else {
+                                data.formFields[fieldIndex].value = "";
+                            }
+                            fieldIndex++;
                         }
                     }
+                    data.formFieldCount = fieldIndex;  /* Ajuster le count réel */
+                } else {
+                    data.formFields = nullptr;
                 }
                 
-                /* MIDI/OSC config : mapper depuis rtpCc → ccBase, rtpChan → midiChan, oscAddress → oscBase */
-                uint8_t ccBase = request->hasParam("rtpCc", true) ? request->getParam("rtpCc", true)->value().toInt() : 1;
-                uint8_t midiChan = request->hasParam("rtpChan", true) ? request->getParam("rtpChan", true)->value().toInt() : 1;
-                String oscBase = request->hasParam("oscAddress", true) ? request->getParam("oscAddress", true)->value() : "/mux" + String(mux_id);
-                
-                /* FormFields : min, max, filterIntensity */
-                uint16_t analog_min = request->hasParam("min", true) ? request->getParam("min", true)->value().toInt() : 0;
-                uint16_t analog_max = request->hasParam("max", true) ? request->getParam("max", true)->value().toInt() : 4095;
-                uint8_t filter_intensity = request->hasParam("filterIntensity", true) ? request->getParam("filterIntensity", true)->value().toInt() : 5;
-                if(filter_intensity < 1) filter_intensity = 1;
-                if(filter_intensity > 10) filter_intensity = 10;
-                
-                /* Format OSC */
-                MuxOSCFormat osc_format = MuxOSCFormat::FLOAT;
-                if(request->hasParam("oscFormat", true)) {
-                    String oscFormatStr = request->getParam("oscFormat", true)->value();
-                    if(oscFormatStr == "raw") {
-                        osc_format = MuxOSCFormat::RAW;
-                    } else if(oscFormatStr == "midi") {
-                        osc_format = MuxOSCFormat::MIDI;
+                /* Allouer et remplir midiParams */
+                data.midiParamCount = 0;
+                data.midiParams = nullptr;
+                if(def && def->midiMessageCount > 0 && def->midiMessages) {
+                    /* Compter les paramètres MIDI */
+                    for(uint8_t i = 0; i < def->midiMessageCount; i++) {
+                        const MidiMessageDef& msg = def->midiMessages[i];
+                        if(msg.params && msg.paramCount > 0) {
+                            data.midiParamCount += msg.paramCount;
+                        }
+                    }
+                    
+                    if(data.midiParamCount > 0) {
+                        data.midiParams = new ComplexComponentData::MidiParamValue[data.midiParamCount];
+                        uint8_t paramIndex = 0;
+                        for(uint8_t i = 0; i < def->midiMessageCount; i++) {
+                            const MidiMessageDef& msg = def->midiMessages[i];
+                            if(msg.params && msg.paramCount > 0) {
+                                for(uint8_t j = 0; j < msg.paramCount && j < msg.paramsCapacity && paramIndex < data.midiParamCount; j++) {
+                                    const MidiParamDef& param = msg.params[j];
+                                    if(param.id && strlen(param.id) > 0) {
+                                        data.midiParams[paramIndex].id = param.id;
+                                        if(request->hasParam(param.id, true)) {
+                                            data.midiParams[paramIndex].value = request->getParam(param.id, true)->value();
+                                        } else if(param.defaultValue && strlen(param.defaultValue) > 0) {
+                                            data.midiParams[paramIndex].value = String(param.defaultValue);
+                                        } else {
+                                            data.midiParams[paramIndex].value = "";
+                                        }
+                                        paramIndex++;
+                                    }
+                                }
+                            }
+                        }
+                        data.midiParamCount = paramIndex;  /* Ajuster le count réel */
                     }
                 }
                 
-                /* Valider les valeurs */
-                if(mux_id >= MAX_MUXES) {
-                    request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid complex ID (0-" + String(MAX_MUXES - 1) + ")\"}");
+                /* Lire paramètres OSC/Debug */
+                data.oscEnabled = request->hasParam("oscEnabled", true) && request->getParam("oscEnabled", true)->value() == "true";
+                data.oscAddress = request->hasParam("oscAddress", true) ? request->getParam("oscAddress", true)->value() : "";
+                data.oscFormat = request->hasParam("oscFormat", true) ? request->getParam("oscFormat", true)->value() : "float";
+                data.dbgEnabled = request->hasParam("dbgEnabled", true) && request->getParam("dbgEnabled", true)->value() == "true";
+                data.dbgHeader = request->hasParam("dbgHeader", true) ? request->getParam("dbgHeader", true)->value() : "";
+                
+                /* Appeler le handler générique */
+                if(handler->addComponent(data)) {
+                    /* Composant complexe ajouté avec succès */
+                } else {
+                    /* Libérer la mémoire allouée */
+                    delete[] data.additionalPins;
+                    if(data.formFields) delete[] data.formFields;
+                    if(data.midiParams) delete[] data.midiParams;
+                    request->send(500, "application/json", "{\"status\":\"error\",\"error\":\"Failed to add complex component\"}");
                     return;
                 }
                 
-                /* Sauvegarder dans MuxManager */
-                if(g_componentManager.addMux(mux_id, sig, s0, s1, s2, s3, en, analog_min, analog_max,
-                                             true, osc_format, filter_intensity, ccBase, midiChan, oscBase.c_str())) {
-                    /* Sauvegarder aussi les clés NVS spécifiques aux mux (mux_X, mux_thresh_X) pour persistance */
-                    Preferences prefs;
-                    prefs.begin("nidmi", false);
-                    String mux_key = "mux_" + String(mux_id);
-                    String mux_config = String(sig) + "," + String(s0) + "," + String(s1) + "," +
-                                       String(s2) + "," + String(s3) + "," + String(en) + "," +
-                                       String(ccBase) + "," + String(midiChan) + "," +
-                                       "1," + String((int)osc_format) + "," +
-                                       String(filter_intensity) + "," + String(oscBase);
-                    prefs.putString(mux_key.c_str(), mux_config);
-                    
-                    /* Sauvegarder les seuils */
-                    String thresh_key = "mux_thresh_" + String(mux_id);
-                    uint8_t buffer[5];
-                    buffer[0] = 0x01;
-                    buffer[1] = analog_min & 0xFF;
-                    buffer[2] = (analog_min >> 8) & 0xFF;
-                    buffer[3] = analog_max & 0xFF;
-                    buffer[4] = (analog_max >> 8) & 0xFF;
-                    prefs.putBytes(thresh_key.c_str(), buffer, 5);
-                    prefs.end();
-                }
+                /* Libérer la mémoire allouée */
+                delete[] data.additionalPins;
+                if(data.formFields) delete[] data.formFields;
+                if(data.midiParams) delete[] data.midiParams;
             }
-            /* Ici, on peut ajouter d'autres types de composants complexes à l'avenir */
-            /* Par exemple : else if(isOtherComponentType) { ... } */
         }
         
         /* Mettre à jour ConfigCache */
@@ -541,63 +505,32 @@ void setupPinAPI(AsyncWebServer& server) {
                 }
             }
             
-            /* Chercher dans MuxManager si un MUX utilise ce GPIO comme SIG */
-            uint8_t foundMuxId = 255;
-            if(sigGpio != 255) {
-                for(uint8_t i = 0; i < MAX_MUXES; i++) {
-                    const MuxConfig* cfg = g_componentManager.getMuxConfig(i);
-                    if(cfg && cfg->enabled && cfg->sig_pin == sigGpio) {
-                        foundMuxId = i;
-                        break;
+            /* Chercher si c'est un composant avec additionalPins en lisant la config NVS */
+            Preferences preferences;
+            preferences.begin("nidmi", true);
+            String key = "pin_" + pinLabel;
+            String configStr = preferences.getString(key.c_str(), "");
+            preferences.end();
+            
+            /* Extraire le role depuis la config NVS si disponible */
+            String role = "";
+            if(configStr.length() > 0) {
+                int roleStart = configStr.indexOf("\"role\":\"");
+                if(roleStart >= 0) {
+                    roleStart += 8;  /* Longueur de "\"role\":\"" */
+                    int roleEnd = configStr.indexOf("\"", roleStart);
+                    if(roleEnd > roleStart) {
+                        role = configStr.substring(roleStart, roleEnd);
                     }
                 }
             }
             
-            /* Si pas trouvé dans MuxManager, essayer depuis NVS (fallback) */
-            if(foundMuxId == 255) {
-                Preferences preferences;
-                preferences.begin("nidmi", true);
-                String key = "pin_" + pinLabel;
-                String configStr = preferences.getString(key.c_str(), "");
-                preferences.end();
-                
-                bool hasAdditionalPins = configStr.indexOf("\"additionalPins\"") >= 0;
-                if(hasAdditionalPins) {
-                    int complexIdStart = configStr.indexOf("\"complexId\":");
-                    if(complexIdStart >= 0) {
-                        int complexIdEnd = configStr.indexOf(",", complexIdStart);
-                        if(complexIdEnd < 0) complexIdEnd = configStr.indexOf("}", complexIdStart);
-                        if(complexIdEnd >= 0) {
-                            String complexIdStr = configStr.substring(complexIdStart + 12, complexIdEnd);
-                            foundMuxId = complexIdStr.toInt();
-                        }
-                    }
-                }
-            }
-            
-            /* Si on a trouvé un composant complexe, le supprimer */
-            if(foundMuxId != 255) {
-                /* Pour l'instant, on utilise encore MuxManager pour les MUX */
-                if(g_componentManager.removeMux(foundMuxId)) {
-                    /* Supprimer aussi les clés NVS (génériques et spécifiques MUX pour compatibilité) */
-                    Preferences prefs;
-                    prefs.begin("nidmi", false);
-                    /* Clés génériques */
-                    String pinLabelKey = "pinLabel_complex_" + String(foundMuxId);
-                    prefs.remove(pinLabelKey.c_str());
-                    String roleKey = "role_complex_" + String(foundMuxId);
-                    prefs.remove(roleKey.c_str());
-                    /* Clés spécifiques MUX (pour compatibilité et MuxManager) */
-                    String muxKey = "mux_" + String(foundMuxId);
-                    prefs.remove(muxKey.c_str());
-                    String threshKey = "mux_thresh_" + String(foundMuxId);
-                    prefs.remove(threshKey.c_str());
-                    /* Clés anciennes pour compatibilité */
-                    String oldPinLabelKey = "pinLabel_mux_" + String(foundMuxId);
-                    prefs.remove(oldPinLabelKey.c_str());
-                    String oldRoleKey = "role_mux_" + String(foundMuxId);
-                    prefs.remove(oldRoleKey.c_str());
-                    prefs.end();
+            /* Si role trouvé et handler disponible, utiliser le handler générique */
+            if(role.length() > 0) {
+                ComplexHandler* handler = ComplexHandlerRegistry::getHandler(role.c_str());
+                if(handler && sigGpio != 255) {
+                    /* Utiliser le handler générique pour supprimer le composant */
+                    handler->removeComponent(pinLabel.c_str(), sigGpio);
                 }
             }
             

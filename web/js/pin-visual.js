@@ -135,7 +135,7 @@ function drawBoard() {
         /* RESTRICTIONS DÉSACTIVÉES - Permettre le clic même sur les pins grisées */
         /* Le grisage est conservé pour l'information visuelle uniquement */
         /*
-        // Ne pas permettre le clic si la pin est grisée (déjà configurée)
+        Ne pas permettre le clic si la pin est grisée (déjà configurée)
         if (r.classList.contains('busDisabled')) {
           return;
         }

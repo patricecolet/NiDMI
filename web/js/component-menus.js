@@ -18,11 +18,11 @@ function checkComponentAvailability(def, pinType, pin) {
   return true;
   
   /* CODE COMMENTÉ - LOGIQUE DE VÉRIFICATION DES ADDITIONAL PINS
-  // Composants sans additionalPins sont toujours disponibles
+  Composants sans additionalPins sont toujours disponibles
   if (!hasAdditionalPins(def)) return true;
   
-  // Pour l'instant, on vérifie uniquement pour les pins analogiques
-  // (les composants avec additionalPins sont généralement sur pins analogiques)
+  Pour l'instant, on vérifie uniquement pour les pins analogiques
+  (les composants avec additionalPins sont généralement sur pins analogiques)
   if (pinType !== 0) return true;
   
   if (!pin || pin.gpio === undefined) return false;
@@ -32,22 +32,17 @@ function checkComponentAvailability(def, pinType, pin) {
   }
   
   try {
-    const sigGpio = parseInt(pin.gpio);
-    if (isNaN(sigGpio)) return false;
+    const mainPinGpio = parseInt(pin.gpio);
+    if (isNaN(mainPinGpio)) return false;
     
-    // Utiliser la nouvelle fonction générique basée sur la définition
+    Utiliser la nouvelle fonction générique basée sur la définition
     if (typeof GpioManager.areAdditionalPinsAvailable === 'function') {
-      // Obtenir les GPIOs déjà utilisés (depuis pcfg)
+      Obtenir les GPIOs déjà utilisés (depuis pcfg)
       const usedGpios = GpioManager.getUsedGpios ? GpioManager.getUsedGpios([]) : new Set();
-      return GpioManager.areAdditionalPinsAvailable(def, sigGpio, usedGpios);
+      return GpioManager.areAdditionalPinsAvailable(def, mainPinGpio, usedGpios);
     }
     
-    // Fallback pour compatibilité (ancienne méthode hardcodée)
-    if (typeof GpioManager.areAddressPinsAvailable === 'function') {
-      const usedGpios = GpioManager.getUsedGpios ? GpioManager.getUsedGpios([]) : new Set();
-      return GpioManager.areAddressPinsAvailable(sigGpio, usedGpios);
-    }
-    
+    Note: areAddressPinsAvailable supprimé - utiliser areAdditionalPinsAvailable() pour une vérification générique
     return false;
   } catch (err) {
     console.warn('[checkComponentAvailability] Erreur vérification disponibilité:', err);
@@ -100,8 +95,8 @@ function populateFamilySelect(pinType, pin) {
     /* RESTRICTIONS DÉSACTIVÉES - TOUS LES COMPOSANTS SONT AJOUTÉS */
     familiesMap.get(familyId).components.push(def);
     
-    /* CODE COMMENTÉ - VÉRIFICATION DE DISPONIBILITÉ
-    // Vérifier disponibilité pour les composants avec additionalPins
+    /* CODE COMMENTÉ - VÉRIFICATION DE DISPONIBILITÉ */
+    /* Vérifier disponibilité pour les composants avec additionalPins
     if (checkComponentAvailability(def, pinType, pin)) {
       familiesMap.get(familyId).components.push(def);
     }
@@ -199,10 +194,10 @@ function populateComponentSelect(familyId, pinType, pin) {
       disabled: !def.implemented /* Désactiver uniquement si non implémenté */
     };
     
-    /* CODE COMMENTÉ - VÉRIFICATION DE DISPONIBILITÉ
-    const available = checkComponentAvailability(def, pinType, pin);
+    /* CODE COMMENTÉ - VÉRIFICATION DE DISPONIBILITÉ */
+    /* const available = checkComponentAvailability(def, pinType, pin);
     
-    // Afficher même si non disponible si non implémenté (pour info)
+    Afficher même si non disponible si non implémenté (pour info)
     if (available || !def.implemented) {
       options[def.id] = {
         label: def.displayName,

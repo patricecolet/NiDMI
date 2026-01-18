@@ -4,16 +4,24 @@
  */
 
 /**
- * Trouve le rôle d'un composant complexe utilisant une pin comme SIG
- * @param {number} sigGpio - GPIO de la pin SIG
+ * Trouve le rôle d'un composant complexe utilisant une pin comme pin principale
+ * @param {number} mainPinGpio - GPIO de la pin principale
  * @returns {string|null} Rôle du composant ou null
  */
-function findComplexRoleBySigGpio(sigGpio) {
+function findComplexRoleByMainPinGpio(mainPinGpio) {
   if (typeof pcfg === 'undefined' || !pcfg) return null;
   
   const existingComplexLabel = Object.keys(pcfg).find(lbl => {
     const cfg = pcfg[lbl];
-    return cfg && cfg.additionalPins && typeof cfg.additionalPins === 'object' && cfg.additionalPins.sig === sigGpio;
+    if(!cfg || !cfg.role) return false;
+    const cfgRole = migrateRole(cfg.role);
+    const cfgDef = typeof getComponentDefinition === 'function' ? getComponentDefinition(cfgRole) : null;
+    const cfgHasAdditionalPins = cfgDef && cfgDef.additionalPins && Array.isArray(cfgDef.additionalPins) && cfgDef.additionalPins.length > 0
+      && cfg.additionalPins && typeof cfg.additionalPins === 'object' && Object.keys(cfg.additionalPins).length > 0;
+    if(!cfgHasAdditionalPins) return false;
+    /* Vérifier si cette pin est utilisée comme pin principale du composant complexe */
+    const complexPin = caps && caps.pins ? caps.pins.find(p => p.label === lbl) : null;
+    return complexPin && parseInt(complexPin.gpio) === mainPinGpio;
   });
   
   if (existingComplexLabel) {
@@ -184,24 +192,47 @@ function setupMenuHandlers(lbl, pinType, pin) {
  */
 function updateConfig() {
   const lbl = $('#selPin')?.textContent || '';
-  const selectedRole = $('#funcSelect')?.value || '';
+  let selectedRole = $('#funcSelect')?.value || '';
   
-  console.log('[updateConfig] Début, lbl:', lbl, 'cur:', cur, 'selectedRole:', selectedRole);
+  /* Si selectedRole est vide mais qu'on a une config dans pcfg, récupérer le rôle depuis pcfg */
+  if (!selectedRole && cur && pcfg && pcfg[cur] && pcfg[cur].role) {
+    selectedRole = pcfg[cur].role;
+  }
+  
+  /* Si on n'a toujours pas de selectedRole, sortir tôt */
+  if (!selectedRole) {
+    return;
+  }
   
   /* Vérifier si le rôle a changé pour décider si on doit régénérer le formulaire */
   const previousRole = (cur && pcfg && pcfg[cur]) ? migrateRoleValue(pcfg[cur].role) : null;
   const currentRole = selectedRole ? migrateRoleValue(selectedRole) : null;
   const roleChanged = previousRole !== currentRole;
   
-  /* Lire d'abord les valeurs actuelles du formulaire AVANT de régénérer */
-  /* Cela permet de sauvegarder les modifications en cours */
-  if (cur && typeof readCfg === 'function') {
-    const updatedCfg = readCfg(selectedRole);
-    if (updatedCfg && updatedCfg.role) {
-      /* Mettre à jour pcfg avec les nouvelles valeurs du formulaire */
-      pcfg[cur] = updatedCfg;
-      console.log('[updateConfig] Config mise à jour depuis formulaire, pcfg[cur]:', pcfg[cur]);
+  /* Si le rôle n'a pas changé, lire les valeurs actuelles du formulaire */
+  /* Attendre un peu pour s'assurer que les champs additionalPins sont créés */
+  if (!roleChanged && cur && typeof readCfg === 'function') {
+    /* Utiliser setTimeout pour s'assurer que les champs sont dans le DOM */
+    setTimeout(() => {
+      const updatedCfg = readCfg(selectedRole);
+      if (updatedCfg && updatedCfg.role) {
+        /* Mettre à jour pcfg avec les nouvelles valeurs du formulaire */
+        pcfg[cur] = updatedCfg;
+        console.log('[updateConfig] Config mise à jour depuis formulaire (rôle inchangé), pcfg[cur]:', pcfg[cur]);
+        console.log('[updateConfig] additionalPins sauvegardés:', updatedCfg.additionalPins);
+        /* Note: complexId supprimé */
+      }
+      /* Mettre à jour la liste et les visuels après avoir sauvegardé les modifications */
+      updatePinsList();
+      updateBusVisuals();
+    }, 10);  /* Délai court pour s'assurer que les champs sont dans le DOM */
+    
+    /* Mettre à jour la visibilité des paramètres MIDI */
+    updateRtpForRole(selectedRole);
+    if (typeof MidiConfig !== 'undefined' && MidiConfig.updateVisibility) {
+      MidiConfig.updateVisibility();
     }
+    return; /* Sortir tôt si on ne régénère pas le formulaire */
   }
   
   /* Régénérer le formulaire seulement si le rôle a changé */
@@ -209,63 +240,49 @@ function updateConfig() {
     /* Utiliser la config mise à jour (ou celle de pcfg) pour régénérer le formulaire */
     const currentCfg = (cur && pcfg && pcfg[cur]) ? pcfg[cur] : (pcfg && pcfg[lbl] ? pcfg[lbl] : {});
     showRoleCards(selectedRole, currentCfg);
-  } else {
-    /* Si le rôle n'a pas changé, juste mettre à jour la visibilité des paramètres MIDI */
+    /* Après avoir régénéré le formulaire, lire les valeurs si elles existent déjà */
+    setTimeout(() => {
+      if (cur && typeof readCfg === 'function') {
+        const updatedCfg = readCfg(selectedRole);
+        if (updatedCfg && updatedCfg.role) {
+          /* Mettre à jour pcfg avec les nouvelles valeurs du formulaire */
+          pcfg[cur] = updatedCfg;
+          console.log('[updateConfig] Config mise à jour depuis formulaire (après régénération), pcfg[cur]:', pcfg[cur]);
+          console.log('[updateConfig] additionalPins sauvegardés:', updatedCfg.additionalPins);
+        }
+      }
+    }, 100);
+    
     updateRtpForRole(selectedRole);
     if (typeof MidiConfig !== 'undefined' && MidiConfig.updateVisibility) {
       MidiConfig.updateVisibility();
     }
-    /* Mettre à jour la liste et les visuels sans régénérer le formulaire */
-    updatePinsList();
-    updateBusVisuals();
-    return; /* Sortir tôt si on ne régénère pas le formulaire */
-  }
-  
-  /* Vérifier si les champs additionalPins sont créés */
-  setTimeout(() => {
-    const migratedRole = migrateRoleValue(selectedRole);
-    const def = getComponentDef(migratedRole);
-    if (hasAdditionalPins(def) && def.additionalPins) {
-      console.log('[updateConfig] Vérification champs additionalPins créés...');
-      def.additionalPins.forEach(ap => {
-        if (ap.id) {
-          const fieldId = FormGenerator.getFieldId(def, ap.id);
-          const field = $('#' + fieldId);
-          console.log('[updateConfig] Champ', ap.id, 'fieldId:', fieldId, 'trouvé:', !!field, 'value:', field ? field.value : 'N/A');
+    
+    /* Initialiser le formulaire (gère simples et complexes) - attendre que les champs soient créés */
+    if (cur) {
+      console.log('[updateConfig] Initialisation formulaire pour cur:', cur);
+      /* Attendre un peu pour que generateAdditionalPins() crée les champs */
+      setTimeout(() => {
+        if (cur) {
+          /* Passer le rôle explicitement pour éviter les problèmes de timing */
+          initComponentForm(cur, selectedRole);
+          /* Attendre que initComponentForm() ait rempli les champs avant de mettre à jour la liste */
+          setTimeout(() => {
+            if (cur) {
+              console.log('[updateConfig] Mise à jour de la liste et des visuels');
+              updatePinsList();
+              updateBusVisuals();
+            } else {
+              console.warn('[updateConfig] cur n\'est plus défini après timeout');
+            }
+          }, 100);
+        } else {
+          console.warn('[updateConfig] cur n\'est plus défini avant initComponentForm');
         }
-      });
+      }, 50);
+    } else {
+      console.warn('[updateConfig] cur n\'est pas défini, lbl:', lbl);
     }
-  }, 50);
-  
-  updateRtpForRole(selectedRole);
-  if (typeof MidiConfig !== 'undefined' && MidiConfig.updateVisibility) {
-    MidiConfig.updateVisibility();
-  }
-  
-  /* Initialiser le formulaire (gère simples et complexes) - attendre que les champs soient créés */
-  if (cur) {
-    console.log('[updateConfig] Initialisation formulaire pour cur:', cur);
-    /* Attendre un peu pour que generateAdditionalPins() crée les champs */
-    setTimeout(() => {
-      if (cur) {
-        /* Passer le rôle explicitement pour éviter les problèmes de timing */
-        initComponentForm(cur, selectedRole);
-        /* Attendre que initComponentForm() ait rempli les champs avant de mettre à jour la liste */
-        setTimeout(() => {
-          if (cur) {
-            console.log('[updateConfig] Mise à jour de la liste et des visuels');
-            updatePinsList();
-            updateBusVisuals();
-          } else {
-            console.warn('[updateConfig] cur n\'est plus défini après timeout');
-          }
-        }, 100);
-      } else {
-        console.warn('[updateConfig] cur n\'est plus défini avant initComponentForm');
-      }
-    }, 50);
-  } else {
-    console.warn('[updateConfig] cur n\'est pas défini, lbl:', lbl);
   }
 }
 
@@ -300,7 +317,7 @@ function updFunc(lbl) {
   } else if (lbl?.startsWith('D')) {
     pinType = 1;
   } else {
-    return; // Bus purs non implémentés
+    return; /* Bus purs non implémentés */
   }
 
   console.log('[updFunc] pinType calculé:', pinType);
@@ -313,9 +330,9 @@ function updFunc(lbl) {
 
   /* Vérifier si cette pin est utilisée par un composant complexe sauvegardé */
   if (!currentRole && pin && pin.gpio !== undefined && typeof pcfg !== 'undefined' && pcfg) {
-    const sigGpio = parseInt(pin.gpio);
-    if (!isNaN(sigGpio)) {
-      currentRole = findComplexRoleBySigGpio(sigGpio);
+    const mainPinGpio = parseInt(pin.gpio);
+    if (!isNaN(mainPinGpio)) {
+      currentRole = findComplexRoleByMainPinGpio(mainPinGpio);
       if (currentRole) {
         console.log('[updFunc] Pin utilisée par composant complexe sauvegardé, role:', currentRole);
       }

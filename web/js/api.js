@@ -385,39 +385,64 @@ async function saveAll(){
   msg.style.color='#ef4444';
   return;
  }
+ 
+ /* Relire la configuration de la pin actuellement sélectionnée depuis le formulaire */
+ /* Cela garantit que les modifications en cours sont sauvegardées */
+ if(typeof cur !== 'undefined' && cur && typeof readCfg === 'function') {
+   const currentCfg = readCfg();
+   if(currentCfg && currentCfg.role) {
+     pcfg[cur] = currentCfg;
+     console.log('[saveAll] Config de la pin courante relue depuis formulaire, cur:', cur, 'additionalPins:', currentCfg.additionalPins);
+   }
+ }
+ 
  /* Sauvegarder tous les composants (simples et complexes) via /api/pins/set */
  const ps=Object.keys(pcfg).map(async lbl=>{
  const c=pcfg[lbl];
  if(!c||!c.role) return null;
- /* Détecter composant complexe depuis pcfg.additionalPins */
- const hasAdditionalPins = c.additionalPins && typeof c.additionalPins === 'object' && c.additionalPins.sig !== undefined;
+ 
+ console.log('[saveAll] Traitement pin:', lbl, 'c:', c);
+ console.log('[saveAll] c.additionalPins:', c.additionalPins);
+ 
  const role = migrateRole(c.role);
  const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
  
+ /* Détecter composant complexe depuis la définition (plus fiable que vérifier sig) */
+ const hasAdditionalPins = def && def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0 
+   && c.additionalPins && typeof c.additionalPins === 'object' && Object.keys(c.additionalPins).length > 0;
+ 
+ console.log('[saveAll] hasAdditionalPins:', hasAdditionalPins, 'role:', role, 'def trouvée:', !!def, 'def.additionalPins count:', def ? (def.additionalPins ? def.additionalPins.length : 0) : 0, 'c.additionalPins keys:', c.additionalPins ? Object.keys(c.additionalPins) : []);
+ 
  /* Si composant simple, vérifier et supprimer les complexes sur cette pin (chercher dans pcfg) */
+ /* NOTE: Les composants complexes sont détectés par leur définition, pas par la présence de sig */
  if(!hasAdditionalPins && caps && caps.pins) {
    const currentPin = caps.pins.find(p => p.label === lbl);
    if(currentPin) {
-     const sigGpio = parseInt(currentPin.gpio);
-     /* Chercher composant complexe dans pcfg par SIG */
+     const mainPinGpio = parseInt(currentPin.gpio);
+     /* Chercher composant complexe dans pcfg par pinLabel (la pin principale du composant complexe) */
      const existingComplexLabel = Object.keys(pcfg).find(plbl => {
        const cfg = pcfg[plbl];
-       return cfg && cfg.additionalPins && cfg.additionalPins.sig === sigGpio;
+       if(!cfg || !cfg.role) return false;
+       const cfgRole = migrateRole(cfg.role);
+       const cfgDef = typeof getComponentDefinition === 'function' ? getComponentDefinition(cfgRole) : null;
+       const cfgHasAdditionalPins = cfgDef && cfgDef.additionalPins && Array.isArray(cfgDef.additionalPins) && cfgDef.additionalPins.length > 0
+         && cfg.additionalPins && typeof cfg.additionalPins === 'object' && Object.keys(cfg.additionalPins).length > 0;
+       if(!cfgHasAdditionalPins) return false;
+       /* Vérifier si cette pin est utilisée comme pin principale du composant complexe */
+       const complexPin = caps.pins.find(p => p.label === plbl);
+       return complexPin && parseInt(complexPin.gpio) === mainPinGpio;
      });
      if(existingComplexLabel) {
        const existingComplex = pcfg[existingComplexLabel];
-       const complexId = existingComplex.complexId;
-       if(complexId !== undefined) {
-         console.log(`[saveAll] Suppression du composant complexe ${complexId} sur pin SIG ${sigGpio} (remplacé par ${lbl})`);
-         /* Supprimer via /api/pins/delete (unifié) */
-         try {
-           const formData = new URLSearchParams();
-           formData.append('pin', existingComplexLabel);
-           await fetch('/api/pins/delete', {method: 'POST', body: formData});
-           console.log(`[saveAll] Composant complexe ${complexId} supprimé via /api/pins/delete`);
-         } catch(e) {
-           console.error('[saveAll] Erreur suppression composant complexe:', e);
-         }
+       console.log(`[saveAll] Suppression du composant complexe sur pin principale ${mainPinGpio} (remplacé par ${lbl})`);
+       /* Supprimer via /api/pins/delete (unifié) */
+       try {
+         const formData = new URLSearchParams();
+         formData.append('pin', existingComplexLabel);
+         await fetch('/api/pins/delete', {method: 'POST', body: formData});
+         console.log(`[saveAll] Composant complexe supprimé via /api/pins/delete`);
+       } catch(e) {
+         console.error('[saveAll] Erreur suppression composant complexe:', e);
        }
      }
    }
@@ -463,23 +488,33 @@ async function saveAll(){
  
  /* Envoyer additionalPins si présent (générique basé sur def.additionalPins) */
  if(hasAdditionalPins && c.additionalPins && def && def.additionalPins && Array.isArray(def.additionalPins)) {
+   console.log('[saveAll] Envoi additionalPins, c.additionalPins:', c.additionalPins);
    /* Envoyer dynamiquement tous les additionalPins depuis la définition */
    def.additionalPins.forEach(pinDef => {
-     if(pinDef && pinDef.id && c.additionalPins[pinDef.id] !== undefined && c.additionalPins[pinDef.id] !== null) {
+     if(pinDef && pinDef.id) {
        const value = c.additionalPins[pinDef.id];
-       /* Ne pas envoyer si valeur est 255 (pin non connectée) sauf si c'est optionnel */
-       if(value !== 255 || !pinDef.optional) {
-         p.set(pinDef.id, value);
-         console.log('[saveAll] additionalPin envoyé:', pinDef.id, '=', value);
+       console.log('[saveAll] Vérification pinDef.id:', pinDef.id, 'value:', value, 'optional:', pinDef.optional);
+       
+       if(value !== undefined && value !== null) {
+         /* Ne pas envoyer si valeur est 255 (pin non connectée) sauf si c'est optionnel */
+         if(value !== 255 || !pinDef.optional) {
+           p.set(pinDef.id, value);
+           console.log('[saveAll] additionalPin envoyé:', pinDef.id, '=', value);
+         } else {
+           console.log('[saveAll] additionalPin ignoré (255 et optionnel):', pinDef.id);
+         }
+       } else if(!pinDef.optional && pinDef.defaultValue !== undefined && pinDef.defaultValue !== 255) {
+         /* Pin requise absente, utiliser la valeur par défaut */
+         p.set(pinDef.id, pinDef.defaultValue);
+         console.log('[saveAll] additionalPin par défaut:', pinDef.id, '=', pinDef.defaultValue);
+       } else {
+         console.warn('[saveAll] ERREUR: Pin requise absente:', pinDef.id, 'value:', value, 'defaultValue:', pinDef.defaultValue);
        }
-     } else if(pinDef && pinDef.id && !pinDef.optional && pinDef.defaultValue !== undefined && pinDef.defaultValue !== 255) {
-       /* Pin requise absente, utiliser la valeur par défaut */
-       p.set(pinDef.id, pinDef.defaultValue);
-       console.log('[saveAll] additionalPin par défaut:', pinDef.id, '=', pinDef.defaultValue);
      }
    });
-   /* complexId pour maintenir l'ID */
-   if(c.complexId !== undefined) p.set('complexId', c.complexId);
+   /* Note: complexId supprimé - plus besoin d'envoyer un ID explicite */
+ } else {
+   console.warn('[saveAll] ERREUR: hasAdditionalPins:', hasAdditionalPins, 'c.additionalPins:', c.additionalPins, 'def:', !!def, 'def.additionalPins:', def ? def.additionalPins : null);
  }
 
  // Champs OSC et Debug (communs à tous)

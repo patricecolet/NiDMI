@@ -83,28 +83,14 @@ function initAdditionalPins(def, pin, usedGpios) {
     return;
   }
 
-  const sigGpio = parseInt(pin.gpio);
-  if (isNaN(sigGpio)) {
+  const mainPinGpio = parseInt(pin.gpio);
+  if (isNaN(mainPinGpio)) {
     console.warn('[initAdditionalPins] GPIO invalide pour pin:', pin.label);
     return;
   }
 
-  /* Extraire les IDs des pins d'adresse depuis les définitions */
-  const addressPinIds = def.additionalPins
-    .filter(ap => ap.id && ap.pinType === 1 && !ap.optional && ap.id !== 'sig' && ap.id !== 'en')
-    .map(ap => ap.id);
-
-  console.log('[initAdditionalPins] addressPinIds extraits:', addressPinIds);
-
-  /* RESTRICTIONS DÉSACTIVÉES - Calcul automatique des pins désactivé */
-  /* L'utilisateur devra sélectionner manuellement les pins */
-  let calculatedAddressPins = {};
-  /*
-  if (addressPinIds.length > 0 && typeof GpioManager.calculateAddressPins === 'function') {
-    calculatedAddressPins = GpioManager.calculateAddressPins(sigGpio, usedGpios, addressPinIds);
-    console.log('[initAdditionalPins] calculatedAddressPins:', calculatedAddressPins);
-  }
-  */
+  /* Note: Calcul automatique des pins additionnelles supprimé du frontend */
+  /* Le backend doit gérer toute la logique spécifique aux composants */
 
   /* Initialiser toutes les additionalPins dynamiquement */
   def.additionalPins.forEach(additionalPin => {
@@ -116,27 +102,11 @@ function initAdditionalPins(def, pin, usedGpios) {
       return;
     }
 
-    /* Pin principale (SIG) - utiliser le GPIO de la pin sélectionnée */
-    if (additionalPin.id === 'sig') {
-      field.value = sigGpio;
-      console.log('[initAdditionalPins] Pin SIG initialisée:', sigGpio);
-    }
-    /* Pins d'adresse - utiliser les valeurs calculées */
-    else if (addressPinIds.includes(additionalPin.id)) {
-      const calculatedValue = calculatedAddressPins[additionalPin.id];
-      if (calculatedValue !== null && calculatedValue !== undefined) {
-        const valueStr = String(calculatedValue);
-        const hasOption = Array.from(field.options).some(opt => opt.value === valueStr);
-        if (hasOption) {
-          field.value = valueStr;
-          console.log('[initAdditionalPins] Pin d\'adresse', additionalPin.id, 'initialisée:', calculatedValue);
-        } else {
-          console.warn('[initAdditionalPins] Valeur calculée', calculatedValue, 'n\'existe pas dans les options');
-          if (field.options.length > 0) {
-            field.value = field.options[0].value;
-          }
-        }
-      }
+    /* Si cette additionalPin correspond au type de la pin principale, initialiser avec le GPIO de la pin principale */
+    const currentPin = caps && caps.pins ? caps.pins.find(p => p && p.label === currentPinLabel) : null;
+    if (currentPin && currentPin.type !== undefined && additionalPin.pinType === parseInt(currentPin.type) && !additionalPin.optional) {
+      field.value = mainPinGpio;
+      console.log('[initAdditionalPins] Pin principale initialisée automatiquement (type correspondant):', additionalPin.id, '=', mainPinGpio);
     }
     /* Pins optionnelles - utiliser la valeur par défaut */
     else if (additionalPin.optional) {
@@ -190,15 +160,13 @@ function initAdditionalPins(def, pin, usedGpios) {
     if (typeof pcfg !== 'undefined') {
       Object.keys(pcfg).forEach(lbl => {
         const cfg = pcfg[lbl];
-        if (cfg && cfg.complexId !== undefined) {
-          usedIds.push(parseInt(cfg.complexId));
-        }
+        /* Note: complexId supprimé - plus besoin de vérifier les IDs utilisés */
       });
     }
     const availableId = [0, 1].find(id => !usedIds.includes(id));
     if (availableId !== undefined) {
       idField.value = availableId;
-      console.log('[initAdditionalPins] complexId initialisé:', availableId);
+      /* Note: complexId supprimé - plus besoin d'initialiser l'ID */
     } else {
       console.warn('[initAdditionalPins] Aucun ID disponible');
     }
@@ -218,8 +186,6 @@ function initAdditionalPins(def, pin, usedGpios) {
  * @param {string} pinLabel - Label de la pin (ex: "A0")
  */
 function initComponentForm(pinLabel, roleOverride = null) {
-  console.log('[initComponentForm] Début, pinLabel:', pinLabel, 'roleOverride:', roleOverride);
-  
   if (typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) {
     console.warn('[initComponentForm] caps ou caps.pins manquant');
     return;
@@ -251,7 +217,6 @@ function initComponentForm(pinLabel, roleOverride = null) {
   }
 
   const hasAdditionalPinsFlag = hasAdditionalPins(def);
-  console.log('[initComponentForm] Définition trouvée, def.id:', def.id, 'hasAdditionalPins:', hasAdditionalPinsFlag);
 
   /* Vérifier si configuration existe dans pcfg */
   const pcfgEntry = typeof pcfg !== 'undefined' && pcfg[pinLabel] ? pcfg[pinLabel] : null;
@@ -260,13 +225,21 @@ function initComponentForm(pinLabel, roleOverride = null) {
   if (pcfgEntry) {
     /* Configuration existe, vérifier si le rôle correspond */
     const pcfgRole = migrateRoleValue(pcfgEntry.role || '');
-    console.log('[initComponentForm] Configuration trouvée dans pcfg, pcfgRole:', pcfgRole, 'currentSelectedRole:', currentSelectedRole);
-    /* Si le rôle correspond, appliquer la config */
-    if (pcfgRole && currentSelectedRole && pcfgRole === currentSelectedRole) {
-      applyCfg(pcfgEntry);
-      return;
+    const migratedCurrentRole = currentSelectedRole ? migrateRoleValue(currentSelectedRole) : null;
+    
+    /* Si le rôle correspond OU si le select n'est pas encore rempli, appliquer la config */
+    /* (applyCfg va mettre à jour le select avec le bon rôle et restaurer les valeurs) */
+    if (pcfgRole && (migratedCurrentRole === pcfgRole || !currentSelectedRole)) {
+      /* Attendre que les menus soient remplis et que les champs soient créés avant d'appliquer la config */
+      setTimeout(() => {
+        /* LIRE DEPUIS pcfg AU LIEU D'UTILISER LA RÉFÉRENCE CAPTURÉE */
+        const currentPcfgEntry = typeof pcfg !== 'undefined' && pcfg[pinLabel] ? pcfg[pinLabel] : null;
+        if (currentPcfgEntry) {
+          applyCfg(currentPcfgEntry);
+        }
+      }, 100);  /* Délai plus long pour s'assurer que les champs additionalPins sont créés */
+      return;  /* Ne pas initialiser avec les valeurs par défaut si une config existe */
     }
-    console.log('[initComponentForm] Rôle dans pcfg ne correspond pas, initialisation avec valeurs par défaut');
   }
 
   /* Pas de config : initialiser valeurs par défaut pour composants avec additionalPins uniquement */
@@ -275,10 +248,13 @@ function initComponentForm(pinLabel, roleOverride = null) {
       ? GpioManager.getUsedGpios([])
       : new Set();
     
-    initAdditionalPins(def, pin, usedGpios);
-    
-    if (typeof updateBusVisuals === 'function') {
-      updateBusVisuals();
-    }
+    /* Attendre que les champs soient créés avant d'initialiser */
+    setTimeout(() => {
+      initAdditionalPins(def, pin, usedGpios);
+      
+      if (typeof updateBusVisuals === 'function') {
+        updateBusVisuals();
+      }
+    }, 100);
   }
 }

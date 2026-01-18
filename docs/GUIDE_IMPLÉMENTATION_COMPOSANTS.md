@@ -134,12 +134,12 @@ struct ComponentDefinition {
     ComponentType type;          // Type enum
     PinType pinType;             // Type de pin requis
     bool implemented;            // true = disponible, false = grisé
-    bool isComplex;              // true = nécessite un manager
+    // Note: isComplex supprimé - utiliser additionalPinCount > 0 pour détecter un composant avec pins additionnelles
     bool supportsMidi;           // true = peut envoyer/recevoir MIDI
     bool supportsOsc;            // true = peut envoyer/recevoir OSC
     
-    // Pins additionnelles (pour composants complexes)
-    uint8_t additionalPinCount;
+    // Pins additionnelles (pour composants avec additionalPinCount > 0)
+    uint8_t additionalPinCount;  // 0 pour composant simple, >0 pour composant avec pins additionnelles
     AdditionalPinDef additionalPins[MAX_ADDITIONAL_PINS];
     
     // Messages MIDI supportés
@@ -192,7 +192,7 @@ struct Encoder {
     static constexpr ComponentType TYPE = ComponentType::ENCODER;
     static constexpr PinType PIN_TYPE = PinType::PIN_DIGITAL;
     static constexpr bool IMPLEMENTED = true;
-    static constexpr bool IS_COMPLEX = false;
+    // Note: IS_COMPLEX supprimé - utiliser additionalPinCount > 0 dans la définition
     
     // Valeurs par défaut
     static constexpr uint8_t DEFAULT_CC = 1;
@@ -205,10 +205,15 @@ struct Encoder {
     
     // Créer la définition
     static ComponentDefinition createDefinition() {
-        return {
-            ID, DISPLAY_NAME, nullptr,
-            TYPE, PIN_TYPE, IMPLEMENTED, IS_COMPLEX
-        };
+        ComponentDefinition def;
+        def.id = ID;
+        def.displayName = DISPLAY_NAME;
+        def.type = TYPE;
+        def.pinType = PIN_TYPE;
+        def.implemented = IMPLEMENTED;
+        // Note: isComplex supprimé - définir additionalPinCount > 0 pour les composants avec pins additionnelles
+        def.additionalPinCount = 0;  // 0 pour composant simple
+        return def;
     }
 };
 
@@ -345,7 +350,7 @@ struct Matrix {
     static constexpr const char* ID = "matrix";
     static constexpr const char* DISPLAY_NAME = "Matrice";
     static constexpr ComponentType TYPE = ComponentType::MATRIX;
-    static constexpr bool IS_COMPLEX = true;  // ← Indique un composant complexe
+    // Note: IS_COMPLEX supprimé - définir additionalPinCount > 0 dans createDefinition()
     
     static constexpr uint8_t MAX_ROWS = 8;
     static constexpr uint8_t MAX_COLS = 8;
@@ -384,8 +389,8 @@ Les composants sont exposés au frontend via l'API :
 ```
 GET /api/components/definitions
 → [
-    {"id":"potentiometer","displayName":"Potentiomètre","pinType":0,"implemented":true,"isComplex":false},
-    {"id":"button","displayName":"Bouton","pinType":1,"implemented":true,"isComplex":false},
+    {"id":"potentiometer","displayName":"Potentiomètre","pinType":0,"implemented":true,"additionalPinCount":0},
+    {"id":"button","displayName":"Bouton","pinType":1,"implemented":true,"additionalPinCount":0},
     ...
   ]
 ```
@@ -502,7 +507,7 @@ struct MuxBase {
     // Code commun à tous les MUX
     static constexpr uint8_t NUM_ADDRESS_PINS = 4;
     static constexpr PinType PIN_TYPE = PinType::PIN_ANALOG;
-    static constexpr bool IS_COMPLEX = true;
+    // Note: IS_COMPLEX supprimé - définir additionalPinCount > 0 dans createDefinition()
     // ...
 };
 
