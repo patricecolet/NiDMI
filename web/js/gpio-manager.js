@@ -223,6 +223,7 @@ const GpioManager = {
    * @param {number} sigGpio - GPIO de la pin signal (SIG)
    * @param {Set} excludeUsedGpios - Set des GPIOs à exclure (optionnel)
    * @returns {boolean} true si au moins 4 pins digitales sont disponibles
+   * @deprecated Utiliser areAdditionalPinsAvailable() à la place pour une vérification basée sur la définition
    */
   areAddressPinsAvailable(sigGpio, excludeUsedGpios = null) {
     if(typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) return false;
@@ -234,9 +235,66 @@ const GpioManager = {
     const usedGpios = excludeUsedGpios instanceof Set ? new Set(excludeUsedGpios) : (excludeUsedGpios ? new Set(excludeUsedGpios) : new Set());
     // Exclure le GPIO SIG lui-même
     usedGpios.delete(sigGpio);
-    // Vérifier qu'il y a au moins 4 pins digitales disponibles
+    // Vérifier qu'il y a au moins 4 pins digitales disponibles (fallback pour compatibilité)
     const availablePins = this.getAvailableDigitalPins(usedGpios);
     return Array.isArray(availablePins) && availablePins.length >= 4;
+  },
+
+  /**
+   * Vérifie si les pins additionnelles requises sont disponibles selon la définition du composant
+   * @param {Object} def - Définition du composant (doit avoir additionalPins)
+   * @param {number} sigGpio - GPIO de la pin signal (SIG)
+   * @param {Set} excludeUsedGpios - Set des GPIOs à exclure (optionnel, utilise getUsedGpios() si non fourni)
+   * @returns {boolean} true si toutes les pins requises sont disponibles
+   */
+  areAdditionalPinsAvailable(def, sigGpio, excludeUsedGpios = null) {
+    if(typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) return false;
+    if(typeof sigGpio !== 'number') sigGpio = parseInt(sigGpio);
+    if(isNaN(sigGpio)) return false;
+    
+    // Si pas de définition ou pas d'additionalPins, considérer comme disponible
+    if(!def || !def.additionalPins || !Array.isArray(def.additionalPins) || def.additionalPins.length === 0) {
+      return true;
+    }
+    
+    const sigPin = caps.pins.find(p => p && parseInt(p.gpio) === sigGpio);
+    if(!sigPin) return false;
+    
+    // Obtenir les GPIOs utilisés (depuis pcfg si excludeUsedGpios n'est pas fourni)
+    let usedGpios;
+    if(excludeUsedGpios instanceof Set) {
+      usedGpios = new Set(excludeUsedGpios);
+    } else if(Array.isArray(excludeUsedGpios)) {
+      usedGpios = new Set(excludeUsedGpios);
+    } else {
+      // Utiliser getUsedGpios() pour obtenir les pins déjà configurées
+      usedGpios = this.getUsedGpios([]);
+    }
+    
+    // Exclure le GPIO SIG lui-même
+    usedGpios.delete(sigGpio);
+    
+    // Compter uniquement les pins requises (non optionnelles, digitales, pas sig/en)
+    const requiredAddressPins = def.additionalPins.filter(ap => {
+      if(!ap || !ap.id) return false;
+      // Ignorer sig et en (gérées séparément)
+      if(ap.id === 'sig' || ap.id === 'en') return false;
+      // Compter uniquement les pins digitales requises
+      return ap.pinType === 1 && !ap.optional;
+    });
+    
+    const requiredCount = requiredAddressPins.length;
+    
+    // Si aucune pin d'adresse requise, considérer comme disponible
+    if(requiredCount === 0) return true;
+    
+    // Vérifier qu'il y a assez de pins digitales disponibles
+    const availablePins = this.getAvailableDigitalPins(usedGpios);
+    const availableCount = Array.isArray(availablePins) ? availablePins.length : 0;
+    
+    console.log('[GpioManager.areAdditionalPinsAvailable] def.id:', def.id, 'sigGpio:', sigGpio, 'requiredCount:', requiredCount, 'availableCount:', availableCount);
+    
+    return availableCount >= requiredCount;
   },
 
   /**

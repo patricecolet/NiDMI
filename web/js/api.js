@@ -461,14 +461,23 @@ async function saveAll(){
   });
  }
  
- /* Envoyer additionalPins si présent */
- if(hasAdditionalPins && c.additionalPins) {
-   if(c.additionalPins.sig !== undefined) p.set('sig', c.additionalPins.sig);
-   if(c.additionalPins.s0 !== undefined) p.set('s0', c.additionalPins.s0);
-   if(c.additionalPins.s1 !== undefined) p.set('s1', c.additionalPins.s1);
-   if(c.additionalPins.s2 !== undefined) p.set('s2', c.additionalPins.s2);
-   if(c.additionalPins.s3 !== undefined) p.set('s3', c.additionalPins.s3);
-   if(c.additionalPins.en !== undefined) p.set('en', c.additionalPins.en);
+ /* Envoyer additionalPins si présent (générique basé sur def.additionalPins) */
+ if(hasAdditionalPins && c.additionalPins && def && def.additionalPins && Array.isArray(def.additionalPins)) {
+   /* Envoyer dynamiquement tous les additionalPins depuis la définition */
+   def.additionalPins.forEach(pinDef => {
+     if(pinDef && pinDef.id && c.additionalPins[pinDef.id] !== undefined && c.additionalPins[pinDef.id] !== null) {
+       const value = c.additionalPins[pinDef.id];
+       /* Ne pas envoyer si valeur est 255 (pin non connectée) sauf si c'est optionnel */
+       if(value !== 255 || !pinDef.optional) {
+         p.set(pinDef.id, value);
+         console.log('[saveAll] additionalPin envoyé:', pinDef.id, '=', value);
+       }
+     } else if(pinDef && pinDef.id && !pinDef.optional && pinDef.defaultValue !== undefined && pinDef.defaultValue !== 255) {
+       /* Pin requise absente, utiliser la valeur par défaut */
+       p.set(pinDef.id, pinDef.defaultValue);
+       console.log('[saveAll] additionalPin par défaut:', pinDef.id, '=', pinDef.defaultValue);
+     }
+   });
    /* complexId pour maintenir l'ID */
    if(c.complexId !== undefined) p.set('complexId', c.complexId);
  }

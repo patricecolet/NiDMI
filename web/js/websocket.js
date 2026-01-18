@@ -90,9 +90,12 @@ function handlePinClickLocal(label){
 function handlePinClick(label){
  if(typeof label !== 'string' || !label) return;
  if(typeof prect === 'undefined' || !prect) return;
+ /* RESTRICTIONS DÉSACTIVÉES - Permettre le clic même sur les pins grisées */
+ /*
  if(prect[label] && prect[label].classList && prect[label].classList.contains('busDisabled')){
   return;
  }
+ */
  
  if(typeof websocket !== 'undefined' && websocket && websocket.readyState === WebSocket.OPEN){
   websocket.send(`PIN_CLICKED:${label}`);

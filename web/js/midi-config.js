@@ -94,6 +94,10 @@ const MidiConfig = {
     // Gérer le changement de type de message
     rtpMsgTypeSelect.addEventListener('change', () => {
       MidiConfig.updateVisibility();
+      /* Sauvegarder la modification du type de message */
+      if (typeof updateConfig === 'function') {
+        updateConfig();
+      }
     });
   },
 
@@ -202,6 +206,12 @@ const MidiConfig = {
         row.appendChild(inputMin);
         row.appendChild(separator);
         row.appendChild(inputMax);
+        
+        /* Attacher les event listeners pour sauvegarder les modifications */
+        inputMin.addEventListener('change', updateConfig);
+        inputMin.addEventListener('input', updateConfig);
+        inputMax.addEventListener('change', updateConfig);
+        inputMax.addEventListener('input', updateConfig);
       } else {
         const label = document.createElement('label');
         const labelText = param.label || '';
@@ -235,6 +245,10 @@ const MidiConfig = {
         }
         
         row.appendChild(input);
+        
+        /* Attacher les event listeners pour sauvegarder les modifications */
+        input.addEventListener('change', updateConfig);
+        input.addEventListener('input', updateConfig);
       }
       
       // Stocker les informations pour updateVisibility

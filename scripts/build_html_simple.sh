@@ -93,12 +93,24 @@ if [ ! -f "web/app.js" ] && [ ! -f "web/js/core.js" ]; then
     exit 1
 fi
 
-# Concaténer les fichiers JS dans l'ordre : core.js, api.js, definitions.js, form-generator.js, midi-config.js, gpio-manager.js, pins.js, components.js, websocket.js, puis app.js
+# Concaténer les fichiers JS dans l'ordre : core.js, component-helpers.js, ui-utils.js, pin-utils.js, api.js, definitions.js, form-generator.js, midi-config.js, gpio-manager.js, pin-visual.js, pin-list.js, component-menus.js, component-form.js, component-config.js, component-utils.js, component-handlers.js, components.js, websocket.js, pins.js (compatibilité), puis app.js
 echo "📄 Concaténation des modules JavaScript..."
 TEMP_JS=$(mktemp)
 {
     if [ -f "web/js/core.js" ]; then
         cat web/js/core.js
+    fi
+    if [ -f "web/js/component-helpers.js" ]; then
+        echo ""
+        cat web/js/component-helpers.js
+    fi
+    if [ -f "web/js/ui-utils.js" ]; then
+        echo ""
+        cat web/js/ui-utils.js
+    fi
+    if [ -f "web/js/pin-utils.js" ]; then
+        echo ""
+        cat web/js/pin-utils.js
     fi
     if [ -f "web/js/api.js" ]; then
         echo ""
@@ -120,9 +132,33 @@ TEMP_JS=$(mktemp)
         echo ""
         cat web/js/gpio-manager.js
     fi
-    if [ -f "web/js/pins.js" ]; then
+    if [ -f "web/js/pin-visual.js" ]; then
         echo ""
-        cat web/js/pins.js
+        cat web/js/pin-visual.js
+    fi
+    if [ -f "web/js/pin-list.js" ]; then
+        echo ""
+        cat web/js/pin-list.js
+    fi
+    if [ -f "web/js/component-menus.js" ]; then
+        echo ""
+        cat web/js/component-menus.js
+    fi
+    if [ -f "web/js/component-form.js" ]; then
+        echo ""
+        cat web/js/component-form.js
+    fi
+    if [ -f "web/js/component-config.js" ]; then
+        echo ""
+        cat web/js/component-config.js
+    fi
+    if [ -f "web/js/component-utils.js" ]; then
+        echo ""
+        cat web/js/component-utils.js
+    fi
+    if [ -f "web/js/component-handlers.js" ]; then
+        echo ""
+        cat web/js/component-handlers.js
     fi
     if [ -f "web/js/components.js" ]; then
         echo ""
@@ -131,6 +167,10 @@ TEMP_JS=$(mktemp)
     if [ -f "web/js/websocket.js" ]; then
         echo ""
         cat web/js/websocket.js
+    fi
+    if [ -f "web/js/pins.js" ]; then
+        echo ""
+        cat web/js/pins.js
     fi
     if [ -f "web/app.js" ]; then
         echo ""
