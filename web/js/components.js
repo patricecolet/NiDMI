@@ -41,9 +41,12 @@ function showRoleCards(role, currentCfg = {}){
   return;
  }
  
- /* Afficher le conteneur */
- card.style.display = 'block';
- 
+ const hasAdditionalPins = def.additionalPinCount > 0 || (def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0);
+ console.log('[showRoleCards] Définition trouvée, def.id:', def.id, 'hasAdditionalPins:', hasAdditionalPins, 'additionalPinCount:', def.additionalPinCount, 'additionalPins:', def.additionalPins, 'type:', typeof def.additionalPins, 'isArray:', Array.isArray(def.additionalPins));
+
+/* Afficher le conteneur */
+card.style.display = 'block';
+
 /* Générer les champs de formulaire dynamiquement */
 if(def.formFields && Array.isArray(def.formFields) && def.formFields.length > 0) {
  if(typeof FormGenerator !== 'undefined' && FormGenerator.generateFormFields) {
@@ -51,11 +54,17 @@ if(def.formFields && Array.isArray(def.formFields) && def.formFields.length > 0)
  }
 }
 
-/* Générer les pins additionnelles si composant complexe */
-if(def.isComplex && def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0) {
+/* Générer les pins additionnelles si composant avec additionalPins */
+if(hasAdditionalPins && def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0) {
+ console.log('[showRoleCards] Appel generateAdditionalPins, def.id:', def.id, 'additionalPins.length:', def.additionalPins.length);
  if(typeof FormGenerator !== 'undefined' && FormGenerator.generateAdditionalPins) {
   FormGenerator.generateAdditionalPins(def, 'componentFormCard', currentCfg);
+  console.log('[showRoleCards] generateAdditionalPins appelé');
+ } else {
+  console.warn('[showRoleCards] FormGenerator.generateAdditionalPins non disponible');
  }
+} else {
+ console.log('[showRoleCards] Pas de additionalPins, hasAdditionalPins:', hasAdditionalPins, 'additionalPins:', def.additionalPins);
 }
  
 /* Générer la section MIDI dynamiquement */
@@ -106,11 +115,21 @@ function populateFamilySelect(pinType, pin) {
    });
   }
   
-  /* Vérifier disponibilité pour les composants complexes */
-  if(def.isComplex && pinType === 0) { /* Composant complexe sur pin analogique */
-   const complexAvailable = pin && typeof GpioManager !== 'undefined' && GpioManager.areAddressPinsAvailable
-     ? GpioManager.areAddressPinsAvailable(pin.gpio)
-     : false;
+  /* Vérifier disponibilité pour les composants avec additionalPins */
+  const hasAdditionalPins = def.additionalPinCount > 0 || (def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0);
+  if(hasAdditionalPins && pinType === 0) { /* Composant avec additionalPins sur pin analogique */
+   let complexAvailable = false;
+   if(pin && pin.gpio !== undefined && typeof GpioManager !== 'undefined' && typeof GpioManager.areAddressPinsAvailable === 'function') {
+    try {
+     const gpio = parseInt(pin.gpio);
+     if(!isNaN(gpio)) {
+      complexAvailable = GpioManager.areAddressPinsAvailable(gpio);
+     }
+    } catch(err) {
+     console.warn('[populateFamilySelect] Erreur vérification disponibilité composant avec additionalPins:', err);
+     complexAvailable = false;
+    }
+   }
    if(complexAvailable) {
     familiesMap.get(familyId).components.push(def);
    }
@@ -129,16 +148,33 @@ function populateFamilySelect(pinType, pin) {
  });
  
  console.log('[populateFamilySelect] Options famille:', familyOptions);
- setOptions(familySel, familyOptions, 0);
- 
- /* Sélectionner automatiquement la première famille si aucune n'est sélectionnée */
- if(!familySel.value && Object.keys(familyOptions).length > 0) {
-  const firstFamilyId = parseInt(Object.keys(familyOptions)[0]);
-  familySel.value = firstFamilyId;
- }
  
  /* Déclencher le filtrage du menu Composant */
  const selectedFamilyId = familySel.value ? parseInt(familySel.value) : null;
+ 
+ /* Sélectionner automatiquement la première famille si aucune n'est sélectionnée */
+ /* Mettre le flag AVANT setOptions pour éviter que le handler change vide le select Component */
+ if(!familySel.value && Object.keys(familyOptions).length > 0) {
+  familySel._restoringConfig = true;
+ }
+ 
+ /* Maintenant remplir le select (peut déclencher le handler change, mais le flag protège) */
+ setOptions(familySel, familyOptions, 0);
+ 
+ /* Si on a mis le flag, le réinitialiser après un délai */
+ if(familySel._restoringConfig) {
+  const firstFamilyId = parseInt(Object.keys(familyOptions)[0]);
+  setTimeout(() => {
+   familySel._restoringConfig = false;
+  }, 10);
+  /* Déclencher manuellement populateComponentSelect pour la première famille */
+  if(selectedFamilyId === null) {
+   populateComponentSelect(firstFamilyId, pinType, pin);
+   return;
+  }
+ }
+ 
+ /* Déclencher le filtrage du menu Composant si une famille était déjà sélectionnée */
  if(selectedFamilyId !== null) {
   populateComponentSelect(selectedFamilyId, pinType, pin);
  }
@@ -178,14 +214,33 @@ function populateComponentSelect(familyId, pinType, pin) {
  
  console.log('[populateComponentSelect] familyComponents (familyId=' + familyId + '):', familyComponents.length, familyComponents.map(d => `${d.id} (implemented=${d.implemented})`));
  
+ /* Trier les composants pour toujours mettre "button" en premier s'il est disponible */
+ const sortedFamilyComponents = [...familyComponents].sort((a, b) => {
+  // Mettre "button" en premier s'il est disponible
+  if(a.id === 'button' && b.id !== 'button') return -1;
+  if(b.id === 'button' && a.id !== 'button') return 1;
+  // Sinon garder l'ordre original
+  return 0;
+ });
+ 
  /* Créer les options pour le menu Composant */
  const options = {};
- familyComponents.forEach(def => {
-  /* Vérifier disponibilité pour les composants complexes */
-  if(def.isComplex && pinType === 0) { /* Composant complexe sur pin analogique */
-   const complexAvailable = pin && typeof GpioManager !== 'undefined' && GpioManager.areAddressPinsAvailable
-     ? GpioManager.areAddressPinsAvailable(pin.gpio)
-     : false;
+ sortedFamilyComponents.forEach(def => {
+  /* Vérifier disponibilité pour les composants avec additionalPins */
+  const hasAdditionalPins = def.additionalPinCount > 0 || (def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0);
+  if(hasAdditionalPins && pinType === 0) { /* Composant avec additionalPins sur pin analogique */
+   let complexAvailable = false;
+   if(pin && pin.gpio !== undefined && typeof GpioManager !== 'undefined' && typeof GpioManager.areAddressPinsAvailable === 'function') {
+    try {
+     const gpio = parseInt(pin.gpio);
+     if(!isNaN(gpio)) {
+      complexAvailable = GpioManager.areAddressPinsAvailable(gpio);
+     }
+    } catch(err) {
+     console.warn('[populateComponentSelect] Erreur vérification disponibilité composant avec additionalPins:', err);
+     complexAvailable = false;
+    }
+   }
    /* Afficher même si non disponible si non implémenté (pour info) */
    if(complexAvailable || !def.implemented) {
     options[def.id] = {
@@ -223,33 +278,15 @@ function updFunc(lbl){
   return;
  }
  
-/* Plus besoin de vider manuellement, les champs sont générés dynamiquement */
+const pin = caps?.pins?.find(p => p?.label === lbl) || null;
  
- /* Utiliser pType() qui utilise les données du backend */
- const type = typeof pType === 'function' ? pType(lbl) : 'digital';
- const pin = caps?.pins?.find(p => p.label === lbl);
- 
- console.log('[updFunc] Pin:', lbl, 'type:', type, 'pin:', pin);
- 
- /* Gérer les bus (I2C, SPI, UART) - rôles spéciaux */
- if(type === 'i2c' || type === 'spi' || type === 'uart') {
-  const def = getComponentDef(type);
-  const displayName = def ? def.displayName : type.toUpperCase();
-  const options = {};
-  options[type] = displayName;
-  setOptions(sel, options, 0);
-  setOptions(familySel, {}, 0);
-  showRoleCards(sel.value || '');
-  updateRtpForRole(sel.value || '');
-  return;
- }
- 
- /* Convertir le type de pin en pinType numérique pour le filtre */
  let pinType = null;
- if(type === 'analog') {
-  pinType = 0; /* PIN_ANALOG */
- } else if(type === 'digital') {
-  pinType = 1; /* PIN_DIGITAL (toujours, peu importe si PWM ou pas) */
+ if(lbl?.startsWith('A')) {
+  pinType = 0;
+ } else if(lbl?.startsWith('D')) {
+  pinType = 1;
+ } else {
+  return; // Bus purs non implémentés
  }
  
  console.log('[updFunc] pinType calculé:', pinType);
@@ -258,7 +295,27 @@ function updFunc(lbl){
  populateFamilySelect(pinType, pin);
  
  /* Si une valeur était déjà sélectionnée, essayer de la restaurer APRÈS que les menus soient remplis */
- const currentRole = pcfg[lbl]?.role;
+ let currentRole = pcfg[lbl]?.role;
+ 
+ // Vérifier si cette pin est utilisée par un composant complexe sauvegardé
+ /* Chercher dans pcfg */
+ if(!currentRole && pin && pin.gpio !== undefined && typeof pcfg !== 'undefined' && pcfg) {
+  const sigGpio = parseInt(pin.gpio);
+  if(isNaN(sigGpio)) return;
+  const existingComplexLabel = Object.keys(pcfg).find(lbl => {
+   const cfg = pcfg[lbl];
+   return cfg && cfg.additionalPins && typeof cfg.additionalPins === 'object' && cfg.additionalPins.sig === sigGpio;
+  });
+  if(existingComplexLabel) {
+   const existingComplex = pcfg[existingComplexLabel];
+   if(existingComplex && existingComplex.role) {
+    // Utiliser le rôle depuis pcfg
+    currentRole = existingComplex.role;
+    console.log('[updFunc] Pin utilisée par composant complexe sauvegardé:', existingComplexLabel, 'role:', currentRole);
+   }
+  }
+ }
+ 
  if(currentRole) {
   /* Utiliser setTimeout pour s'assurer que les menus sont remplis */
   setTimeout(() => {
@@ -268,39 +325,47 @@ function updFunc(lbl){
     /* Sélectionner la bonne famille */
     const defFamilyId = def.family !== undefined ? def.family : 0;
     if(familySel.value != defFamilyId) {
-     familySel.value = defFamilyId;
+     /* Marquer qu'on est en train de restaurer une configuration AVANT de changer la valeur */
+     familySel._restoringConfig = true;
+     console.log('[updFunc] Restauration config, changement famille de', familySel.value, 'vers', defFamilyId);
+     /* Appeler populateComponentSelect AVANT de changer familySel.value pour éviter le déclenchement du handler */
      populateComponentSelect(defFamilyId, pinType, pin);
-     /* Attendre que le menu Composant soit rempli avant de sélectionner */
+     /* Maintenant changer la valeur (le handler sera appelé mais ignorera le vidage grâce au flag) */
+     familySel.value = defFamilyId;
+     /* Réinitialiser le flag après que tout soit fait */
      setTimeout(() => {
-      if(sel.value != migratedRoleVal) {
-       sel.value = migratedRoleVal;
-       const currentCfg = pcfg && pcfg[lbl] ? pcfg[lbl] : {};
-       showRoleCards(migratedRoleVal, currentCfg);
-       updateRtpForRole(migratedRoleVal);
-       if(typeof MidiConfig !== 'undefined' && MidiConfig.updateVisibility) {
-        MidiConfig.updateVisibility();
-       }
-       /* Si composant complexe, initialiser le formulaire */
-      if(def && def.isComplex && typeof ComplexComponents !== 'undefined' && ComplexComponents.initForm) {
-       ComplexComponents.initForm(lbl);
-       }
-      }
-     }, 0);
+      familySel._restoringConfig = false;
+      console.log('[updFunc] Flag _restoringConfig réinitialisé');
+     }, 100);
+       /* Attendre que le menu Composant soit rempli avant de sélectionner */
+       setTimeout(() => {
+        if(sel.value != migratedRoleVal) {
+         sel.value = migratedRoleVal;
+         /* Charger depuis pcfg */
+         let currentCfg = pcfg && pcfg[lbl] ? pcfg[lbl] : {};
+         showRoleCards(migratedRoleVal, currentCfg);
+         updateRtpForRole(migratedRoleVal);
+         if(typeof MidiConfig !== 'undefined' && MidiConfig.updateVisibility) {
+          MidiConfig.updateVisibility();
+         }
+         /* Initialiser le formulaire (gère simples et complexes) */
+         initComponentForm(lbl);
+        }
+       }, 0);
     } else {
      /* Famille déjà sélectionnée, juste sélectionner le composant */
      setTimeout(() => {
       if(sel.value != migratedRoleVal) {
        sel.value = migratedRoleVal;
-       const currentCfg = pcfg && pcfg[lbl] ? pcfg[lbl] : {};
+       /* Charger depuis pcfg */
+       let currentCfg = pcfg && pcfg[lbl] ? pcfg[lbl] : {};
        showRoleCards(migratedRoleVal, currentCfg);
        updateRtpForRole(migratedRoleVal);
        if(typeof MidiConfig !== 'undefined' && MidiConfig.updateVisibility) {
         MidiConfig.updateVisibility();
        }
-       /* Si composant complexe, initialiser le formulaire */
-      if(def && def.isComplex && typeof ComplexComponents !== 'undefined' && ComplexComponents.initForm) {
-       ComplexComponents.initForm(lbl);
-       }
+       /* Initialiser le formulaire (gère simples et complexes) */
+       initComponentForm(lbl);
       }
      }, 0);
     }
@@ -319,39 +384,67 @@ function updFunc(lbl){
      if(typeof MidiConfig !== 'undefined' && MidiConfig.updateVisibility) {
       MidiConfig.updateVisibility();
      }
-     /* Si composant complexe, initialiser le formulaire */
-     const firstDef = getComponentDef(firstComponentId);
-     if(firstDef && firstDef.isComplex && typeof ComplexComponents !== 'undefined' && ComplexComponents.initForm) {
-      ComplexComponents.initForm(lbl);
-     }
+     /* Initialiser le formulaire (gère simples et complexes) */
+     initComponentForm(lbl);
     }
    }
   }, 0);
  }
  
- const updateConfig=()=>{
+const updateConfig=()=>{
  const lbl = $('#selPin')?.textContent || '';
  const currentCfg = pcfg && pcfg[lbl] ? pcfg[lbl] : {};
- showRoleCards(sel.value||'', currentCfg);
- updateRtpForRole(sel.value||'');
+ const selectedRole = sel.value || '';
+ console.log('[updateConfig] Début, lbl:', lbl, 'cur:', cur, 'selectedRole:', selectedRole);
+ showRoleCards(selectedRole, currentCfg);
+ /* Vérifier si les champs additionalPins sont créés */
+ setTimeout(() => {
+  const migratedRole = migrateRoleValue(selectedRole);
+  const def = getComponentDef(migratedRole);
+  const hasAdditionalPins = def && (def.additionalPinCount > 0 || (def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0));
+  if(hasAdditionalPins && def.additionalPins) {
+   console.log('[updateConfig] Vérification champs additionalPins créés...');
+   def.additionalPins.forEach(ap => {
+    if(ap.id) {
+     const fieldId = FormGenerator.getFieldId(def, ap.id);
+     const field = $('#' + fieldId);
+     console.log('[updateConfig] Champ', ap.id, 'fieldId:', fieldId, 'trouvé:', !!field, 'value:', field ? field.value : 'N/A');
+    }
+   });
+  }
+ }, 50);
+ updateRtpForRole(selectedRole);
 if(typeof MidiConfig !== 'undefined' && MidiConfig.updateVisibility) {
  MidiConfig.updateVisibility();
 }
-/* Si composant complexe est sélectionné, initialiser le formulaire */
-const role = sel.value || '';
-const migratedRole = migrateRoleValue(role);
-const def = getComponentDef(migratedRole);
-if(def && def.isComplex && cur && typeof ComplexComponents !== 'undefined' && ComplexComponents.initForm) {
- ComplexComponents.initForm(cur);
-} else {
-  /* Plus besoin d'effacer manuellement, les champs sont générés dynamiquement */
+/* Initialiser le formulaire (gère simples et complexes) - attendre que les champs soient créés */
+if(cur) {
+ console.log('[updateConfig] Initialisation formulaire pour cur:', cur);
+ /* Attendre un peu pour que generateAdditionalPins() crée les champs */
+ setTimeout(() => {
+  if(cur) {
+   initComponentForm(cur);
+   /* Attendre que initComponentForm() ait rempli les champs avant de lire la config */
+   setTimeout(() => {
+    if(cur){
+     console.log('[updateConfig] Lecture config pour cur:', cur, 'selectedRole:', selectedRole);
+     /* Passer le role explicitement pour éviter les problèmes de timing */
+     pcfg[cur]=readCfg(selectedRole);
+     console.log('[updateConfig] Config lue, pcfg[cur]:', pcfg[cur]);
+     updatePinsList();
+     updateBusVisuals();
+    } else {
+     console.warn('[updateConfig] cur n\'est plus défini après timeout');
+    }
+   }, 100);
+  } else {
+   console.warn('[updateConfig] cur n\'est plus défini avant initComponentForm');
+  }
+ }, 50);
+ } else {
+  console.warn('[updateConfig] cur n\'est pas défini, lbl:', lbl);
  }
- if(cur){
-  pcfg[cur]=readCfg();
-  updatePinsList();
-  updateBusVisuals();
- }
- };
+};
  
  /* Retirer l'ancien handler pour éviter les doublons */
  const oldHandler = familySel._onchangeHandler;
@@ -362,17 +455,25 @@ if(def && def.isComplex && cur && typeof ComplexComponents !== 'undefined' && Co
  /* Gérer le changement de famille */
  const newHandler = () => {
   const familyId = parseInt(familySel.value);
-  if(!isNaN(familyId)) {
+  if(isNaN(familyId)) return;
+  
+  /* Ne pas vider le select Component si on est en train de restaurer une configuration */
+  if(familySel._restoringConfig) {
+   console.log('[newHandler] Restauration config, pas de vidage du select Component');
    populateComponentSelect(familyId, pinType, pin);
-   /* Réinitialiser la sélection du composant */
-   sel.value = '';
-   showRoleCards('');
-   updateRtpForRole('');
-   if(typeof MidiConfig !== 'undefined' && MidiConfig.updateVisibility) {
-    MidiConfig.updateVisibility();
-   }
-   /* Plus besoin d'effacer manuellement, les champs sont générés dynamiquement */
+   return;
   }
+  
+  console.log('[newHandler] Changement famille par utilisateur, vidage select Component');
+  populateComponentSelect(familyId, pinType, pin);
+  /* Réinitialiser la sélection du composant uniquement si le changement vient de l'utilisateur */
+  sel.value = '';
+  showRoleCards('');
+  updateRtpForRole('');
+  if(typeof MidiConfig !== 'undefined' && MidiConfig.updateVisibility) {
+   MidiConfig.updateVisibility();
+  }
+  /* Plus besoin d'effacer manuellement, les champs sont générés dynamiquement */
  };
  familySel.addEventListener('change', newHandler);
  familySel._onchangeHandler = newHandler; /* Stocker pour pouvoir le retirer plus tard */
@@ -458,7 +559,8 @@ function getAllFieldIds() {
  
  /* Collecter les IDs des additionalPins depuis toutes les définitions */
   defsCache.forEach(def => {
-   if(def.isComplex && def.additionalPins && Array.isArray(def.additionalPins)) {
+   const hasAdditionalPins = def.additionalPinCount > 0 || (def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0);
+   if(hasAdditionalPins && def.additionalPins && Array.isArray(def.additionalPins)) {
     def.additionalPins.forEach(additionalPin => {
      if(additionalPin.id) {
       /* ID du champ : préfixe depuis l'ID du composant + id en capital (ex: s0 -> hc4067S0) */
@@ -474,17 +576,21 @@ function getAllFieldIds() {
  return ids;
 }
 
-function readCfg(){
+function readCfg(roleOverride = null){
  const c={};
- c.role=$('#funcSelect')?.value||'';
+ /* Utiliser le roleOverride si fourni, sinon lire depuis le select */
+ c.role = roleOverride || $('#funcSelect')?.value || '';
+ 
+ console.log('[readCfg] Début, role:', c.role, 'roleOverride:', roleOverride);
  
  /* Lire les champs depuis les formFields du composant actuel */
- const roleSel = $('#funcSelect');
  let migratedRole = null;
  let def = null;
- if(roleSel && roleSel.value) {
-  migratedRole = migrateRoleValue(roleSel.value);
+ if(c.role) {
+  migratedRole = migrateRoleValue(c.role);
   def = getComponentDef(migratedRole);
+  const hasAdditionalPins = def && (def.additionalPinCount > 0 || (def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0));
+  console.log('[readCfg] migratedRole:', migratedRole, 'def trouvée:', !!def, 'hasAdditionalPins:', hasAdditionalPins);
   
   if(def && def.formFields && Array.isArray(def.formFields)) {
    def.formFields.forEach(field => {
@@ -520,9 +626,78 @@ function readCfg(){
  c.dbgEnabled=!!$('#dbgEnabled')?.checked;
  c.dbgHeader=$('#dbgHeader')?.value||'';
  
+/* Lire les additionalPins si composant avec additionalPins */
+const hasAdditionalPinsForRead = def && (def.additionalPinCount > 0 || (def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0));
+if(hasAdditionalPinsForRead && def.additionalPins && Array.isArray(def.additionalPins) && typeof FormGenerator !== 'undefined' && FormGenerator.getFieldId) {
+  console.log('[readCfg] Lecture additionalPins, def.id:', def.id, 'additionalPins count:', def.additionalPins.length);
+  c.additionalPins = {};
+  def.additionalPins.forEach(additionalPin => {
+   if(!additionalPin.id) return;
+   const fieldId = FormGenerator.getFieldId(def, additionalPin.id);
+   if(!fieldId) {
+    console.warn('[readCfg] FieldId vide pour additionalPin:', additionalPin.id);
+    return;
+   }
+   console.log('[readCfg] Recherche champ, additionalPin.id:', additionalPin.id, 'fieldId calculé:', fieldId);
+   const field = $('#' + fieldId);
+   if(!field) {
+    console.warn('[readCfg] Champ non trouvé:', fieldId, 'Vérification DOM...');
+    /* Vérifier si le champ existe avec un autre ID ou dans un autre conteneur */
+    const allSelects = document.querySelectorAll('select');
+    const selectsInfo = Array.from(allSelects).map(s => ({
+     id: s.id || '(sans ID)',
+     value: s.value,
+     label: s.previousElementSibling?.textContent || s.parentElement?.querySelector('label')?.textContent || '(sans label)',
+     parent: s.parentElement?.className || s.parentElement?.id || '(sans parent)'
+    }));
+    console.log('[readCfg] Selects trouvés dans le DOM:', selectsInfo);
+    /* Chercher aussi dans componentFormCard */
+    const card = $('#componentFormCard');
+    if(card) {
+     const cardSelects = card.querySelectorAll('select');
+     console.log('[readCfg] Selects dans componentFormCard:', Array.from(cardSelects).map(s => ({id: s.id || '(sans ID)', value: s.value})));
+    }
+    return;
+   }
+   if(field.value !== undefined && field.value !== null && field.value !== '') {
+    const value = parseInt(field.value);
+    if(!isNaN(value)) {
+     c.additionalPins[additionalPin.id] = value;
+     console.log('[readCfg] additionalPin lu:', additionalPin.id, '=', value, 'depuis fieldId:', fieldId);
+    } else {
+     console.warn('[readCfg] Valeur non numérique pour', additionalPin.id, ':', field.value);
+    }
+   } else {
+    console.warn('[readCfg] Valeur vide pour', additionalPin.id, 'fieldId:', fieldId);
+   }
+  });
+  /* Lire complexId si présent */
+  const idFieldId = FormGenerator.getFieldId(def, 'id');
+  if(idFieldId) {
+   const idField = $('#' + idFieldId);
+   if(idField && idField.value !== undefined && idField.value !== null && idField.value !== '') {
+    const complexId = parseInt(idField.value);
+    if(!isNaN(complexId)) {
+     c.complexId = complexId;
+     console.log('[readCfg] complexId lu:', complexId, 'depuis fieldId:', idFieldId);
+    }
+   } else {
+    console.warn('[readCfg] complexId non trouvé ou vide, fieldId:', idFieldId);
+   }
+  } else {
+   console.warn('[readCfg] idFieldId vide pour complexId');
+  }
+  console.log('[readCfg] additionalPins final:', c.additionalPins, 'complexId:', c.complexId);
+ }
+ 
  return c;
 }
 
+/**
+ * Version unifiée qui gère aussi les composants complexes via pcfg
+ * Applique une configuration dans le formulaire (simples et complexes)
+ * @param {Object} c - Configuration depuis pcfg (peut contenir additionalPins)
+ */
 function applyCfg(c){
  if(!c) return;
  const setV=(id,v)=>{
@@ -536,6 +711,7 @@ function applyCfg(c){
  
  const migratedRole = migrateRoleValue(c.role);
  const def = migratedRole ? getComponentDef(migratedRole) : null;
+ const hasAdditionalPins = c.additionalPins && typeof c.additionalPins === 'object' && c.additionalPins.sig !== undefined;
  
  /* Restaurer la famille si le rôle est défini */
  if(def && def.family !== undefined && $('#familySelect')) {
@@ -543,8 +719,35 @@ function applyCfg(c){
  }
  
 setV('funcSelect',migratedRole);
-showRoleCards(migratedRole, c);
+/* Ne pas appeler showRoleCards si le conteneur contient déjà les champs pour ce rôle */
+const card = $('#componentFormCard');
+const currentRoleInSelect = $('#funcSelect')?.value;
+if(currentRoleInSelect !== migratedRole || !card || card.innerHTML.trim() === '') {
+ console.log('[applyCfg] Appel showRoleCards, currentRoleInSelect:', currentRoleInSelect, 'migratedRole:', migratedRole, 'card vide:', !card || card.innerHTML.trim() === '');
+ showRoleCards(migratedRole, c);
+} else {
+ console.log('[applyCfg] showRoleCards déjà appelé pour ce rôle, skip pour éviter de vider le conteneur');
+}
 updateRtpForRole(migratedRole);
+ 
+/* Appliquer les additionalPins si composant avec additionalPins */
+const hasAdditionalPinsForApply = def && (def.additionalPinCount > 0 || (def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0));
+if(hasAdditionalPins && hasAdditionalPinsForApply && def.additionalPins && typeof FormGenerator !== 'undefined' && FormGenerator.getFieldId) {
+  def.additionalPins.forEach(additionalPin => {
+   if(!additionalPin.id) return;
+   const fieldId = FormGenerator.getFieldId(def, additionalPin.id);
+   if(!fieldId) return;
+   const value = c.additionalPins[additionalPin.id];
+   if(value !== undefined && value !== null) {
+    setV(fieldId, value);
+   }
+  });
+  /* Appliquer complexId si présent */
+  if(c.complexId !== undefined && def) {
+   const idFieldId = FormGenerator.getFieldId(def, 'id');
+   if(idFieldId) setV(idFieldId, c.complexId);
+  }
+ }
  
  /* Appliquer les champs depuis les formFields du composant */
  if(def && def.formFields && Array.isArray(def.formFields)) {
@@ -573,6 +776,191 @@ updateRtpForRole(migratedRole);
  setV('oscFormat',c.oscFormat);
  setC('dbgEnabled',c.dbgEnabled);
  setV('dbgHeader',c.dbgHeader);
+}
+
+/**
+ * Initialise le formulaire d'un composant (simples et complexes)
+ * Gère les valeurs par défaut si pas de config dans pcfg
+ * @param {string} pinLabel - Label de la pin (ex: "A0")
+ */
+function initComponentForm(pinLabel) {
+ console.log('[initComponentForm] Début, pinLabel:', pinLabel);
+ if(typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) {
+  console.warn('[initComponentForm] caps ou caps.pins manquant');
+  return;
+ }
+ const pin = caps.pins.find(p => p && p.label === pinLabel);
+ if(!pin || pin.gpio === undefined) {
+  console.warn('[initComponentForm] Pin non trouvée:', pinLabel);
+  return;
+ }
+ 
+ const funcSelectValue = $('#funcSelect')?.value || '';
+ const migratedRoleValue = migrateRoleValue(funcSelectValue);
+ const def = getComponentDef(migratedRoleValue);
+ 
+ if(!def) {
+  console.warn('[initComponentForm] Définition non trouvée pour:', migratedRoleValue);
+  return;
+ }
+ const hasAdditionalPinsForInit = def && (def.additionalPinCount > 0 || (def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0));
+ console.log('[initComponentForm] Définition trouvée, def.id:', def.id, 'hasAdditionalPins:', hasAdditionalPinsForInit);
+ 
+ /* Vérifier si configuration existe dans pcfg */
+ const pcfgEntry = typeof pcfg !== 'undefined' && pcfg[pinLabel] ? pcfg[pinLabel] : null;
+ const currentSelectedRole = $('#funcSelect')?.value || '';
+ if(pcfgEntry) {
+  /* Configuration existe, vérifier si le rôle correspond */
+  const pcfgRole = migrateRoleValue(pcfgEntry.role || '');
+  console.log('[initComponentForm] Configuration trouvée dans pcfg, pcfgRole:', pcfgRole, 'currentSelectedRole:', currentSelectedRole);
+  /* Si le rôle correspond, appliquer la config */
+  if(pcfgRole && currentSelectedRole && pcfgRole === currentSelectedRole) {
+   applyCfg(pcfgEntry);
+   return;
+  }
+  /* Si le rôle ne correspond pas, continuer pour initialiser avec les valeurs par défaut (nouveau composant sur cette pin) */
+  console.log('[initComponentForm] Rôle dans pcfg ne correspond pas au rôle sélectionné, initialisation avec valeurs par défaut');
+ }
+ 
+/* Pas de config : initialiser valeurs par défaut pour composants avec additionalPins uniquement */
+if(hasAdditionalPinsForInit && def.additionalPins && Array.isArray(def.additionalPins) && typeof FormGenerator !== 'undefined' && FormGenerator.getFieldId && typeof GpioManager !== 'undefined') {
+  const sigGpio = parseInt(pin.gpio);
+  if(isNaN(sigGpio)) {
+   console.warn('[initComponentForm] GPIO invalide pour pin:', pinLabel);
+   return;
+  }
+  const usedGpios = (GpioManager.getUsedGpios && typeof GpioManager.getUsedGpios === 'function') ? GpioManager.getUsedGpios([]) : new Set();
+  
+  /* Extraire les IDs des pins d'adresse depuis les définitions (au lieu de hardcoder s0, s1, s2, s3) */
+  const addressPinIds = def.additionalPins
+   .filter(ap => ap.id && ap.pinType === 1 && !ap.optional && ap.id !== 'sig' && ap.id !== 'en')
+   .map(ap => ap.id);
+  
+  console.log('[initComponentForm] addressPinIds extraits depuis définitions:', addressPinIds);
+  
+ /* Calculer toutes les pins d'adresse en une fois (générique) */
+ let calculatedAddressPins = {};
+ if(addressPinIds.length > 0 && typeof GpioManager.calculateAddressPins === 'function') {
+  calculatedAddressPins = GpioManager.calculateAddressPins(sigGpio, usedGpios, addressPinIds);
+  console.log('[initComponentForm] calculatedAddressPins:', calculatedAddressPins, 'type:', typeof calculatedAddressPins, 'keys:', Object.keys(calculatedAddressPins));
+ } else {
+  console.warn('[initComponentForm] Impossible de calculer les pins d\'adresse, addressPinIds:', addressPinIds, 'calculateAddressPins available:', typeof GpioManager.calculateAddressPins);
+ }
+  
+  /* Initialiser toutes les additionalPins dynamiquement */
+  def.additionalPins.forEach(additionalPin => {
+   if(!additionalPin.id) return;
+   const fieldId = FormGenerator.getFieldId(def, additionalPin.id);
+   const field = fieldId ? $('#' + fieldId) : null;
+   if(!field) {
+    console.warn('[initComponentForm] Champ non trouvé pour additionalPin:', additionalPin.id, 'fieldId:', fieldId);
+    return;
+   }
+   
+   /* Pin principale (SIG) - utiliser le GPIO de la pin sélectionnée */
+   if(additionalPin.id === 'sig') {
+    field.value = sigGpio;
+    console.log('[initComponentForm] Pin SIG initialisée:', sigGpio);
+   }
+   /* Pins d'adresse - utiliser les valeurs calculées (générique) */
+   else if(addressPinIds.includes(additionalPin.id)) {
+    const calculatedValue = calculatedAddressPins[additionalPin.id];
+    if(calculatedValue !== null && calculatedValue !== undefined) {
+     /* Vérifier si la valeur existe dans les options du select (pour éviter les erreurs silencieuses) */
+     const valueStr = String(calculatedValue);
+     const hasOption = Array.from(field.options).some(opt => opt.value === valueStr);
+     if(hasOption) {
+      field.value = valueStr;
+      console.log('[initComponentForm] Pin d\'adresse', additionalPin.id, 'initialisée:', calculatedValue, 'field.value après:', field.value);
+     } else {
+      console.warn('[initComponentForm] Valeur calculée', calculatedValue, 'pour', additionalPin.id, 'n\'existe pas dans les options du select. Options disponibles:', Array.from(field.options).map(o => o.value).join(', '));
+      /* Utiliser la première option disponible comme fallback */
+      if(field.options.length > 0) {
+       field.value = field.options[0].value;
+       console.warn('[initComponentForm] Utilisation de la première option disponible comme fallback:', field.value);
+      }
+     }
+    } else {
+     console.warn('[initComponentForm] Valeur calculée manquante pour', additionalPin.id, 'calculatedAddressPins:', calculatedAddressPins);
+    }
+   }
+   /* Pins optionnelles - utiliser la valeur par défaut */
+   else if(additionalPin.optional) {
+    field.value = additionalPin.defaultValue !== undefined ? additionalPin.defaultValue : '255';
+    console.log('[initComponentForm] Pin optionnelle', additionalPin.id, 'initialisée:', field.value);
+   }
+   /* Autres pins - utiliser la valeur par défaut */
+   else if(additionalPin.defaultValue !== undefined) {
+    field.value = additionalPin.defaultValue;
+    console.log('[initComponentForm] Pin', additionalPin.id, 'initialisée avec defaultValue:', additionalPin.defaultValue);
+   }
+  });
+  
+  /* Initialiser l'ID du composant (chercher un ID disponible) */
+  const idFieldId = FormGenerator.getFieldId(def, 'id');
+  let idField = idFieldId ? $('#' + idFieldId) : null;
+  
+  /* Si le champ n'existe pas, le créer pour les composants avec additionalPins */
+  if(!idField && hasAdditionalPinsForInit) {
+   const card = $('#componentFormCard');
+   if(card) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'f';
+    
+    const label = document.createElement('label');
+    label.textContent = 'ID du composant';
+    wrapper.appendChild(label);
+    
+    const select = document.createElement('select');
+    select.id = idFieldId;
+    select.style.width = '200px';
+    
+    /* Options: 0, 1 */
+    for(let i = 0; i <= 1; i++) {
+     const option = document.createElement('option');
+     option.value = i;
+     option.textContent = i;
+     select.appendChild(option);
+    }
+    
+    wrapper.appendChild(select);
+    card.appendChild(wrapper);
+    idField = select;
+    console.log('[initComponentForm] Champ id créé:', idFieldId);
+   }
+  }
+  
+  if(idField) {
+   /* Parcourir pcfg pour trouver les IDs utilisés */
+   const usedIds = [];
+   if(typeof pcfg !== 'undefined') {
+    Object.keys(pcfg).forEach(lbl => {
+     const cfg = pcfg[lbl];
+     if(cfg && cfg.complexId !== undefined) {
+      usedIds.push(parseInt(cfg.complexId));
+     }
+    });
+   }
+   const availableId = [0, 1].find(id => !usedIds.includes(id));
+   if(availableId !== undefined) {
+    idField.value = availableId;
+    console.log('[initComponentForm] complexId initialisé:', availableId);
+   } else {
+    console.warn('[initComponentForm] Aucun ID disponible (0 et 1 sont utilisés)');
+   }
+  } else if(hasAdditionalPinsForInit) {
+   console.warn('[initComponentForm] Impossible de créer ou trouver le champ id, idFieldId:', idFieldId);
+  }
+  
+  /* Initialiser l'adresse OSC avec un préfixe basé sur l'ID du composant */
+  const oscField = $('#oscAddress');
+  if(oscField && idField) {
+   const prefix = def.id ? def.id : 'complex';
+   oscField.value = '/' + prefix + (idField.value || '0');
+  }
+  
+  if(typeof updateBusVisuals === 'function') updateBusVisuals();
+ }
 }
 
 /* Toutes les fonctions dépréciées ont été supprimées - utiliser directement les modules */

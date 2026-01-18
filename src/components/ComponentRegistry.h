@@ -64,7 +64,20 @@ public:
      */
     static void cleanup();
 
+    /**
+     * @brief Enregistre une définition de composant (appelé automatiquement au chargement)
+     * @param def Définition à enregistrer (sera déplacée, ne pas utiliser après l'appel)
+     * @return true si l'enregistrement a réussi
+     * 
+     * Cette méthode est appelée automatiquement par les variables statiques
+     * dans les fichiers .cpp des définitions lors du chargement du module.
+     * Les définitions sont stockées temporairement et déplacées dans le
+     * vecteur principal lors de init().
+     */
+    static bool registerDefinition(ComponentDefinition&& def);
+
 private:
     static std::vector<ComponentDefinition>* definitions_ptr;  // Pointeur au lieu d'objet statique (évite crash au boot sur ESP32-C3)
+    static std::vector<ComponentDefinition>* pending_definitions_ptr;  // Vecteur temporaire pour l'enregistrement automatique
     static bool initialized_;
 };

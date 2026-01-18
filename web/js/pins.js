@@ -6,27 +6,28 @@
  * @param {string} lbl - Label de la pin
  * @returns {string} Type CSS (analog, digital, uart, i2c, spi)
  */
+/**
+ * Détermine le type de pin pour le CSS (affichage visuel uniquement)
+ * @param {string} lbl - Label de la pin
+ * @returns {string} Type CSS (analog, digital, uart, i2c, spi)
+ */
 function pType(lbl){
- if(typeof caps === 'undefined' || !caps) return 'digital';
- 
- const pin = caps.pins?.find(p => p.label === lbl);
- if(!pin) return 'digital';
- 
- const gpio = pin.gpio;
- 
- // Vérifier les bus via caps.bus (données du backend)
- if(caps.bus) {
+ if(!lbl) return 'digital';
+ if(lbl.startsWith('A')) return 'analog';
+ if(lbl.startsWith('D')) {
+  if(!caps || !caps.pins || !caps.bus) return 'digital';
+  const pin = caps.pins.find(p => p && p.label === lbl);
+  if(!pin) return 'digital';
+  const gpio = parseInt(pin.gpio);
+  if(isNaN(gpio)) return 'digital';
   if(caps.bus.uart && (gpio === caps.bus.uart.tx || gpio === caps.bus.uart.rx)) return 'uart';
   if(caps.bus.i2c && (gpio === caps.bus.i2c.sda || gpio === caps.bus.i2c.scl)) return 'i2c';
   if(caps.bus.spi && (gpio === caps.bus.spi.mosi || gpio === caps.bus.spi.miso || gpio === caps.bus.spi.sck)) return 'spi';
+  return 'digital';
  }
- 
- // Une pin est analogique seulement si elle commence par "A" ET a ADC
- // Sinon, même si elle a ADC, elle est considérée comme digitale (ex: ESP32-C3 où certaines pins sont les deux)
- if(lbl && lbl.startsWith('A') && (pin.caps?.adc || pin.adc)) {
-  return 'analog';
- }
- 
+ if(lbl === 'SDA' || lbl === 'SCL') return 'i2c';
+ if(lbl === 'TX' || lbl === 'RX') return 'uart';
+ if(lbl === 'MOSI' || lbl === 'MISO' || lbl === 'SCK') return 'spi';
  return 'digital';
 }
 
@@ -59,9 +60,16 @@ function replaceTemplate(template, cfg, def) {
  let valueMappings = {};
  if(def && def.statusValueMappings) {
   try {
-   valueMappings = JSON.parse(def.statusValueMappings);
+   // Si c'est déjà un objet, l'utiliser directement
+   if(typeof def.statusValueMappings === 'object') {
+    valueMappings = def.statusValueMappings;
+   } else if(typeof def.statusValueMappings === 'string') {
+    // Sinon, essayer de parser la string JSON
+    valueMappings = JSON.parse(def.statusValueMappings);
+   }
   } catch(e) {
-   console.warn('Erreur parsing statusValueMappings:', e);
+   console.warn('Erreur parsing statusValueMappings:', e, 'value:', def.statusValueMappings);
+   valueMappings = {};
   }
  }
  
@@ -205,15 +213,16 @@ function setOptions(sel,options,pre=0){
  }
 }
 
-function updateBusVisuals(){
+ function updateBusVisuals(){
  // 1. Enlever tous les grisages
+ if(typeof prect === 'undefined' || !prect) return;
  Object.keys(prect).forEach(lbl=>{
   const r = prect[lbl];
-  if(!r) return;
+  if(!r || typeof r.classList === 'undefined') return;
   r.classList.remove('busDisabled');
  });
  
- if(!caps || !caps.pins) return;
+ if(typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) return;
  
  // 2. Obtenir les GPIOs utilisés depuis le cache backend
  let usedGpios = new Set();
@@ -223,10 +232,12 @@ function updateBusVisuals(){
  }
  
  // 3. Ajouter les GPIOs de l'édition en cours (pas encore sauvegardés)
+ if(typeof pcfg === 'undefined' || !pcfg) return;
  Object.keys(pcfg).forEach(lbl => {
   const cfg = pcfg[lbl];
-  const pin = caps.pins.find(p => p.label === lbl);
-  if(!pin) return;
+  if(!cfg) return;
+  const pin = caps.pins.find(p => p && p.label === lbl);
+  if(!pin || pin.gpio === undefined) return;
   
   const gpio = parseInt(pin.gpio);
   if(!isNaN(gpio)) usedGpios.add(gpio);
@@ -274,7 +285,7 @@ function updateBusVisuals(){
 
 function drawBoard(){
  const L=$('#pinsLeft'),R=$('#pinsRight');
- if(!L||!R||!caps||!caps.pins)return;
+ if(!L||!R||typeof caps === 'undefined'||!caps||!caps.pins||!Array.isArray(caps.pins))return;
  L.innerHTML='';
  R.innerHTML='';
  const RH=28;
@@ -319,8 +330,12 @@ function drawBoard(){
  $('#selPin').textContent=label;
  handlePinClick(label);
  updFunc(label);
- if(pcfg[cur]) applyCfg(pcfg[cur]);
- });
+ /* SIMPLIFICATION : Appliquer la config si elle existe, peu importe le type */
+ /* (updFunc() gère déjà les bus et affiche un message) */
+ if(pcfg[cur]) {
+  applyCfg(pcfg[cur]);
+ }
+});
  }
  return g;
  };
@@ -584,37 +599,46 @@ function updatePinsList(){
  if(!pl) return;
  pl.innerHTML='';
  
- // Collecter les GPIOs des composants complexes sauvegardés pour éviter les doublons
+ // Collecter les GPIOs des composants complexes sauvegardés depuis pcfg
  const savedComplexSigGpios = new Set();
- if(typeof ComplexComponents !== 'undefined' && ComplexComponents.list && Array.isArray(ComplexComponents.list)){
-  ComplexComponents.list.forEach(m => savedComplexSigGpios.add(parseInt(m.sig)));
+ if(typeof pcfg !== 'undefined' && pcfg) {
+   Object.keys(pcfg).forEach(lbl => {
+     const cfg = pcfg[lbl];
+     if(cfg && cfg.additionalPins && typeof cfg.additionalPins === 'object' && cfg.additionalPins.sig !== undefined) {
+       const sigGpio = parseInt(cfg.additionalPins.sig);
+       if(!isNaN(sigGpio)) savedComplexSigGpios.add(sigGpio);
+     }
+   });
  }
- 
- // Afficher les pins configurées
+
+ // Afficher les pins configurées (unifié depuis pcfg)
+ if(typeof pcfg === 'undefined' || !pcfg) return;
  Object.keys(pcfg).forEach(lbl=>{
   const cfg=pcfg[lbl];
   if(!cfg||!cfg.role) return;
   // Ignorer les pins avec préfixe M (anciennes pins avec préfixe historique)
   if(lbl.startsWith('M')) return;
   
-  // Pour les composants complexes : afficher si pas déjà sauvegardé
+  // Détecter composant avec additionalPins depuis pcfg.additionalPins
+  const hasAdditionalPins = cfg.additionalPins && typeof cfg.additionalPins === 'object' && cfg.additionalPins.sig !== undefined;
   const role = typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role;
   const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
-  if(def && def.isComplex){
+  const hasAdditionalPinsFromDef = def && (def.additionalPinCount > 0 || (def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0));
+  const isComplex = hasAdditionalPins || hasAdditionalPinsFromDef;
+  
+  // Pour les composants avec additionalPins : afficher depuis pcfg (unifié)
+  if(isComplex && hasAdditionalPins){
    if(caps && caps.pins){
     const pin=caps.pins.find(p=>p.label===lbl);
-    // Si ce GPIO est déjà dans un composant complexe sauvegardé, ne pas afficher
-    if(pin && savedComplexSigGpios.has(parseInt(pin.gpio))) return;
+    // Si ce GPIO est déjà dans un autre composant complexe sauvegardé, ne pas afficher
+    if(pin && savedComplexSigGpios.has(parseInt(pin.gpio)) && parseInt(cfg.additionalPins.sig) !== parseInt(pin.gpio)) return;
     
-    // Afficher comme composant complexe temporaire (non sauvegardé)
-    const componentType = def ? def.displayName : role;
-    // Générer un préfixe depuis l'ID du composant (ex: "hc4067" -> "HC4", "hc4051" -> "HC4")
-    const prefix = def && def.id ? def.id.toUpperCase().substring(0, 3) : 'COMP';
-    /* ID par défaut pour les composants complexes non sauvegardés */
-    const complexId = '0';
+    // Afficher composant complexe depuis pcfg
+    const roleName = getRoleDisplayLabel(cfg.role);
+    const statText = stat(cfg, lbl);
     const it=document.createElement('div');
     it.className='item complex';
-    it.innerHTML=`<span class="lbl">${prefix}${complexId}</span><span class="role">${componentType}</span><span class="stat">non sauvé</span><button class="del-btn">×</button>`;
+    it.innerHTML=`<span class="lbl">${lbl}</span><span class="role">${roleName}</span><span class="stat">${statText}</span><button class="del-btn">×</button>`;
     it.onclick=()=>{
      if(window._selRect) window._selRect.classList.remove('selectedSquare');
      const r=prect[lbl];
@@ -625,21 +649,62 @@ function updatePinsList(){
      cur=lbl;
      $('#selPin').textContent=lbl;
      updFunc(lbl);
-     if(pcfg[lbl]) applyCfg(pcfg[lbl]);
+     /* SIMPLIFICATION : Appliquer la config si elle existe */
+     if(pcfg[lbl]) {
+      applyCfg(pcfg[lbl]);
+     }
     };
     const delBtn=it.querySelector('.del-btn');
-    if(delBtn) delBtn.onclick=(e)=>{
+    if(delBtn) delBtn.onclick=async (e)=>{
      e.stopPropagation();
-     delete pcfg[lbl];
-     updatePinsList();
-     updateBusVisuals();
+     console.log('[deletePin] Suppression composant complexe sur pin:', lbl);
+     try {
+      const formData = new URLSearchParams();
+      formData.append('pin', lbl);
+      const response = await fetch('/api/pins/delete', {
+       method: 'POST',
+       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+       body: formData.toString()
+      });
+      console.log('[deletePin] Réponse API:', response.status, response.statusText);
+      if(!response.ok) {
+       const errorText = await response.text();
+       console.error('[deletePin] Erreur suppression API:', response.status, errorText);
+       delete pcfg[lbl];
+       updatePinsList();
+       updateBusVisuals();
+       return;
+      }
+      let result;
+      try {
+       result = await response.json();
+       console.log('[deletePin] Résultat JSON:', result);
+      } catch(jsonErr) {
+       const text = await response.text();
+       console.warn('[deletePin] Réponse non-JSON, texte:', text);
+       result = {status: 'ok'};
+      }
+      delete pcfg[lbl];
+      if(typeof loadConfiguredPins === 'function') {
+       await loadConfiguredPins();
+      } else {
+       updatePinsList();
+       updateBusVisuals();
+      }
+      console.log('[deletePin] Composant complexe supprimé');
+     } catch(err) {
+      console.error('[deletePin] Erreur suppression composant complexe:', err);
+      delete pcfg[lbl];
+      updatePinsList();
+      updateBusVisuals();
+     }
     };
     pl.appendChild(it);
    }
    return;
   }
   
-  /* Vérifier si cette pin est utilisée par un composant complexe comme SIG */
+  /* Vérifier si cette pin est utilisée par un composant complexe comme SIG (depuis pcfg) */
   /* Si oui, ne pas afficher le composant simple (le complexe a priorité) */
   if(caps && caps.pins) {
     const pin = caps.pins.find(p => p.label === lbl);
@@ -663,91 +728,56 @@ function updatePinsList(){
    cur=lbl;
    $('#selPin').textContent=lbl;
    updFunc(lbl);
-   if(pcfg[lbl]) applyCfg(pcfg[lbl]);
+   /* SIMPLIFICATION : Appliquer la config si elle existe */
+   if(pcfg[lbl]) {
+    applyCfg(pcfg[lbl]);
+   }
   };
   const delBtn=it.querySelector('.del-btn');
-  if(delBtn) delBtn.onclick=(e)=>{
+  if(delBtn) delBtn.onclick=async (e)=>{
    e.stopPropagation();
-   delete pcfg[lbl];
-   updatePinsList();
-   updateBusVisuals();
+   console.log('[deletePin] Suppression composant simple sur pin:', lbl);
+   try {
+    const formData = new URLSearchParams();
+    formData.append('pin', lbl);
+    const response = await fetch('/api/pins/delete', {
+     method: 'POST',
+     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+     body: formData.toString()
+    });
+    console.log('[deletePin] Réponse API:', response.status, response.statusText);
+    if(!response.ok) {
+     const errorText = await response.text();
+     console.error('[deletePin] Erreur suppression API:', response.status, errorText);
+     delete pcfg[lbl];
+     updatePinsList();
+     updateBusVisuals();
+     return;
+    }
+    let result;
+    try {
+     result = await response.json();
+     console.log('[deletePin] Résultat JSON:', result);
+    } catch(jsonErr) {
+     const text = await response.text();
+     console.warn('[deletePin] Réponse non-JSON, texte:', text);
+     result = {status: 'ok'};
+    }
+    delete pcfg[lbl];
+    if(typeof loadConfiguredPins === 'function') {
+     await loadConfiguredPins();
+    } else {
+     updatePinsList();
+     updateBusVisuals();
+    }
+    console.log('[deletePin] Composant simple supprimé');
+   } catch(err) {
+    console.error('[deletePin] Erreur suppression composant simple:', err);
+    delete pcfg[lbl];
+    updatePinsList();
+    updateBusVisuals();
+   }
   };
   pl.appendChild(it);
  });
- 
- // Ajouter les composants complexes sauvegardés à la liste (depuis ComplexComponents.list)
- if(typeof ComplexComponents !== 'undefined' && ComplexComponents.list && Array.isArray(ComplexComponents.list)){
-  ComplexComponents.list.forEach(component=>{
-   // Trouver la définition du composant complexe depuis le backend
-   const complexDefs = typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.cache 
-    ? ComponentDefinitions.cache.filter(d => d.isComplex && d.implemented)
-    : [];
-   
-   // Essayer de trouver la définition correspondante par rôle ou ID
-   // Pour l'instant, utiliser le premier composant complexe trouvé
-   // TODO: améliorer en faisant correspondre avec le rôle du composant si disponible
-   const componentDef = complexDefs.length > 0 ? complexDefs[0] : null;
-   const componentType = componentDef ? componentDef.displayName : 'Complex';
-   
-   // Générer un préfixe depuis l'ID du composant (ex: "hc4067" -> "HC4")
-   const prefix = componentDef && componentDef.id ? componentDef.id.toUpperCase().substring(0, 3) : 'COMP';
-   
-   // Le statut (nombre de canaux, etc.) devrait venir du backend si nécessaire
-   // Pour l'instant, on laisse vide car c'est spécifique au type de composant
-   const stat = '';
-   
-   const it=document.createElement('div');
-   it.className='item complex';
-   it.innerHTML=`<span class="lbl">${prefix}${component.id}</span><span class="role">${componentType}</span><span class="stat">${stat}</span><button class="del-btn">×</button>`;
-   it.onclick=()=>{
-    // Trouver le pin SIG correspondant et le sélectionner
-    if(caps&&caps.pins&&component.sig!==undefined){
-     const sigPin=caps.pins.find(p=>p.gpio===component.sig);
-     if(sigPin&&sigPin.label){
-      if(window._selRect) window._selRect.classList.remove('selectedSquare');
-      const r=prect[sigPin.label];
-      if(r){
-       window._selRect=r;
-       r.classList.add('selectedSquare');
-      }
-      cur=sigPin.label;
-      $('#selPin').textContent=sigPin.label;
-      if($('#funcSelect')){
-       // Trouver la définition du composant complexe depuis le backend
-       const complexDefs = typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.cache 
-        ? ComponentDefinitions.cache.filter(d => d.isComplex && d.implemented)
-        : [];
-       // Pour l'instant, utiliser le premier composant complexe trouvé
-       // TODO: améliorer en faisant correspondre avec le type du composant sauvegardé
-       const componentDef = complexDefs.length > 0 ? complexDefs[0] : null;
-       if(componentDef && $('#funcSelect')){
-        // Sélectionner la famille depuis la définition du composant
-        if($('#familySelect') && componentDef.family !== undefined) {
-         $('#familySelect').value = componentDef.family;
-        }
-        // Sélectionner le composant
-        $('#funcSelect').value = componentDef.id;
-       }
-       if(typeof updFunc === 'function') updFunc(sigPin.label);
-      }
-      if(typeof ComplexComponents !== 'undefined' && ComplexComponents.loadConfig) {
-       ComplexComponents.loadConfig(component);
-      } else {
-       console.warn('[pins.js] ComplexComponents non disponible');
-      }
-     }
-    }
-   };
-   const delBtn=it.querySelector('.del-btn');
-   if(delBtn) delBtn.onclick=(e)=>{
-    e.stopPropagation();
-    if(typeof ComplexComponents !== 'undefined' && ComplexComponents.delete) {
-     ComplexComponents.delete(component.id, e);
-    } else {
-     console.warn('[pins.js] ComplexComponents.delete non disponible');
-    }
-   };
-   pl.appendChild(it);
-  });
- }
 }

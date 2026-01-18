@@ -1,6 +1,6 @@
 /**
  * Gestion des GPIOs et de leur disponibilité
- * Module refactorisé depuis components.js - Phase 1.4
+ * Module refactorisé depuis components.js
  * 
  * Responsabilités:
  * - Conversion entre labels de pins (D0, A0) et GPIOs
@@ -16,9 +16,9 @@ const GpioManager = {
    * @returns {number|null} GPIO ou null si non trouvé
    */
   getGpioFromD(dNum) {
-    if(!caps || !caps.pins) return null;
-    const pin = caps.pins.find(p => p.label === `D${dNum}`);
-    return pin ? pin.gpio : null;
+    if(typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) return null;
+    const pin = caps.pins.find(p => p && p.label === `D${dNum}`);
+    return pin && pin.gpio !== undefined ? parseInt(pin.gpio) : null;
   },
 
   /**
@@ -27,8 +27,10 @@ const GpioManager = {
    * @returns {number|null} Numéro digital ou null si non trouvé
    */
   getDFromGpio(gpio) {
-    if(!caps || !caps.pins) return null;
-    const pin = caps.pins.find(p => p.gpio === gpio && p.label && p.label.startsWith('D'));
+    if(typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) return null;
+    if(typeof gpio !== 'number') gpio = parseInt(gpio);
+    if(isNaN(gpio)) return null;
+    const pin = caps.pins.find(p => p && parseInt(p.gpio) === gpio && p.label && p.label.startsWith('D'));
     return pin ? parseInt(pin.label.substring(1)) : null;
   },
 
@@ -38,8 +40,10 @@ const GpioManager = {
    * @returns {Object|null} Pin ou null si non trouvé
    */
   getDigitalPinByGpio(gpio) {
-    if(!caps || !caps.pins) return null;
-    return caps.pins.find(p => p.gpio === gpio && p.label && p.label.startsWith('D')) || null;
+    if(typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) return null;
+    if(typeof gpio !== 'number') gpio = parseInt(gpio);
+    if(isNaN(gpio)) return null;
+    return caps.pins.find(p => p && parseInt(p.gpio) === gpio && p.label && p.label.startsWith('D')) || null;
   },
 
   /**
@@ -49,6 +53,9 @@ const GpioManager = {
    * @returns {boolean} true si disponible
    */
   isDigitalPinAvailable(gpio, usedGpios) {
+    if(!usedGpios || typeof usedGpios.has !== 'function') return false;
+    if(typeof gpio !== 'number') gpio = parseInt(gpio);
+    if(isNaN(gpio)) return false;
     return !!this.getDigitalPinByGpio(gpio) && !usedGpios.has(gpio);
   },
 
@@ -58,22 +65,44 @@ const GpioManager = {
    * @param {Set} usedGpiosOverride - Set des GPIOs utilisés (optionnel, sinon utilise getUsedGpios)
    * @returns {Object} {s0, s1, s2, s3} GPIOs ou null
    */
-  calculateAddressPins(sigGpio, usedGpiosOverride = null) {
+  calculateAddressPins(sigGpio, usedGpiosOverride = null, addressPinIds = ['s0', 's1', 's2', 's3']) {
     // Obtenir les GPIO déjà utilisés (sauf le SIG actuel)
     // Note: éviter la récursion infinie en ne passant pas par getUsedGpios si usedGpiosOverride est fourni
-    const usedGpios = usedGpiosOverride || new Set();
+    // Convertir en Set si ce n'est pas déjà un Set (gérer le cas où usedGpiosOverride est un Array)
+    let usedGpios;
+    if(usedGpiosOverride instanceof Set) {
+      usedGpios = new Set(usedGpiosOverride);
+    } else if(Array.isArray(usedGpiosOverride)) {
+      usedGpios = new Set(usedGpiosOverride);
+    } else if(usedGpiosOverride) {
+      usedGpios = new Set([usedGpiosOverride]);
+    } else {
+      usedGpios = new Set();
+    }
     usedGpios.delete(sigGpio);
     
     // Obtenir toutes les pins digitales disponibles
-    const availablePins = this.getAvailableDigitalPins(usedGpios);
+    // Note: getAvailableDigitalPins exclut déjà les GPIOs dans usedGpios, mais on doit aussi
+    // filtrer explicitement la pin SIG pour être cohérent avec generateAdditionalPins()
+    // qui exclut la pin principale si elle est digitale (voir form-generator.js ligne 432)
+    let availablePins = this.getAvailableDigitalPins(usedGpios);
+    // Exclure explicitement la pin SIG (comme dans generateAdditionalPins ligne 432)
+    availablePins = availablePins.filter(p => parseInt(p.gpio) !== sigGpio);
+    console.log('[GpioManager.calculateAddressPins] Après exclusion SIG pin:', sigGpio, 'availablePins count:', availablePins.length);
+    console.log('[GpioManager.calculateAddressPins] sigGpio:', sigGpio, 'availablePins count:', availablePins.length, 'addressPinIds:', addressPinIds);
+    console.log('[GpioManager.calculateAddressPins] availablePins:', availablePins.map(p => ({label: p.label, gpio: p.gpio})));
     
-    // Prendre les 4 premières
-    const result = {
-      s0: availablePins[0] ? parseInt(availablePins[0].gpio) : null,
-      s1: availablePins[1] ? parseInt(availablePins[1].gpio) : null,
-      s2: availablePins[2] ? parseInt(availablePins[2].gpio) : null,
-      s3: availablePins[3] ? parseInt(availablePins[3].gpio) : null
-    };
+    // Construire le résultat dynamiquement depuis addressPinIds
+    const result = {};
+    addressPinIds.forEach((pinId, index) => {
+      if(availablePins[index]) {
+        result[pinId] = parseInt(availablePins[index].gpio);
+        console.log('[GpioManager.calculateAddressPins]', pinId, '=', result[pinId], 'depuis', availablePins[index].label);
+      } else {
+        result[pinId] = null;
+        console.warn('[GpioManager.calculateAddressPins] Pas assez de pins disponibles pour', pinId);
+      }
+    });
     
     return result;
   },
@@ -83,19 +112,30 @@ const GpioManager = {
    * @returns {Array} Liste des pins digitales triées par numéro
    */
   getAllDigitalPins() {
-    if(!caps || !caps.pins) return [];
-    const allDPinsRaw = caps.pins.filter(p => p.label && p.label.startsWith('D'));
+    if(typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) return [];
+    const allDPinsRaw = caps.pins.filter(p => p && p.label && typeof p.label === 'string' && p.label.startsWith('D'));
+    console.log('[GpioManager.getAllDigitalPins] allDPinsRaw count:', allDPinsRaw.length, 'exemples:', allDPinsRaw.slice(0, 5).map(p => ({label: p.label, gpio: p.gpio})));
     const uniqueDPinsMap = new Map();
     allDPinsRaw.forEach(p => {
-      if(!uniqueDPinsMap.has(p.gpio)) {
-        uniqueDPinsMap.set(p.gpio, p);
+      if(!p || p.gpio === undefined) return;
+      const gpioKey = parseInt(p.gpio);
+      if(isNaN(gpioKey)) return;
+      if(!uniqueDPinsMap.has(gpioKey)) {
+        uniqueDPinsMap.set(gpioKey, p);
+      } else {
+        const existing = uniqueDPinsMap.get(gpioKey);
+        console.log('[GpioManager.getAllDigitalPins] GPIO dupliqué ignoré:', gpioKey, 'label:', p.label, 'déjà présent:', existing ? existing.label : 'N/A');
       }
     });
-    return Array.from(uniqueDPinsMap.values()).sort((a, b) => {
+    const result = Array.from(uniqueDPinsMap.values()).sort((a, b) => {
+      if(!a || !b || !a.label || !b.label) return 0;
       const numA = parseInt(a.label.substring(1));
       const numB = parseInt(b.label.substring(1));
+      if(isNaN(numA) || isNaN(numB)) return 0;
       return numA - numB;
     });
+    console.log('[GpioManager.getAllDigitalPins] Résultat unique count:', result.length, 'exemples:', result.slice(0, 5).map(p => ({label: p.label, gpio: p.gpio})));
+    return result;
   },
 
   /**
@@ -107,9 +147,24 @@ const GpioManager = {
   getAvailableDigitalPins(usedGpios, currentValues = null) {
     const allDPins = this.getAllDigitalPins();
     const currentSet = currentValues instanceof Set ? currentValues : new Set();
-    return allDPins.filter(p => {
-      return !usedGpios.has(p.gpio) || currentSet.has(p.gpio);
+    // Convertir usedGpios en Set si ce n'est pas déjà un Set (gérer le cas où c'est un Array)
+    let usedGpiosSet;
+    if(usedGpios instanceof Set) {
+      usedGpiosSet = usedGpios;
+    } else if(Array.isArray(usedGpios)) {
+      usedGpiosSet = new Set(usedGpios);
+    } else {
+      usedGpiosSet = new Set();
+    }
+    console.log('[GpioManager.getAvailableDigitalPins] usedGpios type:', usedGpios instanceof Set ? 'Set' : (Array.isArray(usedGpios) ? 'Array' : typeof usedGpios), 'usedGpios:', Array.from(usedGpiosSet), 'allDPins count:', allDPins.length);
+    const filtered = allDPins.filter(p => {
+      const isUsed = usedGpiosSet.has(p.gpio);
+      const isCurrent = currentSet.has(p.gpio);
+      const isAvailable = !isUsed || isCurrent;
+      return isAvailable;
     });
+    console.log('[GpioManager.getAvailableDigitalPins] Pins disponibles après filtrage:', filtered.length, 'exemples:', filtered.slice(0, 5).map(p => ({label: p.label, gpio: p.gpio})));
+    return filtered;
   },
 
   /**
@@ -119,10 +174,12 @@ const GpioManager = {
    * @returns {boolean} true si le mode auto est disponible
    */
   checkAutoAvailability(sigGpio, usedGpios) {
-    if(!caps || !caps.pins) return false;
-    const sigPin = caps.pins.find(p => p.gpio === sigGpio);
+    if(typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) return false;
+    if(typeof sigGpio !== 'number') sigGpio = parseInt(sigGpio);
+    if(isNaN(sigGpio)) return false;
+    const sigPin = caps.pins.find(p => p && parseInt(p.gpio) === sigGpio);
     if(!sigPin) return false;
-    const usedGpiosCopy = new Set(usedGpios);
+    const usedGpiosCopy = usedGpios instanceof Set ? new Set(usedGpios) : new Set();
     usedGpiosCopy.delete(sigGpio);
     return this.areAddressPinsAvailable(sigGpio, usedGpiosCopy);
   },
@@ -168,16 +225,18 @@ const GpioManager = {
    * @returns {boolean} true si au moins 4 pins digitales sont disponibles
    */
   areAddressPinsAvailable(sigGpio, excludeUsedGpios = null) {
-    if(!caps || !caps.pins) return false;
-    const sigPin = caps.pins.find(p => p.gpio === sigGpio);
+    if(typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) return false;
+    if(typeof sigGpio !== 'number') sigGpio = parseInt(sigGpio);
+    if(isNaN(sigGpio)) return false;
+    const sigPin = caps.pins.find(p => p && parseInt(p.gpio) === sigGpio);
     if(!sigPin) return false;
     // Note: éviter la récursion infinie en utilisant new Set() si excludeUsedGpios n'est pas fourni
-    const usedGpios = excludeUsedGpios || new Set();
+    const usedGpios = excludeUsedGpios instanceof Set ? new Set(excludeUsedGpios) : (excludeUsedGpios ? new Set(excludeUsedGpios) : new Set());
     // Exclure le GPIO SIG lui-même
     usedGpios.delete(sigGpio);
     // Vérifier qu'il y a au moins 4 pins digitales disponibles
     const availablePins = this.getAvailableDigitalPins(usedGpios);
-    return availablePins.length >= 4;
+    return Array.isArray(availablePins) && availablePins.length >= 4;
   },
 
   /**
@@ -189,40 +248,60 @@ const GpioManager = {
     const usedGpios = new Set();
     
     // Ajouter les GPIO des pins configurées
+    if(typeof pcfg === 'undefined' || !pcfg) return usedGpios;
+    if(typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) return usedGpios;
+    
     Object.keys(pcfg).forEach(lbl => {
       const cfg = pcfg[lbl];
-      const pin = caps.pins.find(p => p.label === lbl);
+      if(!cfg) return;
+      const pin = caps.pins.find(p => p && p.label === lbl);
       if(!pin) return;
       
-      // Pour les composants complexes (MUX) temporaires, ajouter aussi les pins d'adresse
-      const role = cfg?.role ? (typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role) : '';
+      // Pour les composants avec additionalPins temporaires, ajouter aussi les pins d'adresse
+      const role = cfg.role ? (typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role) : '';
       const def = typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.getById 
         ? ComponentDefinitions.getById(role)
         : (typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null);
-      if(def && def.isComplex) {
+      const hasAdditionalPins = def && (def.additionalPinCount > 0 || (def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0));
+      if(hasAdditionalPins && cfg.additionalPins && typeof cfg.additionalPins === 'object') {
         const sigGpio = parseInt(pin.gpio);
-        usedGpios.add(sigGpio);
-        // Calculer et ajouter les pins d'adresse (mode auto)
-        // Passer usedGpios pour éviter une boucle infinie
-        const addrPins = this.calculateAddressPins(sigGpio, usedGpios);
-        if(addrPins.s0 !== null) usedGpios.add(addrPins.s0);
-        if(addrPins.s1 !== null) usedGpios.add(addrPins.s1);
-        if(addrPins.s2 !== null) usedGpios.add(addrPins.s2);
-        if(addrPins.s3 !== null) usedGpios.add(addrPins.s3);
+        if(!isNaN(sigGpio)) {
+          usedGpios.add(sigGpio);
+          /* Extraire les IDs des pins d'adresse depuis les définitions (générique) */
+          if(def.additionalPins && Array.isArray(def.additionalPins)) {
+            const addressPinIds = def.additionalPins
+              .filter(ap => ap && ap.id && ap.pinType === 1 && !ap.optional && ap.id !== 'sig' && ap.id !== 'en')
+              .map(ap => ap.id);
+            /* Calculer et ajouter les pins d'adresse (mode auto) */
+            /* Passer usedGpios pour éviter une boucle infinie */
+            const addrPins = this.calculateAddressPins(sigGpio, usedGpios, addressPinIds);
+            /* Ajouter toutes les pins d'adresse calculées (générique) */
+            if(addrPins && typeof addrPins === 'object') {
+              addressPinIds.forEach(pinId => {
+                if(addrPins[pinId] !== null && addrPins[pinId] !== undefined) {
+                  const gpioVal = parseInt(addrPins[pinId]);
+                  if(!isNaN(gpioVal)) usedGpios.add(gpioVal);
+                }
+              });
+            }
+          }
+        }
       } else {
-        usedGpios.add(pin.gpio);
+        const gpioVal = parseInt(pin.gpio);
+        if(!isNaN(gpioVal)) usedGpios.add(gpioVal);
       }
     });
     
     // Ne pas exclure le composant complexe en cours d'édition sauf si on est vraiment en train de l'éditer
-    const funcSelectValue = $('#funcSelect')?.value || '';
+    const funcSelect = typeof $ === 'function' ? $('#funcSelect') : null;
+    const funcSelectValue = funcSelect && funcSelect.value ? funcSelect.value : '';
     // Vérifier si le composant sélectionné est complexe
     const migratedRole = typeof migrateRole === 'function' ? migrateRole(funcSelectValue) : funcSelectValue;
     const funcDef = typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.getById
       ? ComponentDefinitions.getById(migratedRole)
-      : null;
-    const isEditingComplex = funcDef && funcDef.isComplex;
-    // Obtenir l'ID du composant complexe en cours d'édition dynamiquement
+      : (typeof getComponentDefinition === 'function' ? getComponentDefinition(migratedRole) : null);
+    const isEditingComplex = funcDef && (funcDef.additionalPinCount > 0 || (funcDef.additionalPins && Array.isArray(funcDef.additionalPins) && funcDef.additionalPins.length > 0));
+    // Obtenir l'ID du composant avec additionalPins en cours d'édition dynamiquement
     let currentComplexId = null;
     if(isEditingComplex && typeof FormGenerator !== 'undefined' && FormGenerator.getFieldId) {
       currentComplexId = FormGenerator.getFieldId(funcDef, 'id');
@@ -231,7 +310,7 @@ const GpioManager = {
       currentComplexId = prefix + 'Id';
     }
     
-    // Pour les composants complexes, exclure les pins additionnelles en cours d'édition
+    // Pour les composants avec additionalPins, exclure les pins additionnelles en cours d'édition
     if(isEditingComplex && funcDef && funcDef.additionalPins) {
       funcDef.additionalPins.forEach(additionalPin => {
         if(!additionalPin.id) return;
@@ -269,13 +348,17 @@ const GpioManager = {
    * @returns {Array} Liste des pins disponibles
    */
   getPinsByType(pinType, excludeGpios = []) {
-    if(!caps || !caps.pins) return [];
+    if(typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) return [];
     
-    const excludeSet = new Set(excludeGpios);
+    const excludeSet = Array.isArray(excludeGpios) ? new Set(excludeGpios.map(g => parseInt(g)).filter(g => !isNaN(g))) : new Set();
     
     return caps.pins.filter(pin => {
+      if(!pin || pin.gpio === undefined) return false;
+      const gpio = parseInt(pin.gpio);
+      if(isNaN(gpio)) return false;
+      
       // Exclure les pins déjà utilisées
-      if(excludeSet.has(parseInt(pin.gpio))) return false;
+      if(excludeSet.has(gpio)) return false;
       
       // Filtrer selon pinType
       switch(pinType) {

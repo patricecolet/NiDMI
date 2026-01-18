@@ -1,15 +1,36 @@
 #include "ComponentRegistry.h"
-#include "basic/PotentiometerDef.h"
-#include "basic/ButtonDef.h"
-#include "basic/LedDef.h"
-#include "multiplexer/MuxDef.h"
+#include "Definitions.h"  // Centralise tous les includes de définitions pour garantir leur enregistrement automatique
 #include <cstring>
 #include <utility>  // pour std::move
 
 // Initialisation des membres statiques
 // Utiliser un pointeur pour éviter l'initialisation statique avant setup() (crash sur ESP32-C3)
 std::vector<ComponentDefinition>* ComponentRegistry::definitions_ptr = nullptr;
+std::vector<ComponentDefinition>* ComponentRegistry::pending_definitions_ptr = nullptr;
 bool ComponentRegistry::initialized_ = false;
+
+bool ComponentRegistry::registerDefinition(ComponentDefinition&& def) {
+    // Créer le vecteur temporaire si nécessaire
+    // Note: Ce vecteur est créé au premier enregistrement, même avant init()
+    if (pending_definitions_ptr == nullptr) {
+        pending_definitions_ptr = new (std::nothrow) std::vector<ComponentDefinition>();
+        if (pending_definitions_ptr == nullptr) {
+            #ifdef ARDUINO
+            Serial.printf("[ComponentRegistry] WARNING: Failed to allocate pending vector\n");
+            #endif
+            return false;
+        }
+    }
+    
+    // Vérifier que la définition est valide
+    if (def.id == nullptr) {
+        return false;
+    }
+    
+    // Déplacer la définition dans le vecteur temporaire
+    pending_definitions_ptr->push_back(std::move(def));
+    return true;
+}
 
 void ComponentRegistry::init() {
     if (initialized_) return;
@@ -34,46 +55,29 @@ void ComponentRegistry::init() {
     // Initialiser le ValidationRegistry d'abord
     ValidationRegistry::init();
     
-    // === FAMILLE BASIC ===
-    // Composants simples : Potentiomètre, Bouton, LED
-    // Créer chaque définition dans un bloc séparé pour limiter la portée sur la pile
+    // === ENREGISTREMENT AUTOMATIQUE ===
+    // Les définitions ont été enregistrées automatiquement via registerDefinition()
+    // lors du chargement des modules. Il suffit maintenant de les déplacer
+    // du vecteur temporaire vers le vecteur principal.
     
-    {
-        ComponentDefinition def = Components::Potentiometer::createDefinition();
-        if (def.id != nullptr) {
-            definitions_ptr->push_back(std::move(def));
+    // Déplacer toutes les définitions enregistrées automatiquement
+    if (pending_definitions_ptr != nullptr && !pending_definitions_ptr->empty()) {
+        // Réserver l'espace si nécessaire
+        if (definitions_ptr->size() + pending_definitions_ptr->size() > definitions_ptr->capacity()) {
+            definitions_ptr->reserve(definitions_ptr->size() + pending_definitions_ptr->size());
         }
-    }
-    
-    {
-        ComponentDefinition def = Components::Button::createDefinition();
-        if (def.id != nullptr) {
-            definitions_ptr->push_back(std::move(def));
+        
+        // Déplacer toutes les définitions enregistrées
+        for (auto& def : *pending_definitions_ptr) {
+            if (def.id != nullptr) {
+                definitions_ptr->push_back(std::move(def));
+            }
         }
-    }
-    
-    {
-        ComponentDefinition def = Components::Led::createDefinition();
-        if (def.id != nullptr) {
-            definitions_ptr->push_back(std::move(def));
-        }
-    }
-    
-    // === FAMILLE MULTIPLEXER ===
-    // Multiplexeurs analogiques : HC4067, HC4051, etc.
-    
-    {
-        ComponentDefinition def = Components::HC4067::createDefinition();
-        if (def.id != nullptr) {
-            definitions_ptr->push_back(std::move(def));
-        }
-    }
-    
-    {
-        ComponentDefinition def = Components::HC4051::createDefinition();
-        if (def.id != nullptr) {
-            definitions_ptr->push_back(std::move(def));
-        }
+        
+        // Nettoyer le vecteur temporaire
+        pending_definitions_ptr->clear();
+        delete pending_definitions_ptr;
+        pending_definitions_ptr = nullptr;
     }
     
     // === FAMILLES FUTURES ===
@@ -162,6 +166,14 @@ void ComponentRegistry::cleanup() {
         definitions_ptr->clear();
         delete definitions_ptr;
         definitions_ptr = nullptr;
+    }
+    if (pending_definitions_ptr != nullptr) {
+        for (auto& def : *pending_definitions_ptr) {
+            def.cleanup();
+        }
+        pending_definitions_ptr->clear();
+        delete pending_definitions_ptr;
+        pending_definitions_ptr = nullptr;
     }
     initialized_ = false;
 }

@@ -1,6 +1,6 @@
 /**
  * Configuration des messages MIDI (générique)
- * Module refactorisé depuis components.js - Phase 1.3
+ * Module refactorisé depuis components.js
  * 
  * Responsabilités:
  * - Génération de la section de configuration MIDI

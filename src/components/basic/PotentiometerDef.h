@@ -29,7 +29,6 @@ struct Potentiometer {
     static constexpr ComponentType TYPE = ComponentType::POTENTIOMETER;
     static constexpr PinType PIN_TYPE = PinType::PIN_ANALOG;
     static constexpr bool IMPLEMENTED = true;
-    static constexpr bool IS_COMPLEX = false;
     static constexpr bool SUPPORTS_MIDI = true;
     static constexpr bool SUPPORTS_OSC = true;
     
@@ -59,7 +58,6 @@ struct Potentiometer {
         def.type = TYPE;
         def.pinType = PIN_TYPE;
         def.implemented = IMPLEMENTED;
-        def.isComplex = IS_COMPLEX;
         def.supportsMidi = SUPPORTS_MIDI;
         def.supportsOsc = SUPPORTS_OSC;
         def.additionalPinCount = 0;

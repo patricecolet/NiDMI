@@ -18,11 +18,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   await loadCaps();
   /* Dessiner le board SVG avec les pins */
   drawBoard();
-  /* Charger la liste des composants complexes AVANT loadConfiguredPins pour éviter les conflits */
-  if(typeof ComplexComponents !== 'undefined' && ComplexComponents.loadList) {
-   await ComplexComponents.loadList();
-  }
-  /* Charger les pins déjà configurées (après les complexes pour nettoyer les conflits) */
+  /* Charger les pins déjà configurées (inclut les composants complexes depuis MuxManager) */
   await loadConfiguredPins();
   /* Charger les GPIOs utilisés depuis le backend */
   await loadUsedGpiosFromBackend();
@@ -33,10 +29,6 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   // Continuer quand même avec le board (sans définitions)
   loadCaps().then(async ()=>{
    drawBoard();
-   /* Charger la liste des composants complexes AVANT loadConfiguredPins pour éviter les conflits */
-   if(typeof ComplexComponents !== 'undefined' && ComplexComponents.loadList) {
-    await ComplexComponents.loadList();
-   }
    await loadConfiguredPins();
    await loadUsedGpiosFromBackend();
    updateBusVisuals();

@@ -93,7 +93,7 @@ if [ ! -f "web/app.js" ] && [ ! -f "web/js/core.js" ]; then
     exit 1
 fi
 
-# Concaténer les fichiers JS dans l'ordre : core.js, api.js, definitions.js, form-generator.js, midi-config.js, gpio-manager.js, complex-components.js, pins.js, components.js, websocket.js, puis app.js
+# Concaténer les fichiers JS dans l'ordre : core.js, api.js, definitions.js, form-generator.js, midi-config.js, gpio-manager.js, pins.js, components.js, websocket.js, puis app.js
 echo "📄 Concaténation des modules JavaScript..."
 TEMP_JS=$(mktemp)
 {
@@ -119,10 +119,6 @@ TEMP_JS=$(mktemp)
     if [ -f "web/js/gpio-manager.js" ]; then
         echo ""
         cat web/js/gpio-manager.js
-    fi
-    if [ -f "web/js/complex-components.js" ]; then
-        echo ""
-        cat web/js/complex-components.js
     fi
     if [ -f "web/js/pins.js" ]; then
         echo ""

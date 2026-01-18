@@ -1,6 +1,6 @@
 /**
  * Gestion des définitions de composants (cache et accès)
- * Module refactorisé depuis api.js - Phase 1.1
+ * Module refactorisé depuis api.js
  */
 
 const ComponentDefinitions = {

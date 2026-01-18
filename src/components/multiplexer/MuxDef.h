@@ -32,7 +32,6 @@ struct MuxBase {
     static constexpr ComponentFamily FAMILY = ComponentFamily::MULTIPLEXER;
     static constexpr ComponentType TYPE = ComponentType::MUX;
     static constexpr PinType PIN_TYPE = PinType::PIN_ANALOG;
-    static constexpr bool IS_COMPLEX = true;
     static constexpr bool SUPPORTS_MIDI = true;
     static constexpr bool SUPPORTS_OSC = true;
     
@@ -61,7 +60,6 @@ struct MuxBase {
         def.familyName = FAMILY_NAME;
         def.type = TYPE;
         def.pinType = PIN_TYPE;
-        def.isComplex = IS_COMPLEX;
         def.supportsMidi = SUPPORTS_MIDI;
         def.supportsOsc = SUPPORTS_OSC;
         

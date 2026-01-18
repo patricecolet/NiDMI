@@ -343,32 +343,30 @@ function migrateRole(role){
 
 async function loadConfiguredPins(){
  try {
+ /* Charger les pins simples depuis /api/pins/list */
  const r=await fetch('/api/pins/list');
+ if(!r.ok) {
+  console.warn('[loadConfiguredPins] Erreur API:', r.status);
+  return;
+ }
  const d=await r.json();
- if(d.pins && Array.isArray(d.pins)) {
- d.pins.forEach(pinData => {
- if(pinData.pinLabel && pinData.role) {
-  pinData.role=migrateRole(pinData.role);
-  pcfg[pinData.pinLabel] = pinData;
+ if(d && d.pins && Array.isArray(d.pins)) {
+  if(typeof pcfg === 'undefined') {
+   console.error('[loadConfiguredPins] pcfg non défini');
+   return;
+  }
+  d.pins.forEach(pinData => {
+   if(pinData && pinData.pinLabel && pinData.role) {
+    pinData.role = typeof migrateRole === 'function' ? migrateRole(pinData.role) : pinData.role;
+    pcfg[pinData.pinLabel] = pinData;
+   }
+  });
  }
- });
- 
- /* Nettoyer les conflits : supprimer pcfg si un composant complexe utilise cette pin comme SIG */
- if(caps && caps.pins && typeof ComplexComponents !== 'undefined' && ComplexComponents.list) {
-   ComplexComponents.list.forEach(complexComp => {
-     if(complexComp.sig !== undefined) {
-       const sigPin = caps.pins.find(p => p.gpio === parseInt(complexComp.sig));
-       if(sigPin && sigPin.label && pcfg[sigPin.label]) {
-         console.log(`[loadConfiguredPins] Suppression de pcfg[${sigPin.label}] (conflit avec composant complexe SIG ${complexComp.sig})`);
-         delete pcfg[sigPin.label];
-       }
-     }
-   });
- }
- 
+
+ /* /api/pins/list inclut déjà les composants complexes depuis MuxManager avec additionalPins */
+
  updatePinsList();
  updateBusVisuals();
- }
  } catch(err) {
  console.log('Erreur chargement pins:', err);
  }
@@ -376,45 +374,50 @@ async function loadConfiguredPins(){
 
 async function saveAll(){
  const msg=$('#saveAllMsg');
+ if(!msg) {
+  console.error('[saveAll] Élément saveAllMsg non trouvé');
+  return;
+ }
  msg.textContent='Enregistrement...';
  try{
- /* Sauvegarder le composant complexe en cours d'édition s'il y en a un */
- const funcSelectValue = $('#funcSelect')?.value || '';
- /* Migrer le rôle si nécessaire (comme dans ComplexComponents.saveFromPin) */
- const migratedRoleValue = typeof migrateRole === 'function' ? migrateRole(funcSelectValue) : funcSelectValue;
- /* Si composant complexe sélectionné, sauvegarder via ComplexComponents.saveFromPin */
- const funcDef = typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.getById
-   ? ComponentDefinitions.getById(migratedRoleValue)
-   : null;
- if(funcDef && funcDef.isComplex) {
-   if(typeof ComplexComponents === 'undefined' || !ComplexComponents.saveFromPin) {
-     console.warn('[saveAll] ComplexComponents.saveFromPin non disponible');
-   } else {
-     /* Appeler saveFromPin() qui gère toute la validation interne */
-     await ComplexComponents.saveFromPin();
-   }
+ if(typeof pcfg === 'undefined' || !pcfg) {
+  msg.textContent='Erreur: configuration non disponible';
+  msg.style.color='#ef4444';
+  return;
  }
- 
+ /* Sauvegarder tous les composants (simples et complexes) via /api/pins/set */
  const ps=Object.keys(pcfg).map(async lbl=>{
  const c=pcfg[lbl];
- if(!c||!c.role) return;
- /* Ne pas sauvegarder les composants complexes via cette API, ils sont gérés via ComplexComponents */
+ if(!c||!c.role) return null;
+ /* Détecter composant complexe depuis pcfg.additionalPins */
+ const hasAdditionalPins = c.additionalPins && typeof c.additionalPins === 'object' && c.additionalPins.sig !== undefined;
  const role = migrateRole(c.role);
  const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
- if(def && def.isComplex) return;
  
- /* Vérifier s'il y a un composant complexe qui utilise cette pin comme SIG et le supprimer */
- /* Un composant simple remplace toujours le composant complexe sur cette pin */
- if(caps && caps.pins) {
+ /* Si composant simple, vérifier et supprimer les complexes sur cette pin (chercher dans pcfg) */
+ if(!hasAdditionalPins && caps && caps.pins) {
    const currentPin = caps.pins.find(p => p.label === lbl);
    if(currentPin) {
-     const existingComplex = typeof ComplexComponents !== 'undefined' && ComplexComponents.list
-       ? ComplexComponents.list.find(m => m.sig === parseInt(currentPin.gpio))
-       : null;
-     if(existingComplex) {
-       console.log(`[saveAll] Suppression du composant complexe ${existingComplex.id} sur pin SIG ${existingComplex.sig} (remplacé par ${lbl})`);
-       if(typeof ComplexComponents !== 'undefined' && ComplexComponents.delete) {
-         await ComplexComponents.delete(existingComplex.id, null, null);
+     const sigGpio = parseInt(currentPin.gpio);
+     /* Chercher composant complexe dans pcfg par SIG */
+     const existingComplexLabel = Object.keys(pcfg).find(plbl => {
+       const cfg = pcfg[plbl];
+       return cfg && cfg.additionalPins && cfg.additionalPins.sig === sigGpio;
+     });
+     if(existingComplexLabel) {
+       const existingComplex = pcfg[existingComplexLabel];
+       const complexId = existingComplex.complexId;
+       if(complexId !== undefined) {
+         console.log(`[saveAll] Suppression du composant complexe ${complexId} sur pin SIG ${sigGpio} (remplacé par ${lbl})`);
+         /* Supprimer via /api/pins/delete (unifié) */
+         try {
+           const formData = new URLSearchParams();
+           formData.append('pin', existingComplexLabel);
+           await fetch('/api/pins/delete', {method: 'POST', body: formData});
+           console.log(`[saveAll] Composant complexe ${complexId} supprimé via /api/pins/delete`);
+         } catch(e) {
+           console.error('[saveAll] Erreur suppression composant complexe:', e);
+         }
        }
      }
    }
@@ -458,9 +461,18 @@ async function saveAll(){
   });
  }
  
- // Envoyer les additionalPins si composant complexe (mais ici c'est déjà filtré, donc ne devrait pas arriver)
- // Les composants complexes utilisent /api/mux/add (nom d'endpoint historique, mais générique)
- 
+ /* Envoyer additionalPins si présent */
+ if(hasAdditionalPins && c.additionalPins) {
+   if(c.additionalPins.sig !== undefined) p.set('sig', c.additionalPins.sig);
+   if(c.additionalPins.s0 !== undefined) p.set('s0', c.additionalPins.s0);
+   if(c.additionalPins.s1 !== undefined) p.set('s1', c.additionalPins.s1);
+   if(c.additionalPins.s2 !== undefined) p.set('s2', c.additionalPins.s2);
+   if(c.additionalPins.s3 !== undefined) p.set('s3', c.additionalPins.s3);
+   if(c.additionalPins.en !== undefined) p.set('en', c.additionalPins.en);
+   /* complexId pour maintenir l'ID */
+   if(c.complexId !== undefined) p.set('complexId', c.complexId);
+ }
+
  // Champs OSC et Debug (communs à tous)
  if(c.oscEnabled) p.set('oscEnabled','true');
  if(c.oscAddress) p.set('oscAddress',c.oscAddress);
@@ -469,7 +481,7 @@ async function saveAll(){
  if(c.dbgHeader) p.set('dbgHeader',c.dbgHeader);
  return fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
  });
- await Promise.all(ps);
+ await Promise.all(ps.filter(p => p !== null));
  
  const listRes=await fetch('/api/pins/list');
  if(!listRes.ok){

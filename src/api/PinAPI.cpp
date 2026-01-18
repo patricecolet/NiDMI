@@ -5,6 +5,7 @@
 #include "../hardware/MuxConstants.h"
 #include "../Globals.h"
 #include "../config/ConfigCache.h"
+#include "../components/ComponentRegistry.h"
 
 /* Forward declarations */
 String getDefaultConfig(String pin);
@@ -73,6 +74,7 @@ void setupPinAPI(AsyncWebServer& server) {
     });
 
     /* API - Liste des pins configurées (format pour saveAll avec pinLabel) */
+    /* Inclut aussi les composants complexes depuis MuxManager */
     server.on("/api/pins/list", HTTP_GET, [](AsyncWebServerRequest *request){
         String json = "{";
         json += "\"pins\":[";
@@ -87,14 +89,131 @@ void setupPinAPI(AsyncWebServer& server) {
         const PinMapping* mappings = PinMapper::getAllMappings();
         size_t mapping_count = PinMapper::getMappingCount();
         
+        /* Charger les pins simples depuis NVS */
         for (size_t i = 0; i < mapping_count; i++) {
             String pinLabel = String(mappings[i].label);
             String key = "pin_" + pinLabel;
             String configStr = preferences.getString(key.c_str(), "");
             if (!configStr.isEmpty()) {
+                /* Ignorer les pins qui ont additionalPins (seront ajoutées depuis MuxManager) */
+                if(configStr.indexOf("\"additionalPins\"") >= 0) {
+                    continue;
+                }
                 if (!first) json += ",";
                 json += configStr;  // Le config est déjà un JSON complet avec pinLabel
                 first = false;
+            }
+        }
+        
+        /* Ajouter les composants complexes depuis MuxManager */
+        for (uint8_t i = 0; i < MAX_MUXES; i++) {
+            const MuxConfig* cfg = g_componentManager.getMuxConfig(i);
+            if (cfg && cfg->enabled) {
+                /* Chercher d'abord le pinLabel depuis NVS (pinLabel original sauvegardé) */
+                String sigPinLabel = "";
+                /* Essayer d'abord la clé générique, puis la clé spécifique MUX pour compatibilité */
+                String keyNVS = "pinLabel_complex_" + String(i);
+                String savedPinLabel = preferences.getString(keyNVS.c_str(), "");
+                if(savedPinLabel.isEmpty()) {
+                    /* Fallback pour compatibilité avec l'ancien format */
+                    keyNVS = "pinLabel_mux_" + String(i);
+                    savedPinLabel = preferences.getString(keyNVS.c_str(), "");
+                }
+                if(!savedPinLabel.isEmpty()) {
+                    sigPinLabel = savedPinLabel;
+                } else {
+                    /* Si pas trouvé dans NVS, trouver le pinLabel correspondant au GPIO SIG */
+                    /* Préférer les labels analogiques (commencent par "A") si disponibles */
+                    String analogPinLabel = "";
+                    for (size_t j = 0; j < mapping_count; j++) {
+                        if(mappings[j].gpio == cfg->sig_pin) {
+                            String label = String(mappings[j].label);
+                            if(label.startsWith("A")) {
+                                analogPinLabel = label;
+                                break;
+                            } else if(sigPinLabel.isEmpty()) {
+                                sigPinLabel = label;
+                            }
+                        }
+                    }
+                    if(!analogPinLabel.isEmpty()) {
+                        sigPinLabel = analogPinLabel;
+                    }
+                }
+                
+                if(!sigPinLabel.isEmpty()) {
+                    if (!first) json += ",";
+                    
+                    /* Obtenir le rôle depuis NVS (stocké lors de la sauvegarde) */
+                    String roleKey = "role_complex_" + String(i);
+                    String role = preferences.getString(roleKey.c_str(), "");
+                    if(role.isEmpty()) {
+                        /* Fallback pour compatibilité avec l'ancien format */
+                        roleKey = "role_mux_" + String(i);
+                        role = preferences.getString(roleKey.c_str(), "");
+                    }
+                    /* Fallback : si pas trouvé, utiliser "hc4067" par défaut pour compatibilité */
+                    if(role.isEmpty()) {
+                        role = "hc4067";
+                    }
+                    
+                    /* Construire le JSON unifié avec additionalPins */
+                    json += "{";
+                    json += "\"pinLabel\":\"" + sigPinLabel + "\",";
+                    json += "\"role\":\"" + role + "\",";
+                    json += "\"complexId\":" + String(i) + ",";
+                    /* Construire additionalPins dynamiquement depuis la définition du composant */
+                    const ComponentDefinition* compDef = ComponentRegistry::findById(role.c_str());
+                    json += "\"additionalPins\":{";
+                    if(compDef && compDef->additionalPinCount > 0 && compDef->additionalPins) {
+                        bool firstPin = true;
+                        /* Construire avec les valeurs du MuxConfig (spécifique MUX pour l'instant) */
+                        for(uint8_t j = 0; j < compDef->additionalPinCount && j < compDef->additionalPinsCapacity; j++) {
+                            if(!firstPin) json += ",";
+                            String pinId = String(compDef->additionalPins[j].id);
+                            /* Mapper les IDs des pins MUX vers les valeurs dans MuxConfig */
+                            uint8_t pinValue = 255;
+                            if(pinId == "sig") pinValue = cfg->sig_pin;
+                            else if(pinId == "s0") pinValue = cfg->s0;
+                            else if(pinId == "s1") pinValue = cfg->s1;
+                            else if(pinId == "s2") pinValue = cfg->s2;
+                            else if(pinId == "s3") pinValue = cfg->s3;
+                            else if(pinId == "en") pinValue = cfg->en_pin;
+                            json += "\"" + pinId + "\":" + String(pinValue);
+                            firstPin = false;
+                        }
+                    } else {
+                        /* Fallback pour compatibilité : construire avec les valeurs hardcodées MUX */
+                        json += "\"sig\":" + String(cfg->sig_pin) + ",";
+                        json += "\"s0\":" + String(cfg->s0) + ",";
+                        json += "\"s1\":" + String(cfg->s1) + ",";
+                        json += "\"s2\":" + String(cfg->s2) + ",";
+                        json += "\"s3\":" + String(cfg->s3) + ",";
+                        json += "\"en\":" + String(cfg->en_pin);
+                    }
+                    json += "},";
+                    /* FormFields */
+                    uint16_t min_val = cfg->analog_min[0];
+                    uint16_t max_val = cfg->analog_max[0];
+                    json += "\"min\":" + String(min_val) + ",";
+                    json += "\"max\":" + String(max_val) + ",";
+                    json += "\"filterIntensity\":" + String(cfg->filter_intensity) + ",";
+                    /* MIDI/OSC config : mapper ccBase → rtpCc, midiChan → rtpChan, oscBase → oscAddress */
+                    json += "\"rtpCc\":" + String(cfg->cc_base) + ",";
+                    json += "\"rtpChan\":" + String(cfg->midi_channel) + ",";
+                    json += "\"rtpEnabled\":true,";
+                    String oscBase = (cfg->osc_base[0] != '\0') ? String(cfg->osc_base) : "/mux" + String(i);
+                    json += "\"oscAddress\":\"" + oscBase + "\",";
+                    String oscFormatStr = "float";
+                    if (cfg->osc_format == MuxOSCFormat::RAW) {
+                        oscFormatStr = "raw";
+                    } else if (cfg->osc_format == MuxOSCFormat::MIDI) {
+                        oscFormatStr = "midi";
+                    }
+                    json += "\"oscFormat\":\"" + oscFormatStr + "\"";
+                    json += "}";
+                    first = false;
+                }
             }
         }
         
@@ -157,6 +276,51 @@ void setupPinAPI(AsyncWebServer& server) {
         addParam("dbgEnabled");
         addParam("dbgHeader");
         
+        /* Vérifier si le composant a des additionalPins en consultant sa définition */
+        const ComponentDefinition* def = ComponentRegistry::findById(role.c_str());
+        bool hasAdditionalPins = false;
+        
+        if(def && def->additionalPinCount > 0 && def->additionalPins) {
+            /* Vérifier que tous les paramètres required sont présents */
+            hasAdditionalPins = true;
+            for(uint8_t i = 0; i < def->additionalPinCount && i < def->additionalPinsCapacity; i++) {
+                if(!def->additionalPins[i].optional) {
+                    if(!request->hasParam(def->additionalPins[i].id, true)) {
+                        hasAdditionalPins = false;
+                        break;
+                    }
+                }
+            }
+            
+            if(hasAdditionalPins) {
+                json += ",\"additionalPins\":{";
+                bool first = true;
+                for(uint8_t i = 0; i < def->additionalPinCount && i < def->additionalPinsCapacity; i++) {
+                    const AdditionalPinDef& pin = def->additionalPins[i];
+                    if(request->hasParam(pin.id, true)) {
+                        if(!first) json += ",";
+                        json += "\"" + String(pin.id) + "\":" + request->getParam(pin.id, true)->value();
+                        first = false;
+                    } else if(!pin.optional) {
+                        // Pin requise absente (ne devrait pas arriver après la vérification ci-dessus)
+                        hasAdditionalPins = false;
+                        break;
+                    } else {
+                        // Pin optionnelle absente, utiliser la valeur par défaut
+                        if(!first) json += ",";
+                        json += "\"" + String(pin.id) + "\":" + String(pin.defaultValue);
+                        first = false;
+                    }
+                }
+                json += "}";
+                
+                /* Ajouter complexId si présent */
+                if(request->hasParam("complexId", true)) {
+                    json += ",\"complexId\":" + request->getParam("complexId", true)->value();
+                }
+            }
+        }
+        
         json += "}";
         
         /* Sauvegarder en NVS */
@@ -164,7 +328,97 @@ void setupPinAPI(AsyncWebServer& server) {
         preferences.begin("nidmi", false);
         String key = "pin_" + pinLabel;
         preferences.putString(key.c_str(), json);
+        
+        /* Si composant avec additionalPins, sauvegarder aussi le pinLabel et le rôle pour référence future */
+        if(hasAdditionalPins && request->hasParam("complexId", true)) {
+            String complexIdStr = request->getParam("complexId", true)->value();
+            String keyPinLabel = "pinLabel_complex_" + complexIdStr;
+            preferences.putString(keyPinLabel.c_str(), pinLabel);
+            /* Stocker le rôle pour pouvoir le retrouver lors du chargement */
+            String roleKey = "role_complex_" + complexIdStr;
+            preferences.putString(roleKey.c_str(), role);
+        }
+        
         preferences.end();
+        
+        /* Si additionalPins présent, sauvegarder aussi dans MuxManager */
+        if(hasAdditionalPins) {
+            /* Lire les paramètres */
+            uint8_t sig = request->getParam("sig", true)->value().toInt();
+            uint8_t s0 = request->getParam("s0", true)->value().toInt();
+            uint8_t s1 = request->getParam("s1", true)->value().toInt();
+            uint8_t s2 = request->getParam("s2", true)->value().toInt();
+            uint8_t s3 = request->getParam("s3", true)->value().toInt();
+            uint8_t en = request->hasParam("en", true) ? request->getParam("en", true)->value().toInt() : 255;
+            
+            /* ID du composant complexe */
+            uint8_t mux_id = request->hasParam("complexId", true) ? request->getParam("complexId", true)->value().toInt() : 0;
+            /* Générer un ID disponible si non fourni */
+            if(mux_id == 0) {
+                for(uint8_t i = 0; i < MAX_MUXES; i++) {
+                    const MuxConfig* cfg = g_componentManager.getMuxConfig(i);
+                    if(!cfg || !cfg->enabled) {
+                        mux_id = i;
+                        break;
+                    }
+                }
+            }
+            
+            /* MIDI/OSC config : mapper depuis rtpCc → ccBase, rtpChan → midiChan, oscAddress → oscBase */
+            uint8_t ccBase = request->hasParam("rtpCc", true) ? request->getParam("rtpCc", true)->value().toInt() : 1;
+            uint8_t midiChan = request->hasParam("rtpChan", true) ? request->getParam("rtpChan", true)->value().toInt() : 1;
+            String oscBase = request->hasParam("oscAddress", true) ? request->getParam("oscAddress", true)->value() : "/mux" + String(mux_id);
+            
+            /* FormFields : min, max, filterIntensity */
+            uint16_t analog_min = request->hasParam("min", true) ? request->getParam("min", true)->value().toInt() : 0;
+            uint16_t analog_max = request->hasParam("max", true) ? request->getParam("max", true)->value().toInt() : 4095;
+            uint8_t filter_intensity = request->hasParam("filterIntensity", true) ? request->getParam("filterIntensity", true)->value().toInt() : 5;
+            if(filter_intensity < 1) filter_intensity = 1;
+            if(filter_intensity > 10) filter_intensity = 10;
+            
+            /* Format OSC */
+            MuxOSCFormat osc_format = MuxOSCFormat::FLOAT;
+            if(request->hasParam("oscFormat", true)) {
+                String oscFormatStr = request->getParam("oscFormat", true)->value();
+                if(oscFormatStr == "raw") {
+                    osc_format = MuxOSCFormat::RAW;
+                } else if(oscFormatStr == "midi") {
+                    osc_format = MuxOSCFormat::MIDI;
+                }
+            }
+            
+            /* Valider les valeurs */
+            if(mux_id >= MAX_MUXES) {
+                request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid complex ID (0-" + String(MAX_MUXES - 1) + ")\"}");
+                return;
+            }
+            
+            /* Sauvegarder dans MuxManager */
+            if(g_componentManager.addMux(mux_id, sig, s0, s1, s2, s3, en, analog_min, analog_max,
+                                         true, osc_format, filter_intensity, ccBase, midiChan, oscBase.c_str())) {
+                /* Sauvegarder aussi les clés NVS spécifiques aux mux (mux_X, mux_thresh_X) pour persistance */
+                Preferences prefs;
+                prefs.begin("nidmi", false);
+                String mux_key = "mux_" + String(mux_id);
+                String mux_config = String(sig) + "," + String(s0) + "," + String(s1) + "," +
+                                   String(s2) + "," + String(s3) + "," + String(en) + "," +
+                                   String(ccBase) + "," + String(midiChan) + "," +
+                                   "1," + String((int)osc_format) + "," +
+                                   String(filter_intensity) + "," + String(oscBase);
+                prefs.putString(mux_key.c_str(), mux_config);
+                
+                /* Sauvegarder les seuils */
+                String thresh_key = "mux_thresh_" + String(mux_id);
+                uint8_t buffer[5];
+                buffer[0] = 0x01;
+                buffer[1] = analog_min & 0xFF;
+                buffer[2] = (analog_min >> 8) & 0xFF;
+                buffer[3] = analog_max & 0xFF;
+                buffer[4] = (analog_max >> 8) & 0xFF;
+                prefs.putBytes(thresh_key.c_str(), buffer, 5);
+                prefs.end();
+            }
+        }
         
         /* Mettre à jour ConfigCache */
         g_configCache.setConfigClean(pinLabel, json);
@@ -173,193 +427,91 @@ void setupPinAPI(AsyncWebServer& server) {
         request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
 
-    /* API - Suppression d'une pin */
+    /* API - Suppression d'une pin (unifié pour simples et complexes) */
     server.on("/api/pins/delete", HTTP_POST, [](AsyncWebServerRequest *request){
         if(request->hasParam("pin", true)){
-            String pin = request->getParam("pin", true)->value();
-            g_configCache.removeConfig(pin);
+            String pinLabel = request->getParam("pin", true)->value();
+            
+            /* Chercher le complexId depuis MuxManager en premier (plus fiable) */
+            PinMapper::detectMcu();
+            const PinMapping* mappings = PinMapper::getAllMappings();
+            size_t mapping_count = PinMapper::getMappingCount();
+            
+            /* Trouver le GPIO SIG correspondant au pinLabel */
+            uint8_t sigGpio = 255;
+            for (size_t i = 0; i < mapping_count; i++) {
+                if(String(mappings[i].label) == pinLabel) {
+                    sigGpio = mappings[i].gpio;
+                    break;
+                }
+            }
+            
+            /* Chercher dans MuxManager si un MUX utilise ce GPIO comme SIG */
+            uint8_t foundMuxId = 255;
+            if(sigGpio != 255) {
+                for(uint8_t i = 0; i < MAX_MUXES; i++) {
+                    const MuxConfig* cfg = g_componentManager.getMuxConfig(i);
+                    if(cfg && cfg->enabled && cfg->sig_pin == sigGpio) {
+                        foundMuxId = i;
+                        break;
+                    }
+                }
+            }
+            
+            /* Si pas trouvé dans MuxManager, essayer depuis NVS (fallback) */
+            if(foundMuxId == 255) {
+                Preferences preferences;
+                preferences.begin("nidmi", true);
+                String key = "pin_" + pinLabel;
+                String configStr = preferences.getString(key.c_str(), "");
+                preferences.end();
+                
+                bool hasAdditionalPins = configStr.indexOf("\"additionalPins\"") >= 0;
+                if(hasAdditionalPins) {
+                    int complexIdStart = configStr.indexOf("\"complexId\":");
+                    if(complexIdStart >= 0) {
+                        int complexIdEnd = configStr.indexOf(",", complexIdStart);
+                        if(complexIdEnd < 0) complexIdEnd = configStr.indexOf("}", complexIdStart);
+                        if(complexIdEnd >= 0) {
+                            String complexIdStr = configStr.substring(complexIdStart + 12, complexIdEnd);
+                            foundMuxId = complexIdStr.toInt();
+                        }
+                    }
+                }
+            }
+            
+            /* Si on a trouvé un composant complexe, le supprimer */
+            if(foundMuxId != 255) {
+                /* Pour l'instant, on utilise encore MuxManager pour les MUX */
+                if(g_componentManager.removeMux(foundMuxId)) {
+                    /* Supprimer aussi les clés NVS (génériques et spécifiques MUX pour compatibilité) */
+                    Preferences prefs;
+                    prefs.begin("nidmi", false);
+                    /* Clés génériques */
+                    String pinLabelKey = "pinLabel_complex_" + String(foundMuxId);
+                    prefs.remove(pinLabelKey.c_str());
+                    String roleKey = "role_complex_" + String(foundMuxId);
+                    prefs.remove(roleKey.c_str());
+                    /* Clés spécifiques MUX (pour compatibilité et MuxManager) */
+                    String muxKey = "mux_" + String(foundMuxId);
+                    prefs.remove(muxKey.c_str());
+                    String threshKey = "mux_thresh_" + String(foundMuxId);
+                    prefs.remove(threshKey.c_str());
+                    /* Clés anciennes pour compatibilité */
+                    String oldPinLabelKey = "pinLabel_mux_" + String(foundMuxId);
+                    prefs.remove(oldPinLabelKey.c_str());
+                    String oldRoleKey = "role_mux_" + String(foundMuxId);
+                    prefs.remove(oldRoleKey.c_str());
+                    prefs.end();
+                }
+            }
+            
+            /* Supprimer dans NVS et ConfigCache (pour tous les types) */
+            g_configCache.removeConfig(pinLabel);
+            
             request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
             request->send(400, "application/json", "{\"error\":\"pin required\"}");
-        }
-    });
-    
-    // ========================================================================
-    // API - Multiplexeurs analogiques
-    // ========================================================================
-    
-    /* API - Liste des multiplexeurs configurés */
-    server.on("/api/mux/list", HTTP_GET, [](AsyncWebServerRequest *request){
-        String json = "{\"muxes\":[";
-        bool first = true;
-        
-        for (uint8_t i = 0; i < MAX_MUXES; i++) {
-            const MuxConfig* cfg = g_componentManager.getMuxConfig(i);
-            if (cfg && cfg->enabled) {
-                if (!first) json += ",";
-                json += "{";
-                json += "\"id\":" + String(i) + ",";
-                json += "\"sig\":" + String(cfg->sig_pin) + ",";
-                json += "\"s0\":" + String(cfg->s0) + ",";
-                json += "\"s1\":" + String(cfg->s1) + ",";
-                json += "\"s2\":" + String(cfg->s2) + ",";
-                json += "\"s3\":" + String(cfg->s3) + ",";
-                json += "\"en\":" + String(cfg->en_pin) + ",";
-                uint16_t min_val = cfg->analog_min[0];
-                uint16_t max_val = cfg->analog_max[0];
-                json += "\"min\":" + String(min_val) + ",";
-                json += "\"max\":" + String(max_val) + ",";
-                json += "\"filterIntensity\":" + String(cfg->filter_intensity) + ",";
-                json += "\"ccBase\":" + String(cfg->cc_base) + ",";
-                json += "\"midiChan\":" + String(cfg->midi_channel) + ",";
-                
-                String oscBase = (cfg->osc_base[0] != '\0') ? String(cfg->osc_base) : "/mux" + String(i);
-                json += "\"oscBase\":\"" + oscBase + "\",";
-                
-                String oscFormatStr = "float";
-                if (cfg->osc_format == MuxOSCFormat::RAW) {
-                    oscFormatStr = "raw";
-                } else if (cfg->osc_format == MuxOSCFormat::MIDI) {
-                    oscFormatStr = "midi";
-                }
-                json += "\"oscFormat\":\"" + oscFormatStr + "\"";
-                
-                json += "}";
-                first = false;
-            }
-        }
-        
-        json += "],\"count\":" + String(g_componentManager.getMuxCount()) + "}";
-        request->send(200, "application/json", json);
-    });
-    
-    /* API - Ajouter/modifier un multiplexeur */
-    server.on("/api/mux/add", HTTP_POST, [](AsyncWebServerRequest *request){
-        if (!request->hasParam("id", true) || !request->hasParam("sig", true) ||
-            !request->hasParam("s0", true) || !request->hasParam("s1", true) ||
-            !request->hasParam("s2", true) || !request->hasParam("s3", true)) {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Missing parameters\"}");
-            return;
-        }
-        
-        uint8_t mux_id = request->getParam("id", true)->value().toInt();
-        uint8_t sig = request->getParam("sig", true)->value().toInt();
-        uint8_t s0 = request->getParam("s0", true)->value().toInt();
-        uint8_t s1 = request->getParam("s1", true)->value().toInt();
-        uint8_t s2 = request->getParam("s2", true)->value().toInt();
-        uint8_t s3 = request->getParam("s3", true)->value().toInt();
-        uint8_t en = request->hasParam("en", true) ? request->getParam("en", true)->value().toInt() : 255;
-        
-        // Nouveaux paramètres MIDI/OSC (optionnels avec valeurs par défaut)
-        uint8_t ccBase = request->hasParam("ccBase", true) ? request->getParam("ccBase", true)->value().toInt() : 1;
-        uint8_t midiChan = request->hasParam("midiChan", true) ? request->getParam("midiChan", true)->value().toInt() : 1;
-        String oscBase = request->hasParam("oscBase", true) ? request->getParam("oscBase", true)->value() : "/mux" + String(mux_id);
-        
-        // Paramètres seuils et hystérésis (optionnels avec valeurs par défaut)
-        uint16_t analog_min = request->hasParam("min", true) ? request->getParam("min", true)->value().toInt() : 0;
-        uint16_t analog_max = request->hasParam("max", true) ? request->getParam("max", true)->value().toInt() : 4095;
-        // Hystérésis toujours activée (paramètre retiré de l'interface)
-        bool hysteresis_enabled = true;
-        
-        // Format OSC (optionnel, défaut: FLOAT)
-        MuxOSCFormat osc_format = MuxOSCFormat::FLOAT;
-        if (request->hasParam("oscFormat", true)) {
-            String oscFormatStr = request->getParam("oscFormat", true)->value();
-            if (oscFormatStr == "raw") {
-                osc_format = MuxOSCFormat::RAW;
-            } else if (oscFormatStr == "midi") {
-                osc_format = MuxOSCFormat::MIDI;
-            } else {
-                osc_format = MuxOSCFormat::FLOAT;
-            }
-        }
-        
-        // Intensité du filtrage (optionnel, défaut: 5)
-        uint8_t filter_intensity = request->hasParam("filterIntensity", true) ? 
-            request->getParam("filterIntensity", true)->value().toInt() : 5;
-        if (filter_intensity < 1) filter_intensity = 1;
-        if (filter_intensity > 10) filter_intensity = 10;
-        
-        // Valider les valeurs
-        if (mux_id >= MAX_MUXES) {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid mux ID (0-" + String(MAX_MUXES - 1) + ")\"}");
-            return;
-        }
-        
-        if (ccBase > 127) ccBase = 127;
-        if (midiChan < 1 || midiChan > 16) midiChan = 1;
-        
-        // Valider les seuils
-        if (analog_min >= analog_max) {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid thresholds: min >= max\"}");
-            return;
-        }
-        if (analog_max > 4095) {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Invalid max threshold (max 4095)\"}");
-            return;
-        }
-        
-        if (g_componentManager.addMux(mux_id, sig, s0, s1, s2, s3, en, analog_min, analog_max,
-                                     hysteresis_enabled, osc_format, filter_intensity, ccBase, midiChan, oscBase.c_str())) {
-            // Sauvegarder en NVS (config principale sans seuils)
-            Preferences prefs;
-            prefs.begin("nidmi", false);
-            String key = "mux_" + String(mux_id);
-            String config = String(sig) + "," + String(s0) + "," + String(s1) + "," +
-                           String(s2) + "," + String(s3) + "," + String(en) + "," +
-                           String(ccBase) + "," + String(midiChan) + "," +
-                           String(hysteresis_enabled ? 1 : 0) + "," + String((int)osc_format) + "," +
-                           String(filter_intensity) + "," + String(oscBase);
-            prefs.putString(key.c_str(), config);
-            
-            // Sauvegarder les seuils en format binaire compact (uniform : 5 bytes)
-            String thresh_key = "mux_thresh_" + String(mux_id);
-            uint8_t buffer[5];
-            buffer[0] = 0x01; // Flag: uniform = true
-            buffer[1] = analog_min & 0xFF;
-            buffer[2] = (analog_min >> 8) & 0xFF;
-            buffer[3] = analog_max & 0xFF;
-            buffer[4] = (analog_max >> 8) & 0xFF;
-            prefs.putBytes(thresh_key.c_str(), buffer, 5);
-            
-            prefs.end();
-            
-            request->send(200, "application/json", "{\"status\":\"ok\"}");
-        } else {
-            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"Failed to add mux\"}");
-        }
-    });
-    
-    /* API - Supprimer un multiplexeur */
-    server.on("/api/mux/delete", HTTP_POST, [](AsyncWebServerRequest *request){
-        if (!request->hasParam("id", true)) {
-            request->send(400, "application/json", "{\"error\":\"id required\"}");
-            return;
-        }
-        
-        uint8_t mux_id = request->getParam("id", true)->value().toInt();
-        
-        if (g_componentManager.removeMux(mux_id)) {
-            // Supprimer de NVS
-            Preferences prefs;
-            prefs.begin("nidmi", false);
-            String key = "mux_" + String(mux_id);
-            prefs.remove(key.c_str());
-            
-            // Supprimer les 16 configurations de pins MUX
-            for (uint8_t ch = 0; ch < 16; ch++) {
-                String pinLabel = "M" + String(mux_id) + "_" + String(ch);
-                String pinKey = "pin_" + pinLabel;
-                prefs.remove(pinKey.c_str());
-                // Supprimer aussi du cache
-                g_configCache.removeConfig(pinLabel);
-            }
-            
-            prefs.end();
-            
-            request->send(200, "application/json", "{\"status\":\"ok\"}");
-        } else {
-            request->send(400, "application/json", "{\"error\":\"Failed to remove mux\"}");
         }
     });
 }

@@ -1,6 +1,6 @@
 /**
  * Génération de formulaires HTML dynamiques
- * Module refactorisé depuis components.js - Phase 1.2
+ * Module refactorisé depuis components.js
  * 
  * Responsabilités:
  * - Génération de champs de formulaire depuis FormFieldDef
@@ -71,13 +71,28 @@ const FormGenerator = {
     container.innerHTML = '';
     
     // Parcourir tous les champs de formulaire
-    def.formFields.forEach(field => {
+    def.formFields.forEach((field, fieldIndex) => {
+      // Log pour debug
+      if(field.type === 2 && field.options) { // SELECT avec options
+        console.log(`[FormGenerator] Field ${fieldIndex} (${field.id}): type=SELECT, options type=${typeof field.options}, value=`, field.options);
+      }
       // Gérer l'affichage conditionnel
       let fieldContainer = container;
       if(field.dependsOn && field.showWhen) {
         const dependsOnEl = $('#' + field.dependsOn);
         if(dependsOnEl) {
-          const showWhenValues = JSON.parse(field.showWhen || '[]');
+          // Si showWhen est déjà un tableau, l'utiliser directement
+          let showWhenValues = [];
+          if(Array.isArray(field.showWhen)) {
+            showWhenValues = field.showWhen;
+          } else if(typeof field.showWhen === 'string') {
+            try {
+              showWhenValues = JSON.parse(field.showWhen || '[]');
+            } catch(e) {
+              console.warn('[FormGenerator.generateFormFields] Erreur parsing showWhen pour field:', field.id, 'value:', field.showWhen, 'erreur:', e);
+              showWhenValues = [];
+            }
+          }
           const shouldShow = showWhenValues.includes(dependsOnEl.value);
           // Créer un élément pour gérer l'affichage conditionnel
           let hiddenWrapper = $('#' + field.id + 'Row');
@@ -157,18 +172,81 @@ const FormGenerator = {
           input = document.createElement('select');
           input.id = field.id;
           if(field.width > 0) input.style.width = field.width + 'px';
-          if(field.options) {
+          // Vérifier que field.options existe et n'est pas null/undefined/vide
+          // field.options peut être null, undefined, une string vide, ou la string "null"
+          if(field.options && 
+             field.options !== null && 
+             field.options !== undefined && 
+             field.options !== 'null' && 
+             field.options !== 'undefined' &&
+             (typeof field.options !== 'string' || field.options.trim().length > 0)) {
             try {
-              const options = JSON.parse(field.options);
-              options.forEach(opt => {
-                const option = document.createElement('option');
-                option.value = opt.value;
-                option.textContent = opt.label;
-                input.appendChild(option);
-              });
+              // Les options peuvent être déjà un objet JavaScript (après JSON.parse du backend)
+              // ou une string JSON (si double-encodé)
+              let options = [];
+              
+              try {
+                // Vérifier d'abord si c'est déjà un tableau (cas le plus courant)
+                if(Array.isArray(field.options)) {
+                  options = field.options;
+                } else if(typeof field.options === 'string') {
+                  // Si c'est une string, la parser
+                  let cleanedOptions = field.options.trim();
+                  if(cleanedOptions && cleanedOptions.length > 0) {
+                    // Si la string commence et se termine par des guillemets, les retirer
+                    if(cleanedOptions.startsWith('"') && cleanedOptions.endsWith('"') && cleanedOptions.length > 2) {
+                      cleanedOptions = cleanedOptions.slice(1, -1);
+                      cleanedOptions = cleanedOptions.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+                    }
+                    // Vérifier que cleanedOptions commence par '[' ou '{' (JSON valide)
+                    if(cleanedOptions.startsWith('[') || cleanedOptions.startsWith('{')) {
+                      options = JSON.parse(cleanedOptions);
+                      if(!Array.isArray(options)) options = [];
+                    }
+                  }
+                } else if(typeof field.options === 'object' && field.options !== null) {
+                  // Si c'est un objet mais pas un tableau, essayer de le convertir
+                  options = Object.keys(field.options).map(key => ({
+                    value: key,
+                    label: field.options[key]
+                  }));
+                }
+              } catch(parseError) {
+                console.error('[FormGenerator.generateFormFields] Erreur parsing options pour field:', field.id, 'erreur:', parseError);
+                options = [];
+              }
+              
+              if(Array.isArray(options) && options.length > 0) {
+                options.forEach(opt => {
+                  if(opt && opt.value !== undefined && opt.label !== undefined) {
+                    const option = document.createElement('option');
+                    option.value = opt.value;
+                    option.textContent = opt.label;
+                    input.appendChild(option);
+                  } else {
+                    console.warn('[FormGenerator.generateFormFields] Option invalide:', opt);
+                  }
+                });
+              } else {
+                console.warn('[FormGenerator.generateFormFields] Options n\'est pas un tableau valide pour field:', field.id, 'options:', options);
+              }
             } catch(e) {
-              console.warn('[FormGenerator.generateFormFields] Erreur parsing options:', e);
+              console.warn('[FormGenerator.generateFormFields] Erreur parsing options pour field:', field.id, 'erreur:', e.message, 'type:', typeof field.options, 'value:', field.options);
+              // En cas d'erreur, essayer de voir si c'est déjà un objet
+              if(typeof field.options === 'object' && Array.isArray(field.options)) {
+                field.options.forEach(opt => {
+                  if(opt && opt.value !== undefined && opt.label !== undefined) {
+                    const option = document.createElement('option');
+                    option.value = opt.value;
+                    option.textContent = opt.label;
+                    input.appendChild(option);
+                  }
+                });
+              }
             }
+          } else {
+            // Pas d'options définies - c'est normal pour certains champs SELECT
+            console.warn('[FormGenerator.generateFormFields] Pas d\'options définies pour field SELECT:', field.id);
           }
           if(field.defaultValue && !currentCfg[field.id]) input.value = field.defaultValue;
           else if(currentCfg[field.id]) input.value = currentCfg[field.id];
@@ -287,7 +365,9 @@ const FormGenerator = {
    */
   generateAdditionalPins(def, containerId, currentCfg = {}) {
     const container = $('#' + containerId);
+    console.log('[FormGenerator.generateAdditionalPins] Début, containerId:', containerId, 'container trouvé:', !!container, 'def.id:', def?.id, 'additionalPins count:', def?.additionalPins?.length);
     if(!container || !def || !def.additionalPins || !Array.isArray(def.additionalPins) || def.additionalPins.length === 0) {
+      console.warn('[FormGenerator.generateAdditionalPins] Paramètres invalides, arrêt');
       return;
     }
     
@@ -329,6 +409,7 @@ const FormGenerator = {
       const fieldId = this.getFieldId(def, additionalPin.id);
       select.id = fieldId;
       select.style.width = '200px';
+      console.log('[FormGenerator.generateAdditionalPins] Création champ, additionalPin.id:', additionalPin.id, 'fieldId:', fieldId);
       
       // Ajouter option "Non connecté" pour les pins optionnelles
       if(additionalPin.optional) {

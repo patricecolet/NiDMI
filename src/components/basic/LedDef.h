@@ -29,7 +29,6 @@ struct Led {
     static constexpr ComponentType TYPE = ComponentType::LED;
     static constexpr PinType PIN_TYPE = PinType::PIN_DIGITAL;
     static constexpr bool IMPLEMENTED = true;
-    static constexpr bool IS_COMPLEX = false;
     static constexpr bool SUPPORTS_MIDI = true;   // Reçoit MIDI
     static constexpr bool SUPPORTS_OSC = false;
     
@@ -61,7 +60,6 @@ struct Led {
         def.type = TYPE;
         def.pinType = PIN_TYPE;
         def.implemented = IMPLEMENTED;
-        def.isComplex = IS_COMPLEX;
         def.supportsMidi = SUPPORTS_MIDI;
         def.supportsOsc = SUPPORTS_OSC;
         def.additionalPinCount = 0;

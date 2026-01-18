@@ -197,7 +197,7 @@ struct ComponentDefinition {
     ComponentType type;          // Type enum correspondant
     PinType pinType;             // Type de pin principale
     bool implemented;            // true = disponible, false = grisé dans l'UI
-    bool isComplex;              // true = nécessite un manager (ex: MUX)
+    // Note: isComplex supprimé - utiliser additionalPinCount > 0 pour détecter un composant avec pins additionnelles
     bool supportsMidi;           // true = peut envoyer/recevoir MIDI
     bool supportsOsc;            // true = peut envoyer/recevoir OSC
     const char* statusTextTemplate; // Template par défaut pour le texte de statut
@@ -223,7 +223,7 @@ struct ComponentDefinition {
         id(nullptr), displayName(nullptr), icon(nullptr), cardId(nullptr),
         family(ComponentFamily::BASIC), familyName(nullptr),
         type(ComponentType::POTENTIOMETER), pinType(PinType::PIN_DIGITAL),
-        implemented(false), isComplex(false), supportsMidi(false), supportsOsc(false),
+        implemented(false), supportsMidi(false), supportsOsc(false),
         statusTextTemplate(nullptr), statusValueMappings(nullptr),
         formFieldCount(0), formFields(nullptr), formFieldsCapacity(0),
         additionalPinCount(0), additionalPins(nullptr), additionalPinsCapacity(0),
@@ -264,7 +264,7 @@ struct ComponentDefinition {
         
         int written = snprintf(buffer, bufferSize,
             "{\"id\":\"%s\",\"displayName\":\"%s\",\"cardId\":\"%s\",\"family\":%d,\"familyName\":\"%s\","
-            "\"pinType\":%d,\"implemented\":%s,\"isComplex\":%s,"
+            "\"pinType\":%d,\"implemented\":%s,"
             "\"supportsMidi\":%s,\"supportsOsc\":%s,\"additionalPinCount\":%d",
             id,
             displayName,
@@ -273,7 +273,6 @@ struct ComponentDefinition {
             familyName ? familyName : "",
             static_cast<int>(pinType),
             implemented ? "true" : "false",
-            isComplex ? "true" : "false",
             supportsMidi ? "true" : "false",
             supportsOsc ? "true" : "false",
             additionalPinCount
@@ -500,6 +499,8 @@ struct ComponentDefinition {
                 }
                 
                 if (field.type == FieldType::SELECT && field.options) {
+                    // field.options est déjà du JSON valide (ex: [{"value":"v","label":"L"}])
+                    // L'insérer directement sans guillemets autour (pas de %s avec guillemets)
                     written += snprintf(buffer + written, bufferSize - written,
                         ",\"options\":%s",
                         field.options

@@ -1,7 +1,11 @@
 /* Variables globales et utilitaires de base */
 
 /* Sélecteur DOM simplifié - retourne un élément par ID ou sélecteur */
-const $=s=>document.querySelector(s[0]=='#'?s:'#'+s);
+const $=s=>{
+ if(typeof document === 'undefined') return null;
+ if(!s || typeof s !== 'string') return null;
+ return document.querySelector(s[0]=='#'?s:'#'+s);
+};
 
 /* Configuration des pins - objet global qui stocke toutes les configs */
 const pcfg={};
@@ -17,9 +21,6 @@ const prect={};
 
 /* Codes couleur pour les différents types de pins */
 const FC={DIGITAL:'#3B82F6',ANALOG:'#EC4899',I2C:'#10B981',UART:'#6B7280',SPI:'#8B5CF6',TOUCH:'#F59E0B',POWER:'#EF4444',GND:'#000'};
-
-/* Compatibilité: muxList est maintenant un getter qui pointe vers ComplexComponents.list */
-/* Initialisé dans complex-components.js */
 
 /* Instance WebSocket pour synchronisation temps réel */
 let websocket=null;
