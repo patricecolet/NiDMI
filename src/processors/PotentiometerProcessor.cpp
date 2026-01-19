@@ -1,6 +1,7 @@
 #include "PotentiometerProcessor.h"
 #include "ProcessorRegistry.h"
 #include "../components/ComponentTypes.h"  // Définitions communes
+#include "../midi/handlers/MidiOutputCoordinator.h"
 
 void PotentiometerProcessor::process(
     const ComponentConfig& config,
@@ -117,17 +118,7 @@ void PotentiometerProcessor::process(
         state.last_time = millis();
         
         // 9. OSC si activé (même valeur que MIDI)
-        if (config.flags & 0x02) {
-            String oscAddress = (config.osc_address[0] != '\0') ? String(config.osc_address) : "/note";
-            if (config.flags & 0x08) { // Format RAW
-                uint16_t raw_value_array[1] = {filtered_value}; // Valeur brute (0-4095)
-                osc_queue.enqueueIntArray(oscAddress, raw_value_array, 1);
-            } else if (config.flags & 0x04) { // Format MIDI
-                osc_queue.enqueueMidi(oscAddress, stable_midi_value, config.midi_param, config.midi_channel);
-            } else { // Format float
-                osc_queue.enqueueFloat(oscAddress, stable_midi_value / 127.0f);
-            }
-        }
+        MidiOutputCoordinator::sendOsc(osc_queue, config, stable_midi_value, filtered_value);
         
         return; // Traitement NOTE_SWEEP GPIO normale terminé
     }
@@ -146,51 +137,8 @@ void PotentiometerProcessor::process(
         return; // Pas de changement, ne pas envoyer
     }
     
-    // Envoyer le message MIDI selon le type configuré
-    switch (config.msg_type) {
-        case MidiMessageType::CONTROL_CHANGE:
-            midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
-            break;
-        case MidiMessageType::PITCH_BEND: {
-            // Pitch Bend: 0-127 → -8192 à +8191 (signé, centre=0)
-            int pitchBend = map(midi_value, 0, 127, -8192, 8191);
-            midi_sender->sendPitchBend(config.midi_channel, pitchBend);
-            break;
-        }
-        case MidiMessageType::AFTERTOUCH:
-            midi_sender->sendAftertouch(config.midi_channel, midi_value);
-            break;
-        case MidiMessageType::NOTE_VELOCITY:
-            // Note + vélocité: envoyer Note On avec vélocité variable
-            if (midi_value > 0) {
-                midi_sender->sendNoteOn(config.midi_channel, config.midi_param, midi_value);
-            } else {
-                midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
-            }
-            break;
-        case MidiMessageType::PROGRAM_CHANGE:
-            midi_sender->sendProgramChange(config.midi_channel, midi_value);
-            break;
-        default:
-            // Par défaut: Control Change
-            midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
-            break;
-    }
-    
-    // Envoyer OSC si activé (via queue prioritaire)
-    if (config.flags & 0x02) { // Bit OSC enabled
-        // Utiliser l'adresse OSC configurée (ou défaut si vide)
-        String oscAddress = (config.osc_address[0] != '\0') ? String(config.osc_address) : "/ctl";
-        
-        if (config.flags & 0x08) { // Format RAW
-            uint16_t raw_value_array[1] = {filtered_value}; // Valeur brute (0-4095)
-            osc_queue.enqueueIntArray(oscAddress, raw_value_array, 1);
-        } else if (config.flags & 0x04) { // Format MIDI
-            osc_queue.enqueueMidi(oscAddress, midi_value, config.midi_param, config.midi_channel);
-        } else { // Format float
-            osc_queue.enqueueFloat(oscAddress, midi_value / 127.0f);
-        }
-    }
+    // Envoyer MIDI et OSC via le coordinateur (évite les redondances)
+    MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, midi_value, filtered_value);
     
     // Mettre à jour last_value UNE SEULE FOIS après l'envoi (comme le MUX)
     state.last_value = midi_value;

@@ -1,6 +1,7 @@
 #include "ButtonProcessor.h"
 #include "ProcessorRegistry.h"
 #include "../components/ComponentTypes.h"  // Définitions communes
+#include "../midi/handlers/MidiOutputCoordinator.h"
 
 void ButtonProcessor::process(
     const ComponentConfig& config,
@@ -45,64 +46,21 @@ void ButtonProcessor::process(
         return;
     }
     
-    // Fonction helper pour envoyer Note On
+    // Fonction helper pour envoyer Note On (utilise le coordinateur)
     auto sendNoteOn = [&]() {
-        switch (config.msg_type) {
-            case MidiMessageType::NOTE:
-            case MidiMessageType::NOTE_VELOCITY:
-            case MidiMessageType::NOTE_SWEEP:
-                midi_sender->sendNoteOn(config.midi_channel, config.midi_param, 127);
-                break;
-            case MidiMessageType::CONTROL_CHANGE:
-                midi_sender->sendControlChange(config.midi_channel, config.midi_param, 127);
-                break;
-            case MidiMessageType::PROGRAM_CHANGE:
-                midi_sender->sendProgramChange(config.midi_channel, config.midi_param);
-                break;
-            case MidiMessageType::CLOCK:
-                midi_sender->sendClock();
-                break;
-            case MidiMessageType::TAP_TEMPO:
-                midi_sender->sendClock();
-                break;
-            default:
-                midi_sender->sendNoteOn(config.midi_channel, config.midi_param, 127);
-                break;
-        }
+        MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, 127);
     };
     
-    // Fonction helper pour envoyer Note Off
+    // Fonction helper pour envoyer Note Off (utilise le coordinateur)
     auto sendNoteOff = [&]() {
-        switch (config.msg_type) {
-            case MidiMessageType::NOTE:
-            case MidiMessageType::NOTE_VELOCITY:
-            case MidiMessageType::NOTE_SWEEP:
-                midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
-                break;
-            case MidiMessageType::CONTROL_CHANGE:
-                midi_sender->sendControlChange(config.midi_channel, config.midi_param, 0);
-                break;
-            case MidiMessageType::PROGRAM_CHANGE:
-            case MidiMessageType::CLOCK:
-            case MidiMessageType::TAP_TEMPO:
-                // Pas de "off" pour ces types
-                break;
-            default:
-                midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
-                break;
+        // Pour certains types (PROGRAM_CHANGE, CLOCK, TAP_TEMPO), pas de "off"
+        if (config.msg_type == MidiMessageType::PROGRAM_CHANGE ||
+            config.msg_type == MidiMessageType::CLOCK ||
+            config.msg_type == MidiMessageType::TAP_TEMPO) {
+            return; // Pas de "off" pour ces types
         }
-    };
-    
-    // Fonction helper pour envoyer OSC
-    auto sendOSC = [&](uint8_t value) {
-        if (config.flags & 0x02) {
-            String oscAddress = (config.osc_address[0] != '\0') ? String(config.osc_address) : "/note";
-            if (config.flags & 0x04) {
-                osc_queue.enqueueMidi(oscAddress, config.midi_param, value, config.midi_channel);
-            } else {
-                osc_queue.enqueueFloat(oscAddress, value / 127.0f);
-            }
-        }
+        // Pour les autres types, envoyer avec value=0 (le handler gère Note Off vs CC=0)
+        MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, 0);
     };
     
     // Déterminer le mode (défaut: press_release)
@@ -126,8 +84,6 @@ void ButtonProcessor::process(
                 // Au press: envoyer Note On + Note Off immédiatement
                 sendNoteOn();
                 sendNoteOff();
-                sendOSC(127);
-                sendOSC(0);
             } else {
                 // Au release (défaut): mémoriser qu'on a été pressé, on enverra au Rising
                 state.pulse_pending = true;
@@ -137,20 +93,17 @@ void ButtonProcessor::process(
             if (!state.toggle_state) {
                 // État OFF → ON
                 sendNoteOn();
-                sendOSC(127);
                 state.toggle_state = true;
                 state.last_value = 127;
             } else {
                 // État ON → OFF
                 sendNoteOff();
-                sendOSC(0);
                 state.toggle_state = false;
                 state.last_value = 0;
             }
         } else {
             // Mode press_release (défaut): Note On au Falling
             sendNoteOn();
-            sendOSC(127);
             state.last_value = 127;
         }
     } else if (rising) {
@@ -160,14 +113,11 @@ void ButtonProcessor::process(
             if (state.pulse_pending) {
                 sendNoteOn();
                 sendNoteOff();
-                sendOSC(127);
-                sendOSC(0);
                 state.pulse_pending = false;
             }
         } else if (btnMode == "press_release") {
             // Mode press_release: Note Off au Rising
             sendNoteOff();
-            sendOSC(0);
             state.last_value = 0;
         }
         // Pour toggle, on ne fait rien au Rising

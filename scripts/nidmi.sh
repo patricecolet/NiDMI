@@ -161,7 +161,7 @@ sync_files() {
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
-    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,config,hardware,managers,managers/complex,managers/complex/multiplexer,midi,network,osc,processors,server,ui,utils}
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,config,hardware,managers,managers/complex,managers/complex/multiplexer,midi,midi/handlers,network,osc,processors,server,ui,utils}
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -196,6 +196,11 @@ sync_files() {
     fi
     cp -f $REPO_DIR/src/midi/*.cpp $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true
     cp -f $REPO_DIR/src/midi/*.h $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true
+    # Copier les handlers MIDI
+    if [ -d "$REPO_DIR/src/midi/handlers" ]; then
+        cp -f $REPO_DIR/src/midi/handlers/*.cpp $ARDUINO_LIB_DIR/src/midi/handlers/ 2>/dev/null || true
+        cp -f $REPO_DIR/src/midi/handlers/*.h $ARDUINO_LIB_DIR/src/midi/handlers/ 2>/dev/null || true
+    fi
     cp -f $REPO_DIR/src/network/*.cpp $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true
     cp -f $REPO_DIR/src/network/*.h $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true
     cp -f $REPO_DIR/src/osc/*.cpp $ARDUINO_LIB_DIR/src/osc/ 2>/dev/null || true
