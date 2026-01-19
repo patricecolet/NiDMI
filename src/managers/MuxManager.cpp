@@ -3,7 +3,7 @@
 #include "../osc/OSCQueue.h"
 #include "../midi/MidiSender.h"
 
-MuxManager::MuxManager() : mux_count(0) {
+MuxManager::MuxManager() : mux_count(0), muxTaskHandle(nullptr), taskStarted(false) {
      for (int i = 0; i < MAX_MUXES; i++) {
          muxes[i] = nullptr;
          mux_configs[i].enabled = false;
@@ -11,6 +11,7 @@ MuxManager::MuxManager() : mux_count(0) {
  }
  
  MuxManager::~MuxManager() {
+     stop(); // Arrêter la tâche avant destruction
      for (int i = 0; i < MAX_MUXES; i++) {
          if (muxes[i] != nullptr) {
              delete muxes[i];
@@ -556,4 +557,67 @@ void MuxManager::updateAllCaches() {
      }
      
      prefs.end();
- }
+}
+
+void MuxManager::begin() {
+    if (taskStarted) {
+        return; // Déjà démarrée
+    }
+    
+    // Créer la tâche FreeRTOS sur Core 0 (PRO_CPU) pour les lectures ADC
+    BaseType_t result = xTaskCreatePinnedToCore(
+        muxTask,           // Fonction de la tâche
+        "MuxTask",         // Nom
+        4096,              // Stack size (4KB)
+        this,              // Paramètre (instance)
+        5,                 // Priorité (haute priorité pour temps réel)
+        &muxTaskHandle,    // Handle
+        0                  // Core 0 (PRO_CPU - processeur principal)
+    );
+    
+    if (result == pdPASS) {
+        taskStarted = true;
+        Serial.println("[MuxManager] FreeRTOS task started on Core 0");
+    } else {
+        Serial.println("[MuxManager] ERROR: Failed to create FreeRTOS task");
+    }
+}
+
+void MuxManager::stop() {
+    if (!taskStarted || muxTaskHandle == nullptr) {
+        return;
+    }
+    
+    vTaskDelete(muxTaskHandle);
+    muxTaskHandle = nullptr;
+    taskStarted = false;
+    Serial.println("[MuxManager] FreeRTOS task stopped");
+}
+
+void MuxManager::muxTask(void* parameter) {
+    MuxManager* instance = static_cast<MuxManager*>(parameter);
+    instance->muxTaskLoop();
+}
+
+void MuxManager::muxTaskLoop() {
+    const TickType_t xFrequency = pdMS_TO_TICKS(5); // 5ms = 200Hz
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    
+    for(;;) {
+        // Mettre à jour un multiplexeur par tour (round-robin)
+        static uint8_t current_mux = 0;
+        
+        for (uint8_t attempt = 0; attempt < MAX_MUXES; attempt++) {
+            uint8_t mux_id = current_mux;
+            current_mux = (current_mux + 1) % MAX_MUXES;
+            
+            if (muxes[mux_id] != nullptr && mux_configs[mux_id].enabled) {
+                updateMuxCache(mux_id);
+                break; // Un seul par tour
+            }
+        }
+        
+        // Attendre jusqu'à la prochaine période (5ms)
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}

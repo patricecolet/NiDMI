@@ -18,7 +18,7 @@
 #include "../Globals.h"
 
 ComponentManager::ComponentManager()
-    : component_count(0), midi_sender(nullptr) {
+    : component_count(0), midi_sender(nullptr), midiTaskHandle(nullptr), midiTaskStarted(false) {
     // Initialiser les filtres
     for (int i = 0; i < MAX_COMPONENTS; i++) {
         filters[i].alpha = 0.1f;
@@ -27,6 +27,12 @@ ComponentManager::ComponentManager()
 }
 
 ComponentManager::~ComponentManager() {
+    // Arrêter la tâche MIDI avant destruction
+    if (midiTaskStarted && midiTaskHandle != nullptr) {
+        vTaskDelete(midiTaskHandle);
+        midiTaskHandle = nullptr;
+        midiTaskStarted = false;
+    }
     clearAll();
 }
 
@@ -47,6 +53,27 @@ void ComponentManager::begin(MidiSender* sender) {
             OSCCalibrationHandler::handleMessage(*this, address, value, arg_string);
         }
     );
+    
+    // Démarrer la tâche FreeRTOS pour les multiplexeurs
+    mux_manager.begin();
+    
+    // Créer la tâche MIDI sur Core 0
+    BaseType_t result = xTaskCreatePinnedToCore(
+        midiTask,
+        "MidiTask",
+        8192,              // Stack size (8KB pour traitement composants)
+        this,
+        4,                 // Priorité légèrement inférieure à MuxTask
+        &midiTaskHandle,
+        0                  // Core 0 (PRO_CPU)
+    );
+    
+    if (result == pdPASS) {
+        midiTaskStarted = true;
+        Serial.println("[ComponentManager] FreeRTOS MIDI task started on Core 0");
+    } else {
+        Serial.println("[ComponentManager] ERROR: Failed to create FreeRTOS MIDI task");
+    }
     
     // Serial.printf("[ComponentManager] Loaded %d components\n", component_count);
     
@@ -106,44 +133,15 @@ void ComponentManager::update() {
     // Traiter les messages OSC entrants (commandes de calibrage)
     osc_manager.update();
     
-    // OPTIMISATION: Mettre à jour tous les MUX en batch AVANT de traiter les composants
-    mux_manager.updateAllCaches();
-    // Envoyer les valeurs MUX en MIDI (CC par canal)
-    mux_manager.sendMidiUpdates(midi_sender);
-    // Envoyer les batches OSC pour tous les MUX qui ont changé
+    // Les multiplexeurs sont maintenant lus par la tâche FreeRTOS sur Core 0
+    // Seulement envoyer les batches OSC (rapide, synchrone)
     mux_manager.sendOscBatches(osc_queue);
     
     // Traiter OSC en priorité (avec queue FreeRTOS)
     osc_queue.update();
     
-    for (uint8_t i = 0; i < component_count; i++) {
-        // Vérifier que le composant est valide avant de le traiter
-        const ComponentConfig& config = configs[i];
-        /* Vérifier GPIO valide : 0-48 pour pins normales OU 200-247 pour MUX */
-        bool is_mux_gpio = isMuxGpio(config.gpio);
-        if (config.gpio >= 255 || (!is_mux_gpio && config.gpio > 48)) {
-            // GPIO invalide, ignorer ce composant
-            continue;
-        }
-        
-        // Utiliser le registre de processeurs (extensible pour des centaines de composants)
-        // Vérifier les capacités de la pin selon la définition du composant
-        const ComponentDefinition* def = ComponentRegistry::findByType(config.type);
-        AnalogFilter* filter_ptr = nullptr;
-        if (def && def->pinType == PinType::PIN_ANALOG) {
-            if (!PinMapper::hasAdc(config.gpio)) {
-                continue; // Pas d'ADC, ignorer
-            }
-            filter_ptr = &filters[i];
-        }
-        
-        // Appeler le processeur enregistré pour ce type de composant
-        if (!ProcessorRegistry::process(config.type, configs[i], states[i], filter_ptr, midi_sender, osc_queue)) {
-            // Processeur non enregistré (ne devrait pas arriver si tous les processeurs sont chargés)
-            Serial.printf("[ComponentManager] WARNING: No processor registered for component type %d\n", 
-                         static_cast<int>(config.type));
-        }
-    }
+    // Le traitement des composants directs (non-MUX) est maintenant dans la tâche MIDI sur Core 0
+    // On ne garde ici que le traitement réseau/OSC qui doit rester sur Core 1
 }
 
 void ComponentManager::reloadConfigs() {
@@ -408,3 +406,55 @@ void ComponentManager::loadMuxConfigFromNVS() {
     mux_manager.loadMuxConfigFromNVS();
 }
 
+void ComponentManager::midiTask(void* parameter) {
+    ComponentManager* instance = static_cast<ComponentManager*>(parameter);
+    instance->midiTaskLoop();
+}
+
+void ComponentManager::midiTaskLoop() {
+    const TickType_t xFrequency = pdMS_TO_TICKS(10); // 10ms
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    
+    for(;;) {
+        if (!midi_sender) {
+            vTaskDelay(pdMS_TO_TICKS(100)); // Attendre si pas de sender
+            continue;
+        }
+        
+        // Envoyer les mises à jour MIDI des multiplexeurs
+        mux_manager.sendMidiUpdates(midi_sender);
+        
+        // Traiter les composants directs (potentiomètres, boutons, etc.)
+        for (uint8_t i = 0; i < component_count; i++) {
+            // Vérifier que le composant est valide avant de le traiter
+            const ComponentConfig& config = configs[i];
+            /* Vérifier GPIO valide : 0-48 pour pins normales OU 200-247 pour MUX */
+            bool is_mux_gpio = isMuxGpio(config.gpio);
+            if (config.gpio >= 255 || (!is_mux_gpio && config.gpio > 48)) {
+                // GPIO invalide, ignorer ce composant
+                continue;
+            }
+            
+            // Utiliser le registre de processeurs (extensible pour des centaines de composants)
+            // Vérifier les capacités de la pin selon la définition du composant
+            const ComponentDefinition* def = ComponentRegistry::findByType(config.type);
+            AnalogFilter* filter_ptr = nullptr;
+            if (def && def->pinType == PinType::PIN_ANALOG) {
+                if (!PinMapper::hasAdc(config.gpio)) {
+                    continue; // Pas d'ADC, ignorer
+                }
+                filter_ptr = &filters[i];
+            }
+            
+            // Appeler le processeur enregistré pour ce type de composant
+            if (!ProcessorRegistry::process(config.type, configs[i], states[i], filter_ptr, midi_sender, osc_queue)) {
+                // Processeur non enregistré (ne devrait pas arriver si tous les processeurs sont chargés)
+                Serial.printf("[ComponentManager] WARNING: No processor registered for component type %d\n", 
+                             static_cast<int>(config.type));
+            }
+        }
+        
+        // Attendre jusqu'à la prochaine période (10ms)
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}

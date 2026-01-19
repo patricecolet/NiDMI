@@ -82,12 +82,25 @@ async function loadMidiInterfaces(){
       }
     }
     
-    // Charger l'état USB MIDI
+    // Charger l'état USB MIDI (statut uniquement, pas de checkbox)
     const usbRes = await fetch('/api/usbmidi/status');
     if(usbRes.ok) {
       const usbData = await usbRes.json();
-      if($('#usbMidiEnabled')) {
-        $('#usbMidiEnabled').checked = !!usbData.enabled;
+      const statusEl = document.getElementById('usbMidiStatus');
+      if(statusEl) {
+        let statusText = '';
+        if(usbData.supported) {
+          if(usbData.connected) {
+            statusText = '✅ Connecté';
+          } else if(usbData.enabled) {
+            statusText = '⚠️ Initialisé (non connecté)';
+          } else {
+            statusText = '❌ Non initialisé';
+          }
+        } else {
+          statusText = '❌ Non supporté';
+        }
+        statusEl.textContent = statusText;
       }
     }
   } catch(err) {
@@ -591,13 +604,7 @@ async function saveAll(){
      rtpFormData.append('enable', $('#rtpMidiEnabled').checked ? 'true' : 'false');
      await fetch('/api/rtp/enable', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: rtpFormData.toString()});
    }
-   
-   // Sauvegarder USB MIDI
-   if($('#usbMidiEnabled')) {
-     const usbFormData = new URLSearchParams();
-     usbFormData.append('enable', $('#usbMidiEnabled').checked ? 'true' : 'false');
-     await fetch('/api/usbmidi/enable', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: usbFormData.toString()});
-   }
+   // Note: USB MIDI s'active automatiquement au boot si supporté, pas de contrôle via interface
  } catch(e) {
    console.error('Erreur sauvegarde interfaces MIDI:', e);
  }

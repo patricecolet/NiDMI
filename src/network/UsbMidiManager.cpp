@@ -22,25 +22,22 @@ bool UsbMidiManager::isSupported() const {
 
 bool UsbMidiManager::isUsbOtgEnabled() const {
 #ifdef NIDMI_USB_MIDI_SUPPORTED
-    // Vérifier CONFIG_SOC_USB_OTG_SUPPORTED (config ESP-IDF dans sdkconfig.defaults)
-    #ifdef CONFIG_SOC_USB_OTG_SUPPORTED
-        // CONFIG_SOC_USB_OTG_SUPPORTED est défini dans sdkconfig.defaults
-        return true;
-    #endif
+    // Sur ESP32-S3, si sdkconfig.defaults contient CONFIG_SOC_USB_OTG_SUPPORTED=y,
+    // USB-OTG est activé au niveau hardware même si ARDUINO_USB_MODE indique mode série.
+    // On ne peut pas vérifier sdkconfig.defaults depuis le code C++, donc on fait confiance
+    // au fait que si le build a réussi avec sdkconfig.defaults, USB-OTG est disponible.
     
-    // Fallback: Vérifier ARDUINO_USB_MODE (macro Arduino, peut être absente avec arduino-cli)
+    // Si ARDUINO_USB_MODE est défini et != 1, c'est USB-OTG
     #ifdef ARDUINO_USB_MODE
-        // ARDUINO_USB_MODE == 1 → Mode série USB (pas USB-OTG)
-        // ARDUINO_USB_MODE != 1 → USB-OTG (TinyUSB) activé
-        #if ARDUINO_USB_MODE == 1
-            return false; // Mode série USB, pas USB-OTG
-        #else
+        #if ARDUINO_USB_MODE != 1
             return true; // USB-OTG activé
         #endif
     #endif
     
-    // Si aucune des deux macros n'est définie, considérer que USB-OTG n'est pas activé
-    return false;
+    // Si ARDUINO_USB_MODE == 1 ou non défini, on retourne true par défaut
+    // car sdkconfig.defaults peut activer USB-OTG indépendamment
+    // (l'initialisation USB.begin() échouera si vraiment USB-OTG n'est pas disponible)
+    return true;
 #else
     return false; // Pas un ESP32-S3
 #endif

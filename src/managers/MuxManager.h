@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include "../hardware/AnalogMux.h"
 #include "../utils/Hysteresis.h"
 #include "../hardware/MuxConstants.h"
@@ -64,6 +66,10 @@ public:
     void sendOscBatches(OSCQueue& osc_queue);
     void sendMidiUpdates(MidiSender* midi_sender);
     
+    // Gestion de la tâche FreeRTOS
+    void begin(); // Démarrer la tâche FreeRTOS sur Core 0
+    void stop();  // Arrêter la tâche FreeRTOS
+    
     bool readMuxAllChannels(uint8_t mux_id, uint16_t* values);
     uint16_t readMuxChannel(uint8_t gpio);
     
@@ -125,4 +131,10 @@ private:
     uint8_t mux_count;
     
     uint8_t computeCcForChannel(const MuxConfig& config, uint8_t channel) const;
+    
+    // FreeRTOS task pour lecture multiplexeurs sur Core 0
+    TaskHandle_t muxTaskHandle;
+    bool taskStarted;
+    static void muxTask(void* parameter);
+    void muxTaskLoop();
 };

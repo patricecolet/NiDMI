@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include "../utils/PinMapper.h"
 #include "../midi/MidiSender.h"
 #include "../midi/MidiMessageType.h"
@@ -39,6 +41,12 @@ private:
     MuxManager mux_manager;
     
     AnalogFilter filters[MAX_COMPONENTS];
+    
+    // FreeRTOS task pour traitement composants et MIDI sur Core 0
+    TaskHandle_t midiTaskHandle;
+    bool midiTaskStarted;
+    static void midiTask(void* parameter);
+    void midiTaskLoop();
     
 public:
     ComponentManager();

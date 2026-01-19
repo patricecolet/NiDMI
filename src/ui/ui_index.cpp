@@ -82,7 +82,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div id="rtpMidiSection"></div>
 <h4>Interfaces MIDI</h4>
 <div class="r switch"><input type="checkbox" id="rtpMidiEnabled"><label for="rtpMidiEnabled">RTP-MIDI</label></div>
-<div class="r switch"><input type="checkbox" id="usbMidiEnabled"><label for="usbMidiEnabled">USB-MIDI</label></div>
+<div class="r"><label>USB-MIDI:</label><span id="usbMidiStatus">-</span></div>
 <div class="r switch"><input type="checkbox" id="debugMidiEnabled"><label for="debugMidiEnabled">Debug MIDI</label></div>
  <h4>OSC</h4>
  <div class="r switch"><input type="checkbox" id="oscEnabled2"><label for="oscEnabled2">Activer</label><label>Addr:</label><input type="text" id="oscAddress" placeholder="/ctl"></div>
