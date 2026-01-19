@@ -22,6 +22,30 @@ void PotentiometerProcessor::process(
     // Lecture analogique directe
     uint16_t raw_value = analogRead(config.gpio);
     
+    // Appliquer le mapping min/max (comme dans le MUX)
+    uint16_t mapped_value;
+    uint16_t analog_min = config.potMin;
+    uint16_t analog_max = config.potMax;
+    
+    // Si les seuils ne sont pas configurés (0,0), utiliser les valeurs par défaut
+    if (analog_min == 0 && analog_max == 0) {
+        analog_min = 0;
+        analog_max = 4095;
+    }
+    
+    if (analog_max > analog_min) {
+        int32_t raw = raw_value;
+        int32_t min_val = analog_min;
+        int32_t max_val = analog_max;
+        
+        if (raw < min_val) raw = min_val;
+        if (raw > max_val) raw = max_val;
+        
+        mapped_value = (uint16_t)map(raw, min_val, max_val, 0, 4095);
+    } else {
+        mapped_value = raw_value; // Pas de mapping si seuils invalides
+    }
+    
     // Mettre à jour alpha du filtre selon filter_intensity (1-10)
     uint8_t intensity = config.filter_intensity;
     if (intensity == 0) intensity = 5; // Valeur par défaut si non configuré
@@ -30,9 +54,9 @@ void PotentiometerProcessor::process(
     // Filtrage : médian + passe-bas agressif pour NOTE_SWEEP, sinon filtre normal
     uint16_t filtered_value;
     if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
-        filtered_value = filter.processMedianAndLowpass(raw_value);
+        filtered_value = filter.processMedianAndLowpass(mapped_value);
     } else {
-        filtered_value = filter.process(raw_value);
+        filtered_value = filter.process(mapped_value);
     }
     
     // ===== TRAITEMENT SPÉCIAL NOTE_SWEEP (GPIO normales) =====
@@ -95,9 +119,12 @@ void PotentiometerProcessor::process(
         // 9. OSC si activé (même valeur que MIDI)
         if (config.flags & 0x02) {
             String oscAddress = (config.osc_address[0] != '\0') ? String(config.osc_address) : "/note";
-            if (config.flags & 0x04) {
+            if (config.flags & 0x08) { // Format RAW
+                uint16_t raw_value_array[1] = {filtered_value}; // Valeur brute (0-4095)
+                osc_queue.enqueueIntArray(oscAddress, raw_value_array, 1);
+            } else if (config.flags & 0x04) { // Format MIDI
                 osc_queue.enqueueMidi(oscAddress, stable_midi_value, config.midi_param, config.midi_channel);
-            } else {
+            } else { // Format float
                 osc_queue.enqueueFloat(oscAddress, stable_midi_value / 127.0f);
             }
         }
@@ -155,7 +182,10 @@ void PotentiometerProcessor::process(
         // Utiliser l'adresse OSC configurée (ou défaut si vide)
         String oscAddress = (config.osc_address[0] != '\0') ? String(config.osc_address) : "/ctl";
         
-        if (config.flags & 0x04) { // Format MIDI
+        if (config.flags & 0x08) { // Format RAW
+            uint16_t raw_value_array[1] = {filtered_value}; // Valeur brute (0-4095)
+            osc_queue.enqueueIntArray(oscAddress, raw_value_array, 1);
+        } else if (config.flags & 0x04) { // Format MIDI
             osc_queue.enqueueMidi(oscAddress, midi_value, config.midi_param, config.midi_channel);
         } else { // Format float
             osc_queue.enqueueFloat(oscAddress, midi_value / 127.0f);

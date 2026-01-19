@@ -50,6 +50,8 @@ struct ComponentConfig {
     char btnPulseTiming[16]; // Timing pour mode pulse: "press" ou "release"
     char ledMode[16];     // Mode LED: "onoff", "pwm"
     uint8_t filter_intensity; // Intensité du filtrage (1-10): 1=rapide, 10=stable (défaut: 5)
+    uint16_t potMin;          // Seuil minimum pour potentiomètre (0-4095, défaut: 0)
+    uint16_t potMax;          // Seuil maximum pour potentiomètre (0-4095, défaut: 4095)
     
     // Champs génériques pour nouveaux composants (extensible sans modifier la structure)
     char customField1[16];  // Champ générique réutilisable (ex: encoderDirection, touchThreshold, etc.)

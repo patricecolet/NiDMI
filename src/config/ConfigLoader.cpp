@@ -200,16 +200,23 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                     String oscFormat = JSONParser::extractStr(pinConfig, "oscFormat", "float");
                     String oscAddress = JSONParser::extractStr(pinConfig, "oscAddress", "");
                     
-                    // Configurer les flags (bit 0x02 pour OSC, bit 0x04 pour format MIDI)
+                    // Configurer les flags (bit 0x02 pour OSC, bit 0x04 pour format MIDI, bit 0x08 pour format RAW)
                     if (oscEnabled) {
                         config->flags |= 0x02; // Activer OSC
                         if (oscFormat.length() > 0 && oscFormat.equalsIgnoreCase("midi")) {
                             config->flags |= 0x04; // Format MIDI
+                            config->flags &= ~0x08; // Pas RAW
+                        } else if (oscFormat.length() > 0 && oscFormat.equalsIgnoreCase("raw")) {
+                            config->flags |= 0x08; // Format RAW
+                            config->flags &= ~0x04; // Pas MIDI
                         } else {
                             config->flags &= ~0x04; // Format float
+                            config->flags &= ~0x08; // Pas RAW
                         }
                     } else {
                         config->flags &= ~0x02; // Désactiver OSC
+                        config->flags &= ~0x04; // Pas MIDI
+                        config->flags &= ~0x08; // Pas RAW
                     }
                     
                     // Configurer l'adresse OSC (utiliser valeur par défaut si vide)
@@ -291,6 +298,21 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                                     }
                                 }
                             }
+                        }
+                    }
+                    
+                    // Lire potMin et potMax pour potentiomètre (seuils analogiques)
+                    if (strcmp(def->id, "potentiometer") == 0) {
+                        int potMin = JSONParser::extractInt(pinConfig, "potMin", 0);
+                        int potMax = JSONParser::extractInt(pinConfig, "potMax", 4095);
+                        // Stocker dans potMin et potMax
+                        config->potMin = (potMin >= 0 && potMin <= 4095) ? potMin : 0;
+                        config->potMax = (potMax >= 0 && potMax <= 4095) ? potMax : 4095;
+                        // S'assurer que min < max
+                        if (config->potMin >= config->potMax) {
+                            uint16_t temp = config->potMin;
+                            config->potMin = config->potMax;
+                            config->potMax = temp;
                         }
                     }
                     

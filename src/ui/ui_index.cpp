@@ -86,7 +86,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div class="r switch"><input type="checkbox" id="debugMidiEnabled"><label for="debugMidiEnabled">Debug MIDI</label></div>
  <h4>OSC</h4>
  <div class="r switch"><input type="checkbox" id="oscEnabled2"><label for="oscEnabled2">Activer</label><label>Addr:</label><input type="text" id="oscAddress" placeholder="/ctl"></div>
- <div class="r"><label>Format:</label><select id="oscFormat"><option value="float">Float (0-1)</option><option value="midi">MIDI (3 int)</option></select></div>
+ <div class="r"><label>Format:</label><select id="oscFormat"><option value="float">Float (0-1)</option><option value="midi">MIDI (3 int)</option><option value="raw">Raw</option></select></div>
  <h4>Debug</h4>
  <div class="r switch"><input type="checkbox" id="dbgEnabled"><label for="dbgEnabled">Activer</label><label>Hdr:</label><input type="text" id="dbgHeader" placeholder="[DBG]"></div>
  </div></div>

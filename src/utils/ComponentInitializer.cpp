@@ -26,6 +26,10 @@ void ComponentInitializer::initializeConfig(
     config.rtpNoteVelFix = 100; // Défaut: vélocité fixe
     config.rtpNoteSweepAutoOffDelay = 0; // Défaut: désactivé
     
+    // Initialiser les seuils pour potentiomètre
+    config.potMin = 0;    // Défaut: 0
+    config.potMax = 4095; // Défaut: 4095
+    
     // Initialiser les champs génériques à zéro/vide
     config.customField1[0] = '\0';
     config.customField2[0] = '\0';

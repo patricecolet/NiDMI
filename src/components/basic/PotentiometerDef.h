@@ -69,10 +69,44 @@ struct Potentiometer {
         def.statusValueMappings = nullptr;
         
         // Allouer les champs de formulaire
-        def.formFieldCount = 1;
-        def.formFieldsCapacity = 1;
-        def.formFields = new FormFieldDef[1];
+        def.formFieldCount = 3;
+        def.formFieldsCapacity = 3;
+        def.formFields = new FormFieldDef[3];
+        
+        // Min threshold
         def.formFields[0] = FormFieldDef{
+            "potMin",
+            "Seuil minimum",
+            FieldType::NUMBER,
+            false,
+            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
+            0, 4095, 1,            // min, max, step
+            nullptr, nullptr,
+            "0",
+            HintPosition::NONE, nullptr, nullptr,
+            nullptr, nullptr,
+            "f", nullptr, 100,
+            nullptr, nullptr
+        };
+        
+        // Max threshold
+        def.formFields[1] = FormFieldDef{
+            "potMax",
+            "Seuil maximum",
+            FieldType::NUMBER,
+            false,
+            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
+            0, 4095, 1,            // min, max, step
+            nullptr, nullptr,
+            "4095",
+            HintPosition::NONE, nullptr, nullptr,
+            nullptr, nullptr,
+            "f", nullptr, 100,
+            nullptr, nullptr
+        };
+        
+        // Filter intensity
+        def.formFields[2] = FormFieldDef{
             "filterIntensity",
             "Intensité filtrage (1-10)",
             FieldType::NUMBER,
