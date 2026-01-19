@@ -78,7 +78,52 @@ function replaceTemplate(template, cfg, def) {
   
   /* Remplacer les variables {variable} avec les valeurs de cfg */
   return template.replace(/\{(\w+)\}/g, (match, key) => {
-    const value = cfg[key];
+    // Essayer d'abord la clé directe
+    let value = cfg[key];
+    
+    // Si pas trouvé, essayer avec le préfixe 'midi' (ex: cc -> midiCc, note -> midiNote)
+    if (value === undefined || value === null) {
+      const midiKey = 'midi' + key.charAt(0).toUpperCase() + key.slice(1);
+      value = cfg[midiKey];
+    }
+    
+    // Si toujours pas trouvé, essayer quelques variantes communes
+    if (value === undefined || value === null) {
+      const keyMap = {
+        'cc': 'midiCc',
+        'note': 'midiNote',
+        'pc': 'midiPc',
+        'channel': 'midiChannel',
+        'chan': 'midiChannel',
+        'velocity': 'midiVelocity',
+        'vel': 'midiVelocity'
+      };
+      if (keyMap[key]) {
+        value = cfg[keyMap[key]];
+      }
+    }
+    
+    // Si toujours pas trouvé, essayer l'ancien format rtp* pour compatibilité
+    if (value === undefined || value === null) {
+      const rtpKey = 'rtp' + key.charAt(0).toUpperCase() + key.slice(1);
+      value = cfg[rtpKey];
+    }
+    
+    // Si toujours pas trouvé, essayer les variantes rtp* communes
+    if (value === undefined || value === null) {
+      const rtpKeyMap = {
+        'cc': 'rtpCc',
+        'note': 'rtpNote',
+        'pc': 'rtpPc',
+        'channel': 'rtpChan',
+        'chan': 'rtpChan',
+        'velocity': 'rtpVel',
+        'vel': 'rtpVel'
+      };
+      if (rtpKeyMap[key]) {
+        value = cfg[rtpKeyMap[key]];
+      }
+    }
     
     /* Si la valeur est undefined ou null, utiliser une valeur par défaut selon la clé */
     if (value === undefined || value === null) {
@@ -107,9 +152,10 @@ function replaceTemplate(template, cfg, def) {
 function getComponentStatusText(def, cfg, pinLabel) {
   if (!def || !cfg) return '';
   
-  /* Si rtpType est défini, utiliser le template du message MIDI */
-  if (cfg.rtpType && def.midiMessages && Array.isArray(def.midiMessages)) {
-    const msg = def.midiMessages.find(m => m.displayName === cfg.rtpType);
+  /* Si midiMessageType (ou rtpType pour compatibilité) est défini, utiliser le template du message MIDI */
+  const msgType = cfg.midiMessageType || cfg.rtpType; // Nouveau format puis ancien pour compatibilité
+  if (msgType && def.midiMessages && Array.isArray(def.midiMessages)) {
+    const msg = def.midiMessages.find(m => m.displayName === msgType);
     if (msg && msg.statusTemplate) {
       return replaceTemplate(msg.statusTemplate, cfg, def);
     }

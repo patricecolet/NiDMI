@@ -114,56 +114,57 @@ void PotentiometerProcessor::process(
     
     uint8_t midi_value = state.hysteresis.getValue();  // Déjà 0-127
     
-    // Envoyer seulement si changement significatif (seuil de 1 pour valeurs 0-127)
-    if (abs((int)midi_value - (int)state.last_value) >= 1) {
-        state.last_value = midi_value;  // Mettre à jour avant d'envoyer
-        // Envoyer le message MIDI selon le type configuré
-        switch (config.msg_type) {
-            case MidiMessageType::CONTROL_CHANGE:
-                midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
-                break;
-            case MidiMessageType::PITCH_BEND: {
-                // Pitch Bend: 0-127 → -8192 à +8191 (signé, centre=0)
-                int pitchBend = map(midi_value, 0, 127, -8192, 8191);
-                midi_sender->sendPitchBend(config.midi_channel, pitchBend);
-                break;
-            }
-            case MidiMessageType::AFTERTOUCH:
-                midi_sender->sendAftertouch(config.midi_channel, midi_value);
-                break;
-            case MidiMessageType::NOTE_VELOCITY:
-                // Note + vélocité: envoyer Note On avec vélocité variable
-                if (midi_value > 0) {
-                    midi_sender->sendNoteOn(config.midi_channel, config.midi_param, midi_value);
-                } else {
-                    midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
-                }
-                break;
-            case MidiMessageType::PROGRAM_CHANGE:
-                midi_sender->sendProgramChange(config.midi_channel, midi_value);
-                break;
-            default:
-                // Par défaut: Control Change
-                midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
-                break;
-        }
-        
-        // Envoyer OSC si activé (via queue prioritaire)
-        if (config.flags & 0x02) { // Bit OSC enabled
-            // Utiliser l'adresse OSC configurée (ou défaut si vide)
-            String oscAddress = (config.osc_address[0] != '\0') ? String(config.osc_address) : "/ctl";
-            
-            if (config.flags & 0x04) { // Format MIDI
-                osc_queue.enqueueMidi(oscAddress, midi_value, config.midi_param, config.midi_channel);
-            } else { // Format float
-                osc_queue.enqueueFloat(oscAddress, midi_value / 127.0f);
-            }
-        }
-        
-        // Mettre à jour last_value
-        state.last_value = midi_value;
-        state.last_time = millis();
+    // Comparer avec la dernière valeur ENVOYÉE (comme le MUX)
+    if (midi_value == state.last_value) {
+        return; // Pas de changement, ne pas envoyer
     }
+    
+    // Envoyer le message MIDI selon le type configuré
+    switch (config.msg_type) {
+        case MidiMessageType::CONTROL_CHANGE:
+            midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
+            break;
+        case MidiMessageType::PITCH_BEND: {
+            // Pitch Bend: 0-127 → -8192 à +8191 (signé, centre=0)
+            int pitchBend = map(midi_value, 0, 127, -8192, 8191);
+            midi_sender->sendPitchBend(config.midi_channel, pitchBend);
+            break;
+        }
+        case MidiMessageType::AFTERTOUCH:
+            midi_sender->sendAftertouch(config.midi_channel, midi_value);
+            break;
+        case MidiMessageType::NOTE_VELOCITY:
+            // Note + vélocité: envoyer Note On avec vélocité variable
+            if (midi_value > 0) {
+                midi_sender->sendNoteOn(config.midi_channel, config.midi_param, midi_value);
+            } else {
+                midi_sender->sendNoteOff(config.midi_channel, config.midi_param, 0);
+            }
+            break;
+        case MidiMessageType::PROGRAM_CHANGE:
+            midi_sender->sendProgramChange(config.midi_channel, midi_value);
+            break;
+        default:
+            // Par défaut: Control Change
+            midi_sender->sendControlChange(config.midi_channel, config.midi_param, midi_value);
+            break;
+    }
+    
+    // Envoyer OSC si activé (via queue prioritaire)
+    if (config.flags & 0x02) { // Bit OSC enabled
+        // Utiliser l'adresse OSC configurée (ou défaut si vide)
+        String oscAddress = (config.osc_address[0] != '\0') ? String(config.osc_address) : "/ctl";
+        
+        if (config.flags & 0x04) { // Format MIDI
+            osc_queue.enqueueMidi(oscAddress, midi_value, config.midi_param, config.midi_channel);
+        } else { // Format float
+            osc_queue.enqueueFloat(oscAddress, midi_value / 127.0f);
+        }
+    }
+    
+    // Mettre à jour last_value UNE SEULE FOIS après l'envoi (comme le MUX)
+    state.last_value = midi_value;
+    state.last_time = millis();
 }
 
 // Wrapper pour normaliser la signature (filter par pointeur au lieu de référence)

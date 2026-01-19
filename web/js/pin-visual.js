@@ -17,16 +17,14 @@ function updateBusVisuals() {
 
   if (typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) return;
 
-  /* 2. Obtenir les GPIOs utilisés depuis le cache backend */
+  /* 2. Calculer les GPIOs utilisés uniquement depuis pcfg (état actuel de l'interface) */
+  /* Cela permet de refléter immédiatement les suppressions même avant enregistrement */
+  /* Les GPIOs sont calculés depuis pcfg qui contient tous les composants configurés */
   let usedGpios = new Set();
 
-  if (typeof getCachedUsedGpios === 'function') {
-    usedGpios = new Set(getCachedUsedGpios());
-  }
-
-  /* 3. Ajouter les GPIOs de l'édition en cours (pas encore sauvegardés) */
-  /* ET les GPIOs des composants sauvegardés dans pcfg */
   if (typeof pcfg === 'undefined' || !pcfg) return;
+  
+  /* 3. Parcourir pcfg pour calculer tous les GPIOs utilisés */
   Object.keys(pcfg).forEach(lbl => {
     const cfg = pcfg[lbl];
     if (!cfg) return;

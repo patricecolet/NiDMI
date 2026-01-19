@@ -103,6 +103,7 @@ function initAdditionalPins(def, pin, usedGpios) {
     }
 
     /* Si cette additionalPin correspond au type de la pin principale, initialiser avec le GPIO de la pin principale */
+    const currentPinLabel = $('#selPin')?.textContent || '';
     const currentPin = caps && caps.pins ? caps.pins.find(p => p && p.label === currentPinLabel) : null;
     if (currentPin && currentPin.type !== undefined && additionalPin.pinType === parseInt(currentPin.type) && !additionalPin.optional) {
       field.value = mainPinGpio;

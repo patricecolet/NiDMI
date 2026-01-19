@@ -183,7 +183,7 @@ void setupPinAPI(AsyncWebServer& server) {
                                 /* Fallback si getComponentInfo échoue */
                                 json += "\"additionalPins\":{},";
                                 json += "\"min\":0,\"max\":4095,";
-                                json += "\"rtpCc\":1,\"rtpChan\":1,\"rtpEnabled\":true";
+                                json += "\"midiCc\":1,\"midiChannel\":1,\"rtpMidiEnabled\":true";
                             }
                             json += "}";
                         } else {
@@ -252,8 +252,10 @@ void setupPinAPI(AsyncWebServer& server) {
         };
         
         /* Paramètres MIDI communs (toujours présents) */
-        addParam("rtpEnabled");
-        addParam("rtpType");
+        addParam("rtpMidiEnabled"); // Compatibilité: accepter aussi rtpEnabled
+        addParam("rtpEnabled"); // Ancien format pour compatibilité
+        addParam("midiMessageType"); // Nouveau format
+        addParam("rtpType"); // Ancien format pour compatibilité
         
         /* Lire dynamiquement les paramètres MIDI depuis def->midiMessages[].params[] */
         if(def && def->midiMessageCount > 0 && def->midiMessages) {

@@ -488,13 +488,22 @@ async function saveAll(){
  const p=new URLSearchParams();
  p.set('pinLabel',lbl);
  p.set('role',c.role);
- if(c.rtpEnabled) p.set('rtpEnabled','true');
- if(c.rtpType) p.set('rtpType',c.rtpType);
+ // Envoyer rtpMidiEnabled (ou rtpEnabled pour compatibilité)
+ if(c.rtpMidiEnabled) p.set('rtpMidiEnabled','true');
+ else if(c.rtpEnabled) p.set('rtpEnabled','true'); // Compatibilité ancien format
+ // Envoyer midiMessageType (ou rtpType pour compatibilité)
+ if(c.midiMessageType) p.set('midiMessageType',c.midiMessageType);
+ else if(c.rtpType) p.set('rtpType',c.rtpType); // Compatibilité ancien format
  
- // Envoyer dynamiquement tous les paramètres MIDI (tous les champs qui commencent par 'rtp' sauf rtpEnabled et rtpType)
+ // Envoyer dynamiquement tous les paramètres MIDI (nouveaux noms midi* puis anciens rtp* pour compatibilité)
  Object.keys(c).forEach(key => {
-  if(key.startsWith('rtp') && key !== 'rtpEnabled' && key !== 'rtpType' && c[key] !== undefined && c[key] !== null && c[key] !== '') {
+  // Nouveaux noms (midi*)
+  if(key.startsWith('midi') && c[key] !== undefined && c[key] !== null && c[key] !== '') {
    p.set(key, c[key]);
+  }
+  // Anciens noms (rtp*) sauf rtpEnabled et rtpType (déjà gérés ci-dessus)
+  else if(key.startsWith('rtp') && key !== 'rtpEnabled' && key !== 'rtpType' && key !== 'rtpMidiEnabled' && c[key] !== undefined && c[key] !== null && c[key] !== '') {
+   p.set(key, c[key]); // Compatibilité ancien format
   }
  });
  
@@ -548,11 +557,13 @@ async function saveAll(){
          console.warn('[saveAll] ERREUR: Pin requise absente:', pinDef.id, 'value:', value, 'defaultValue:', pinDef.defaultValue);
        }
      }
-   });
-   /* Note: complexId supprimé - plus besoin d'envoyer un ID explicite */
- } else {
-   console.warn('[saveAll] ERREUR: hasAdditionalPins:', hasAdditionalPins, 'c.additionalPins:', c.additionalPins, 'def:', !!def, 'def.additionalPins:', def ? def.additionalPins : null);
- }
+  });
+  /* Note: complexId supprimé - plus besoin d'envoyer un ID explicite */
+} else if(def && def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0) {
+  /* Seulement avertir si la définition indique qu'il devrait y avoir additionalPins mais qu'elles manquent */
+  console.warn('[saveAll] ERREUR: Composant devrait avoir additionalPins mais elles sont absentes. def:', def.id, 'def.additionalPins:', def.additionalPins, 'c.additionalPins:', c.additionalPins);
+}
+/* Sinon, c'est normal - composant simple sans additionalPins */
 
  // Champs OSC et Debug (communs à tous)
  if(c.oscEnabled) p.set('oscEnabled','true');

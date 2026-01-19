@@ -69,9 +69,11 @@ const MidiConfig = {
       rtpMsgTypeSelect.appendChild(option);
     });
     
-    // Sélectionner la valeur actuelle si disponible (rtpType ou midiMessageType)
-    if(currentCfg.rtpType || currentCfg.midiMessageType) {
-      rtpMsgTypeSelect.value = currentCfg.rtpType || currentCfg.midiMessageType;
+    // Sélectionner la valeur actuelle si disponible (nouveau format puis ancien pour compatibilité)
+    if(currentCfg.midiMessageType) {
+      rtpMsgTypeSelect.value = currentCfg.midiMessageType;
+    } else if(currentCfg.rtpType) {
+      rtpMsgTypeSelect.value = currentCfg.rtpType; // Compatibilité ancien format
     }
     
     wrapper.appendChild(typeLabel);
@@ -310,9 +312,10 @@ const MidiConfig = {
    */
   readConfig(def) {
     const config = {
-      // Compatibilité: rtpType et midiMessageType
-      rtpType: $('#rtpMsgType')?.value || '',
+      // Nouveau format (prioritaire)
       midiMessageType: $('#rtpMsgType')?.value || '',
+      // Compatibilité: rtpType (ancien format)
+      rtpType: $('#rtpMsgType')?.value || '',
       // Interfaces MIDI (checkboxes HTML, codées en dur OK)
       rtpMidiEnabled: !!$('#rtpMidiEnabled')?.checked,
       rtpEnabled: !!$('#rtpMidiEnabled')?.checked || !!$('#rtpEnabled2')?.checked, // Alias pour compatibilité
@@ -367,9 +370,11 @@ const MidiConfig = {
       if(el) el.checked = !!b;
     };
     
-    // Appliquer le type de message (compatibilité: rtpType et midiMessageType)
-    if(cfg.rtpType || cfg.midiMessageType) {
-      setV('rtpMsgType', cfg.rtpType || cfg.midiMessageType);
+    // Appliquer le type de message (nouveau format puis ancien pour compatibilité)
+    if(cfg.midiMessageType) {
+      setV('rtpMsgType', cfg.midiMessageType);
+    } else if(cfg.rtpType) {
+      setV('rtpMsgType', cfg.rtpType); // Compatibilité ancien format
     }
     
     // Appliquer les interfaces MIDI

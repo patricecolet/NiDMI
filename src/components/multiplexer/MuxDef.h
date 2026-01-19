@@ -79,9 +79,9 @@ struct MuxBase {
         def.midiMessages[0].paramCount = 3;
         def.midiMessages[0].paramsCapacity = 3;
         def.midiMessages[0].params = new MidiParamDef[3];
-        def.midiMessages[0].params[0] = MidiParamDef{"rtpCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        def.midiMessages[0].params[1] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        def.midiMessages[0].params[2] = MidiParamDef{"rtpCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, "[\"potentiometer\"]"};
+        def.midiMessages[0].params[0] = MidiParamDef{"midiCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[0].params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[0].params[2] = MidiParamDef{"midiCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, "[\"potentiometer\"]"};
         
         // Program Change
         def.midiMessages[1].id = "pc";
@@ -90,8 +90,8 @@ struct MuxBase {
         def.midiMessages[1].paramCount = 2;
         def.midiMessages[1].paramsCapacity = 2;
         def.midiMessages[1].params = new MidiParamDef[2];
-        def.midiMessages[1].params[0] = MidiParamDef{"rtpPc", "{{t.pins.program}}:", FieldType::NUMBER, 0, 127, "0", "0", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        def.midiMessages[1].params[1] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[1].params[0] = MidiParamDef{"midiPc", "{{t.pins.program}}:", FieldType::NUMBER, 0, 127, "0", "0", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[1].params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
         
         // Pitch Bend
         def.midiMessages[2].id = "pitchbend";
@@ -100,7 +100,7 @@ struct MuxBase {
         def.midiMessages[2].paramCount = 1;
         def.midiMessages[2].paramsCapacity = 1;
         def.midiMessages[2].params = new MidiParamDef[1];
-        def.midiMessages[2].params[0] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[2].params[0] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
         
         // Aftertouch
         def.midiMessages[3].id = "aftertouch";
@@ -109,7 +109,7 @@ struct MuxBase {
         def.midiMessages[3].paramCount = 1;
         def.midiMessages[3].paramsCapacity = 1;
         def.midiMessages[3].params = new MidiParamDef[1];
-        def.midiMessages[3].params[0] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[3].params[0] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
     }
 };
 

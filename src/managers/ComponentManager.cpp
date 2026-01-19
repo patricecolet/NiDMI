@@ -436,14 +436,17 @@ void ComponentManager::midiTaskLoop() {
             }
             
             // Utiliser le registre de processeurs (extensible pour des centaines de composants)
-            // Vérifier les capacités de la pin selon la définition du composant
+            // Logique générique : si le GPIO a un ADC, utiliser un filtre analogique
+            // (indépendamment de la définition du composant - basé sur les capacités matérielles)
             const ComponentDefinition* def = ComponentRegistry::findByType(config.type);
             AnalogFilter* filter_ptr = nullptr;
-            if (def && def->pinType == PinType::PIN_ANALOG) {
-                if (!PinMapper::hasAdc(config.gpio)) {
-                    continue; // Pas d'ADC, ignorer
-                }
+            
+            if (PinMapper::hasAdc(config.gpio)) {
+                // GPIO avec ADC : utiliser un filtre analogique
                 filter_ptr = &filters[i];
+            } else if (def && def->pinType == PinType::PIN_ANALOG) {
+                // Si la définition indique PIN_ANALOG mais le GPIO n'a pas d'ADC, ignorer
+                continue;
             }
             
             // Appeler le processeur enregistré pour ce type de composant

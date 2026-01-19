@@ -44,19 +44,15 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             continue;
         }
         
-        // Extraire role dans un bloc pour limiter la portée
-        const char* roleCStr = nullptr;
-        {
-            String role = JSONParser::extractStr(pinConfig, "role", "\n");
-            if (role.length() == 0) continue;
-            roleCStr = role.c_str();
-        }
+        // Extraire role - garder en vie jusqu'à l'utilisation
+        String role = JSONParser::extractStr(pinConfig, "role", "\n");
+        if (role.length() == 0) continue;
         
         // Trouver la définition du composant via ComponentRegistry
-        const ComponentDefinition* def = ComponentRegistry::findById(roleCStr);
+        const ComponentDefinition* def = ComponentRegistry::findById(role.c_str());
         if (!def) {
             Serial.printf("[ConfigLoader] WARNING: Component '%s' not found in registry for pin %s\n", 
-                          roleCStr, pinLabelCStr);
+                          role.c_str(), pinLabelCStr);
             continue;
         }
         
@@ -81,21 +77,18 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
         uint8_t channel = 1;    // défaut canal 1
         MidiMessageType msg_type = MidiMessageType::NOTE; // défaut
         
-        // Lire rtpType dans un bloc pour limiter la portée
-        const char* rtpTypeCStr = nullptr;
-        {
-            String rtpTypeStr = JSONParser::extractStr(pinConfig, "rtpType", "");
-            if (rtpTypeStr.length() > 0) {
-                rtpTypeCStr = rtpTypeStr.c_str();
-            }
+        // Lire midiMessageType (ou rtpType pour compatibilité) - garder en vie jusqu'à l'utilisation
+        String rtpTypeStr = JSONParser::extractStr(pinConfig, "midiMessageType", "");
+        if (rtpTypeStr.length() == 0) {
+            rtpTypeStr = JSONParser::extractStr(pinConfig, "rtpType", ""); // Compatibilité ancien format
         }
         
         // Chercher le MidiMessageDef correspondant
         const MidiMessageDef* msgDef = nullptr;
-        if (rtpTypeCStr) {
+        if (rtpTypeStr.length() > 0) {
             // Chercher par displayName d'abord, puis par id
             for (uint8_t i = 0; i < def->midiMessageCount && i < MAX_MIDI_MESSAGES; i++) {
-                if (def->midiMessages[i].displayName && strcmp(def->midiMessages[i].displayName, rtpTypeCStr) == 0) {
+                if (def->midiMessages[i].displayName && strcmp(def->midiMessages[i].displayName, rtpTypeStr.c_str()) == 0) {
                     msgDef = &def->midiMessages[i];
                     break;
                 }
@@ -103,7 +96,7 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             // Si pas trouvé par displayName, chercher par id
             if (!msgDef) {
                 for (uint8_t i = 0; i < def->midiMessageCount && i < MAX_MIDI_MESSAGES; i++) {
-                    if (def->midiMessages[i].id && strcmp(def->midiMessages[i].id, rtpTypeCStr) == 0) {
+                    if (def->midiMessages[i].id && strcmp(def->midiMessages[i].id, rtpTypeStr.c_str()) == 0) {
                         msgDef = &def->midiMessages[i];
                         break;
                     }
@@ -113,7 +106,7 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             if (msgDef && msgDef->displayName) {
                 msg_type = stringToMidiMessageType(msgDef->displayName);
             } else {
-                msg_type = stringToMidiMessageType(rtpTypeCStr);
+                msg_type = stringToMidiMessageType(rtpTypeStr);
             }
         } else {
             // Défaut : utiliser le premier message MIDI du composant s'il existe
@@ -127,37 +120,66 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
         
         // Extraire les paramètres MIDI selon les paramètres définis dans MidiMessageDef
         if (msgDef) {
-            channel = JSONParser::extractInt(pinConfig, "rtpChan", 1);
+            // Lire midiChannel (ou rtpChan pour compatibilité)
+            channel = JSONParser::extractInt(pinConfig, "midiChannel", 1);
+            if (channel == 1) {
+                channel = JSONParser::extractInt(pinConfig, "rtpChan", 1); // Compatibilité ancien format
+            }
             
             // Parcourir les paramètres du message pour extraire la valeur appropriée
             for (uint8_t i = 0; i < msgDef->paramCount && i < MAX_MIDI_PARAMS; i++) {
                 const MidiParamDef& param = msgDef->params[i];
                 if (param.id) {
-                    // Extraire selon le type de paramètre
-                    if (strcmp(param.id, "rtpNote") == 0) {
-                        midi_param = JSONParser::extractInt(pinConfig, "rtpNote", param.defaultValue ? atoi(param.defaultValue) : 60);
-                    } else if (strcmp(param.id, "rtpCc") == 0) {
-                        midi_param = JSONParser::extractInt(pinConfig, "rtpCc", param.defaultValue ? atoi(param.defaultValue) : 7);
-                    } else if (strcmp(param.id, "rtpPc") == 0) {
-                        midi_param = JSONParser::extractInt(pinConfig, "rtpPc", param.defaultValue ? atoi(param.defaultValue) : 0);
+                    // Extraire selon le type de paramètre (nouveau format puis ancien pour compatibilité)
+                    if (strcmp(param.id, "midiNote") == 0) {
+                        midi_param = JSONParser::extractInt(pinConfig, "midiNote", param.defaultValue ? atoi(param.defaultValue) : 60);
+                        if (midi_param == (param.defaultValue ? atoi(param.defaultValue) : 60)) {
+                            midi_param = JSONParser::extractInt(pinConfig, "rtpNote", midi_param); // Compatibilité
+                        }
+                    } else if (strcmp(param.id, "midiCc") == 0) {
+                        midi_param = JSONParser::extractInt(pinConfig, "midiCc", param.defaultValue ? atoi(param.defaultValue) : 7);
+                        if (midi_param == (param.defaultValue ? atoi(param.defaultValue) : 7)) {
+                            midi_param = JSONParser::extractInt(pinConfig, "rtpCc", midi_param); // Compatibilité
+                        }
+                    } else if (strcmp(param.id, "midiPc") == 0) {
+                        midi_param = JSONParser::extractInt(pinConfig, "midiPc", param.defaultValue ? atoi(param.defaultValue) : 0);
+                        if (midi_param == (param.defaultValue ? atoi(param.defaultValue) : 0)) {
+                            midi_param = JSONParser::extractInt(pinConfig, "rtpPc", midi_param); // Compatibilité
+                        }
                     }
-                    // Les autres paramètres (rtpChan, rtpVel, etc.) sont lus ailleurs
+                    // Les autres paramètres (midiChannel, midiVelocity, etc.) sont lus ailleurs
                 }
             }
         } else {
             // Fallback si pas de définition de message
-            channel = JSONParser::extractInt(pinConfig, "rtpChan", 1);
+            channel = JSONParser::extractInt(pinConfig, "midiChannel", 1);
+            if (channel == 1) {
+                channel = JSONParser::extractInt(pinConfig, "rtpChan", 1); // Compatibilité
+            }
             if (msg_type == MidiMessageType::CONTROL_CHANGE) {
-                midi_param = JSONParser::extractInt(pinConfig, "rtpCc", 7);
+                midi_param = JSONParser::extractInt(pinConfig, "midiCc", 7);
+                if (midi_param == 7) {
+                    midi_param = JSONParser::extractInt(pinConfig, "rtpCc", 7); // Compatibilité
+                }
             } else if (msg_type == MidiMessageType::PROGRAM_CHANGE) {
-                midi_param = JSONParser::extractInt(pinConfig, "rtpPc", 0);
+                midi_param = JSONParser::extractInt(pinConfig, "midiPc", 0);
+                if (midi_param == 0) {
+                    midi_param = JSONParser::extractInt(pinConfig, "rtpPc", 0); // Compatibilité
+                }
             } else if (msg_type == MidiMessageType::NOTE || msg_type == MidiMessageType::NOTE_VELOCITY || msg_type == MidiMessageType::NOTE_SWEEP) {
-                midi_param = JSONParser::extractInt(pinConfig, "rtpNote", 60);
+                midi_param = JSONParser::extractInt(pinConfig, "midiNote", 60);
+                if (midi_param == 60) {
+                    midi_param = JSONParser::extractInt(pinConfig, "rtpNote", 60); // Compatibilité
+                }
             }
         }
         
         // Ajouter le composant en utilisant le type depuis la définition
         ComponentType type = def->type;
+        
+        // DEBUG: Afficher les valeurs extraites
+        Serial.printf("[ConfigLoader] Pin %s: type=%d, midi_param=%d, channel=%d, msg_type=%d\n", 
+                     pinLabelCStr, (int)type, midi_param, channel, (int)msg_type);
         
         bool success = manager.addComponent(gpio, type, midi_param, channel, msg_type);
         
@@ -173,21 +195,15 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             if (index != 255) {
                 ComponentConfig* config = manager.getConfigMutable(index);
                 if (config) {
-                    // Lire oscEnabled, oscFormat et oscAddress depuis la config dans des blocs pour limiter la portée
+                    // Lire oscEnabled, oscFormat et oscAddress depuis la config
                     bool oscEnabled = JSONParser::extractBool(pinConfig, "oscEnabled", false);
-                    const char* oscFormatCStr = nullptr;
-                    const char* oscAddressCStr = nullptr;
-                    {
-                        String oscFormat = JSONParser::extractStr(pinConfig, "oscFormat", "float");
-                        oscFormatCStr = oscFormat.c_str();
-                        String oscAddress = JSONParser::extractStr(pinConfig, "oscAddress", "");
-                        oscAddressCStr = oscAddress.length() > 0 ? oscAddress.c_str() : nullptr;
-                    }
+                    String oscFormat = JSONParser::extractStr(pinConfig, "oscFormat", "float");
+                    String oscAddress = JSONParser::extractStr(pinConfig, "oscAddress", "");
                     
                     // Configurer les flags (bit 0x02 pour OSC, bit 0x04 pour format MIDI)
                     if (oscEnabled) {
                         config->flags |= 0x02; // Activer OSC
-                        if (oscFormatCStr && strcmp(oscFormatCStr, "midi") == 0) {
+                        if (oscFormat.length() > 0 && oscFormat.equalsIgnoreCase("midi")) {
                             config->flags |= 0x04; // Format MIDI
                         } else {
                             config->flags &= ~0x04; // Format float
@@ -197,11 +213,11 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                     }
                     
                     // Configurer l'adresse OSC (utiliser valeur par défaut si vide)
-                    if (oscAddressCStr) {
-                        strncpy(config->osc_address, oscAddressCStr, sizeof(config->osc_address) - 1);
+                    if (oscAddress.length() > 0) {
+                        strncpy(config->osc_address, oscAddress.c_str(), sizeof(config->osc_address) - 1);
                         config->osc_address[sizeof(config->osc_address) - 1] = '\0';
                         Serial.printf("[ConfigLoader] OSC address from config: '%s' for %s\n", 
-                                      oscAddressCStr, pinLabelCStr);
+                                      oscAddress.c_str(), pinLabelCStr);
                     } else {
                         Serial.printf("[ConfigLoader] OSC address empty for %s, using default: '%s'\n", 
                                       pinLabelCStr, config->osc_address);
@@ -280,10 +296,23 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                     
                     // Lire les paramètres pour NOTE_SWEEP (balayage)
                     if (msg_type == MidiMessageType::NOTE_SWEEP) {
-                        config->rtpNoteMin = JSONParser::extractInt(pinConfig, "rtpNoteMin", 48);
-                        config->rtpNoteMax = JSONParser::extractInt(pinConfig, "rtpNoteMax", 72);
-                        config->rtpNoteVelFix = JSONParser::extractInt(pinConfig, "rtpNoteVelFix", 100);
-                        config->rtpNoteSweepAutoOffDelay = JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 0);
+                        // Lire avec nouveaux noms puis anciens pour compatibilité
+                        config->rtpNoteMin = JSONParser::extractInt(pinConfig, "midiNoteMin", 48);
+                        if (config->rtpNoteMin == 48) {
+                            config->rtpNoteMin = JSONParser::extractInt(pinConfig, "rtpNoteMin", 48); // Compatibilité
+                        }
+                        config->rtpNoteMax = JSONParser::extractInt(pinConfig, "midiNoteMax", 72);
+                        if (config->rtpNoteMax == 72) {
+                            config->rtpNoteMax = JSONParser::extractInt(pinConfig, "rtpNoteMax", 72); // Compatibilité
+                        }
+                        config->rtpNoteVelFix = JSONParser::extractInt(pinConfig, "midiNoteVelocityFix", 100);
+                        if (config->rtpNoteVelFix == 100) {
+                            config->rtpNoteVelFix = JSONParser::extractInt(pinConfig, "rtpNoteVelFix", 100); // Compatibilité
+                        }
+                        config->rtpNoteSweepAutoOffDelay = JSONParser::extractInt(pinConfig, "midiNoteSweepAutoOffDelay", 0);
+                        if (config->rtpNoteSweepAutoOffDelay == 0) {
+                            config->rtpNoteSweepAutoOffDelay = JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 0); // Compatibilité
+                        }
                         // S'assurer que min <= max
                         if (config->rtpNoteMin > config->rtpNoteMax) {
                             uint8_t temp = config->rtpNoteMin;

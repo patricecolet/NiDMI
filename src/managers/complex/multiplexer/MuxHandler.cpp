@@ -110,10 +110,10 @@ bool MuxHandler::mapMidiParams(const ComplexComponentData& data,
         const char* paramId = data.midiParams[i].id;
         String value = data.midiParams[i].value;
         
-        if (strcmp(paramId, "rtpCc") == 0) {
+        if (strcmp(paramId, "midiCc") == 0 || strcmp(paramId, "rtpCc") == 0) { // Nouveau format puis compatibilité
             ccBase = value.toInt();
             if (ccBase > 127) ccBase = 127;
-        } else if (strcmp(paramId, "rtpChan") == 0) {
+        } else if (strcmp(paramId, "midiChannel") == 0 || strcmp(paramId, "rtpChan") == 0) { // Nouveau format puis compatibilité
             midiChan = value.toInt();
             if (midiChan < 1) midiChan = 1;
             if (midiChan > 16) midiChan = 16;

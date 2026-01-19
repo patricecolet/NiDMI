@@ -34,8 +34,8 @@ String getDefaultConfig(String pin) {
             int default_cc = pinNum + 1; // A0 -> CC1, A1 -> CC2, etc.
             if (default_cc > 127) default_cc = 127;
             
-            String config = "{\"role\":\"potentiometer\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",";
-            config += "\"rtpCc\":" + String(default_cc) + ",\"rtpChan\":1,";
+            String config = "{\"role\":\"potentiometer\",\"rtpMidiEnabled\":true,\"midiMessageType\":\"Control Change\",";
+            config += "\"midiCc\":" + String(default_cc) + ",\"midiChannel\":1,";
             config += "\"filterIntensity\":5,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",";
             config += "\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
             return config;
@@ -53,8 +53,8 @@ String getDefaultConfig(String pin) {
             int default_cc = 1 + (mux_id * 16) + channel;
             if (default_cc > 127) default_cc = 127; // Limiter à 127
             
-            String config = "{\"role\":\"potentiometer\",\"rtpEnabled\":true,\"rtpType\":\"Control Change\",";
-            config += "\"rtpCc\":" + String(default_cc) + ",\"rtpChan\":1,";
+            String config = "{\"role\":\"potentiometer\",\"rtpMidiEnabled\":true,\"midiMessageType\":\"Control Change\",";
+            config += "\"midiCc\":" + String(default_cc) + ",\"midiChannel\":1,";
             config += "\"filterIntensity\":5,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",";
             config += "\"oscFormat\":\"float\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
             return config;
@@ -70,7 +70,7 @@ String getDefaultConfig(String pin) {
     if (buttonDef && (pin == "D0" || pin == "D1" || pin == "D2" || pin == "D3")) {
         int pinNum = pin.charAt(1) - '0';
         int noteVal = 60 + pinNum;
-        String example = "{\"role\":\"button\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":" + String(noteVal) + ",\"rtpChan\":1";
+        String example = "{\"role\":\"button\",\"rtpMidiEnabled\":true,\"midiMessageType\":\"Note\",\"midiNote\":" + String(noteVal) + ",\"midiChannel\":1";
         if (buttonDef->formFieldCount > 0) {
             for (uint8_t i = 0; i < buttonDef->formFieldCount && i < MAX_FORM_FIELDS; i++) {
                 const FormFieldDef& field = buttonDef->formFields[i];
@@ -90,12 +90,12 @@ String getDefaultConfig(String pin) {
         else if (pin == "D9") noteVal = 38;
         
         String rtpType = "Note";
-        String rtpParam = "\"rtpNote\":" + String(noteVal);
+        String rtpParam = "\"midiNote\":" + String(noteVal);
         
         // Pour D10, utiliser CC
         if (pin == "D10") {
             rtpType = "Control Change";
-            rtpParam = "\"rtpCc\":10";
+            rtpParam = "\"midiCc\":10";
             // Chercher le message CC
             for (uint8_t i = 0; i < ledDef->midiMessageCount && i < MAX_MIDI_MESSAGES; i++) {
                 if (ledDef->midiMessages[i].id && strcmp(ledDef->midiMessages[i].id, "cc") == 0) {
@@ -105,7 +105,7 @@ String getDefaultConfig(String pin) {
             }
         }
         
-        String example = "{\"role\":\"led\",\"rtpEnabled\":true,\"rtpType\":\"" + rtpType + "\"," + rtpParam + ",\"rtpChan\":1";
+        String example = "{\"role\":\"led\",\"rtpMidiEnabled\":true,\"midiMessageType\":\"" + rtpType + "\"," + rtpParam + ",\"midiChannel\":1";
         
         // Ajouter les formFields par défaut
         if (ledDef->formFieldCount > 0) {
@@ -133,12 +133,12 @@ String getDefaultConfig(String pin) {
     }
     
     // Bus
-    if (pin == "SDA" || pin == "SCL") return "{\"role\":\"I2C\",\"rtpEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "MOSI" || pin == "MISO" || pin == "SCK") return "{\"role\":\"SPI\",\"rtpEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "TX" || pin == "RX") return "{\"role\":\"UART\",\"rtpEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "SDA" || pin == "SCL") return "{\"role\":\"I2C\",\"rtpMidiEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "MOSI" || pin == "MISO" || pin == "SCK") return "{\"role\":\"SPI\",\"rtpMidiEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "TX" || pin == "RX") return "{\"role\":\"UART\",\"rtpMidiEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
     
     // Défaut
-    return "{\"role\":\"button\",\"rtpEnabled\":true,\"rtpType\":\"Note\",\"rtpNote\":60,\"rtpChan\":1,\"btnMode\":\"pulse\",\"btnPulseTiming\":\"release\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    return "{\"role\":\"button\",\"rtpMidiEnabled\":true,\"midiMessageType\":\"Note\",\"midiNote\":60,\"midiChannel\":1,\"btnMode\":\"pulse\",\"btnPulseTiming\":\"release\",\"oscEnabled\":true,\"oscAddress\":\"/note\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
 }
 
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
