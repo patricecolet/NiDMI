@@ -40,6 +40,7 @@ public:
      * @brief Configurer le GPIO selon le type de composant
      * @param gpio Pin GPIO
      * @param type Type de composant
+     * @param config Configuration du composant (optionnel, nécessaire pour boutons avec btnPullMode)
      */
-    static void setupGpio(uint8_t gpio, ComponentType type);
+    static void setupGpio(uint8_t gpio, ComponentType type, const ComponentConfig* config = nullptr);
 };

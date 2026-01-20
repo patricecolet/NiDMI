@@ -74,9 +74,9 @@ struct Button {
         def.statusValueMappings = nullptr;
         
         // Allouer les champs de formulaire
-        def.formFieldCount = 2;
-        def.formFieldsCapacity = 2;
-        def.formFields = new FormFieldDef[2];
+        def.formFieldCount = 3;
+        def.formFieldsCapacity = 3;
+        def.formFields = new FormFieldDef[3];
         
         // btnMode
         def.formFields[0] = FormFieldDef{
@@ -113,10 +113,27 @@ struct Button {
             nullptr, nullptr
         };
         
+        // btnPullMode
+        def.formFields[2] = FormFieldDef{
+            "btnPullMode",
+            "Mode pull",
+            FieldType::SELECT,
+            false,
+            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
+            0, 0, 0,              // min, max, step
+            "[{\"value\":\"pullup\",\"label\":\"Pull-up\"},{\"value\":\"pulldown\",\"label\":\"Pull-down\"},{\"value\":\"none\",\"label\":\"Aucun\"}]",
+            nullptr,
+            "pullup",
+            HintPosition::NONE, nullptr, nullptr,
+            nullptr, nullptr,
+            "r", nullptr, 0,
+            nullptr, nullptr
+        };
+        
         // Allouer les messages MIDI supportés
-        def.midiMessageCount = 6;
-        def.midiMessagesCapacity = 6;
-        def.midiMessages = new MidiMessageDef[6];
+        def.midiMessageCount = 4;
+        def.midiMessagesCapacity = 4;
+        def.midiMessages = new MidiMessageDef[4];
         
         // Note
         def.midiMessages[0].id = "note";
@@ -147,39 +164,17 @@ struct Button {
         def.midiMessages[2].paramCount = 2;
         def.midiMessages[2].paramsCapacity = 2;
         def.midiMessages[2].params = new MidiParamDef[2];
-        def.midiMessages[2].params[0] = MidiParamDef{"midiPc", "{{t.pins.program}}:", FieldType::NUMBER, 0, 127, "0", "0", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[2].params[0] = MidiParamDef{"midiPc", "{{t.pins.program}}:", FieldType::NUMBER, 1, 128, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
         def.midiMessages[2].params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
         
-        // Note + vélocité
-        def.midiMessages[3].id = "notevel";
-        def.midiMessages[3].displayName = "Note + vélocité";
-        def.midiMessages[3].statusTemplate = "Note {note} +vel";
-        def.midiMessages[3].paramCount = 2;
-        def.midiMessages[3].paramsCapacity = 2;
-        def.midiMessages[3].params = new MidiParamDef[2];
-        def.midiMessages[3].params[0] = MidiParamDef{"midiNote", "{{t.pins.note}}:", FieldType::NUMBER, 0, 127, "60", "60", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        def.midiMessages[3].params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        
-        // Note (balayage)
-        def.midiMessages[4].id = "notesweep";
-        def.midiMessages[4].displayName = "Note (balayage)";
-        def.midiMessages[4].statusTemplate = "Note {note} scan";
-        def.midiMessages[4].paramCount = 4;
-        def.midiMessages[4].paramsCapacity = 4;
-        def.midiMessages[4].params = new MidiParamDef[4];
-        def.midiMessages[4].params[0] = MidiParamDef{"midiNoteSweep", "{{t.pins.sweep}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "48", "72", "→", nullptr, nullptr, 90, nullptr};
-        def.midiMessages[4].params[1] = MidiParamDef{"midiNoteVelocityFix", "{{t.pins.fixedVelocity}}:", FieldType::NUMBER, 1, 127, "100", "100", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        def.midiMessages[4].params[2] = MidiParamDef{"midiNoteSweepAutoOffDelay", "{{t.pins.autoOff}}", FieldType::NUMBER, 0, 65535, "0", "0", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        def.midiMessages[4].params[3] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        
         // Clock
-        def.midiMessages[5].id = "clock";
-        def.midiMessages[5].displayName = "Clock";
-        def.midiMessages[5].statusTemplate = "Clock";
-        def.midiMessages[5].paramCount = 1;
-        def.midiMessages[5].paramsCapacity = 1;
-        def.midiMessages[5].params = new MidiParamDef[1];
-        def.midiMessages[5].params[0] = MidiParamDef{"rtpClockHint", nullptr, FieldType::INFO, 0, 0, nullptr, nullptr, nullptr, nullptr, nullptr, "{{t.pins.clockHint}}", "color:#6b7280;", 0, nullptr};
+        def.midiMessages[3].id = "clock";
+        def.midiMessages[3].displayName = "Clock";
+        def.midiMessages[3].statusTemplate = "Clock";
+        def.midiMessages[3].paramCount = 1;
+        def.midiMessages[3].paramsCapacity = 1;
+        def.midiMessages[3].params = new MidiParamDef[1];
+        def.midiMessages[3].params[0] = MidiParamDef{"rtpClockHint", nullptr, FieldType::INFO, 0, 0, nullptr, nullptr, nullptr, nullptr, nullptr, "{{t.pins.clockHint}}", "color:#6b7280;", 0, nullptr};
         
         return def;
     }

@@ -6,6 +6,7 @@
 #include "../Globals.h"
 #include "../config/ConfigCache.h"
 #include "../components/ComponentRegistry.h"
+#include "../components/ValidationRegistry.h"
 #include "../managers/complex/ComplexHandlerRegistry.h"
 
 /* Forward declarations */
@@ -265,7 +266,27 @@ void setupPinAPI(AsyncWebServer& server) {
                     for(uint8_t j = 0; j < msg.paramCount && j < msg.paramsCapacity; j++) {
                         const MidiParamDef& param = msg.params[j];
                         if(param.id && strlen(param.id) > 0) {
-                            addParam(param.id);
+                            /* Traiter les paramètres RANGE comme Min/Max */
+                            if(param.type == FieldType::RANGE) {
+                                String minId = String(param.id) + "Min";
+                                String maxId = String(param.id) + "Max";
+                                // Toujours sauvegarder les valeurs (même si par défaut)
+                                if(request->hasParam(minId.c_str(), true)) {
+                                    addParam(minId.c_str());
+                                } else if(param.defaultMin) {
+                                    // Sauvegarder la valeur par défaut si absente
+                                    json += ",\"" + minId + "\":" + String(param.defaultMin);
+                                }
+                                if(request->hasParam(maxId.c_str(), true)) {
+                                    addParam(maxId.c_str());
+                                } else if(param.defaultMax) {
+                                    // Sauvegarder la valeur par défaut si absente
+                                    json += ",\"" + maxId + "\":" + String(param.defaultMax);
+                                }
+                            } else {
+                                /* Pour autres types (NUMBER, INFO, etc.) */
+                                addParam(param.id);
+                            }
                         }
                     }
                 }
@@ -462,6 +483,19 @@ void setupPinAPI(AsyncWebServer& server) {
                 data.dbgEnabled = request->hasParam("dbgEnabled", true) && request->getParam("dbgEnabled", true)->value() == "true";
                 data.dbgHeader = request->hasParam("dbgHeader", true) ? request->getParam("dbgHeader", true)->value() : "";
                 
+                /* VALIDATION AVANT d'appeler addComponent() */
+                auto validation = ValidationRegistry::validateComplex(role.c_str(), data);
+                if(!validation.valid) {
+                    /* Libérer la mémoire allouée */
+                    if(data.additionalPins) delete[] data.additionalPins;
+                    if(data.formFields) delete[] data.formFields;
+                    if(data.midiParams) delete[] data.midiParams;
+                    
+                    request->send(400, "application/json", 
+                        "{\"status\":\"error\",\"message\":\"" + validation.error_message + "\"}");
+                    return;
+                }
+                
                 /* Appeler le handler générique */
                 if(handler->addComponent(data)) {
                     /* Composant complexe ajouté avec succès */
@@ -533,6 +567,11 @@ void setupPinAPI(AsyncWebServer& server) {
                 if(handler && sigGpio != 255) {
                     /* Utiliser le handler générique pour supprimer le composant */
                     handler->removeComponent(pinLabel.c_str(), sigGpio);
+                }
+            } else {
+                /* Pour les composants simples, supprimer via ComponentManager */
+                if(sigGpio != 255) {
+                    g_componentManager.removeComponent(sigGpio);
                 }
             }
             

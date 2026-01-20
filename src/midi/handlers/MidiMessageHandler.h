@@ -26,8 +26,9 @@ public:
      * @param sender Interface d'envoi MIDI
      * @param config Configuration du composant
      * @param value Valeur MIDI (0-127 pour la plupart)
+     * @param raw_value Valeur brute (0-4095) pour handlers nécessitant plus de résolution (ex: pitchbend)
      */
-    virtual void send(MidiSender* sender, const ComponentConfig& config, uint8_t value) = 0;
+    virtual void send(MidiSender* sender, const ComponentConfig& config, uint8_t value, uint16_t raw_value = 0) = 0;
     
     /**
      * @brief Indique si le handler supporte des valeurs continues (true) ou discrètes (false)
@@ -46,7 +47,7 @@ public:
  */
 class ControlChangeHandler : public MidiMessageHandler {
 public:
-    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value) override {
+    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value, uint16_t raw_value = 0) override {
         if (!sender) return;
         sender->sendControlChange(config.midi_channel, config.midi_param, value);
     }
@@ -57,9 +58,19 @@ public:
  */
 class ProgramChangeHandler : public MidiMessageHandler {
 public:
-    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value) override {
+    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value, uint16_t raw_value = 0) override {
         if (!sender) return;
-        sender->sendProgramChange(config.midi_channel, value);
+        // Pour Program Change, utiliser config.midi_param (numéro de programme) au lieu de value
+        // value est ignoré pour Program Change car il représente toujours 127 depuis ButtonProcessor
+        uint8_t program = config.midi_param;
+        // Convertir de 1-based (1-128, comme le formulaire) vers 0-based (0-127) pour l'envoi MIDI
+        // Cohérent avec le canal MIDI qui est aussi 1-based dans le formulaire et converti à l'envoi
+        if (program > 0) {
+            program = program - 1; // 1-128 → 0-127
+        }
+        // S'assurer que le programme est dans la plage valide (0-127)
+        if (program > 127) program = 127;
+        sender->sendProgramChange(config.midi_channel, program);
     }
 };
 
@@ -68,10 +79,40 @@ public:
  */
 class PitchBendHandler : public MidiMessageHandler {
 public:
-    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value) override {
+    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value, uint16_t raw_value = 0) override {
         if (!sender) return;
-        // Conversion: 0-127 → -8192 à +8191 (signé, centre=0)
-        int pitchBend = map(value, 0, 127, -8192, 8191);
+        int pitchBend;
+        // raw_value est maintenant la valeur brute filtrée (pas normalisée) depuis le processeur
+        // Appliquer le mapping potMin/potMax DIRECTEMENT vers 0-16383 (14 bits)
+        // Cela garantit que les seuils correspondent exactement aux valeurs min/max du pitchbend
+        uint16_t analog_min = config.potMin;
+        uint16_t analog_max = config.potMax;
+        
+        // Si les seuils ne sont pas configurés (0,0), utiliser les valeurs par défaut
+        if (analog_min == 0 && analog_max == 0) {
+            analog_min = 0;
+            analog_max = 4095;
+        }
+        
+        uint16_t bend14bit;
+        // Mapping direct : [potMin, potMax] → [0, 16383]
+        if (analog_max > analog_min) {
+            if (raw_value < analog_min) {
+                // En dessous du seuil min → 0 (pitchbend min)
+                bend14bit = 0;
+            } else if (raw_value > analog_max) {
+                // Au dessus du seuil max → 16383 (pitchbend max)
+                bend14bit = 16383;
+            } else {
+                // Entre les seuils → mapper linéairement de [potMin, potMax] vers [0, 16383]
+                bend14bit = map(raw_value, analog_min, analog_max, 0, 16383);
+            }
+        } else {
+            // Pas de seuils configurés → mapping direct 0-4095 → 0-16383
+            bend14bit = map(raw_value, 0, 4095, 0, 16383);
+        }
+        
+        pitchBend = (int)bend14bit - 8192; // Convertir en signé (-8192 à +8191)
         sender->sendPitchBend(config.midi_channel, pitchBend);
     }
 };
@@ -81,7 +122,7 @@ public:
  */
 class AftertouchHandler : public MidiMessageHandler {
 public:
-    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value) override {
+    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value, uint16_t raw_value = 0) override {
         if (!sender) return;
         sender->sendAftertouch(config.midi_channel, value);
     }
@@ -92,7 +133,7 @@ public:
  */
 class NoteHandler : public MidiMessageHandler {
 public:
-    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value) override {
+    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value, uint16_t raw_value = 0) override {
         if (!sender) return;
         if (value > 0) {
             sender->sendNoteOn(config.midi_channel, config.midi_param, value);
@@ -109,7 +150,7 @@ public:
  */
 class NoteVelocityHandler : public MidiMessageHandler {
 public:
-    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value) override {
+    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value, uint16_t raw_value = 0) override {
         if (!sender) return;
         if (value > 0) {
             sender->sendNoteOn(config.midi_channel, config.midi_param, value);
@@ -125,7 +166,7 @@ public:
  */
 class NoteSweepHandler : public MidiMessageHandler {
 public:
-    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value) override {
+    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value, uint16_t raw_value = 0) override {
         // NOTE: NoteSweep nécessite un traitement spécial qui ne peut pas être fait ici
         // car il nécessite l'état (last_note, note_on_time) et des paramètres spéciaux
         // Ce handler est donc utilisé uniquement pour la détection, le traitement réel
@@ -147,8 +188,8 @@ public:
  */
 class ClockHandler : public MidiMessageHandler {
 public:
-    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value) override {
-        (void)config; (void)value; // Clock n'utilise pas ces paramètres
+    void send(MidiSender* sender, const ComponentConfig& config, uint8_t value, uint16_t raw_value = 0) override {
+        (void)config; (void)value; (void)raw_value; // Clock n'utilise pas ces paramètres
         if (!sender) return;
         sender->sendClock();
     }

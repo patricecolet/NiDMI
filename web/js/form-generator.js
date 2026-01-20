@@ -32,7 +32,8 @@ const FormGenerator = {
       'fixedVelocity': 'Vélocité fixe',
       'autoOff': 'Auto-off',
       'activate': 'Activer',
-      'type': 'Type'
+      'type': 'Type',
+      'clockHint': 'Clock / Tap Tempo: pas de canal.'
     };
     
     /* Remplacer {{t.pins.xxx}}: (avec :) et {{t.pins.xxx}} (sans :) */

@@ -498,8 +498,12 @@ async function saveAll(){
  // Envoyer dynamiquement tous les paramètres MIDI (nouveaux noms midi* puis anciens rtp* pour compatibilité)
  Object.keys(c).forEach(key => {
   // Nouveaux noms (midi*)
-  if(key.startsWith('midi') && c[key] !== undefined && c[key] !== null && c[key] !== '') {
-   p.set(key, c[key]);
+  // Pour les paramètres RANGE (midiCcRangeMin/Max), toujours envoyer même si valeur par défaut
+  if(key.startsWith('midi') && c[key] !== undefined && c[key] !== null) {
+   // Accepter les chaînes vides et les valeurs "0" pour midiCcRangeMin/Max
+   if(c[key] !== '' || key.endsWith('Min') || key.endsWith('Max')) {
+     p.set(key, c[key] || (key.endsWith('Min') ? '0' : key.endsWith('Max') ? '127' : ''));
+   }
   }
   // Anciens noms (rtp*) sauf rtpEnabled et rtpType (déjà gérés ci-dessus)
   else if(key.startsWith('rtp') && key !== 'rtpEnabled' && key !== 'rtpType' && key !== 'rtpMidiEnabled' && c[key] !== undefined && c[key] !== null && c[key] !== '') {
@@ -607,18 +611,22 @@ async function saveAll(){
  });
  await Promise.all(deletePromises);
 
- // Sauvegarder les interfaces MIDI globales
- try {
-   // Sauvegarder RTP-MIDI
-   if($('#rtpMidiEnabled')) {
-     const rtpFormData = new URLSearchParams();
-     rtpFormData.append('enable', $('#rtpMidiEnabled').checked ? 'true' : 'false');
-     await fetch('/api/rtp/enable', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: rtpFormData.toString()});
-   }
-   // Note: USB MIDI s'active automatiquement au boot si supporté, pas de contrôle via interface
- } catch(e) {
-   console.error('Erreur sauvegarde interfaces MIDI:', e);
- }
+// Sauvegarder les interfaces MIDI globales
+try {
+  // Sauvegarder RTP-MIDI
+  const rtpMidiElement = $('#rtpMidiEnabled');
+  if (rtpMidiElement && rtpMidiElement.type === 'checkbox' && typeof rtpMidiElement.checked !== 'undefined') {
+    const rtpFormData = new URLSearchParams();
+    rtpFormData.append('enable', rtpMidiElement.checked ? 'true' : 'false');
+    const bodyString = rtpFormData.toString();
+    if (bodyString && bodyString.includes('enable=')) {
+      await fetch('/api/rtp/enable', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: bodyString});
+    }
+  }
+  // Note: USB MIDI s'active automatiquement au boot si supporté, pas de contrôle via interface
+} catch(e) {
+  console.error('Erreur sauvegarde interfaces MIDI:', e);
+}
 
  // Rafraîchir le cache des GPIOs utilisés depuis le backend
  await loadUsedGpiosFromBackend();

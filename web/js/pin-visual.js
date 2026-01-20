@@ -347,7 +347,8 @@ function drawBoard() {
     i2cPins.forEach(p => {
       /* Éviter les doublons : vérifier que le GPIO n'a pas déjà été affiché */
       if (!displayedGpios.has(Number(p.gpio))) {
-        leftPins.push({ gpio: p.gpio, label: p.label, color: getPinColor(p.label), dLabel: getAlias(p.gpio, 'D') });
+        const busLabel = getBus(p.gpio); // Utiliser getBus() pour obtenir "SDA" ou "SCL" au lieu de p.label
+        leftPins.push({ gpio: p.gpio, label: busLabel || p.label, color: getPinColor(busLabel || p.label), dLabel: getAlias(p.gpio, 'D') });
         displayedGpios.add(Number(p.gpio));
       }
     });
@@ -355,7 +356,8 @@ function drawBoard() {
     /* UART TX depuis caps.bus */
     const uartTx = bus.uart ? uartPins.find(p => p.gpio === bus.uart.tx) : null;
     if (uartTx && !displayedGpios.has(Number(uartTx.gpio))) {
-      leftPins.push({ gpio: uartTx.gpio, label: uartTx.label, color: getPinColor(uartTx.label), dLabel: getAlias(uartTx.gpio, 'D') });
+      const busLabel = getBus(uartTx.gpio); // Utiliser getBus() pour obtenir "TX" au lieu de uartTx.label
+      leftPins.push({ gpio: uartTx.gpio, label: busLabel || uartTx.label, color: getPinColor(busLabel || uartTx.label), dLabel: getAlias(uartTx.gpio, 'D') });
       displayedGpios.add(Number(uartTx.gpio));
     }
 
@@ -387,7 +389,8 @@ function drawBoard() {
     spiPins.forEach(p => {
       /* Éviter les doublons : vérifier que le GPIO n'a pas déjà été affiché */
       if (!displayedGpios.has(Number(p.gpio))) {
-        R.appendChild(right(rightRow++, getAlias(p.gpio, 'D'), p.label, getPinColor(p.label)));
+        const busLabel = getBus(p.gpio); // Utiliser getBus() pour obtenir "MOSI", "MISO", ou "SCK" au lieu de p.label
+        R.appendChild(right(rightRow++, getAlias(p.gpio, 'D'), busLabel || p.label, getPinColor(busLabel || p.label)));
         displayedGpios.add(Number(p.gpio));
       }
     });
@@ -395,7 +398,8 @@ function drawBoard() {
     /* UART RX depuis caps.bus */
     const uartRx = bus.uart ? pins.find(p => p.gpio === bus.uart.rx) : null;
     if (uartRx && !displayedGpios.has(Number(uartRx.gpio))) {
-      R.appendChild(right(rightRow++, getAlias(uartRx.gpio, 'D'), uartRx.label, getPinColor(uartRx.label)));
+      const busLabel = getBus(uartRx.gpio); // Utiliser getBus() pour obtenir "RX" au lieu de uartRx.label
+      R.appendChild(right(rightRow++, getAlias(uartRx.gpio, 'D'), busLabel || uartRx.label, getPinColor(busLabel || uartRx.label)));
       displayedGpios.add(Number(uartRx.gpio));
     }
   }

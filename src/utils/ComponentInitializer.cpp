@@ -26,6 +26,14 @@ void ComponentInitializer::initializeConfig(
     config.rtpNoteVelFix = 100; // Défaut: vélocité fixe
     config.rtpNoteSweepAutoOffDelay = 0; // Défaut: désactivé
     
+    // Initialiser la plage MIDI (défaut: 0-127 = plage complète)
+    config.midiCcRangeMin = 0;   // Défaut: 0
+    config.midiCcRangeMax = 127; // Défaut: 127
+    
+    // Initialiser les valeurs CC On/Off pour boutons (défaut: 127 ON, 0 OFF)
+    config.midiCcOnOffMin = 0;   // Défaut: 0 (OFF)
+    config.midiCcOnOffMax = 127; // Défaut: 127 (ON)
+    
     // Initialiser les seuils pour potentiomètre
     config.potMin = 0;    // Défaut: 0
     config.potMax = 4095; // Défaut: 4095
@@ -49,6 +57,9 @@ void ComponentInitializer::initializeConfig(
                 } else if (strcmp(field.id, "btnPulseTiming") == 0) {
                     strncpy(config.btnPulseTiming, field.defaultValue, sizeof(config.btnPulseTiming) - 1);
                     config.btnPulseTiming[sizeof(config.btnPulseTiming) - 1] = '\0';
+                } else if (strcmp(field.id, "btnPullMode") == 0) {
+                    strncpy(config.btnPullMode, field.defaultValue, sizeof(config.btnPullMode) - 1);
+                    config.btnPullMode[sizeof(config.btnPullMode) - 1] = '\0';
                 } else if (strcmp(field.id, "ledMode") == 0) {
                     strncpy(config.ledMode, field.defaultValue, sizeof(config.ledMode) - 1);
                     config.ledMode[sizeof(config.ledMode) - 1] = '\0';
@@ -82,6 +93,8 @@ void ComponentInitializer::initializeConfig(
         config.btnMode[sizeof(config.btnMode)-1] = '\0';
         strncpy(config.btnPulseTiming, "release", sizeof(config.btnPulseTiming));
         config.btnPulseTiming[sizeof(config.btnPulseTiming)-1] = '\0';
+        strncpy(config.btnPullMode, "pullup", sizeof(config.btnPullMode));
+        config.btnPullMode[sizeof(config.btnPullMode)-1] = '\0';
         strncpy(config.ledMode, "onoff", sizeof(config.ledMode));
         config.ledMode[sizeof(config.ledMode)-1] = '\0';
         config.filter_intensity = 5;
@@ -104,7 +117,7 @@ void ComponentInitializer::initializeState(ComponentState& state) {
     state.last_change_time = 0;
 }
 
-void ComponentInitializer::setupGpio(uint8_t gpio, ComponentType type) {
+void ComponentInitializer::setupGpio(uint8_t gpio, ComponentType type, const ComponentConfig* config) {
     const ComponentDefinition* def = ComponentRegistry::findByType(type);
     if (!def) {
         // Fallback : comportement par défaut si définition non disponible
@@ -121,7 +134,20 @@ void ComponentInitializer::setupGpio(uint8_t gpio, ComponentType type) {
         case PinType::PIN_DIGITAL:
             // Pour les composants digitaux, déterminer INPUT ou OUTPUT selon le type
             if (type == ComponentType::BUTTON) {
-                pinMode(gpio, INPUT_PULLUP);
+                // Configurer le mode pull selon btnPullMode
+                String pullMode = "pullup"; // Défaut
+                if (config && strlen(config->btnPullMode) > 0) {
+                    pullMode = String(config->btnPullMode);
+                }
+                
+                if (pullMode == "pullup") {
+                    pinMode(gpio, INPUT_PULLUP);
+                } else if (pullMode == "pulldown") {
+                    pinMode(gpio, INPUT_PULLDOWN);
+                } else {
+                    // "none" ou autre : pas de pull interne
+                    pinMode(gpio, INPUT);
+                }
             } else if (type == ComponentType::LED) {
                 pinMode(gpio, OUTPUT);
                 digitalWrite(gpio, LOW);

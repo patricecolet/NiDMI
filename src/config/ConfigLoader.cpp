@@ -4,6 +4,7 @@
 #include "../components/ComponentRegistry.h"  // Pour trouver les définitions de composants
 #include "../utils/JSONParser.h"
 #include "../utils/PinMapper.h"
+#include "../utils/ComponentInitializer.h"  // Pour setupGpio
 #include "../midi/MidiMessageType.h"
 #include <Preferences.h>
 
@@ -142,10 +143,31 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                             midi_param = JSONParser::extractInt(pinConfig, "rtpCc", midi_param); // Compatibilité
                         }
                     } else if (strcmp(param.id, "midiPc") == 0) {
-                        midi_param = JSONParser::extractInt(pinConfig, "midiPc", param.defaultValue ? atoi(param.defaultValue) : 0);
-                        if (midi_param == (param.defaultValue ? atoi(param.defaultValue) : 0)) {
-                            midi_param = JSONParser::extractInt(pinConfig, "rtpPc", midi_param); // Compatibilité
+                        // Lire midiPc avec défaut 1 (1-based, comme le formulaire)
+                        midi_param = JSONParser::extractInt(pinConfig, "midiPc", 1);
+                        if (midi_param == 1) {
+                            // Compatibilité : essayer ancien format (0-based)
+                            int old_value = JSONParser::extractInt(pinConfig, "rtpPc", -1);
+                            if (old_value >= 0 && old_value <= 127) {
+                                // Ancienne valeur 0-based trouvée : convertir en 1-based pour cohérence
+                                midi_param = old_value + 1;
+                            }
+                        } else if (midi_param == 0) {
+                            // Valeur 0 trouvée : probablement ancienne valeur 0-based, convertir en 1-based
+                            // Chercher rtpPc pour confirmation
+                            int old_value = JSONParser::extractInt(pinConfig, "rtpPc", -1);
+                            if (old_value >= 0 && old_value <= 127) {
+                                midi_param = old_value + 1; // Convertir 0-based → 1-based
+                            } else {
+                                midi_param = 1; // Par défaut : programme 1
+                            }
                         }
+                        // S'assurer que le programme est dans la plage valide (1-128)
+                        if (midi_param < 1) midi_param = 1;
+                        if (midi_param > 128) midi_param = 128;
+                    } else if (strcmp(param.id, "midiCcRange") == 0 && param.type == FieldType::RANGE) {
+                        // Plage MIDI : lire midiCcRangeMin et midiCcRangeMin
+                        // Les valeurs seront stockées après l'ajout du composant
                     }
                     // Les autres paramètres (midiChannel, midiVelocity, etc.) sont lus ailleurs
                 }
@@ -162,10 +184,19 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                     midi_param = JSONParser::extractInt(pinConfig, "rtpCc", 7); // Compatibilité
                 }
             } else if (msg_type == MidiMessageType::PROGRAM_CHANGE) {
-                midi_param = JSONParser::extractInt(pinConfig, "midiPc", 0);
-                if (midi_param == 0) {
-                    midi_param = JSONParser::extractInt(pinConfig, "rtpPc", 0); // Compatibilité
+                // Lire midiPc avec défaut 1 (1-based, comme le formulaire)
+                midi_param = JSONParser::extractInt(pinConfig, "midiPc", 1);
+                if (midi_param == 1) {
+                    // Compatibilité : essayer ancien format (0-based)
+                    int old_value = JSONParser::extractInt(pinConfig, "rtpPc", -1);
+                    if (old_value >= 0 && old_value <= 127) {
+                        // Ancienne valeur 0-based trouvée : convertir en 1-based pour cohérence
+                        midi_param = old_value + 1;
+                    }
                 }
+                // S'assurer que le programme est dans la plage valide (1-128)
+                if (midi_param < 1) midi_param = 1;
+                if (midi_param > 128) midi_param = 128;
             } else if (msg_type == MidiMessageType::NOTE || msg_type == MidiMessageType::NOTE_VELOCITY || msg_type == MidiMessageType::NOTE_SWEEP) {
                 midi_param = JSONParser::extractInt(pinConfig, "midiNote", 60);
                 if (midi_param == 60) {
@@ -255,6 +286,14 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                                             config->btnPulseTiming[sizeof(config->btnPulseTiming) - 1] = '\0';
                                         }
                                     }
+                                } else if (strcmp(field.id, "btnPullMode") == 0) {
+                                    {
+                                        String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
+                                        if (fieldValue.length() > 0) {
+                                            strncpy(config->btnPullMode, fieldValue.c_str(), sizeof(config->btnPullMode) - 1);
+                                            config->btnPullMode[sizeof(config->btnPullMode) - 1] = '\0';
+                                        }
+                                    }
                                 } else if (strcmp(field.id, "ledMode") == 0) {
                                     {
                                         String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
@@ -316,6 +355,26 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                         }
                     }
                     
+                    // Lire midiCcRangeMin et midiCcRangeMax (plage MIDI)
+                    int midiCcRangeMin = JSONParser::extractInt(pinConfig, "midiCcRangeMin", 0);
+                    int midiCcRangeMax = JSONParser::extractInt(pinConfig, "midiCcRangeMax", 127);
+                    // Valider et stocker
+                    config->midiCcRangeMin = (midiCcRangeMin >= 0 && midiCcRangeMin <= 127) ? midiCcRangeMin : 0;
+                    config->midiCcRangeMax = (midiCcRangeMax >= 0 && midiCcRangeMax <= 127) ? midiCcRangeMax : 127;
+                    // S'assurer que min < max
+                    if (config->midiCcRangeMin >= config->midiCcRangeMax) {
+                        uint8_t temp = config->midiCcRangeMin;
+                        config->midiCcRangeMin = config->midiCcRangeMax;
+                        config->midiCcRangeMax = temp;
+                    }
+                    
+                    // Lire midiCcOnOffMin et midiCcOnOffMax pour boutons en CC
+                    int midiCcOnOffMin = JSONParser::extractInt(pinConfig, "midiCcOnOffMin", 0);
+                    int midiCcOnOffMax = JSONParser::extractInt(pinConfig, "midiCcOnOffMax", 127);
+                    // Valider et stocker
+                    config->midiCcOnOffMin = (midiCcOnOffMin >= 0 && midiCcOnOffMin <= 127) ? midiCcOnOffMin : 0;
+                    config->midiCcOnOffMax = (midiCcOnOffMax >= 0 && midiCcOnOffMax <= 127) ? midiCcOnOffMax : 127;
+                    
                     // Lire les paramètres pour NOTE_SWEEP (balayage)
                     if (msg_type == MidiMessageType::NOTE_SWEEP) {
                         // Lire avec nouveaux noms puis anciens pour compatibilité
@@ -348,6 +407,9 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                     if (filter_intensity < 1) filter_intensity = 1;
                     if (filter_intensity > 10) filter_intensity = 10;
                     config->filter_intensity = filter_intensity;
+                    
+                    // Reconfigurer le GPIO après avoir chargé tous les champs (notamment btnPullMode pour les boutons)
+                    ComponentInitializer::setupGpio(gpio, type, config);
                     
                     Serial.printf("[ConfigLoader] Final OSC config: %s addr:%s for GPIO%d\n", 
                                  oscEnabled ? "enabled" : "disabled", config->osc_address, gpio);

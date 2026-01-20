@@ -3,13 +3,14 @@
 void MidiOutputCoordinator::sendMidi(
     MidiSender* midi_sender,
     const ComponentConfig& config,
-    uint8_t value
+    uint8_t value,
+    uint16_t raw_value
 ) {
     if (!midi_sender) return;
     
     MidiMessageHandler* handler = MidiMessageHandlerFactory::getHandler(config.msg_type);
     if (handler) {
-        handler->send(midi_sender, config, value);
+        handler->send(midi_sender, config, value, raw_value);
     }
 }
 
@@ -34,6 +35,6 @@ void MidiOutputCoordinator::sendMidiAndOsc(
     uint8_t midi_value,
     uint16_t raw_value
 ) {
-    sendMidi(midi_sender, config, midi_value);
+    sendMidi(midi_sender, config, midi_value, raw_value);
     sendOsc(osc_queue, config, midi_value, raw_value);
 }

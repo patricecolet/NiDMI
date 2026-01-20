@@ -26,11 +26,13 @@ public:
      * @param midi_sender Interface d'envoi MIDI
      * @param config Configuration du composant
      * @param value Valeur MIDI (0-127)
+     * @param raw_value Valeur brute (0-4095) pour handlers nécessitant plus de résolution (ex: pitchbend)
      */
     static void sendMidi(
         MidiSender* midi_sender,
         const ComponentConfig& config,
-        uint8_t value
+        uint8_t value,
+        uint16_t raw_value = 0
     );
     
     /**

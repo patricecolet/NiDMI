@@ -158,7 +158,21 @@ const MidiConfig = {
       if(fieldType === 'info') {
         const hintDiv = document.createElement('div');
         hintDiv.className = param.hintClass || 'hint';
-        hintDiv.textContent = param.hint || '';
+        // Résoudre le template pour le hint
+        const hintText = param.hint || '';
+        hintDiv.textContent = (typeof FormGenerator !== 'undefined' && FormGenerator.replaceTranslationTemplate)
+          ? FormGenerator.replaceTranslationTemplate(hintText)
+          : hintText.replace(/\{\{t\.pins\.(\w+)\}\}(:?)/g, (match, key, colon) => {
+              // Utiliser la traduction depuis l'objet global si disponible
+              if (typeof translations !== 'undefined' && translations.pins && translations.pins[key]) {
+                return translations.pins[key] + (colon || '');
+              }
+              // Fallback vers un dictionnaire local
+              const fallbackTranslations = {
+                'clockHint': 'Clock / Tap Tempo: pas de canal.'
+              };
+              return (fallbackTranslations[key] || key) + (colon || '');
+            });
         row.appendChild(hintDiv);
       } else if(fieldType === 'range') {
         const label = document.createElement('label');
@@ -182,10 +196,11 @@ const MidiConfig = {
         inputMin.max = param.max || 127;
         inputMin.placeholder = param.defaultMin || param.min || 0;
         if(param.width) inputMin.style.width = param.width + 'px';
-        if(currentCfg[param.id + 'Min'] !== undefined) {
+        // Toujours initialiser avec une valeur (config actuelle ou valeur par défaut)
+        if(currentCfg[param.id + 'Min'] !== undefined && currentCfg[param.id + 'Min'] !== null && currentCfg[param.id + 'Min'] !== '') {
           inputMin.value = currentCfg[param.id + 'Min'];
-        } else if(param.defaultMin) {
-          inputMin.value = param.defaultMin;
+        } else {
+          inputMin.value = param.defaultMin || param.min || '0';
         }
         
         const separator = document.createElement('span');
@@ -199,10 +214,11 @@ const MidiConfig = {
         inputMax.max = param.max || 127;
         inputMax.placeholder = param.defaultMax || param.max || 127;
         if(param.width) inputMax.style.width = param.width + 'px';
-        if(currentCfg[param.id + 'Max'] !== undefined) {
+        // Toujours initialiser avec une valeur (config actuelle ou valeur par défaut)
+        if(currentCfg[param.id + 'Max'] !== undefined && currentCfg[param.id + 'Max'] !== null && currentCfg[param.id + 'Max'] !== '') {
           inputMax.value = currentCfg[param.id + 'Max'];
-        } else if(param.defaultMax) {
-          inputMax.value = param.defaultMax;
+        } else {
+          inputMax.value = param.defaultMax || param.max || '127';
         }
         
         row.appendChild(inputMin);
@@ -331,14 +347,35 @@ const MidiConfig = {
         if(msg.params && Array.isArray(msg.params)) {
           msg.params.forEach(param => {
             if(param.id) {
-              const el = $('#' + param.id);
-              if(el) {
-                if(param.type === 4) { // RANGE (velocity range, sweep range, etc.)
-                  const elMin = $('#' + param.id + 'Min');
-                  const elMax = $('#' + param.id + 'Max');
-                  if(elMin) config[param.id + 'Min'] = elMin.value || '';
-                  if(elMax) config[param.id + 'Max'] = elMax.value || '';
+              // Pour les paramètres RANGE, traiter différemment car il n'y a pas d'élément avec param.id
+              if(param.type === 4) { // RANGE
+                const elMin = $('#' + param.id + 'Min');
+                const elMax = $('#' + param.id + 'Max');
+                // Toujours collecter les valeurs (même si par défaut ou cachées)
+                if(elMin) {
+                  const minValue = elMin.value || (param.defaultMin ? String(param.defaultMin) : (param.min ? String(param.min) : '0'));
+                  config[param.id + 'Min'] = minValue;
+                } else if(param.defaultMin) {
+                  // Si le champ n'existe pas, utiliser la valeur par défaut
+                  config[param.id + 'Min'] = String(param.defaultMin);
                 } else {
+                  // Fallback final
+                  config[param.id + 'Min'] = String(param.min || '0');
+                }
+                if(elMax) {
+                  const maxValue = elMax.value || (param.defaultMax ? String(param.defaultMax) : (param.max ? String(param.max) : '127'));
+                  config[param.id + 'Max'] = maxValue;
+                } else if(param.defaultMax) {
+                  // Si le champ n'existe pas, utiliser la valeur par défaut
+                  config[param.id + 'Max'] = String(param.defaultMax);
+                } else {
+                  // Fallback final
+                  config[param.id + 'Max'] = String(param.max || '127');
+                }
+              } else {
+                // Pour les autres types, chercher l'élément normal
+                const el = $('#' + param.id);
+                if(el) {
                   config[param.id] = el.value || '';
                 }
               }

@@ -23,8 +23,24 @@ void PotentiometerProcessor::process(
     // Lecture analogique directe
     uint16_t raw_value = analogRead(config.gpio);
     
-    // Appliquer le mapping min/max (comme dans le MUX)
-    uint16_t mapped_value;
+    // Mettre à jour alpha du filtre selon filter_intensity (1-10)
+    uint8_t intensity = config.filter_intensity;
+    if (intensity == 0) intensity = 5; // Valeur par défaut si non configuré
+    filter.setAlphaFromIntensity(intensity);
+    
+    // FILTRAGE D'ABORD : filtrer la valeur brute avant normalisation
+    // Cela permet au pitchbend d'appliquer le mapping potMin/potMax directement
+    uint16_t filtered_raw_value;  // Valeur brute filtrée (0-4095)
+    if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
+        filtered_raw_value = filter.processMedianAndLowpass(raw_value);
+    } else {
+        filtered_raw_value = filter.process(raw_value);
+    }
+    
+    // Appliquer le mapping min/max pour définir la plage analogique
+    // où la plage MIDI (0-127) va s'étendre (pour Control Change, etc.)
+    // Résultat : valeur normalisée dans 0-4095 selon potMin/potMax
+    uint16_t mapped_value;  // Valeur normalisée selon potMin/potMax (0-4095) pour CC
     uint16_t analog_min = config.potMin;
     uint16_t analog_max = config.potMax;
     
@@ -34,31 +50,27 @@ void PotentiometerProcessor::process(
         analog_max = 4095;
     }
     
+    // Normaliser la valeur filtrée selon potMin/potMax (pour Control Change, OSC, etc.)
+    // - valeurs < potMin → 0 (sera 0 MIDI après hystérésis)
+    // - valeurs > potMax → 4095 (sera 127 MIDI après hystérésis)
+    // - valeurs entre potMin et potMax → mappées linéairement vers 0-4095
     if (analog_max > analog_min) {
-        int32_t raw = raw_value;
-        int32_t min_val = analog_min;
-        int32_t max_val = analog_max;
-        
-        if (raw < min_val) raw = min_val;
-        if (raw > max_val) raw = max_val;
-        
-        mapped_value = (uint16_t)map(raw, min_val, max_val, 0, 4095);
+        if (filtered_raw_value < analog_min) {
+            // En dessous du seuil min → 0 (normalisé)
+            mapped_value = 0;
+        } else if (filtered_raw_value > analog_max) {
+            // Au dessus du seuil max → maximum (normalisé)
+            mapped_value = 4095;
+        } else {
+            // Entre les seuils → mapper linéairement de [potMin, potMax] vers [0, 4095]
+            mapped_value = (uint16_t)map(filtered_raw_value, analog_min, analog_max, 0, 4095);
+        }
     } else {
-        mapped_value = raw_value; // Pas de mapping si seuils invalides
+        mapped_value = filtered_raw_value; // Pas de mapping si seuils invalides
     }
     
-    // Mettre à jour alpha du filtre selon filter_intensity (1-10)
-    uint8_t intensity = config.filter_intensity;
-    if (intensity == 0) intensity = 5; // Valeur par défaut si non configuré
-    filter.setAlphaFromIntensity(intensity);
-    
-    // Filtrage : médian + passe-bas agressif pour NOTE_SWEEP, sinon filtre normal
-    uint16_t filtered_value;
-    if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
-        filtered_value = filter.processMedianAndLowpass(mapped_value);
-    } else {
-        filtered_value = filter.process(mapped_value);
-    }
+    // Valeur normalisée filtrée (pour compatibilité avec le code existant)
+    uint16_t filtered_value = mapped_value;
     
     // ===== TRAITEMENT SPÉCIAL NOTE_SWEEP (GPIO normales) =====
     if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
@@ -132,13 +144,24 @@ void PotentiometerProcessor::process(
     
     uint8_t midi_value = state.hysteresis.getValue();  // Déjà 0-127
     
+    // Appliquer la plage MIDI si configurée (pas plage complète 0-127)
+    if (config.midiCcRangeMin != 0 || config.midiCcRangeMax != 127) {
+        // Mapper de 0-127 vers la plage configurée
+        midi_value = map(midi_value, 0, 127, config.midiCcRangeMin, config.midiCcRangeMax);
+    }
+    
     // Comparer avec la dernière valeur ENVOYÉE (comme le MUX)
     if (midi_value == state.last_value) {
         return; // Pas de changement, ne pas envoyer
     }
     
     // Envoyer MIDI et OSC via le coordinateur (évite les redondances)
-    MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, midi_value, filtered_value);
+    // Pour le pitchbend : passer filtered_raw_value (brute filtrée) pour mapping direct potMin/potMax → 0-16383
+    // Pour les autres : passer filtered_value (normalisée) pour hystérésis déjà appliquée
+    uint16_t raw_value_for_handler = (config.msg_type == MidiMessageType::PITCH_BEND) 
+                                    ? filtered_raw_value  // Pitchbend : valeur brute filtrée
+                                    : filtered_value;     // Autres : valeur normalisée
+    MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, midi_value, raw_value_for_handler);
     
     // Mettre à jour last_value UNE SEULE FOIS après l'envoi (comme le MUX)
     state.last_value = midi_value;

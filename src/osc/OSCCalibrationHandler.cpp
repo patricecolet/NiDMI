@@ -55,11 +55,12 @@ void OSCCalibrationHandler::handleMessage(
     uint8_t channel = 0;
     
     // Extraire le canal depuis la valeur (value contient le numéro de canal 0-15)
+    // Si value < 0 (généralement -1), c'est une valeur sentinelle indiquant "pas de valeur" = tous les canaux
     if (value >= 0 && value < 16 && (int)value == value) {
         channel = (uint8_t)value;
         all_channels = false;
     } else {
-        // Pas de canal spécifié (ou invalide), traiter tous les canaux
+        // Pas de canal spécifié (value < 0 ou invalide), traiter tous les canaux
         all_channels = true;
     }
     

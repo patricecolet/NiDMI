@@ -10,7 +10,24 @@ void ButtonProcessor::process(
     OSCQueue& osc_queue
 ) {
     // Lecture digitale avec anti-rebond
-    bool pressed = !digitalRead(config.gpio); // INPUT_PULLUP: LOW = pressed
+    // Déterminer le mode pull configuré
+    String pullMode = String(config.btnPullMode);
+    if (pullMode.length() == 0) {
+        pullMode = "pullup"; // Défaut
+    }
+    
+    bool raw_state = digitalRead(config.gpio);
+    bool pressed;
+    
+    if (pullMode == "pullup") {
+        pressed = !raw_state; // LOW = pressed avec pullup
+    } else if (pullMode == "pulldown") {
+        pressed = raw_state;  // HIGH = pressed avec pulldown
+    } else {
+        // "none" ou autre : suppose pull externe vers VCC (comportement pullup)
+        pressed = !raw_state;
+    }
+    
     uint32_t now = millis();
     
     // Debouncing simple et fiable
@@ -48,7 +65,13 @@ void ButtonProcessor::process(
     
     // Fonction helper pour envoyer Note On (utilise le coordinateur)
     auto sendNoteOn = [&]() {
-        MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, 127);
+        uint8_t value = 127; // Défaut pour Note
+        if (config.msg_type == MidiMessageType::CONTROL_CHANGE) {
+            // Pour Control Change, utiliser la valeur configurée pour ON
+            // Note: midiCcOnOffMin contient la valeur "ON" (car le RANGE est inversé : 127→0)
+            value = config.midiCcOnOffMin;
+        }
+        MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, value);
     };
     
     // Fonction helper pour envoyer Note Off (utilise le coordinateur)
@@ -59,8 +82,14 @@ void ButtonProcessor::process(
             config.msg_type == MidiMessageType::TAP_TEMPO) {
             return; // Pas de "off" pour ces types
         }
+        // Pour Control Change, utiliser la valeur configurée pour OFF
+        uint8_t value = 0; // Défaut pour Note Off
+        if (config.msg_type == MidiMessageType::CONTROL_CHANGE) {
+            // Note: midiCcOnOffMax contient la valeur "OFF" (car le RANGE est inversé : 127→0)
+            value = config.midiCcOnOffMax;
+        }
         // Pour les autres types, envoyer avec value=0 (le handler gère Note Off vs CC=0)
-        MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, 0);
+        MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, value);
     };
     
     // Déterminer le mode (défaut: press_release)

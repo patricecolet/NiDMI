@@ -314,7 +314,7 @@ void OSCManager::update() {
                 
                 // Appeler le callback si défini (avec ou sans valeur)
                 if (messageCallback) {
-                    float value = 0.0f;
+                    float value = -1.0f; // -1 = sentinelle pour "pas de valeur" (tous les canaux)
                     String arg_string = "";
                     
                     if (msg.size() > 0) {

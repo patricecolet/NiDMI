@@ -90,7 +90,7 @@ struct MuxBase {
         def.midiMessages[1].paramCount = 2;
         def.midiMessages[1].paramsCapacity = 2;
         def.midiMessages[1].params = new MidiParamDef[2];
-        def.midiMessages[1].params[0] = MidiParamDef{"midiPc", "{{t.pins.program}}:", FieldType::NUMBER, 0, 127, "0", "0", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[1].params[0] = MidiParamDef{"midiPc", "{{t.pins.program}}:", FieldType::NUMBER, 1, 128, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
         def.midiMessages[1].params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
         
         // Pitch Bend

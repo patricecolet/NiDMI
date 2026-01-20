@@ -133,9 +133,9 @@ struct Potentiometer {
         };
         
         // Allouer les messages MIDI supportés
-        def.midiMessageCount = 4;
-        def.midiMessagesCapacity = 4;
-        def.midiMessages = new MidiMessageDef[4];
+        def.midiMessageCount = 5;
+        def.midiMessagesCapacity = 5;
+        def.midiMessages = new MidiMessageDef[5];
         
         // Control Change
         def.midiMessages[0].id = "cc";
@@ -155,7 +155,7 @@ struct Potentiometer {
         def.midiMessages[1].paramCount = 2;
         def.midiMessages[1].paramsCapacity = 2;
         def.midiMessages[1].params = new MidiParamDef[2];
-        def.midiMessages[1].params[0] = MidiParamDef{"midiPc", "{{t.pins.program}}:", FieldType::NUMBER, 0, 127, "0", "0", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[1].params[0] = MidiParamDef{"midiPc", "{{t.pins.program}}:", FieldType::NUMBER, 1, 128, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
         def.midiMessages[1].params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
         
         // Pitch Bend
@@ -175,6 +175,18 @@ struct Potentiometer {
         def.midiMessages[3].paramsCapacity = 1;
         def.midiMessages[3].params = new MidiParamDef[1];
         def.midiMessages[3].params[0] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        
+        // Note (balayage)
+        def.midiMessages[4].id = "notesweep";
+        def.midiMessages[4].displayName = "Note (balayage)";
+        def.midiMessages[4].statusTemplate = "Note {note} scan";
+        def.midiMessages[4].paramCount = 4;
+        def.midiMessages[4].paramsCapacity = 4;
+        def.midiMessages[4].params = new MidiParamDef[4];
+        def.midiMessages[4].params[0] = MidiParamDef{"midiNoteSweep", "{{t.pins.sweep}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "48", "72", "→", nullptr, nullptr, 90, nullptr};
+        def.midiMessages[4].params[1] = MidiParamDef{"midiNoteVelocityFix", "{{t.pins.fixedVelocity}}:", FieldType::NUMBER, 1, 127, "100", "100", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[4].params[2] = MidiParamDef{"midiNoteSweepAutoOffDelay", "{{t.pins.autoOff}}", FieldType::NUMBER, 0, 65535, "0", "0", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[4].params[3] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
         
         return def;
     }

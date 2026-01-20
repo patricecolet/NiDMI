@@ -10,6 +10,7 @@
 #include "../processors/ProcessorRegistry.h"
 #include "../processors/Processors.h"  // Centralise tous les processeurs pour l'enregistrement automatique
 #include "../components/ComponentRegistry.h"  // Pour trouver les définitions de composants
+#include "../components/ValidationRegistry.h"  // Pour la validation centralisée
 #include "../utils/PinMapper.h"
 #include "../osc/OSCCalibrationHandler.h"
 #include "../osc/OSCConfigLoader.h"
@@ -174,13 +175,18 @@ bool ComponentManager::addComponent(uint8_t gpio, ComponentType type, uint8_t mi
         return false;
     }
     
-    // Vérifier que la pin a les capacités requises selon la définition du composant
+    // Validation centralisée via ValidationRegistry
     const ComponentDefinition* def = ComponentRegistry::findByType(type);
-    if (def && def->pinType == PinType::PIN_ANALOG) {
-        if (is_mux_gpio) {
-            // Les pins MUX ont toujours ADC (vérifié dans hasAdc)
-        } else if (!PinMapper::hasAdc(gpio)) {
-            Serial.printf("[ComponentManager] ERROR: GPIO %d does not have ADC for component type %d\n", gpio, static_cast<int>(type));
+    if (def && def->id) {
+        // Utiliser ValidationRegistry pour valider le GPIO selon le type de composant
+        if (!ValidationRegistry::validate(def->id, gpio)) {
+            Serial.printf("[ComponentManager] ERROR: Invalid GPIO %d for component %s\n", gpio, def->id);
+            return false;
+        }
+    } else {
+        // Fallback si pas de définition : validation basique
+        if (!is_mux_gpio && gpio > 48) {
+            Serial.printf("[ComponentManager] ERROR: Invalid GPIO %d\n", gpio);
             return false;
         }
     }
@@ -192,7 +198,7 @@ bool ComponentManager::addComponent(uint8_t gpio, ComponentType type, uint8_t mi
     // Initialiser la configuration et l'état avec les valeurs par défaut
     ComponentInitializer::initializeConfig(config, gpio, type, midi_param, channel, msg_type);
     ComponentInitializer::initializeState(state);
-    ComponentInitializer::setupGpio(gpio, type);
+    ComponentInitializer::setupGpio(gpio, type, &config);
     
     // Serial.printf("[ComponentManager] Added component: GPIO%d, type=%d, param=%d, channel=%d, msg_type=%d\n",
     //               gpio, (int)type, midi_param, channel, (int)msg_type);
@@ -205,10 +211,57 @@ bool ComponentManager::removeComponent(uint8_t gpio) {
     uint8_t index = findComponentByGpio(gpio);
     if (index == 255) return false;
     
-    // Éteindre la note si c'est un NOTE_SWEEP avec une note active
-    if (configs[index].msg_type == MidiMessageType::NOTE_SWEEP && states[index].last_note != 255) {
-        if (midi_sender) {
-            midi_sender->sendNoteOff(configs[index].midi_channel, states[index].last_note, 0);
+    // Éteindre tous les messages MIDI actifs avant suppression
+    const ComponentConfig& config = configs[index];
+    ComponentState& state = states[index];
+    
+    if (midi_sender) {
+        // 1. NOTE_SWEEP : éteindre la note active
+        if (config.msg_type == MidiMessageType::NOTE_SWEEP && state.last_note != 255) {
+            midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
+        }
+        // 2. NOTE ou NOTE_VELOCITY : éteindre si actif
+        else if (config.msg_type == MidiMessageType::NOTE || 
+                 config.msg_type == MidiMessageType::NOTE_VELOCITY) {
+            // Vérifier le mode du bouton
+            String btnMode = String(config.btnMode);
+            if (btnMode.length() == 0) {
+                btnMode = "press_release"; // Défaut
+            }
+            
+            uint8_t note = config.midi_param; // midi_param contient la note pour NOTE
+            
+            // Si mode toggle et état actif, envoyer Note Off
+            if (btnMode == "toggle" && state.toggle_state) {
+                midi_sender->sendNoteOff(config.midi_channel, note, 0);
+            }
+            // Si mode press_release et bouton pressé, envoyer Note Off
+            else if (btnMode == "press_release" && state.prev_stable_state) {
+                midi_sender->sendNoteOff(config.midi_channel, note, 0);
+            }
+        }
+        // 3. CONTROL_CHANGE : remettre à zéro si actif
+        else if (config.msg_type == MidiMessageType::CONTROL_CHANGE) {
+            // Vérifier le mode du bouton (pour les boutons en CC)
+            String btnMode = String(config.btnMode);
+            if (btnMode.length() == 0) {
+                btnMode = "press_release"; // Défaut
+            }
+            
+            // Si mode toggle et état actif, envoyer CC=0
+            if (btnMode == "toggle" && state.toggle_state) {
+                midi_sender->sendControlChange(config.midi_channel, config.midi_param, 0);
+            }
+            // Si mode press_release et bouton pressé, envoyer CC=0
+            else if (btnMode == "press_release" && state.prev_stable_state) {
+                midi_sender->sendControlChange(config.midi_channel, config.midi_param, 0);
+            }
+            // Pour les potentiomètres en CC, si dernière valeur > 0, remettre à zéro
+            // (moins critique mais peut être utile)
+            else if (state.last_value > 0) {
+                // Optionnel : envoyer CC=0 pour les potentiomètres
+                // midi_sender->sendControlChange(config.midi_channel, config.midi_param, 0);
+            }
         }
     }
     
@@ -224,11 +277,44 @@ bool ComponentManager::removeComponent(uint8_t gpio) {
 }
 
 void ComponentManager::clearAll() {
-    // Éteindre toutes les notes actives avant de tout effacer
+    // Éteindre tous les messages MIDI actifs avant de tout effacer
     for (uint8_t i = 0; i < component_count; i++) {
-        if (configs[i].msg_type == MidiMessageType::NOTE_SWEEP && states[i].last_note != 255) {
-            if (midi_sender) {
-                midi_sender->sendNoteOff(configs[i].midi_channel, states[i].last_note, 0);
+        const ComponentConfig& config = configs[i];
+        ComponentState& state = states[i];
+        
+        if (midi_sender) {
+            // NOTE_SWEEP : éteindre la note active
+            if (config.msg_type == MidiMessageType::NOTE_SWEEP && state.last_note != 255) {
+                midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
+            }
+            // NOTE ou NOTE_VELOCITY : éteindre si actif
+            else if (config.msg_type == MidiMessageType::NOTE || 
+                     config.msg_type == MidiMessageType::NOTE_VELOCITY) {
+                String btnMode = String(config.btnMode);
+                if (btnMode.length() == 0) {
+                    btnMode = "press_release";
+                }
+                
+                uint8_t note = config.midi_param;
+                
+                if (btnMode == "toggle" && state.toggle_state) {
+                    midi_sender->sendNoteOff(config.midi_channel, note, 0);
+                } else if (btnMode == "press_release" && state.prev_stable_state) {
+                    midi_sender->sendNoteOff(config.midi_channel, note, 0);
+                }
+            }
+            // CONTROL_CHANGE : remettre à zéro si actif
+            else if (config.msg_type == MidiMessageType::CONTROL_CHANGE) {
+                String btnMode = String(config.btnMode);
+                if (btnMode.length() == 0) {
+                    btnMode = "press_release";
+                }
+                
+                if (btnMode == "toggle" && state.toggle_state) {
+                    midi_sender->sendControlChange(config.midi_channel, config.midi_param, 0);
+                } else if (btnMode == "press_release" && state.prev_stable_state) {
+                    midi_sender->sendControlChange(config.midi_channel, config.midi_param, 0);
+                }
             }
         }
     }

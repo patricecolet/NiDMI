@@ -44,10 +44,15 @@ struct ComponentConfig {
     uint8_t rtpNoteMax;   // Note max pour balayage (NOTE_SWEEP)
     uint8_t rtpNoteVelFix; // Vélocité fixe pour balayage (NOTE_SWEEP)
     uint16_t rtpNoteSweepAutoOffDelay; // Délai auto-off en ms (0 = désactivé, max 65535)
+    uint8_t midiCcRangeMin; // Plage MIDI min (0-127, défaut: 0) pour CC/autres messages
+    uint8_t midiCcRangeMax; // Plage MIDI max (0-127, défaut: 127) pour CC/autres messages
+    uint8_t midiCcOnOffMin; // Valeur CC pour état OFF (0-127, défaut: 0) - pour boutons
+    uint8_t midiCcOnOffMax; // Valeur CC pour état ON (0-127, défaut: 127) - pour boutons
     
     // Champs spécifiques existants (pour compatibilité/rétrocompatibilité)
     char btnMode[16];     // Mode bouton: "pulse", "press_release", "toggle"
     char btnPulseTiming[16]; // Timing pour mode pulse: "press" ou "release"
+    char btnPullMode[16]; // Mode pull bouton: "pullup", "pulldown", "none" (défaut: "pullup")
     char ledMode[16];     // Mode LED: "onoff", "pwm"
     uint8_t filter_intensity; // Intensité du filtrage (1-10): 1=rapide, 10=stable (défaut: 5)
     uint16_t potMin;          // Seuil minimum pour potentiomètre (0-4095, défaut: 0)
