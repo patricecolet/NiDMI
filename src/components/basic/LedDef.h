@@ -103,8 +103,8 @@ struct Led {
         def.midiMessages[0].paramCount = 2;
         def.midiMessages[0].paramsCapacity = 2;
         def.midiMessages[0].params = new MidiParamDef[2];
-        def.midiMessages[0].params[0] = MidiParamDef{"rtpNote", "{{t.pins.note}}:", FieldType::NUMBER, 0, 127, "60", "60", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        def.midiMessages[0].params[1] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[0].params[0] = MidiParamDef{"midiNote", "{{t.pins.note}}:", FieldType::NUMBER, 0, 127, "60", "60", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[0].params[1] = MidiParamDef{"midiChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
         
         // Control Change
         def.midiMessages[1].id = "cc";
@@ -113,8 +113,8 @@ struct Led {
         def.midiMessages[1].paramCount = 2;
         def.midiMessages[1].paramsCapacity = 2;
         def.midiMessages[1].params = new MidiParamDef[2];
-        def.midiMessages[1].params[0] = MidiParamDef{"rtpCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        def.midiMessages[1].params[1] = MidiParamDef{"rtpChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[1].params[0] = MidiParamDef{"midiCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        def.midiMessages[1].params[1] = MidiParamDef{"midiChan", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
         
         return def;
     }

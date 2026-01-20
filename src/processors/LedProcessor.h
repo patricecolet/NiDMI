@@ -79,4 +79,20 @@ public:
         uint8_t control,
         uint8_t value
     );
+    
+    /**
+     * @brief Gérer un message OSC entrant pour les LEDs
+     * @param configs Tableau des configurations de composants
+     * @param count Nombre de composants
+     * @param address Adresse OSC (ex: "/note", "/ctl")
+     * @param value Valeur float (peut être note/CC/valeur normalisée selon format)
+     * @param arg_string Argument string optionnel (peut contenir param,channel pour format MIDI)
+     */
+    static void handleOscMessage(
+        const ComponentConfig* configs,
+        uint8_t count,
+        const String& address,
+        float value,
+        const String& arg_string
+    );
 };

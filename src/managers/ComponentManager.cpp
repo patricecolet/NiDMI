@@ -51,7 +51,11 @@ void ComponentManager::begin(MidiSender* sender) {
         osc_manager,
         osc_queue,
         [this](const String& address, float value, const String& arg_string) {
+            // D'abord, gérer les commandes de calibrage des multiplexeurs
             OSCCalibrationHandler::handleMessage(*this, address, value, arg_string);
+            
+            // Ensuite, router les messages OSC vers les LEDs
+            LedProcessor::handleOscMessage(configs, component_count, address, value, arg_string);
         }
     );
     

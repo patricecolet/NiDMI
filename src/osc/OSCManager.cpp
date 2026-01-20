@@ -329,9 +329,23 @@ void OSCManager::update() {
                             arg_string = String(strBuffer);
                             Serial.printf("[OSC] Appel callback avec argument string: '%s'\n", arg_string.c_str());
                         } else if (msg.isInt(0)) {
-                            // Message avec valeur int
-                            value = (float)msg.getInt(0);
-                            Serial.printf("[OSC] Appel callback avec valeur int: %d\n", (int)value);
+                            // Message avec valeur(s) int
+                            // Format MIDI (3 int) : data1, data2, channel
+                            // Format simple (1 int) : value
+                            if (msg.size() >= 3 && msg.isInt(0) && msg.isInt(1) && msg.isInt(2)) {
+                                // Format MIDI : construire "param,channel" depuis data1 et channel
+                                int32_t data1 = msg.getInt(0);  // note/CC
+                                int32_t data2 = msg.getInt(1);  // velocity/value
+                                int32_t channel = msg.getInt(2); // canal MIDI
+                                value = (float)data2; // Utiliser data2 comme valeur principale
+                                arg_string = String((int)data1) + "," + String((int)channel);
+                                Serial.printf("[OSC] Format MIDI: data1=%d, data2=%d, channel=%d\n", 
+                                            (int)data1, (int)data2, (int)channel);
+                            } else {
+                                // Format simple (1 int)
+                                value = (float)msg.getInt(0);
+                                Serial.printf("[OSC] Appel callback avec valeur int: %d\n", (int)value);
+                            }
                         } else {
                             Serial.printf("[OSC] Appel callback avec argument de type inconnu, size=%d\n", msg.size());
                         }
