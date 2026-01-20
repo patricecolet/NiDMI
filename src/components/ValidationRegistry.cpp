@@ -1,4 +1,5 @@
 #include "ValidationRegistry.h"
+#include "ComponentRegistry.h"
 #include "../utils/PinMapper.h"
 #include "../managers/MuxValidator.h"
 #include "../managers/MuxManager.h"
@@ -11,18 +12,8 @@ ComplexValidatorEntry ValidationRegistry::complexValidators_[MAX_COMPLEX_VALIDAT
 size_t ValidationRegistry::complexValidatorCount_ = 0;
 
 // Fonctions de validation statiques (au lieu de lambdas)
-static bool validatePotentiometer(uint8_t gpio, const void* config) {
-    return PinMapper::hasAdc(gpio);
-}
-
-static bool validateButton(uint8_t gpio, const void* config) {
-    // Un GPIO est valide si il est dans la plage des pins du MCU
-    return gpio < 48; // ESP32 a max 48 GPIOs
-}
-
-static bool validateLed(uint8_t gpio, const void* config) {
-    return gpio < 48; // N'importe quel GPIO valide
-}
+// Note: Les validators pour composants simples (potentiomètre, bouton, LED, velostat)
+// ont été supprimés car ils sont maintenant validés dynamiquement via ComponentDefinition::pinType
 
 static bool validateMux(uint8_t gpio, const void* config) {
     if (config == nullptr) {
@@ -49,12 +40,33 @@ void ValidationRegistry::registerValidator(const char* componentId, ValidatorFun
 
 bool ValidationRegistry::validate(const char* componentId, uint8_t gpio, const void* config) {
     // Recherche linéaire (plus simple et sans std::string temporaire)
+    // D'abord chercher un validator spécifique (pour cas spéciaux comme MUX)
     for (size_t i = 0; i < validatorCount_; i++) {
         if (strcmp(validators_[i].componentId, componentId) == 0) {
             return validators_[i].validator(gpio, config);
         }
     }
-    // Pas de validator enregistré = invalide par défaut
+    
+    // Pas de validator spécifique : validation dynamique basée sur ComponentDefinition
+    const ComponentDefinition* def = ComponentRegistry::findById(componentId);
+    if (def) {
+        // Validation basée sur le type de pin requis
+        switch (def->pinType) {
+            case PinType::PIN_ANALOG:
+                // Composant analogique : vérifier que le GPIO a un ADC
+                return PinMapper::hasAdc(gpio);
+            
+            case PinType::PIN_DIGITAL:
+                // Composant digital : vérifier que c'est un GPIO valide
+                return gpio < 48;
+            
+            default:
+                // Type inconnu : validation basique
+                return gpio < 48;
+        }
+    }
+    
+    // Pas de définition trouvée = invalide par défaut
     return false;
 }
 
@@ -181,16 +193,12 @@ bool ValidationRegistry::hasComplexValidator(const char* componentId) {
 }
 
 void ValidationRegistry::init() {
-    // Potentiomètre : nécessite une pin ADC
-    registerValidator("potentiometer", validatePotentiometer);
+    // Note: Les composants simples (potentiomètre, bouton, LED, velostat) sont maintenant
+    // validés dynamiquement via ComponentDefinition::pinType dans validate().
+    // On n'enregistre plus de validators spécifiques pour eux.
     
-    // Bouton : n'importe quelle pin GPIO valide (on vérifie juste que c'est dans la plage)
-    registerValidator("button", validateButton);
-    
-    // LED : pin digitale (PWM optionnel, utilisé si disponible et ledMode="pwm")
-    registerValidator("led", validateLed);
-    
-    // MUX : validation complexe via MuxValidator (pour compatibilité avec l'ancien système)
+    // MUX : validation complexe via MuxValidator (cas spécial avec config)
+    // Gardé car il nécessite une validation spéciale avec la config MUX
     registerValidator("mux", validateMux);
     
     // Composants complexes : validation complète avec ComplexComponentData

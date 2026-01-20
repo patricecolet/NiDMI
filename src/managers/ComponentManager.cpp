@@ -542,8 +542,12 @@ void ComponentManager::midiTaskLoop() {
             // Appeler le processeur enregistré pour ce type de composant
             if (!ProcessorRegistry::process(config.type, configs[i], states[i], filter_ptr, midi_sender, osc_queue)) {
                 // Processeur non enregistré (ne devrait pas arriver si tous les processeurs sont chargés)
-                Serial.printf("[ComponentManager] WARNING: No processor registered for component type %d\n", 
-                             static_cast<int>(config.type));
+                static unsigned long last_warning = 0;
+                if (millis() - last_warning > 5000) {  // Limiter les warnings
+                    Serial.printf("[ComponentManager] WARNING: No processor registered for component type %d (GPIO:%d)\n", 
+                                 static_cast<int>(config.type), configs[i].gpio);
+                    last_warning = millis();
+                }
             }
         }
         

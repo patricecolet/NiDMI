@@ -151,7 +151,14 @@ void RtpMidi::sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pressure) {
     if (!isStarted) return;
     // Key Pressure (Polyphonic Aftertouch) : status 0xA0-0xAF (channel 0-15)
     // Format : [0xAn | note | pressure] où n = channel (0-15)
-    MIDI.send(0xA0 | (channel & 0x0F), note & 0x7F, pressure & 0x7F);
+    // Vérifications de sécurité
+    if (channel == 0 || channel > 16) return; // Channel valide: 1-16
+    if (note > 127) return; // Note valide: 0-127
+    if (pressure > 127) return; // Pressure valide: 0-127
+    // Utiliser la surcharge sendAfterTouch(note, pressure, channel) pour Polyphonic Aftertouch
+    // Cette méthode remplace sendPolyPressure() qui est deprecated
+    // Signature: sendAfterTouch(note, pressure, channel) pour polyphonic
+    MIDI.sendAfterTouch(note & 0x7F, pressure & 0x7F, channel);
 }
 
 void RtpMidi::sendClock() {

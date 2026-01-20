@@ -1,6 +1,9 @@
 #pragma once
 
 #include "../ComponentDefinition.h"
+#include "../ComponentBuilder.h"
+#include "../FormFieldHelpers.h"
+#include "../MidiMessageFactory.h"
 
 /**
  * @file MuxDef.h
@@ -51,65 +54,18 @@ struct MuxBase {
     static bool validateSigPin(uint8_t gpio);
     
     /**
-     * @brief Remplit les champs communs de la définition
+     * @brief Crée un builder avec les champs communs remplis
      */
-    static void fillCommonDefinition(ComponentDefinition& def) {
-        def.icon = nullptr;
-        def.cardId = "cardMux";
-        def.family = FAMILY;
-        def.familyName = FAMILY_NAME;
-        def.type = TYPE;
-        def.pinType = PIN_TYPE;
-        def.supportsMidi = SUPPORTS_MIDI;
-        def.supportsOsc = SUPPORTS_OSC;
-        
-        // Template par défaut
-        def.statusTextTemplate = nullptr;
-        def.statusValueMappings = nullptr;
-        
-        // Allouer les messages MIDI supportés (même que potentiomètre)
-        def.midiMessageCount = 4;
-        def.midiMessagesCapacity = 4;
-        def.midiMessages = new MidiMessageDef[4];
-        
-        // Control Change
-        def.midiMessages[0].id = "cc";
-        def.midiMessages[0].displayName = "Control Change";
-        def.midiMessages[0].statusTemplate = "CC#{cc}";
-        def.midiMessages[0].paramCount = 3;
-        def.midiMessages[0].paramsCapacity = 3;
-        def.midiMessages[0].params = new MidiParamDef[3];
-        def.midiMessages[0].params[0] = MidiParamDef{"midiCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        def.midiMessages[0].params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        def.midiMessages[0].params[2] = MidiParamDef{"midiCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, "[\"potentiometer\"]"};
-        
-        // Program Change
-        def.midiMessages[1].id = "pc";
-        def.midiMessages[1].displayName = "Program Change";
-        def.midiMessages[1].statusTemplate = "PC#{pc}";
-        def.midiMessages[1].paramCount = 2;
-        def.midiMessages[1].paramsCapacity = 2;
-        def.midiMessages[1].params = new MidiParamDef[2];
-        def.midiMessages[1].params[0] = MidiParamDef{"midiPc", "{{t.pins.program}}:", FieldType::NUMBER, 1, 128, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        def.midiMessages[1].params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        
-        // Pitch Bend
-        def.midiMessages[2].id = "pitchbend";
-        def.midiMessages[2].displayName = "Pitch Bend";
-        def.midiMessages[2].statusTemplate = "Pitch Bend";
-        def.midiMessages[2].paramCount = 1;
-        def.midiMessages[2].paramsCapacity = 1;
-        def.midiMessages[2].params = new MidiParamDef[1];
-        def.midiMessages[2].params[0] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        
-        // Aftertouch
-        def.midiMessages[3].id = "aftertouch";
-        def.midiMessages[3].displayName = "Aftertouch (Channel)";
-        def.midiMessages[3].statusTemplate = "Aftertouch";
-        def.midiMessages[3].paramCount = 1;
-        def.midiMessages[3].paramsCapacity = 1;
-        def.midiMessages[3].params = new MidiParamDef[1];
-        def.midiMessages[3].params[0] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+    static ComponentBuilder createCommonBuilder() {
+        return ComponentBuilder()
+            .setBasicInfo("", "", "cardMux")  // id et displayName seront définis par les sous-classes
+            .setFamily(FAMILY, FAMILY_NAME)
+            .setType(TYPE, PIN_TYPE)
+            .setCapabilities(SUPPORTS_MIDI, SUPPORTS_OSC)
+            .addMidiMessage(createCcMessage(true, "[\"potentiometer\"]"))
+            .addMidiMessage(createPcMessage())
+            .addMidiMessage(createPitchBendMessage())
+            .addMidiMessage(createAftertouchMessage());
     }
 };
 
@@ -130,100 +86,30 @@ struct HC4067 : MuxBase {
      * @brief Crée la définition pour le registre
      */
     static ComponentDefinition createDefinition() {
-        ComponentDefinition def;
-        def.id = ID;
-        def.displayName = DISPLAY_NAME;
-        def.implemented = IMPLEMENTED;
-        
-        // Remplir les champs communs (alloue midiMessages)
-        fillCommonDefinition(def);
-        
-        // Allouer les pins additionnelles (S0, S1, S2, S3, EN)
-        def.additionalPinCount = 5;
-        def.additionalPinsCapacity = 5;
-        def.additionalPins = new AdditionalPinDef[5];
-        def.additionalPins[0] = {"s0", "S0", PinType::PIN_DIGITAL, false, 255};
-        def.additionalPins[1] = {"s1", "S1", PinType::PIN_DIGITAL, false, 255};
-        def.additionalPins[2] = {"s2", "S2", PinType::PIN_DIGITAL, false, 255};
-        def.additionalPins[3] = {"s3", "S3", PinType::PIN_DIGITAL, false, 255};
-        def.additionalPins[4] = {"en", "Enable", PinType::PIN_DIGITAL, true, 255};
-        
-        // Allouer les champs de formulaire pour MUX
-        // Note: Les pins additionnelles (S0-S3, EN) sont gérées séparément via additionalPins
-        // Ici on définit les champs de configuration analogique
-        def.formFieldCount = 4;
-        def.formFieldsCapacity = 4;
-        def.formFields = new FormFieldDef[4];
-        
-        // Min threshold
-        def.formFields[0] = FormFieldDef{
-            "muxMin",
-            "Seuil minimum",
-            FieldType::NUMBER,
-            false,
-            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
-            0, 4095, 1,            // min, max, step
-            nullptr, nullptr,
-            "0",
-            HintPosition::NONE, nullptr, nullptr,
-            nullptr, nullptr,
-            "f", nullptr, 100,
-            nullptr, nullptr
+        AdditionalPinDef pins[5] = {
+            {"s0", "S0", PinType::PIN_DIGITAL, false, 255},
+            {"s1", "S1", PinType::PIN_DIGITAL, false, 255},
+            {"s2", "S2", PinType::PIN_DIGITAL, false, 255},
+            {"s3", "S3", PinType::PIN_DIGITAL, false, 255},
+            {"en", "Enable", PinType::PIN_DIGITAL, true, 255}
         };
         
-        // Max threshold
-        def.formFields[1] = FormFieldDef{
-            "muxMax",
-            "Seuil maximum",
-            FieldType::NUMBER,
-            false,
-            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
-            0, 4095, 1,            // min, max, step
-            nullptr, nullptr,
-            "4095",
-            HintPosition::NONE, nullptr, nullptr,
-            nullptr, nullptr,
-            "f", nullptr, 100,
-            nullptr, nullptr
-        };
-        
-        // Hint pour calibrage OSC
-        def.formFields[2] = FormFieldDef{
-            "_muxCalibHint",
-            nullptr,
-            FieldType::INFO,
-            false,
-            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
-            0, 0, 0,              // min, max, step
-            nullptr, nullptr,
-            nullptr,
-            HintPosition::BELOW,
-            "Adresses OSC pour le calibrage: /mux[ID]/cal/min [CH] /mux[ID]/cal/max [CH] /mux[ID]/cal/reset [CH] (CH=0-15)",
-            "hint",
-            nullptr, nullptr,
-            nullptr, nullptr, 0,
-            nullptr, nullptr
-        };
-        
-        // Filter intensity
-        def.formFields[3] = FormFieldDef{
-            "muxFilterIntensity",
-            "Intensité filtrage (1-10)",
-            FieldType::NUMBER,
-            false,
-            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
-            1, 10, 1,             // min, max, step
-            nullptr, nullptr,
-            "5",
-            HintPosition::INLINE,
-            "1=rapide, 10=stable",
-            "margin-left:8px;font-size:0.9em;color:#666;",
-            nullptr, nullptr,
-            "f", nullptr, 60,
-            nullptr, nullptr
-        };
-        
-        return def;
+        return createCommonBuilder()
+            .setBasicInfo(ID, DISPLAY_NAME, "cardMux")
+            .setImplemented(IMPLEMENTED)
+            .setAdditionalPins(pins, 5)
+            .addFormField(makeNumberField("muxMin", "Seuil minimum", 0, 4095, "0", 1, 100, "f"))
+            .addFormField(makeNumberField("muxMax", "Seuil maximum", 0, 4095, "4095", 1, 100, "f"))
+            .addFormField(makeInfoField(
+                "_muxCalibHint",
+                "Adresses OSC pour le calibrage: /mux[ID]/cal/min [CH] /mux[ID]/cal/max [CH] /mux[ID]/cal/reset [CH] (CH=0-15)"
+            ))
+            .addFormField(makeNumberFieldWithHint(
+                "muxFilterIntensity",
+                "Intensité filtrage (1-10)",
+                1, 10, "5", "1=rapide, 10=stable", 60, "f"
+            ))
+            .build();
     }
 };
 
@@ -244,97 +130,29 @@ struct HC4051 : MuxBase {
      * @brief Crée la définition pour le registre
      */
     static ComponentDefinition createDefinition() {
-        ComponentDefinition def;
-        def.id = ID;
-        def.displayName = DISPLAY_NAME;
-        def.implemented = IMPLEMENTED;
-        
-        // Remplir les champs communs (alloue midiMessages)
-        fillCommonDefinition(def);
-        
-        // Allouer les pins additionnelles (S0, S1, S2, EN) - pas de S3 pour 8 canaux
-        def.additionalPinCount = 4;
-        def.additionalPinsCapacity = 4;
-        def.additionalPins = new AdditionalPinDef[4];
-        def.additionalPins[0] = {"s0", "S0", PinType::PIN_DIGITAL, false, 255};
-        def.additionalPins[1] = {"s1", "S1", PinType::PIN_DIGITAL, false, 255};
-        def.additionalPins[2] = {"s2", "S2", PinType::PIN_DIGITAL, false, 255};
-        def.additionalPins[3] = {"en", "Enable", PinType::PIN_DIGITAL, true, 255};
-        
-        // Allouer les champs de formulaire (même que HC4067)
-        def.formFieldCount = 4;
-        def.formFieldsCapacity = 4;
-        def.formFields = new FormFieldDef[4];
-        
-        // Min threshold
-        def.formFields[0] = FormFieldDef{
-            "muxMin",
-            "Seuil minimum",
-            FieldType::NUMBER,
-            false,
-            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
-            0, 4095, 1,            // min, max, step
-            nullptr, nullptr,
-            "0",
-            HintPosition::NONE, nullptr, nullptr,
-            nullptr, nullptr,
-            "f", nullptr, 100,
-            nullptr, nullptr
+        AdditionalPinDef pins[4] = {
+            {"s0", "S0", PinType::PIN_DIGITAL, false, 255},
+            {"s1", "S1", PinType::PIN_DIGITAL, false, 255},
+            {"s2", "S2", PinType::PIN_DIGITAL, false, 255},
+            {"en", "Enable", PinType::PIN_DIGITAL, true, 255}
         };
         
-        // Max threshold
-        def.formFields[1] = FormFieldDef{
-            "muxMax",
-            "Seuil maximum",
-            FieldType::NUMBER,
-            false,
-            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
-            0, 4095, 1,            // min, max, step
-            nullptr, nullptr,
-            "4095",
-            HintPosition::NONE, nullptr, nullptr,
-            nullptr, nullptr,
-            "f", nullptr, 100,
-            nullptr, nullptr
-        };
-        
-        // Hint pour calibrage OSC
-        def.formFields[2] = FormFieldDef{
-            "_muxCalibHint",
-            nullptr,
-            FieldType::INFO,
-            false,
-            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
-            0, 0, 0,              // min, max, step
-            nullptr, nullptr,
-            nullptr,
-            HintPosition::BELOW,
-            "Adresses OSC pour le calibrage: /mux[ID]/cal/min [CH] /mux[ID]/cal/max [CH] /mux[ID]/cal/reset [CH] (CH=0-15)",
-            "hint",
-            nullptr, nullptr,
-            nullptr, nullptr, 0,
-            nullptr, nullptr
-        };
-        
-        // Filter intensity
-        def.formFields[3] = FormFieldDef{
-            "muxFilterIntensity",
-            "Intensité filtrage (1-10)",
-            FieldType::NUMBER,
-            false,
-            nullptr, 0, nullptr,  // placeholder, maxLength (uint16_t), pattern
-            1, 10, 1,             // min, max, step
-            nullptr, nullptr,
-            "5",
-            HintPosition::INLINE,
-            "1=rapide, 10=stable",
-            "margin-left:8px;font-size:0.9em;color:#666;",
-            nullptr, nullptr,
-            "f", nullptr, 60,
-            nullptr, nullptr
-        };
-        
-        return def;
+        return createCommonBuilder()
+            .setBasicInfo(ID, DISPLAY_NAME, "cardMux")
+            .setImplemented(IMPLEMENTED)
+            .setAdditionalPins(pins, 4)
+            .addFormField(makeNumberField("muxMin", "Seuil minimum", 0, 4095, "0", 1, 100, "f"))
+            .addFormField(makeNumberField("muxMax", "Seuil maximum", 0, 4095, "4095", 1, 100, "f"))
+            .addFormField(makeInfoField(
+                "_muxCalibHint",
+                "Adresses OSC pour le calibrage: /mux[ID]/cal/min [CH] /mux[ID]/cal/max [CH] /mux[ID]/cal/reset [CH] (CH=0-15)"
+            ))
+            .addFormField(makeNumberFieldWithHint(
+                "muxFilterIntensity",
+                "Intensité filtrage (1-10)",
+                1, 10, "5", "1=rapide, 10=stable", 60, "f"
+            ))
+            .build();
     }
 };
 

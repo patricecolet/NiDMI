@@ -189,6 +189,9 @@ void UsbMidiManager::sendAftertouch(uint8_t channel, uint8_t pressure) {
 }
 
 void UsbMidiManager::sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pressure) {
+    // TEMPORAIREMENT DÉSACTIVÉ POUR DEBUG - CRASH SUSPECTÉ
+    return;
+    /*
 #ifdef NIDMI_USB_MIDI_SUPPORTED
     if (usbMidi && isConnected()) {
         // USB MIDI format: CIN=0x04 pour Channel Voice Messages à 2 octets
@@ -199,6 +202,7 @@ void UsbMidiManager::sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pres
         usbMidi->writePacket(&packet);
     }
 #endif
+    */
 }
 
 void UsbMidiManager::sendClock() {

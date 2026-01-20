@@ -98,7 +98,7 @@ show_help() {
     echo "Options:"
     echo "  sync     - Synchroniser les fichiers seulement"
     echo "  compile  - Synchroniser + compiler"
-    echo "  build    - Synchroniser + compiler + stocker le binaire + générer UF2"
+    echo "  build    - Synchroniser + compiler + stocker le binaire"
     echo "  upload   - Synchroniser + compiler + uploader"
     echo "  monitor  - Ouvrir le moniteur série"
     echo "  all      - Tout faire (sync + compile + upload + test)"
@@ -436,10 +436,6 @@ build_binary() {
         echo "   ✅ Binaire compilé et stocké dans bin/"
         echo "   📁 Fichiers créés:"
         ls -la "$REPO_DIR/bin/" 2>/dev/null || echo "   📁 Aucun fichier trouvé"
-        
-        # Générer automatiquement le fichier UF2
-        echo ""
-        generate_uf2
     else
         echo "   ⚠️  arduino-cli non trouvé"
         echo "   📝 Veuillez compiler manuellement dans l'IDE Arduino"
