@@ -12,17 +12,77 @@ const ComponentDefinitions = {
 
   /**
    * Charge les définitions de composants depuis l'API backend
+   * Détecte automatiquement si la pagination est activée et charge toutes les pages
    * @returns {Promise<Array>} Tableau des définitions de composants
    */
   async load() {
     try {
+      // Faire une première requête normale (sans paramètres de pagination)
       const r = await fetch('/api/components/definitions');
       if(!r.ok) {
         console.warn('[ComponentDefinitions.load] Erreur chargement définitions:', r.status);
         return [];
       }
-      this._cache = await r.json();
+      
+      // Vérifier si la pagination est activée (présence du header X-Total-Pages)
+      const totalPagesHeader = r.headers.get('X-Total-Pages');
+      const totalCountHeader = r.headers.get('X-Total-Count');
+      
+      console.log('[ComponentDefinitions.load] Headers pagination:', {
+        'X-Total-Pages': totalPagesHeader,
+        'X-Total-Count': totalCountHeader
+      });
+      
+      // Si les headers de pagination sont présents, la pagination est activée
+      if (totalPagesHeader !== null && totalCountHeader !== null) {
+        const totalPages = parseInt(totalPagesHeader);
+        const totalCount = parseInt(totalCountHeader);
+        
+        if (totalCount > 0) {
+          // Mode pagination activé : charger toutes les pages (même s'il n'y en a qu'une)
+          console.log('[ComponentDefinitions.load] Pagination détectée, chargement de toutes les pages...', 
+                     `(totalPages: ${totalPages}, totalCount: ${totalCount})`);
+          this._cache = [];
+          
+          // Charger toutes les pages
+          // Utiliser limit=5 pour correspondre au default du backend (buffer 12KB = ~5 composants par page)
+          for (let page = 0; page < totalPages; page++) {
+            const pageR = await fetch(`/api/components/definitions?page=${page}&limit=5`);
+            if (!pageR.ok) {
+              console.warn(`[ComponentDefinitions.load] Erreur page ${page}:`, pageR.status);
+              break;
+            }
+            
+            const pageData = await pageR.json();
+            if (!Array.isArray(pageData)) {
+              console.warn(`[ComponentDefinitions.load] Page ${page} invalide (pas un tableau)`);
+              break;
+            }
+            
+            if (pageData.length === 0) {
+              console.log(`[ComponentDefinitions.load] Page ${page} vide, arrêt`);
+              break; // Page vide, arrêter
+            }
+            
+            this._cache.push(...pageData);
+            console.log(`[ComponentDefinitions.load] Page ${page} chargée: ${pageData.length} composants`);
+          }
+          
+          console.log(`[ComponentDefinitions.load] Composants chargés (pagination): ${this._cache.length}/${totalCount}`);
+          console.log('[ComponentDefinitions.load] IDs des composants (pagination):', this._cache.map(d => d.id).join(', '));
+          return this._cache;
+        }
+      }
+      
+      // Mode normal : utiliser les données de la première requête
+      const data = await r.json();
+      if (!Array.isArray(data)) {
+        console.error('[ComponentDefinitions.load] Réponse invalide (pas un tableau):', data);
+        return [];
+      }
+      this._cache = data;
       console.log('[ComponentDefinitions.load] Composants chargés:', this._cache.length);
+      console.log('[ComponentDefinitions.load] IDs des composants:', this._cache.map(d => d.id).join(', '));
       return this._cache;
     } catch(err) {
       console.error('[ComponentDefinitions.load] Erreur:', err);
@@ -45,10 +105,14 @@ const ComponentDefinitions = {
    */
   getById(componentId) {
     if(!this._cache || this._cache.length === 0) {
-      console.warn('[ComponentDefinitions.getById] Cache vide pour:', componentId);
+      console.warn('[ComponentDefinitions.getById] Cache vide pour:', componentId, '(cache:', this._cache, ')');
       return null;
     }
-    return this._cache.find(def => def.id === componentId) || null;
+    const found = this._cache.find(def => def.id === componentId);
+    if (!found) {
+      console.warn('[ComponentDefinitions.getById] Composant non trouvé:', componentId, '(composants disponibles:', this._cache.map(d => d.id).join(', '), ')');
+    }
+    return found || null;
   },
 
   /**

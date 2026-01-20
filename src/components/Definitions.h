@@ -20,6 +20,7 @@
 #include "basic/ButtonDef.h"
 #include "basic/LedDef.h"
 #include "basic/VelostatDef.h"
+#include "basic/UltrasonicDef.h"
 
 // === FAMILLE MULTIPLEXER ===
 #include "multiplexer/MuxDef.h"

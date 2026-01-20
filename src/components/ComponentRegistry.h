@@ -53,6 +53,18 @@ public:
      */
     static int toJsonArray(char* buffer, size_t bufferSize);
     
+#ifdef NIDMI_COMPONENT_DEFS_PAGINATION
+    /**
+     * @brief Convertit les définitions en JSON array avec pagination
+     * @param buffer Buffer de sortie
+     * @param bufferSize Taille du buffer
+     * @param page Numéro de page (0-based)
+     * @param limit Nombre d'éléments par page
+     * @return Nombre de caractères écrits
+     */
+    static int toJsonArrayPage(char* buffer, size_t bufferSize, int page, int limit);
+#endif
+    
     /**
      * @brief Obtient le nombre de composants enregistrés
      */

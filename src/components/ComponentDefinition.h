@@ -291,7 +291,8 @@ struct ComponentDefinition {
             written += added;
         }
         
-        // Ajouter statusValueMappings si présent
+        // Ajouter statusValueMappings si présent (omis en mode LIGHT)
+#ifndef NIDMI_COMPONENT_DEFS_LIGHT
         if (statusValueMappings && written < (int)bufferSize - 50) {
             int added = snprintf(buffer + written, bufferSize - written,
                 ",\"statusValueMappings\":%s",
@@ -300,6 +301,7 @@ struct ComponentDefinition {
             if (added < 0 || written + added >= (int)bufferSize) return 0;
             written += added;
         }
+#endif
         
         // Ajouter les pins additionnelles si présentes
         if (additionalPinCount > 0 && additionalPins && written < (int)bufferSize - 50) {
@@ -402,6 +404,8 @@ struct ComponentDefinition {
                             }
                         }
                         
+                        // Hint pour INFO (omis en mode LIGHT)
+#ifndef NIDMI_COMPONENT_DEFS_LIGHT
                         if (param.type == FieldType::INFO && param.hint) {
                             written += snprintf(buffer + written, bufferSize - written,
                                 ",\"hint\":\"%s\"",
@@ -414,6 +418,7 @@ struct ComponentDefinition {
                                 );
                             }
                         }
+#endif
                         
                         if (param.dependsOnRole) {
                             written += snprintf(buffer + written, bufferSize - written,
@@ -522,6 +527,8 @@ struct ComponentDefinition {
                     );
                 }
                 
+                // Hints pour formFields (omis en mode LIGHT)
+#ifndef NIDMI_COMPONENT_DEFS_LIGHT
                 if (field.hintPosition != HintPosition::NONE && field.hint) {
                     written += snprintf(buffer + written, bufferSize - written,
                         ",\"hintPosition\":%d,\"hint\":\"%s\"",
@@ -535,6 +542,7 @@ struct ComponentDefinition {
                         );
                     }
                 }
+#endif
                 
                 if (field.dependsOn) {
                     written += snprintf(buffer + written, bufferSize - written,

@@ -26,7 +26,11 @@ CLEAR_NVS=false
 # Langue par défaut (français)
 LANG_CODE="fr"
 
-# Parser les arguments pour --lang et --board
+# Options d'optimisation JSON
+LIGHT_MODE=false
+PAGINATION_MODE=false
+
+# Parser les arguments pour --lang, --board, --light, --pagination
 ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -40,6 +44,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --clear-nvs)
             CLEAR_NVS=true
+            shift
+            ;;
+        --light)
+            LIGHT_MODE=true
+            shift
+            ;;
+        --pagination)
+            PAGINATION_MODE=true
             shift
             ;;
         *)
@@ -112,6 +124,10 @@ show_help() {
     echo "                  c3 = XIAO ESP32-C3"
     echo "                  s3 = XIAO ESP32-S3"
     echo "  --clear-nvs   - Utiliser le sketch de reset NVS"
+    echo "  --light       - Mode LIGHT: définitions simplifiées (réduit la taille JSON)"
+    echo "  --pagination  - Mode PAGINATION: chargement par pages (pour beaucoup de composants)"
+    echo ""
+    echo "  Les options --light et --pagination peuvent être combinées"
     echo ""
     echo "Sketches disponibles:"
     echo "  nidmi_basic (défaut)"
@@ -259,9 +275,36 @@ compile_sketch() {
     echo "   📁 Sketch: $SKETCH_PATH"
     echo "   📋 Board: $BOARD"
     
+    if [ "$LIGHT_MODE" = true ]; then
+        echo "   💡 Mode LIGHT activé (définitions simplifiées)"
+    fi
+    
+    if [ "$PAGINATION_MODE" = true ]; then
+        echo "   📄 Mode PAGINATION activé (chargement par pages)"
+    fi
+    
     if command -v arduino-cli &> /dev/null; then
         echo "   Utilisation d'arduino-cli..."
-        arduino-cli compile --fqbn $BOARD $SKETCH_PATH
+        
+        # Construire les flags de build
+        EXTRA_FLAGS_ARRAY=()
+        
+        if [ "$LIGHT_MODE" = true ]; then
+            EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_LIGHT")
+        fi
+        
+        if [ "$PAGINATION_MODE" = true ]; then
+            EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
+        fi
+        
+        # Construire la commande arduino-cli
+        if [ ${#EXTRA_FLAGS_ARRAY[@]} -gt 0 ]; then
+            # Joindre les flags avec des espaces
+            EXTRA_FLAGS_STR="${EXTRA_FLAGS_ARRAY[*]}"
+            arduino-cli compile --fqbn $BOARD --build-property compiler.cpp.extra_flags="$EXTRA_FLAGS_STR" $SKETCH_PATH
+        else
+            arduino-cli compile --fqbn $BOARD $SKETCH_PATH
+        fi
         echo "   ✅ Compilation réussie"
     else
         echo "   ⚠️  arduino-cli non trouvé"
@@ -427,12 +470,39 @@ build_binary() {
     echo "   📋 Board: $BOARD"
     echo "   📦 Dossier de sortie: $REPO_DIR/bin"
     
+    if [ "$LIGHT_MODE" = true ]; then
+        echo "   💡 Mode LIGHT activé (définitions simplifiées)"
+    fi
+    
+    if [ "$PAGINATION_MODE" = true ]; then
+        echo "   📄 Mode PAGINATION activé (chargement par pages)"
+    fi
+    
     # Créer le dossier bin s'il n'existe pas
     mkdir -p "$REPO_DIR/bin"
     
     if command -v arduino-cli &> /dev/null; then
         echo "   Utilisation d'arduino-cli..."
-        arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "$SKETCH_PATH"
+        
+        # Construire les flags de build (même logique que compile_sketch)
+        EXTRA_FLAGS_ARRAY=()
+        
+        if [ "$LIGHT_MODE" = true ]; then
+            EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_LIGHT")
+        fi
+        
+        if [ "$PAGINATION_MODE" = true ]; then
+            EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
+        fi
+        
+        # Construire la commande arduino-cli
+        if [ ${#EXTRA_FLAGS_ARRAY[@]} -gt 0 ]; then
+            # Joindre les flags avec des espaces
+            EXTRA_FLAGS_STR="${EXTRA_FLAGS_ARRAY[*]}"
+            arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" --build-property compiler.cpp.extra_flags="$EXTRA_FLAGS_STR" "$SKETCH_PATH"
+        else
+            arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "$SKETCH_PATH"
+        fi
         echo "   ✅ Binaire compilé et stocké dans bin/"
         echo "   📁 Fichiers créés:"
         ls -la "$REPO_DIR/bin/" 2>/dev/null || echo "   📁 Aucun fichier trouvé"
