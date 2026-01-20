@@ -57,7 +57,7 @@
 #X floatatom 119 389 5 0 100 0 - - - 0;
 #X obj 119 412 / 100;
 #X floatatom 251 430 5 0 127 0 - - - 0;
-#X text 412 443 note: with rtpmidi \, the loop between midi in and out comes from the lib provided for esp32 \, I couldn't brake it.;
+#X text 412 443 note: with rtpmidi \, the loop between midi in and out comes from the lib provided for esp32 \, I couldn't handle it.;
 #X connect 0 0 3 0;
 #X connect 0 1 2 0;
 #X connect 2 0 3 1;
