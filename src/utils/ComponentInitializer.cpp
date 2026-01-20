@@ -115,6 +115,9 @@ void ComponentInitializer::initializeState(ComponentState& state) {
     // Initialiser les champs de debouncing simple
     state.last_button_state = false;
     state.last_change_time = 0;
+    
+    // Pour Velostat : initialiser last_aftertouch
+    state.last_aftertouch = 0;
 }
 
 void ComponentInitializer::setupGpio(uint8_t gpio, ComponentType type, const ComponentConfig* config) {

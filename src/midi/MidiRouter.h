@@ -20,6 +20,7 @@ public:
     void sendProgramChange(uint8_t channel, uint8_t program) override;
     void sendPitchBend(uint8_t channel, int bend) override;
     void sendAftertouch(uint8_t channel, uint8_t pressure) override;
+    void sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pressure) override;
     void sendClock() override;
     void sendStart() override;
     void sendStop() override;

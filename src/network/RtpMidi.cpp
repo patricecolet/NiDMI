@@ -147,6 +147,13 @@ void RtpMidi::sendAftertouch(uint8_t channel, uint8_t pressure) {
     MIDI.sendAfterTouch(pressure, channel);
 }
 
+void RtpMidi::sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pressure) {
+    if (!isStarted) return;
+    // Key Pressure (Polyphonic Aftertouch) : status 0xA0-0xAF (channel 0-15)
+    // Format : [0xAn | note | pressure] où n = channel (0-15)
+    MIDI.send(0xA0 | (channel & 0x0F), note & 0x7F, pressure & 0x7F);
+}
+
 void RtpMidi::sendClock() {
     if (!isStarted) return;
     MIDI.sendRealTime(midi::Clock);

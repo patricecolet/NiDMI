@@ -29,6 +29,7 @@ public:
     void sendProgramChange(uint8_t channel, uint8_t program);
     void sendPitchBend(uint8_t channel, int bend);
     void sendAftertouch(uint8_t channel, uint8_t pressure);
+    void sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pressure);
     void sendClock();
     void sendStart();
     void sendStop();

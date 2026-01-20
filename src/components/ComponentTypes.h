@@ -18,9 +18,10 @@ enum class ComponentType : uint8_t {
     POTENTIOMETER = 0,
     BUTTON = 1,
     LED = 2,
-    MUX = 3
+    MUX = 3,
+    VELOSTAT = 4
     // Facilement extensible pour de nouveaux types
-    // Exemple: ENCODER = 4, FADER = 5, etc.
+    // Exemple: ENCODER = 5, FADER = 6, etc.
 };
 
 // Types de pins supportés par un composant
@@ -82,4 +83,7 @@ struct ComponentState {
     
     // Hystérésis pour NOTE_SWEEP (zone morte de 2 bits = ±3 sur 0-127)
     Hysteresis<2> hysteresis;
+    
+    // Pour Velostat : dernière valeur aftertouch envoyée
+    uint8_t last_aftertouch;
 };

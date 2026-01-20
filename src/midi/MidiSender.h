@@ -19,6 +19,7 @@ public:
     virtual void sendProgramChange(uint8_t channel, uint8_t program) = 0;
     virtual void sendPitchBend(uint8_t channel, int bend) = 0;  // -8192 à +8191, centre=0
     virtual void sendAftertouch(uint8_t channel, uint8_t pressure) = 0;
+    virtual void sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pressure) = 0;  // Key Pressure (Polyphonic Aftertouch)
     virtual void sendClock() = 0;      // MIDI Clock (pas de canal)
     virtual void sendStart() = 0;      // MIDI Start
     virtual void sendStop() = 0;       // MIDI Stop

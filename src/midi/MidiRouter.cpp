@@ -118,6 +118,24 @@ void MidiRouter::sendAftertouch(uint8_t channel, uint8_t pressure) {
     }
 }
 
+void MidiRouter::sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pressure) {
+    const uint8_t ch = channel ? channel : defaultChannel;
+    if (rtpEnabled) {
+        serverCore.rtpMidi().sendKeyPressure(ch, note, pressure);
+    }
+    if (bluetoothEnabled) {
+        // BluetoothManager n'a pas sendKeyPressure, on peut l'ignorer ou l'implémenter plus tard
+    }
+    if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
+        serverCore.usbMidi().sendKeyPressure(ch, note, pressure);
+    }
+    #ifdef NIDMI_ENABLE_OSC_ROUTER
+    if (oscEnabled) {
+        serverCore.sendOscKeyPressure(ch, note, pressure, oscToSta, oscPort);
+    }
+    #endif
+}
+
 void MidiRouter::sendClock() {
     if (rtpEnabled) {
         serverCore.rtpMidi().sendClock();
