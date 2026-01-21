@@ -365,5 +365,32 @@ public:
 
 ---
 
+## Familles de composants Seeed/Grove (placeholders non implémentés)
+
+NiDMI expose plusieurs nouvelles familles de composants pour préparer l’intégration
+de capteurs/actuateurs Seeed/Grove. Ces composants apparaissent dans l’UI mais
+sont marqués comme **non implémentés** (grisés) tant que les processeurs ne sont
+pas écrits.
+
+- **BASIC** : Potentiomètre, Bouton, LED, Velostat, Ultrasonique, Touch.
+- **MULTIPLEXER** : HC4067 / Mux analogiques.
+- **DISTANCE** : `DistanceGeneric` (Ultrasonic Grove, LiDAR, IR distance, inductif).
+- **ENVIRONMENT** : `EnvironmentGeneric` (température, humidité, pression, lumière, UV, sol).
+- **MOTION** : `MotionGeneric` (PIR, IMU, capteurs de gestes).
+- **COLOR** : `ColorGeneric` (capteurs de couleur / lumière avancés).
+- **INTERFACE** : `InterfaceGeneric` (MPR121, FSR, encodeurs, sliders).
+- **ACTUATOR** : `ActuatorGeneric` (relais, moteurs, servos, buzzers).
+- **DISPLAY** : `DisplayGeneric` (matrices LED, petits écrans).
+
+Chaque `*Generic` :
+- utilise une **famille** dédiée (`ComponentFamily::DISTANCE`, `ENVIRONMENT`, etc.),
+- est déclaré avec `IMPLEMENTED = false` dans son `*Def.h`,
+- n’a pas encore de processeur (`*Processor.cpp`) associé.
+
+Cela permet de préparer les fonctions du pin et l’organisation des composants
+sans impacter le runtime tant que les implémentations ne sont pas prêtes.
+
+---
+
 *Guide avancé pour développeurs expérimentés*
 *Basé sur l'architecture NiDMI et les meilleures pratiques ESP32*

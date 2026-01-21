@@ -20,10 +20,18 @@
  * Chaque famille correspond à un dossier dans src/components/
  */
 enum class ComponentFamily : uint8_t {
-    BASIC = 0,        // Potentiomètre, Bouton, LED (composants simples)
+    BASIC       = 0,  // Potentiomètre, Bouton, LED (composants simples)
     MULTIPLEXER = 1,  // HC4067, HC4051, CD4052...
-    ENCODER = 2,      // Encodeurs rotatifs
-    SCREEN = 3        // Écrans OLED, LCD (évite conflit avec macro DISPLAY d'Arduino)
+    ENCODER     = 2,  // Encodeurs rotatifs
+    SCREEN      = 3,  // Écrans OLED, LCD (évite conflit avec macro DISPLAY d'Arduino)
+
+    // Nouvelles familles fonctionnelles pour capteurs/actuateurs Seeed/Grove
+    DISTANCE    = 4,  // Ultrasonic, LiDAR, IR distance, inductif
+    ENVIRONMENT = 5,  // Température, humidité, pression, lumière, UV, sol
+    MOTION      = 6,  // PIR, IMU, radar, gestes
+    COLOR       = 7,  // Capteurs de couleur / lumière avancés
+    INTERFACE   = 8,  // Touch/MPR121, FSR, encodeurs, contrôles physiques
+    ACTUATOR    = 9   // Relais, moteurs, servos, buzzers
     // Ajouter de nouvelles familles ici
 };
 

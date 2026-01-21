@@ -21,9 +21,11 @@ enum class ComponentType : uint8_t {
     MUX           = 3,
     VELOSTAT      = 4,
     ULTRASONIC    = 5,
-    TOUCH         = 6
+    TOUCH         = 6,
+    ACTUATOR      = 7,  // Actuateurs de sortie (relais, buzzers, solénoïdes, etc.)
+    BARGRAPH      = 8   // Bargraph LED (10 segments) - réutilise LedProcessor pour l'instant
     // Facilement extensible pour de nouveaux types
-    // Exemple: ENCODER = 7, FADER = 8, etc.
+    // Exemple: ENCODER = 9, FADER = 10, etc.
 };
 
 // Types de pins supportés par un composant

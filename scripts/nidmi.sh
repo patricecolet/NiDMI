@@ -177,7 +177,7 @@ sync_files() {
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
-    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,config,hardware,managers,managers/complex,managers/complex/multiplexer,midi,midi/handlers,network,osc,processors,server,ui,utils}
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,midi,midi/handlers,network,osc,processors,server,ui,utils}
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -195,6 +195,20 @@ sync_files() {
     cp -f $REPO_DIR/src/components/basic/*.cpp $ARDUINO_LIB_DIR/src/components/basic/ 2>/dev/null || true
     cp -f $REPO_DIR/src/components/multiplexer/*.h $ARDUINO_LIB_DIR/src/components/multiplexer/ 2>/dev/null || true
     cp -f $REPO_DIR/src/components/multiplexer/*.cpp $ARDUINO_LIB_DIR/src/components/multiplexer/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/distance/*.h $ARDUINO_LIB_DIR/src/components/distance/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/distance/*.cpp $ARDUINO_LIB_DIR/src/components/distance/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/environment/*.h $ARDUINO_LIB_DIR/src/components/environment/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/environment/*.cpp $ARDUINO_LIB_DIR/src/components/environment/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/motion/*.h $ARDUINO_LIB_DIR/src/components/motion/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/motion/*.cpp $ARDUINO_LIB_DIR/src/components/motion/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/color/*.h $ARDUINO_LIB_DIR/src/components/color/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/color/*.cpp $ARDUINO_LIB_DIR/src/components/color/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/interface/*.h $ARDUINO_LIB_DIR/src/components/interface/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/interface/*.cpp $ARDUINO_LIB_DIR/src/components/interface/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/actuator/*.h $ARDUINO_LIB_DIR/src/components/actuator/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/actuator/*.cpp $ARDUINO_LIB_DIR/src/components/actuator/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/display/*.h $ARDUINO_LIB_DIR/src/components/display/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/display/*.cpp $ARDUINO_LIB_DIR/src/components/display/ 2>/dev/null || true
     cp -f $REPO_DIR/src/config/*.cpp $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
     cp -f $REPO_DIR/src/config/*.h $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
     cp -f $REPO_DIR/src/hardware/*.cpp $ARDUINO_LIB_DIR/src/hardware/ 2>/dev/null || true

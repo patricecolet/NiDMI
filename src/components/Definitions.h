@@ -20,11 +20,58 @@
 #include "basic/ButtonDef.h"
 #include "basic/LedDef.h"
 #include "basic/VelostatDef.h"
-#include "basic/UltrasonicDef.h"
 #include "basic/TouchDef.h"
 
 // === FAMILLE MULTIPLEXER ===
 #include "multiplexer/MuxDef.h"
+
+// === FAMILLE DISTANCE ===
+// Ultrasonique + autres capteurs de distance Seeed/Grove (non implémentés)
+#include "basic/UltrasonicDef.h"
+#include "distance/IrDistanceSharpDef.h"
+#include "distance/LidarTofDef.h"
+#include "distance/InductiveProximityDef.h"
+
+// === FAMILLE ENVIRONMENT ===
+#include "environment/EnvironmentGenericDef.h"
+#include "environment/LightSensorGroveDef.h"
+#include "environment/TempHumDhtDef.h"
+#include "environment/TempHumI2cDef.h"
+#include "environment/BarometerDps310Def.h"
+#include "environment/SoilMoistureCapacitiveDef.h"
+#include "environment/UvSensorGroveDef.h"
+
+// === FAMILLE MOTION ===
+#include "motion/MotionGenericDef.h"
+#include "motion/PirMotionDef.h"
+#include "motion/Imu6AxisDef.h"
+#include "motion/GestureIrDef.h"
+#include "motion/RadarDopplerDef.h"
+
+// === FAMILLE COLOR ===
+#include "color/ColorGenericDef.h"
+
+// === FAMILLE INTERFACE ===
+// On garde uniquement les contrôles qui n’existent pas déjà dans BASIC
+// (FSR, encodeurs complexes, joystick...). Boutons et sliders restent dans BASIC.
+#include "interface/FsrDef.h"
+#include "interface/RotaryAngleGroveDef.h"
+#include "interface/ThumbJoystickGroveDef.h"
+
+// === FAMILLE ACTUATOR ===
+#include "actuator/ActuatorGenericDef.h"
+#include "actuator/RelayGroveDef.h"
+#include "actuator/BuzzerGroveDef.h"
+#include "actuator/VibrationMotorGroveDef.h"
+#include "actuator/SolenoidGroveDef.h"
+
+// === FAMILLE SCREEN ===
+#include "display/DisplayGenericDef.h"
+#include "display/BargraphLedGroveDef.h"
+#include "display/OledI2cGroveDef.h"
+#include "display/Lcd16x2I2cGroveDef.h"
+#include "display/FourDigitDisplayGroveDef.h"
+#include "display/LedMatrixGroveDef.h"
 
 // Pour ajouter une nouvelle définition :
 // #include "[famille]/MyComponentDef.h"

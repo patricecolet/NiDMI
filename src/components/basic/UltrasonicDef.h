@@ -25,10 +25,10 @@ struct Ultrasonic {
     // Identifiants
     static constexpr const char *ID = "ultrasonic";
     static constexpr const char *DISPLAY_NAME = "Ultrasonique";
-    static constexpr const char *FAMILY_NAME = "Basic";
+    static constexpr const char *FAMILY_NAME = "Distance";
 
     // Configuration
-    static constexpr ComponentFamily FAMILY = ComponentFamily::BASIC;
+    static constexpr ComponentFamily FAMILY = ComponentFamily::DISTANCE;
     static constexpr ComponentType TYPE = ComponentType::ULTRASONIC;
     static constexpr PinType PIN_TYPE = PinType::PIN_DIGITAL;
     static constexpr bool IMPLEMENTED = true;

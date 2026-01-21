@@ -402,6 +402,8 @@ void ComponentManager::printStats() {
                 case ComponentType::POTENTIOMETER: typeStr = "Pot"; msgTypeStr = "CC"; break;
                 case ComponentType::BUTTON: typeStr = "Btn"; msgTypeStr = "Note"; break;
                 case ComponentType::LED: typeStr = "LED"; msgTypeStr = "Note"; break;
+                case ComponentType::BARGRAPH: typeStr = "Bar"; msgTypeStr = "CC"; break;
+                case ComponentType::ACTUATOR: typeStr = "Act"; msgTypeStr = "Note"; break;
             }
         }
         
