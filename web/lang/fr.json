@@ -36,7 +36,14 @@
     "ssid": "SSID",
     "password": "Mot de passe",
     "networkName": "Nom du réseau",
-    "connect": "Connecter"
+    "connect": "Connecter",
+    "system": "Paramètres système",
+    "touchEnabled": "Activer le support Touch (ESP32-S3)",
+    "touchEnabledHint": "Active ou désactive l'utilisation des pins touch. Nécessite un rechargement des composants.",
+    "dangerZone": "Zone de danger",
+    "clearNVS": "Effacer toute la NVS",
+    "clearNVSWarning": "⚠️ Attention : Cela supprimera toutes les configurations (pins, OSC, WiFi, etc.) et réinitialisera complètement le système.",
+    "clearNVSSuccess": "NVS effacée avec succès. Rechargement..."
   },
   "pins": {
     "configured": "Pins configurées",

@@ -172,6 +172,10 @@ TEMP_JS=$(mktemp)
         echo ""
         cat web/js/pins.js
     fi
+    if [ -f "web/js/system-config.js" ]; then
+        echo ""
+        cat web/js/system-config.js
+    fi
     if [ -f "web/app.js" ]; then
         echo ""
         cat web/app.js

@@ -125,13 +125,54 @@ int ConfigCache::findPinIndex(const String& pin) {
 /* Supprimer une pin du cache et de la NVS */
 void ConfigCache::removeConfig(const String& pin) {
     int index = findPinIndex(pin);
-    
-    /* Supprimer de la NVS */
-    Preferences preferences;
-    preferences.begin("nidmi", false);
     String key = "pin_" + pin;
-    preferences.remove(key.c_str());
-    preferences.end();
+    
+    /* Supprimer de la NVS avec vérification */
+    Preferences preferences;
+    preferences.begin("nidmi", false);  // false = mode écriture
+    
+    /* Vérifier si la clé existe */
+    bool key_exists = preferences.isKey(key.c_str());
+    
+    if (key_exists) {
+        /* Méthode 1 : remove() - devrait fonctionner */
+        bool removed = preferences.remove(key.c_str());
+        preferences.end();
+        
+        /* Vérifier que ça a fonctionné */
+        preferences.begin("nidmi", true);  // true = mode lecture
+        bool still_exists = preferences.isKey(key.c_str());
+        preferences.end();
+        
+        if (still_exists) {
+            /* Si remove() n'a pas fonctionné, forcer la suppression en mettant une valeur vide */
+            Serial.printf("[ConfigCache] ⚠️ remove() n'a pas fonctionné pour '%s', tentative de suppression forcée\n", key.c_str());
+            preferences.begin("nidmi", false);
+            /* Méthode alternative : mettre une valeur vide puis supprimer */
+            preferences.putString(key.c_str(), "");
+            delay(5);
+            /* Essayer remove() à nouveau */
+            preferences.remove(key.c_str());
+            delay(5);
+            preferences.end();
+            
+            /* Vérification finale */
+            preferences.begin("nidmi", true);
+            bool final_check = preferences.isKey(key.c_str());
+            preferences.end();
+            
+            if (final_check) {
+                Serial.printf("[ConfigCache] ⚠️ La clé '%s' existe toujours après toutes les tentatives!\n", key.c_str());
+            } else {
+                Serial.printf("[ConfigCache] ✓ Clé '%s' supprimée avec succès (méthode forcée)\n", key.c_str());
+            }
+        } else {
+            Serial.printf("[ConfigCache] ✓ Clé '%s' supprimée avec succès\n", key.c_str());
+        }
+    } else {
+        preferences.end();
+        Serial.printf("[ConfigCache] Clé '%s' n'existait pas dans NVS\n", key.c_str());
+    }
     
     /* Retirer du cache si présent */
     if (index != -1 && index < count && count > 0) {
@@ -147,7 +188,37 @@ void ConfigCache::removeConfig(const String& pin) {
             cache[count].clear();
             dirty[count] = false;
         }
+        Serial.printf("[ConfigCache] Pin '%s' retirée du cache (count=%d)\n", pin.c_str(), count);
     }
+}
+
+/* Clear complet de la NVS - supprime tout le namespace "nidmi" */
+void ConfigCache::clearAllNVS() {
+    Serial.println("[ConfigCache] ⚠️ CLEAR COMPLET DE LA NVS - suppression de toutes les configs!");
+    
+    Preferences preferences;
+    preferences.begin("nidmi", false);  // false = mode écriture
+    
+    /* Clear complet du namespace */
+    bool cleared = preferences.clear();
+    preferences.end();
+    
+    /* Clear aussi le cache en mémoire */
+    count = 0;
+    for (int i = 0; i < MAX_PINS; i++) {
+        pinNames[i].clear();
+        cache[i].clear();
+        dirty[i] = false;
+    }
+    
+    if (cleared) {
+        Serial.println("[ConfigCache] ✓ NVS complètement vidée");
+    } else {
+        Serial.println("[ConfigCache] ⚠️ Échec du clear NVS");
+    }
+    
+    /* Demander le rechargement des composants (qui sera vide maintenant) */
+    nidmi_requestReloadPins();
 }
 
 /* Mettre en cache sans marquer dirty (pour lecture NVS) */

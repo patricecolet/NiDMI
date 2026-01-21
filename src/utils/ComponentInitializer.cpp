@@ -3,6 +3,7 @@
 #include "../components/ComponentRegistry.h"  // Pour obtenir les définitions
 #include "../components/ComponentDefinition.h"  // Pour FormFieldDef, FieldType, MAX_FORM_FIELDS
 #include "../midi/MidiMessageType.h"
+#include "../utils/PinMapper.h"  // Pour PinMapper::hasTouch()
 
 void ComponentInitializer::initializeConfig(
     ComponentConfig& config,
@@ -121,6 +122,22 @@ void ComponentInitializer::initializeState(ComponentState& state) {
 }
 
 void ComponentInitializer::setupGpio(uint8_t gpio, ComponentType type, const ComponentConfig* config) {
+    // IMPORTANT: Ne PAS appeler pinMode() sur les pins touch ESP32-S3
+    // car cela désactive la fonctionnalité touch (touchRead() ne fonctionnera plus)
+    bool is_touch_type = (type == ComponentType::TOUCH);
+    bool has_touch_capability = PinMapper::hasTouch(gpio);
+    
+    if (is_touch_type || has_touch_capability) {
+        // Pour les pins touch, ne pas appeler pinMode()
+        // touchRead() configure automatiquement la pin pour le touch sensing
+        Serial.printf("[ComponentInitializer] ═══ GPIO%d: Touch pin détectée ═══\n", gpio);
+        Serial.printf("[ComponentInitializer] Type=TOUCH: %s, hasTouch(): %s\n", 
+                     is_touch_type ? "OUI" : "NON", has_touch_capability ? "OUI" : "NON");
+        Serial.printf("[ComponentInitializer] ✓ Pas de pinMode() appelé (touchRead() configure automatiquement)\n");
+        Serial.printf("[ComponentInitializer] ════════════════════════════════════\n");
+        return;
+    }
+    
     const ComponentDefinition* def = ComponentRegistry::findByType(type);
     if (!def) {
         // Fallback : comportement par défaut si définition non disponible

@@ -54,8 +54,8 @@ void nidmi_begin() {
     String staSnStr = preferences.getString("sta_sn", "");
     
     // Charger l'état des interfaces MIDI depuis NVS
-    bool usbMidiEnabled = preferences.getBool("usbmidi_enabled", true); // Par défaut true
-    // bool usbMidiEnabled = false ; // Par défaut true
+    // bool usbMidiEnabled = preferences.getBool("usbmidi_enabled", true); // Par défaut true
+     bool usbMidiEnabled = false ; // Par défaut true
     
     preferences.end();
     

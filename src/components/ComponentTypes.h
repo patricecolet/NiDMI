@@ -20,9 +20,10 @@ enum class ComponentType : uint8_t {
     LED           = 2,
     MUX           = 3,
     VELOSTAT      = 4,
-    ULTRASONIC    = 5
+    ULTRASONIC    = 5,
+    TOUCH         = 6
     // Facilement extensible pour de nouveaux types
-    // Exemple: ENCODER = 6, FADER = 7, etc.
+    // Exemple: ENCODER = 7, FADER = 8, etc.
 };
 
 // Types de pins supportés par un composant

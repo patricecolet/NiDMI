@@ -10,6 +10,9 @@
  * @brief Définition du composant Ultrasonique
  *
  * Capteur de distance ultrasonique sur pin digitale.
+ * Compatible avec HC-SR04+ (3.3V, compatible ESP32).
+ * Note: Le HC-SR04 standard nécessite 5V et n'est pas compatible avec l'ESP32.
+ * 
  * La distance (en mm) est mappée vers des messages MIDI (CC, Pitch Bend,
  * Aftertouch, Note Sweep).
  *
