@@ -36,7 +36,14 @@
     "ssid": "SSID",
     "password": "Password",
     "networkName": "Network name",
-    "connect": "Connect"
+    "connect": "Connect",
+    "system": "System Settings",
+    "touchEnabled": "Enable Touch support (ESP32-S3)",
+    "touchEnabledHint": "Enable or disable touch pin usage. Requires component reload.",
+    "dangerZone": "Danger Zone",
+    "clearNVS": "Clear All NVS",
+    "clearNVSWarning": "⚠️ Warning: This will delete all configurations (pins, OSC, WiFi, etc.) and completely reset the system.",
+    "clearNVSSuccess": "NVS cleared successfully. Reloading..."
   },
   "pins": {
     "configured": "Configured pins",

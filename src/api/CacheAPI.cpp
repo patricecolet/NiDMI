@@ -8,4 +8,11 @@ void setupCacheAPI(AsyncWebServer& server) {
         debug_network( "[CacheAPI] forceSave() terminé\n");
         request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
+    
+    /* API - Clear complet de la NVS (utile pour réinitialiser) */
+    server.on("/api/cache/clear", HTTP_POST, [](AsyncWebServerRequest *request){
+        Serial.println("[CacheAPI] Clear NVS demandé via API");
+        g_configCache.clearAllNVS();
+        request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"NVS cleared\"}");
+    });
 }

@@ -24,12 +24,59 @@ void setupComponentsAPI(AsyncWebServer& server) {
      * Retourne la liste des composants disponibles avec leurs métadonnées
      */
     server.on("/api/components/definitions", HTTP_GET, [](AsyncWebServerRequest* request) {
+#ifdef NIDMI_COMPONENT_DEFS_PAGINATION
+        // Mode pagination activé
+        // Limit par défaut à 5 : avec buffer 12KB, 5 composants = ~9-10KB (marge confortable)
+        // Cela permet de tester la pagination même avec peu de composants
+        int page = 0, limit = 5;
+        if (request->hasParam("page")) {
+            page = request->getParam("page")->value().toInt();
+            if (page < 0) page = 0;
+        }
+        if (request->hasParam("limit")) {
+            limit = request->getParam("limit")->value().toInt();
+            if (limit < 1) limit = 1;
+            if (limit > 15) limit = 15; // Max 15 par page pour éviter les buffers trop grands (avec buffer 12KB)
+        }
+        
+        static char jsonBuffer[12288];  // Buffer 12KB par page (augmenté pour éviter la troncature)
+        int written = ComponentRegistry::toJsonArrayPage(jsonBuffer, sizeof(jsonBuffer), page, limit);
+        
+        if (written > 0 && written < (int)sizeof(jsonBuffer)) {
+            // Ajouter les métadonnées de pagination dans les headers
+            int totalCount = static_cast<int>(ComponentRegistry::count());
+            int totalPages = (totalCount + limit - 1) / limit;
+            
+            #ifdef ARDUINO
+            Serial.printf("[ComponentsAPI] Pagination: page=%d, limit=%d, totalCount=%d, totalPages=%d\n", 
+                         page, limit, totalCount, totalPages);
+            #endif
+            
+            AsyncWebServerResponse* response = request->beginResponse(200, "application/json", jsonBuffer);
+            response->addHeader("X-Total-Count", String(totalCount));
+            response->addHeader("X-Total-Pages", String(totalPages));
+            response->addHeader("X-Current-Page", String(page));
+            response->addHeader("X-Per-Page", String(limit));
+            request->send(response);
+        } else {
+            Serial.printf("[ComponentsAPI] WARNING: Pagination serialization failed (written=%d, size=%zu)\n", 
+                         written, sizeof(jsonBuffer));
+            request->send(500, "application/json", "{\"error\":\"Serialization failed\"}");
+        }
+#else
+        // Mode normal (sans pagination) - code existant
         // Buffer plus grand pour inclure toutes les métadonnées (MIDI params, formFields, etc.)
         // Avec les nouvelles structures, chaque composant peut prendre ~500-800 bytes
         // Pour ~10 composants, on a besoin d'au moins 8-10KB
-        static char jsonBuffer[12288];  // 12KB pour être sûr
+        // Augmenté à 24KB pour permettre l'ajout de nouveaux composants (ultrasonic, etc.)
+        static char jsonBuffer[24576];  // 24KB pour tester avec plusieurs composants
         
         int written = ComponentRegistry::toJsonArray(jsonBuffer, sizeof(jsonBuffer));
+        
+        #ifdef ARDUINO
+        int totalCount = static_cast<int>(ComponentRegistry::count());
+        Serial.printf("[ComponentsAPI] Mode normal: totalCount=%d, written=%d\n", totalCount, written);
+        #endif
         
         if (written > 0 && written < (int)sizeof(jsonBuffer)) {
             request->send(200, "application/json", jsonBuffer);
@@ -39,6 +86,7 @@ void setupComponentsAPI(AsyncWebServer& server) {
                          written, sizeof(jsonBuffer));
             request->send(500, "application/json", "{\"error\":\"Buffer too small for component definitions\"}");
         }
+#endif
     });
     
     /**

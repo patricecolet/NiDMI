@@ -26,7 +26,11 @@ CLEAR_NVS=false
 # Langue par défaut (français)
 LANG_CODE="fr"
 
-# Parser les arguments pour --lang et --board
+# Options d'optimisation JSON
+LIGHT_MODE=false
+PAGINATION_MODE=false
+
+# Parser les arguments pour --lang, --board, --light, --pagination
 ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -40,6 +44,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --clear-nvs)
             CLEAR_NVS=true
+            shift
+            ;;
+        --light)
+            LIGHT_MODE=true
+            shift
+            ;;
+        --pagination)
+            PAGINATION_MODE=true
             shift
             ;;
         *)
@@ -112,6 +124,10 @@ show_help() {
     echo "                  c3 = XIAO ESP32-C3"
     echo "                  s3 = XIAO ESP32-S3"
     echo "  --clear-nvs   - Utiliser le sketch de reset NVS"
+    echo "  --light       - Mode LIGHT: définitions simplifiées (réduit la taille JSON)"
+    echo "  --pagination  - Mode PAGINATION: chargement par pages (pour beaucoup de composants)"
+    echo ""
+    echo "  Les options --light et --pagination peuvent être combinées"
     echo ""
     echo "Sketches disponibles:"
     echo "  nidmi_basic (défaut)"
@@ -161,7 +177,7 @@ sync_files() {
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
-    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,config,hardware,managers,managers/complex,managers/complex/multiplexer,midi,midi/handlers,network,osc,processors,server,ui,utils}
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,midi,midi/handlers,network,osc,processors,server,ui,utils}
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -179,6 +195,20 @@ sync_files() {
     cp -f $REPO_DIR/src/components/basic/*.cpp $ARDUINO_LIB_DIR/src/components/basic/ 2>/dev/null || true
     cp -f $REPO_DIR/src/components/multiplexer/*.h $ARDUINO_LIB_DIR/src/components/multiplexer/ 2>/dev/null || true
     cp -f $REPO_DIR/src/components/multiplexer/*.cpp $ARDUINO_LIB_DIR/src/components/multiplexer/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/distance/*.h $ARDUINO_LIB_DIR/src/components/distance/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/distance/*.cpp $ARDUINO_LIB_DIR/src/components/distance/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/environment/*.h $ARDUINO_LIB_DIR/src/components/environment/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/environment/*.cpp $ARDUINO_LIB_DIR/src/components/environment/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/motion/*.h $ARDUINO_LIB_DIR/src/components/motion/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/motion/*.cpp $ARDUINO_LIB_DIR/src/components/motion/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/color/*.h $ARDUINO_LIB_DIR/src/components/color/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/color/*.cpp $ARDUINO_LIB_DIR/src/components/color/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/interface/*.h $ARDUINO_LIB_DIR/src/components/interface/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/interface/*.cpp $ARDUINO_LIB_DIR/src/components/interface/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/actuator/*.h $ARDUINO_LIB_DIR/src/components/actuator/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/actuator/*.cpp $ARDUINO_LIB_DIR/src/components/actuator/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/display/*.h $ARDUINO_LIB_DIR/src/components/display/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/display/*.cpp $ARDUINO_LIB_DIR/src/components/display/ 2>/dev/null || true
     cp -f $REPO_DIR/src/config/*.cpp $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
     cp -f $REPO_DIR/src/config/*.h $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
     cp -f $REPO_DIR/src/hardware/*.cpp $ARDUINO_LIB_DIR/src/hardware/ 2>/dev/null || true
@@ -259,9 +289,36 @@ compile_sketch() {
     echo "   📁 Sketch: $SKETCH_PATH"
     echo "   📋 Board: $BOARD"
     
+    if [ "$LIGHT_MODE" = true ]; then
+        echo "   💡 Mode LIGHT activé (définitions simplifiées)"
+    fi
+    
+    if [ "$PAGINATION_MODE" = true ]; then
+        echo "   📄 Mode PAGINATION activé (chargement par pages)"
+    fi
+    
     if command -v arduino-cli &> /dev/null; then
         echo "   Utilisation d'arduino-cli..."
-        arduino-cli compile --fqbn $BOARD $SKETCH_PATH
+        
+        # Construire les flags de build
+        EXTRA_FLAGS_ARRAY=()
+        
+        if [ "$LIGHT_MODE" = true ]; then
+            EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_LIGHT")
+        fi
+        
+        if [ "$PAGINATION_MODE" = true ]; then
+            EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
+        fi
+        
+        # Construire la commande arduino-cli
+        if [ ${#EXTRA_FLAGS_ARRAY[@]} -gt 0 ]; then
+            # Joindre les flags avec des espaces
+            EXTRA_FLAGS_STR="${EXTRA_FLAGS_ARRAY[*]}"
+            arduino-cli compile --fqbn $BOARD --build-property compiler.cpp.extra_flags="$EXTRA_FLAGS_STR" $SKETCH_PATH
+        else
+            arduino-cli compile --fqbn $BOARD $SKETCH_PATH
+        fi
         echo "   ✅ Compilation réussie"
     else
         echo "   ⚠️  arduino-cli non trouvé"
@@ -427,12 +484,39 @@ build_binary() {
     echo "   📋 Board: $BOARD"
     echo "   📦 Dossier de sortie: $REPO_DIR/bin"
     
+    if [ "$LIGHT_MODE" = true ]; then
+        echo "   💡 Mode LIGHT activé (définitions simplifiées)"
+    fi
+    
+    if [ "$PAGINATION_MODE" = true ]; then
+        echo "   📄 Mode PAGINATION activé (chargement par pages)"
+    fi
+    
     # Créer le dossier bin s'il n'existe pas
     mkdir -p "$REPO_DIR/bin"
     
     if command -v arduino-cli &> /dev/null; then
         echo "   Utilisation d'arduino-cli..."
-        arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "$SKETCH_PATH"
+        
+        # Construire les flags de build (même logique que compile_sketch)
+        EXTRA_FLAGS_ARRAY=()
+        
+        if [ "$LIGHT_MODE" = true ]; then
+            EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_LIGHT")
+        fi
+        
+        if [ "$PAGINATION_MODE" = true ]; then
+            EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
+        fi
+        
+        # Construire la commande arduino-cli
+        if [ ${#EXTRA_FLAGS_ARRAY[@]} -gt 0 ]; then
+            # Joindre les flags avec des espaces
+            EXTRA_FLAGS_STR="${EXTRA_FLAGS_ARRAY[*]}"
+            arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" --build-property compiler.cpp.extra_flags="$EXTRA_FLAGS_STR" "$SKETCH_PATH"
+        else
+            arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "$SKETCH_PATH"
+        fi
         echo "   ✅ Binaire compilé et stocké dans bin/"
         echo "   📁 Fichiers créés:"
         ls -la "$REPO_DIR/bin/" 2>/dev/null || echo "   📁 Aucun fichier trouvé"

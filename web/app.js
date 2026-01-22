@@ -18,6 +18,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
  loadComponentDefinitions().then(async () => {
   /* Charger les capacités de la carte, puis dessiner le board */
   await loadCaps();
+  /* Vérifier le type de board et charger la config système (si S3) */
+  if (typeof initSystemConfig === 'function') {
+    await initSystemConfig();
+  }
   /* Dessiner le board SVG avec les pins */
   drawBoard();
   /* Charger les pins déjà configurées (inclut les composants complexes depuis MuxManager) */
@@ -30,6 +34,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   console.warn('Erreur chargement définitions composants:', err);
   // Continuer quand même avec le board (sans définitions)
   loadCaps().then(async ()=>{
+   /* Vérifier le type de board et charger la config système (si S3) */
+   if (typeof initSystemConfig === 'function') {
+     await initSystemConfig();
+   }
    drawBoard();
    await loadConfiguredPins();
    await loadUsedGpiosFromBackend();

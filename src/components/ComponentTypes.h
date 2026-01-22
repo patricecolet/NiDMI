@@ -16,12 +16,16 @@
 // Types de composants supportés
 enum class ComponentType : uint8_t {
     POTENTIOMETER = 0,
-    BUTTON = 1,
-    LED = 2,
-    MUX = 3,
-    VELOSTAT = 4
+    BUTTON        = 1,
+    LED           = 2,
+    MUX           = 3,
+    VELOSTAT      = 4,
+    ULTRASONIC    = 5,
+    TOUCH         = 6,
+    ACTUATOR      = 7,  // Actuateurs de sortie (relais, buzzers, solénoïdes, etc.)
+    BARGRAPH      = 8   // Bargraph LED (10 segments) - réutilise LedProcessor pour l'instant
     // Facilement extensible pour de nouveaux types
-    // Exemple: ENCODER = 5, FADER = 6, etc.
+    // Exemple: ENCODER = 9, FADER = 10, etc.
 };
 
 // Types de pins supportés par un composant

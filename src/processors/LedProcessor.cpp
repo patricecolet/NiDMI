@@ -14,7 +14,7 @@ void LedProcessor::handleMidiNoteOn(
     // Chercher les LEDs configurées pour cette note/canal
     for (uint8_t i = 0; i < count; i++) {
         const ComponentConfig& config = configs[i];
-        if (config.type == ComponentType::LED && 
+        if ((config.type == ComponentType::LED || config.type == ComponentType::BARGRAPH) && 
             config.midi_channel == channel && 
             config.midi_param == note) {
             
@@ -45,7 +45,7 @@ void LedProcessor::handleMidiNoteOff(
     // Chercher les LEDs configurées pour cette note/canal
     for (uint8_t i = 0; i < count; i++) {
         const ComponentConfig& config = configs[i];
-        if (config.type == ComponentType::LED && 
+        if ((config.type == ComponentType::LED || config.type == ComponentType::BARGRAPH) && 
             config.midi_channel == channel && 
             config.midi_param == note) {
             
@@ -68,10 +68,10 @@ void LedProcessor::handleMidiControlChange(
     uint8_t control,
     uint8_t value
 ) {
-    // Chercher les LEDs configurées pour ce CC/canal
+    // Chercher les LEDs et Bargraphs configurés pour ce CC/canal
     for (uint8_t i = 0; i < count; i++) {
         const ComponentConfig& config = configs[i];
-        if (config.type == ComponentType::LED && 
+        if ((config.type == ComponentType::LED || config.type == ComponentType::BARGRAPH) && 
             config.midi_channel == channel && 
             config.midi_param == control) {
             
@@ -125,7 +125,7 @@ void LedProcessor::handleOscMessage(
     // Chercher les LEDs configurées pour cette adresse OSC
     for (uint8_t i = 0; i < count; i++) {
         const ComponentConfig& config = configs[i];
-        if (config.type != ComponentType::LED) {
+        if (config.type != ComponentType::LED && config.type != ComponentType::BARGRAPH) {
             continue;
         }
         
@@ -220,7 +220,13 @@ static void processWrapper(
 }
 
 // Enregistrement automatique au chargement du module
-static bool registered = ProcessorRegistry::registerProcessor(
+static bool registered_led = ProcessorRegistry::registerProcessor(
     ComponentType::LED,
+    processWrapper
+);
+
+// Enregistrer aussi pour BARGRAPH (réutilise le même processeur)
+static bool registered_bargraph = ProcessorRegistry::registerProcessor(
+    ComponentType::BARGRAPH,
     processWrapper
 );

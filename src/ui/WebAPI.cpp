@@ -19,6 +19,7 @@ void setupPinAPI(AsyncWebServer& server);
 void setupOSC_API(AsyncWebServer& server);
 void setupCacheAPI(AsyncWebServer& server);
 void setupComponentsAPI(AsyncWebServer& server);
+void setupSystemAPI(AsyncWebServer& server);
 
 Preferences preferences;
 
@@ -232,4 +233,5 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     setupOSC_API(server);
     setupCacheAPI(server);
     setupComponentsAPI(server);
+    setupSystemAPI(server);
 }

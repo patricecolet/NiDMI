@@ -402,6 +402,8 @@ void ComponentManager::printStats() {
                 case ComponentType::POTENTIOMETER: typeStr = "Pot"; msgTypeStr = "CC"; break;
                 case ComponentType::BUTTON: typeStr = "Btn"; msgTypeStr = "Note"; break;
                 case ComponentType::LED: typeStr = "LED"; msgTypeStr = "Note"; break;
+                case ComponentType::BARGRAPH: typeStr = "Bar"; msgTypeStr = "CC"; break;
+                case ComponentType::ACTUATOR: typeStr = "Act"; msgTypeStr = "Note"; break;
             }
         }
         
@@ -526,7 +528,7 @@ void ComponentManager::midiTaskLoop() {
             }
             
             // Utiliser le registre de processeurs (extensible pour des centaines de composants)
-            // Logique générique : si le GPIO a un ADC, utiliser un filtre analogique
+            // Logique générique : si le GPIO a un ADC ou Touch, utiliser un filtre analogique
             // (indépendamment de la définition du composant - basé sur les capacités matérielles)
             const ComponentDefinition* def = ComponentRegistry::findByType(config.type);
             AnalogFilter* filter_ptr = nullptr;
@@ -534,8 +536,11 @@ void ComponentManager::midiTaskLoop() {
             if (PinMapper::hasAdc(config.gpio)) {
                 // GPIO avec ADC : utiliser un filtre analogique
                 filter_ptr = &filters[i];
+            } else if (PinMapper::hasTouch(config.gpio)) {
+                // GPIO avec Touch : utiliser aussi un filtre analogique (touchRead() retourne une valeur analogique)
+                filter_ptr = &filters[i];
             } else if (def && def->pinType == PinType::PIN_ANALOG) {
-                // Si la définition indique PIN_ANALOG mais le GPIO n'a pas d'ADC, ignorer
+                // Si la définition indique PIN_ANALOG mais le GPIO n'a ni ADC ni Touch, ignorer
                 continue;
             }
             

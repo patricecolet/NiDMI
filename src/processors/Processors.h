@@ -18,6 +18,9 @@
 #include "PotentiometerProcessor.h"
 #include "ButtonProcessor.h"
 #include "LedProcessor.h"
+#include "VelostatProcessor.h"
+#include "UltrasonicProcessor.h"
+#include "TouchProcessor.h"
 
 // Pour ajouter un nouveau processeur :
 // #include "MyComponentProcessor.h"

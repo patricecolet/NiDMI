@@ -20,10 +20,18 @@
  * Chaque famille correspond à un dossier dans src/components/
  */
 enum class ComponentFamily : uint8_t {
-    BASIC = 0,        // Potentiomètre, Bouton, LED (composants simples)
+    BASIC       = 0,  // Potentiomètre, Bouton, LED (composants simples)
     MULTIPLEXER = 1,  // HC4067, HC4051, CD4052...
-    ENCODER = 2,      // Encodeurs rotatifs
-    SCREEN = 3        // Écrans OLED, LCD (évite conflit avec macro DISPLAY d'Arduino)
+    ENCODER     = 2,  // Encodeurs rotatifs
+    SCREEN      = 3,  // Écrans OLED, LCD (évite conflit avec macro DISPLAY d'Arduino)
+
+    // Nouvelles familles fonctionnelles pour capteurs/actuateurs Seeed/Grove
+    DISTANCE    = 4,  // Ultrasonic, LiDAR, IR distance, inductif
+    ENVIRONMENT = 5,  // Température, humidité, pression, lumière, UV, sol
+    MOTION      = 6,  // PIR, IMU, radar, gestes
+    COLOR       = 7,  // Capteurs de couleur / lumière avancés
+    INTERFACE   = 8,  // Touch/MPR121, FSR, encodeurs, contrôles physiques
+    ACTUATOR    = 9   // Relais, moteurs, servos, buzzers
     // Ajouter de nouvelles familles ici
 };
 
@@ -291,7 +299,8 @@ struct ComponentDefinition {
             written += added;
         }
         
-        // Ajouter statusValueMappings si présent
+        // Ajouter statusValueMappings si présent (omis en mode LIGHT)
+#ifndef NIDMI_COMPONENT_DEFS_LIGHT
         if (statusValueMappings && written < (int)bufferSize - 50) {
             int added = snprintf(buffer + written, bufferSize - written,
                 ",\"statusValueMappings\":%s",
@@ -300,6 +309,7 @@ struct ComponentDefinition {
             if (added < 0 || written + added >= (int)bufferSize) return 0;
             written += added;
         }
+#endif
         
         // Ajouter les pins additionnelles si présentes
         if (additionalPinCount > 0 && additionalPins && written < (int)bufferSize - 50) {
@@ -402,6 +412,8 @@ struct ComponentDefinition {
                             }
                         }
                         
+                        // Hint pour INFO (omis en mode LIGHT)
+#ifndef NIDMI_COMPONENT_DEFS_LIGHT
                         if (param.type == FieldType::INFO && param.hint) {
                             written += snprintf(buffer + written, bufferSize - written,
                                 ",\"hint\":\"%s\"",
@@ -414,6 +426,7 @@ struct ComponentDefinition {
                                 );
                             }
                         }
+#endif
                         
                         if (param.dependsOnRole) {
                             written += snprintf(buffer + written, bufferSize - written,
@@ -522,6 +535,8 @@ struct ComponentDefinition {
                     );
                 }
                 
+                // Hints pour formFields (omis en mode LIGHT)
+#ifndef NIDMI_COMPONENT_DEFS_LIGHT
                 if (field.hintPosition != HintPosition::NONE && field.hint) {
                     written += snprintf(buffer + written, bufferSize - written,
                         ",\"hintPosition\":%d,\"hint\":\"%s\"",
@@ -535,6 +550,7 @@ struct ComponentDefinition {
                         );
                     }
                 }
+#endif
                 
                 if (field.dependsOn) {
                     written += snprintf(buffer + written, bufferSize - written,

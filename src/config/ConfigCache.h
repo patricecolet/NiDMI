@@ -31,6 +31,9 @@ public:
     /* Supprimer une pin du cache et de la NVS */
     void removeConfig(const String& pin);
     
+    /* Clear complet de la NVS (supprime tout le namespace "nidmi") */
+    void clearAllNVS();
+    
     /* Auto-save si nécessaire (30 secondes) */
     void autoSave();
     
