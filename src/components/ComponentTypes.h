@@ -23,9 +23,10 @@ enum class ComponentType : uint8_t {
     ULTRASONIC    = 5,
     TOUCH         = 6,
     ACTUATOR      = 7,  // Actuateurs de sortie (relais, buzzers, solénoïdes, etc.)
-    BARGRAPH      = 8   // Bargraph LED (10 segments) - réutilise LedProcessor pour l'instant
+    BARGRAPH      = 8,  // Bargraph LED (10 segments) - réutilise LedProcessor pour l'instant
+    JOYSTICK      = 9   // Joystick 2 axes analogiques
     // Facilement extensible pour de nouveaux types
-    // Exemple: ENCODER = 9, FADER = 10, etc.
+    // Exemple: ENCODER = 10, FADER = 11, etc.
 };
 
 // Types de pins supportés par un composant
@@ -35,6 +36,16 @@ enum class PinType : uint8_t {
     PIN_ANALOG_OR_DIGITAL = 2, // Les deux sont acceptés
     PIN_PWM = 3              // Pin avec capacité PWM
 };
+
+// Forward declarations des configurations spécifiques
+// (définies dans leurs headers respectifs)
+namespace Components {
+    struct ButtonConfig;
+    struct LedConfig;
+    struct PotentiometerConfig;
+    struct VelostatConfig;
+    struct JoystickConfig;
+}
 
 // Configuration optimisée d'un composant
 struct ComponentConfig {
@@ -54,20 +65,36 @@ struct ComponentConfig {
     uint8_t midiCcOnOffMin; // Valeur CC pour état OFF (0-127, défaut: 0) - pour boutons
     uint8_t midiCcOnOffMax; // Valeur CC pour état ON (0-127, défaut: 127) - pour boutons
     
-    // Champs spécifiques existants (pour compatibilité/rétrocompatibilité)
-    char btnMode[16];     // Mode bouton: "pulse", "press_release", "toggle"
-    char btnPulseTiming[16]; // Timing pour mode pulse: "press" ou "release"
-    char btnPullMode[16]; // Mode pull bouton: "pullup", "pulldown", "none" (défaut: "pullup")
-    char ledMode[16];     // Mode LED: "onoff", "pwm"
-    uint8_t filter_intensity; // Intensité du filtrage (1-10): 1=rapide, 10=stable (défaut: 5)
-    uint16_t potMin;          // Seuil minimum pour potentiomètre (0-4095, défaut: 0)
-    uint16_t potMax;          // Seuil maximum pour potentiomètre (0-4095, défaut: 4095)
+    // Union pour les configurations spécifiques par type de composant
+    // Permet d'économiser de la mémoire en ne stockant que la config nécessaire
+    union {
+        Components::ButtonConfig* button;
+        Components::LedConfig* led;
+        Components::PotentiometerConfig* potentiometer;
+        Components::VelostatConfig* velostat;
+        Components::JoystickConfig* joystick;
+        void* specific;  // Pointeur générique pour accès type-agnostique
+    } specificConfig;
     
     // Champs génériques pour nouveaux composants (extensible sans modifier la structure)
     char customField1[16];  // Champ générique réutilisable (ex: encoderDirection, touchThreshold, etc.)
     char customField2[16];  // Champ générique réutilisable (ex: encoderMode, touchMode, etc.)
     uint8_t customInt1;     // Valeur numérique générique (ex: encoderSteps, touchSensitivity, etc.)
     uint8_t customInt2;     // Valeur numérique générique supplémentaire
+    
+    ComponentConfig() {
+        specificConfig.specific = nullptr;
+        customField1[0] = '\0';
+        customField2[0] = '\0';
+        customInt1 = 0;
+        customInt2 = 0;
+    }
+    
+    ~ComponentConfig() {
+        // Libérer la mémoire allouée pour specificConfig si nécessaire
+        // Note: Pour l'instant, on assume que ComponentManager gère la mémoire
+        // TODO: Implémenter un système de gestion mémoire propre
+    }
 };
 
 // État runtime d'un composant
@@ -83,6 +110,10 @@ struct ComponentState {
     uint32_t note_on_time; // Temps où la note a été jouée (pour auto-off)
     bool toggle_state;     // État pour mode toggle (true = note on, false = note off)
     bool prev_stable_state; // État stable précédent (après debounce) pour détecter Falling/Rising
+    
+    // Champs pour joystick (réutilise customInt1/customInt2 pour stocker les dernières valeurs normalisées)
+    // customInt1 = dernière valeur normalisée X (-127..127, stockée comme uint8_t avec offset 127)
+    // customInt2 = dernière valeur normalisée Y (-127..127, stockée comme uint8_t avec offset 127)
     bool pulse_pending;    // Pour pulse: mémoriser qu'on a été pressé, attendre release
     
     // Hystérésis pour NOTE_SWEEP (zone morte de 2 bits = ±3 sur 0-127)

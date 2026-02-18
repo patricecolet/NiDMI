@@ -5,8 +5,8 @@
 #include <ESP.h>
 
 void setupRTPAPI(AsyncWebServer& server) {
-    // API - Configuration RTP-MIDI
-    server.on("/api/rtp", HTTP_POST, [](AsyncWebServerRequest *request){
+    // API - Configuration RTP-MIDI (nom et cible)
+    server.on("/api/rtp/config", HTTP_POST, [](AsyncWebServerRequest *request){
         if(request->hasParam("name", true) && request->hasParam("target", true)){
             String name = request->getParam("name", true)->value();
             String target = request->getParam("target", true)->value();

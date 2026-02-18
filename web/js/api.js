@@ -73,7 +73,7 @@ async function loadStaConfig(){
 
 async function loadMidiInterfaces(){
   try {
-    // Charger l'état RTP-MIDI
+    /* Charger l'état RTP-MIDI */
     const rtpRes = await fetch('/api/rtp/status');
     if(rtpRes.ok) {
       const rtpData = await rtpRes.json();
@@ -82,7 +82,7 @@ async function loadMidiInterfaces(){
       }
     }
     
-    // Charger l'état USB MIDI (statut uniquement, pas de checkbox)
+    /* Charger l'état USB MIDI (statut uniquement, pas de checkbox) */
     const usbRes = await fetch('/api/usbmidi/status');
     if(usbRes.ok) {
       const usbData = await usbRes.json();
@@ -191,8 +191,8 @@ function initForms(){
  });
 }
 
-// Variable globale pour stocker les définitions de composants (compatibilité avec ancien code)
-// DÉPRÉCIÉ: Utiliser ComponentDefinitions.cache à la place
+/* Variable globale pour stocker les définitions de composants (compatibilité avec ancien code) */
+/* DÉPRÉCIÉ: Utiliser ComponentDefinitions.cache à la place */
 let componentDefinitions = [];
 
 /**
@@ -201,15 +201,15 @@ let componentDefinitions = [];
  * @returns {Promise<Array>} Tableau des définitions de composants
  */
 async function loadComponentDefinitions(){
- // Déléguer à ComponentDefinitions.load() si disponible, sinon ancienne implémentation
+ /* Déléguer à ComponentDefinitions.load() si disponible, sinon ancienne implémentation */
  if(typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.load) {
   const defs = await ComponentDefinitions.load();
-  // Maintenir la compatibilité avec l'ancienne variable globale
+  /* Maintenir la compatibilité avec l'ancienne variable globale */
   componentDefinitions = ComponentDefinitions.cache;
   return defs;
  }
- 
- // Ancienne implémentation (fallback si ComponentDefinitions n'est pas disponible)
+
+ /* Ancienne implémentation (fallback si ComponentDefinitions n'est pas disponible) */
  try {
   const r=await fetch('/api/components/definitions');
   if(!r.ok) {
@@ -232,12 +232,12 @@ async function loadComponentDefinitions(){
  * @returns {Object|null} Définition du composant ou null
  */
 function getComponentDefinition(componentId) {
- // Déléguer à ComponentDefinitions.getById() si disponible
+ /* Déléguer à ComponentDefinitions.getById() si disponible */
  if(typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.getById) {
   return ComponentDefinitions.getById(componentId);
  }
- 
- // Ancienne implémentation (fallback)
+
+ /* Ancienne implémentation (fallback) */
  if(!componentDefinitions || componentDefinitions.length === 0) return null;
  return componentDefinitions.find(def => def.id === componentId) || null;
 }
@@ -250,29 +250,29 @@ function getComponentDefinition(componentId) {
  * @returns {Array} Liste des composants compatibles
  */
 function getComponentsForPinType(pinType, implementedOnly = true) {
- // Déléguer à ComponentDefinitions.getForPinType() si disponible
+ /* Déléguer à ComponentDefinitions.getForPinType() si disponible */
  if(typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.getForPinType) {
   return ComponentDefinitions.getForPinType(pinType, implementedOnly);
  }
- 
- // Ancienne implémentation (fallback si ComponentDefinitions n'est pas disponible)
+
+ /* Ancienne implémentation (fallback si ComponentDefinitions n'est pas disponible) */
  if(!componentDefinitions || componentDefinitions.length === 0) {
   console.log('[getComponentsForPinType] Aucune définition disponible');
   return [];
  }
  
  const filtered = componentDefinitions.filter(def => {
-  // Filtrer par implémenté si demandé
+  /* Filtrer par implémenté si demandé */
   if(implementedOnly && !def.implemented) return false;
-  
-  // Vérifier la compatibilité du type de pin
+
+  /* Vérifier la compatibilité du type de pin */
   switch(pinType) {
-   case 0: // PIN_ANALOG
-    return def.pinType === 0 || def.pinType === 2; // ANALOG ou ANALOG_OR_DIGITAL
-   case 1: // PIN_DIGITAL
-    return def.pinType === 1 || def.pinType === 2; // DIGITAL ou ANALOG_OR_DIGITAL
-   case 3: // PIN_PWM
-    return def.pinType === 3; // PWM uniquement
+   case 0: /* PIN_ANALOG */
+    return def.pinType === 0 || def.pinType === 2; /* ANALOG ou ANALOG_OR_DIGITAL */
+   case 1: /* PIN_DIGITAL */
+    return def.pinType === 1 || def.pinType === 2; /* DIGITAL ou ANALOG_OR_DIGITAL */
+   case 3: /* PIN_PWM */
+    return def.pinType === 3; /* PWM uniquement */
    default:
     return false;
   }
@@ -287,7 +287,7 @@ async function loadCaps(){
  caps=await r.json();
 }
 
-// Variable pour stocker les GPIOs utilisés (cache)
+/* Variable pour stocker les GPIOs utilisés (cache) */
 let cachedUsedGpios = new Set();
 
 /**
@@ -331,20 +331,20 @@ function getUsedGpiosWithEditing(editingConfig) {
  
  if(!editingConfig) return gpios;
  
- // Ajouter le GPIO principal
+ /* Ajouter le GPIO principal */
  if(editingConfig.gpio !== undefined && editingConfig.gpio !== null) {
   gpios.add(parseInt(editingConfig.gpio));
  }
  
- // Pour les composants complexes, utiliser les additionalPins du backend
+ /* Pour les composants complexes, utiliser les additionalPins du backend */
  if(editingConfig.role && typeof getComponentDefinition === 'function') {
   const migratedRole = typeof migrateRole === 'function' ? migrateRole(editingConfig.role) : editingConfig.role;
   const def = getComponentDefinition(migratedRole);
-  
+
   if(def && def.additionalPins && def.additionalPinCount > 0) {
-   // Parcourir les pins additionnelles définies par le backend
+   /* Parcourir les pins additionnelles définies par le backend */
    def.additionalPins.forEach(pinDef => {
-    const pinId = pinDef.id; // ex: "s0", "s1", "en"
+    const pinId = pinDef.id; /* ex: "s0", "s1", "en" */
     const gpio = editingConfig[pinId];
     if(gpio !== undefined && gpio !== null && gpio !== 255) {
      gpios.add(parseInt(gpio));
@@ -365,16 +365,16 @@ function getUsedGpiosWithEditing(editingConfig) {
 function migrateRole(role){
  if(!role) return role;
  
- // Si c'est déjà un ID valide (format backend), retourner tel quel
+ /* Si c'est déjà un ID valide (format backend), retourner tel quel */
  if(/^[a-z0-9_-]+$/.test(role)) return role;
- 
- // Chercher dans les définitions du backend par displayName
+
+ /* Chercher dans les définitions du backend par displayName */
  if(typeof componentDefinitions !== 'undefined' && componentDefinitions.length > 0) {
   const def = componentDefinitions.find(d => d.displayName === role);
   if(def) return def.id;
  }
- 
- // Si rien n'est trouvé, retourner tel quel
+
+ /* Si rien n'est trouvé, retourner tel quel */
  return role;
 }
 
@@ -488,40 +488,44 @@ async function saveAll(){
  const p=new URLSearchParams();
  p.set('pinLabel',lbl);
  p.set('role',c.role);
- // Envoyer rtpMidiEnabled (ou rtpEnabled pour compatibilité)
+ /* Envoyer rtpMidiEnabled (ou rtpEnabled pour compatibilité) */
  if(c.rtpMidiEnabled) p.set('rtpMidiEnabled','true');
- else if(c.rtpEnabled) p.set('rtpEnabled','true'); // Compatibilité ancien format
- // Envoyer midiMessageType (ou rtpType pour compatibilité)
+ else if(c.rtpEnabled) p.set('rtpEnabled','true'); /* Compatibilité ancien format */
+ /* Envoyer midiMessageType (ou rtpType pour compatibilité) */
  if(c.midiMessageType) p.set('midiMessageType',c.midiMessageType);
- else if(c.rtpType) p.set('rtpType',c.rtpType); // Compatibilité ancien format
- 
- // Envoyer dynamiquement tous les paramètres MIDI (nouveaux noms midi* puis anciens rtp* pour compatibilité)
+ else if(c.rtpType) p.set('rtpType',c.rtpType); /* Compatibilité ancien format */
+
+ /* Envoyer dynamiquement tous les paramètres MIDI (nouveaux noms midi* puis anciens rtp* pour compatibilité) */
  Object.keys(c).forEach(key => {
-  // Nouveaux noms (midi*)
-  // Pour les paramètres RANGE (midiCcRangeMin/Max), toujours envoyer même si valeur par défaut
+  /* Nouveaux noms (midi*) */
+  /* Pour les paramètres RANGE (midiCcRangeMin/Max), toujours envoyer même si valeur par défaut */
   if(key.startsWith('midi') && c[key] !== undefined && c[key] !== null) {
-   // Accepter les chaînes vides et les valeurs "0" pour midiCcRangeMin/Max
+   /* Accepter les chaînes vides et les valeurs "0" pour midiCcRangeMin/Max */
    if(c[key] !== '' || key.endsWith('Min') || key.endsWith('Max')) {
      p.set(key, c[key] || (key.endsWith('Min') ? '0' : key.endsWith('Max') ? '127' : ''));
    }
   }
-  // Anciens noms (rtp*) sauf rtpEnabled et rtpType (déjà gérés ci-dessus)
+  /* Paramètres MIDI par axe (X_midiCc, Y_midiCc, X_midiChannel, Y_midiChannel, etc.) */
+  else if((key.startsWith('X_') || key.startsWith('Y_')) && c[key] !== undefined && c[key] !== null && c[key] !== '') {
+   p.set(key, c[key]);
+  }
+  /* Anciens noms (rtp*) sauf rtpEnabled et rtpType (déjà gérés ci-dessus) */
   else if(key.startsWith('rtp') && key !== 'rtpEnabled' && key !== 'rtpType' && key !== 'rtpMidiEnabled' && c[key] !== undefined && c[key] !== null && c[key] !== '') {
-   p.set(key, c[key]); // Compatibilité ancien format
+   p.set(key, c[key]); /* Compatibilité ancien format */
   }
  });
- 
- // Envoyer dynamiquement tous les formFields depuis la définition
+
+ /* Envoyer dynamiquement tous les formFields depuis la définition */
  if(def && def.formFields && Array.isArray(def.formFields)) {
   def.formFields.forEach(field => {
    if(field.id && !field.id.startsWith('_')) {
     const value = c[field.id];
     if(value !== undefined && value !== null && value !== '') {
-     if(field.type === 3) { // CHECKBOX
+     if(field.type === 3) { /* CHECKBOX */
       if(value === true || value === 'true') {
        p.set(field.id, 'true');
       }
-     } else if(field.type === 4) { // RANGE
+     } else if(field.type === 4) { /* RANGE */
       if(c[field.id + 'Min'] !== undefined && c[field.id + 'Min'] !== null && c[field.id + 'Min'] !== '') {
        p.set(field.id + 'Min', c[field.id + 'Min']);
       }
@@ -546,17 +550,19 @@ async function saveAll(){
        console.log('[saveAll] Vérification pinDef.id:', pinDef.id, 'value:', value, 'optional:', pinDef.optional);
        
        if(value !== undefined && value !== null) {
-         /* Ne pas envoyer si valeur est 255 (pin non connectée) sauf si c'est optionnel */
+         /* Toujours envoyer les pins requises, même si valeur est 255 */
+         /* Pour les pins optionnelles, ne pas envoyer si valeur est 255 */
          if(value !== 255 || !pinDef.optional) {
            p.set(pinDef.id, value);
            console.log('[saveAll] additionalPin envoyé:', pinDef.id, '=', value);
          } else {
            console.log('[saveAll] additionalPin ignoré (255 et optionnel):', pinDef.id);
          }
-       } else if(!pinDef.optional && pinDef.defaultValue !== undefined && pinDef.defaultValue !== 255) {
-         /* Pin requise absente, utiliser la valeur par défaut */
-         p.set(pinDef.id, pinDef.defaultValue);
-         console.log('[saveAll] additionalPin par défaut:', pinDef.id, '=', pinDef.defaultValue);
+       } else if(!pinDef.optional) {
+         /* Pin requise absente - utiliser la valeur par défaut ou 255 */
+         const defaultValue = (pinDef.defaultValue !== undefined) ? pinDef.defaultValue : 255;
+         p.set(pinDef.id, defaultValue);
+         console.log('[saveAll] additionalPin requise absente, utilisation defaultValue:', pinDef.id, '=', defaultValue);
        } else {
          console.warn('[saveAll] ERREUR: Pin requise absente:', pinDef.id, 'value:', value, 'defaultValue:', pinDef.defaultValue);
        }
@@ -569,7 +575,7 @@ async function saveAll(){
 }
 /* Sinon, c'est normal - composant simple sans additionalPins */
 
- // Champs OSC et Debug (communs à tous)
+ /* Champs OSC et Debug (communs à tous) */
  if(c.oscEnabled) p.set('oscEnabled','true');
  if(c.oscAddress) p.set('oscAddress',c.oscAddress);
  if(c.oscFormat) p.set('oscFormat',c.oscFormat);
@@ -611,24 +617,32 @@ async function saveAll(){
  });
  await Promise.all(deletePromises);
 
-// Sauvegarder les interfaces MIDI globales
+/* Sauvegarder les interfaces MIDI globales */
 try {
-  // Sauvegarder RTP-MIDI
+  /* Sauvegarder RTP-MIDI */
   const rtpMidiElement = $('#rtpMidiEnabled');
   if (rtpMidiElement && rtpMidiElement.type === 'checkbox' && typeof rtpMidiElement.checked !== 'undefined') {
     const rtpFormData = new URLSearchParams();
     rtpFormData.append('enable', rtpMidiElement.checked ? 'true' : 'false');
     const bodyString = rtpFormData.toString();
     if (bodyString && bodyString.includes('enable=')) {
-      await fetch('/api/rtp/enable', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: bodyString});
+      try {
+        const rtpResponse = await fetch('/api/rtp/enable', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: bodyString});
+        if (!rtpResponse.ok) {
+          const errorText = await rtpResponse.text();
+          console.warn('[saveAll] Erreur RTP-MIDI:', rtpResponse.status, errorText);
+        }
+      } catch(e) {
+        console.warn('[saveAll] Erreur lors de la sauvegarde RTP-MIDI:', e);
+      }
     }
   }
-  // Note: USB MIDI s'active automatiquement au boot si supporté, pas de contrôle via interface
+  /* Note: USB MIDI s'active automatiquement au boot si supporté, pas de contrôle via interface */
 } catch(e) {
   console.error('Erreur sauvegarde interfaces MIDI:', e);
 }
 
- // Rafraîchir le cache des GPIOs utilisés depuis le backend
+ /* Rafraîchir le cache des GPIOs utilisés depuis le backend */
  await loadUsedGpiosFromBackend();
  updateBusVisuals();
  

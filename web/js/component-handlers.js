@@ -194,9 +194,12 @@ function updateConfig() {
   const lbl = $('#selPin')?.textContent || '';
   let selectedRole = $('#funcSelect')?.value || '';
   
+  console.log('[updateConfig] selectedRole depuis funcSelect:', selectedRole, 'cur:', cur);
+  
   /* Si selectedRole est vide mais qu'on a une config dans pcfg, récupérer le rôle depuis pcfg */
   if (!selectedRole && cur && pcfg && pcfg[cur] && pcfg[cur].role) {
     selectedRole = pcfg[cur].role;
+    console.log('[updateConfig] selectedRole depuis pcfg:', selectedRole);
   }
   
   /* Si on n'a toujours pas de selectedRole, sortir tôt */

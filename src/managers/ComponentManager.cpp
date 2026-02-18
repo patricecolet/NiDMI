@@ -10,6 +10,7 @@
 #include "../processors/ProcessorRegistry.h"
 #include "../processors/Processors.h"  // Centralise tous les processeurs pour l'enregistrement automatique
 #include "../components/ComponentRegistry.h"  // Pour trouver les définitions de composants
+#include "../components/basic/ButtonDef.h"    // Pour ButtonConfig (btnMode)
 #include "../components/ValidationRegistry.h"  // Pour la validation centralisée
 #include "../utils/PinMapper.h"
 #include "../osc/OSCCalibrationHandler.h"
@@ -228,9 +229,10 @@ bool ComponentManager::removeComponent(uint8_t gpio) {
         else if (config.msg_type == MidiMessageType::NOTE || 
                  config.msg_type == MidiMessageType::NOTE_VELOCITY) {
             // Vérifier le mode du bouton
-            String btnMode = String(config.btnMode);
-            if (btnMode.length() == 0) {
-                btnMode = "press_release"; // Défaut
+            String btnMode = "press_release"; // Défaut
+            if (config.specificConfig.button) {
+                btnMode = String(config.specificConfig.button->btnMode);
+                if (btnMode.length() == 0) btnMode = "press_release";
             }
             
             uint8_t note = config.midi_param; // midi_param contient la note pour NOTE
@@ -247,9 +249,10 @@ bool ComponentManager::removeComponent(uint8_t gpio) {
         // 3. CONTROL_CHANGE : remettre à zéro si actif
         else if (config.msg_type == MidiMessageType::CONTROL_CHANGE) {
             // Vérifier le mode du bouton (pour les boutons en CC)
-            String btnMode = String(config.btnMode);
-            if (btnMode.length() == 0) {
-                btnMode = "press_release"; // Défaut
+            String btnMode = "press_release"; // Défaut
+            if (config.specificConfig.button) {
+                btnMode = String(config.specificConfig.button->btnMode);
+                if (btnMode.length() == 0) btnMode = "press_release";
             }
             
             // Si mode toggle et état actif, envoyer CC=0
@@ -294,9 +297,10 @@ void ComponentManager::clearAll() {
             // NOTE ou NOTE_VELOCITY : éteindre si actif
             else if (config.msg_type == MidiMessageType::NOTE || 
                      config.msg_type == MidiMessageType::NOTE_VELOCITY) {
-                String btnMode = String(config.btnMode);
-                if (btnMode.length() == 0) {
-                    btnMode = "press_release";
+                String btnMode = "press_release";
+                if (config.specificConfig.button) {
+                    btnMode = String(config.specificConfig.button->btnMode);
+                    if (btnMode.length() == 0) btnMode = "press_release";
                 }
                 
                 uint8_t note = config.midi_param;
@@ -309,9 +313,10 @@ void ComponentManager::clearAll() {
             }
             // CONTROL_CHANGE : remettre à zéro si actif
             else if (config.msg_type == MidiMessageType::CONTROL_CHANGE) {
-                String btnMode = String(config.btnMode);
-                if (btnMode.length() == 0) {
-                    btnMode = "press_release";
+                String btnMode = "press_release";
+                if (config.specificConfig.button) {
+                    btnMode = String(config.specificConfig.button->btnMode);
+                    if (btnMode.length() == 0) btnMode = "press_release";
                 }
                 
                 if (btnMode == "toggle" && state.toggle_state) {

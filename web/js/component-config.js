@@ -45,11 +45,21 @@ function readAdditionalPins(def, c) {
       if (!isNaN(value)) {
         c.additionalPins[additionalPin.id] = value;
         console.log('[readAdditionalPins] additionalPin lu depuis le formulaire:', additionalPin.id, '=', value);
+      } else {
+        console.warn('[readAdditionalPins] Valeur invalide pour additionalPin:', additionalPin.id, 'value:', field.value);
       }
     } else if (cur && pcfg && pcfg[cur] && pcfg[cur].additionalPins && pcfg[cur].additionalPins[additionalPin.id] !== undefined) {
       /* Si le champ est vide mais qu'il y a une valeur dans pcfg, utiliser celle-ci */
       c.additionalPins[additionalPin.id] = pcfg[cur].additionalPins[additionalPin.id];
       console.log('[readAdditionalPins] additionalPin lu depuis pcfg (champ vide):', additionalPin.id, '=', c.additionalPins[additionalPin.id]);
+    } else if (!additionalPin.optional) {
+      /* Pin requise mais valeur absente - utiliser la valeur par défaut si disponible */
+      if (additionalPin.defaultValue !== undefined && additionalPin.defaultValue !== 255) {
+        c.additionalPins[additionalPin.id] = additionalPin.defaultValue;
+        console.log('[readAdditionalPins] additionalPin requise, utilisation defaultValue:', additionalPin.id, '=', additionalPin.defaultValue);
+      } else {
+        console.error('[readAdditionalPins] ERREUR: Pin requise absente et pas de defaultValue:', additionalPin.id);
+      }
     }
   });
 

@@ -79,6 +79,25 @@ Spécifie le type de carte ESP32.
 - `c3` → `esp32:esp32:XIAO_ESP32C3`
 - `s3` → `esp32:esp32:XIAO_ESP32S3`
 
+### Pagination (par défaut, C3 et S3)
+
+NiDMI **nécessite la pagination** pour que l’API des définitions de composants fonctionne correctement : sans elle, le buffer JSON est trop petit et le JSON est tronqué (erreur côté frontend). La pagination est donc **activée par défaut** pour les deux cartes (C3 et S3).
+
+- **Pagination activée** : l’API renvoie les définitions par pages (buffer 12 Ko par requête), le frontend charge toutes les pages et les concatène. Aucune troncature.
+- **Options :** `--pagination` (forcer), `--no-pagination` (désactiver — déconseillé sauf cas particulier).
+
+### Partition C3 (large-app, par défaut pour C3 uniquement)
+
+Sur **ESP32-C3**, le firmware occupe facilement ~97 % du flash avec la partition standard. Pour éviter d’être au bord de la limite, le script active **par défaut** une partition sans SPIFFS (app ~4 Mo) lorsque tu compiles pour le C3.
+
+- **Comportement :** avec `--board c3`, la partition « large-app » est utilisée automatiquement (fichier `tools/nidmi_c3_no_spiffs.csv`).
+- **Désactiver :** `--no-large-app` pour revenir à la partition standard (1,25 Mo pour l’app).
+- **S3 :** aucune partition spéciale ; cette option ne s’applique qu’au C3.
+
+**Résumé des défauts :**
+- **Pagination :** toujours activée (C3 et S3).
+- **Partition C3 :** partition 4 Mo activée par défaut pour C3 ; `--no-large-app` pour désactiver.
+
 ## 📖 Exemples d'utilisation
 
 ### Synchronisation simple

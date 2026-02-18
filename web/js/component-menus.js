@@ -208,5 +208,23 @@ function populateComponentSelect(familyId, pinType, pin) {
   });
 
   console.log('[populateComponentSelect] Options composant:', Object.keys(options));
-  setOptions(compSel, options, 0);
+  
+  /* Conserver la sélection actuelle si elle existe et est toujours valide */
+  const currentSelection = compSel.value;
+  console.log('[populateComponentSelect] Sélection actuelle avant setOptions:', currentSelection);
+  const preSelectValue = (currentSelection && options[currentSelection] && !options[currentSelection].disabled) 
+    ? currentSelection 
+    : 0;
+  console.log('[populateComponentSelect] Valeur à présélectionner:', preSelectValue);
+  
+  /* Désactiver temporairement l'événement change pour éviter qu'il se déclenche pendant le remplissage */
+  const oldOnchange = compSel.onchange;
+  compSel.onchange = null;
+  
+  setOptions(compSel, options, preSelectValue);
+  
+  console.log('[populateComponentSelect] Sélection après setOptions:', compSel.value);
+  
+  /* Réactiver l'événement change */
+  compSel.onchange = oldOnchange;
 }

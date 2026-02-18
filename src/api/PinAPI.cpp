@@ -97,9 +97,14 @@ void setupPinAPI(AsyncWebServer& server) {
             String key = "pin_" + pinLabel;
             String configStr = preferences.getString(key.c_str(), "");
             if (!configStr.isEmpty()) {
-                /* Ignorer les pins qui ont additionalPins (seront ajoutées depuis MuxManager) */
+                /* Ignorer les MUX qui ont additionalPins (seront ajoutés depuis MuxManager) */
+                /* Les autres composants avec additionalPins (joystick, etc.) sont inclus normalement */
                 if(configStr.indexOf("\"additionalPins\"") >= 0) {
-                    continue;
+                    /* Vérifier si c'est un MUX (rôle commence par "hc4" pour hc4067/hc4051) */
+                    bool isMux = (configStr.indexOf("\"role\":\"hc4") >= 0);
+                    if(isMux) {
+                        continue;
+                    }
                 }
                 if (!first) json += ",";
                 json += configStr;  // Le config est déjà un JSON complet avec pinLabel
@@ -258,6 +263,10 @@ void setupPinAPI(AsyncWebServer& server) {
         addParam("midiMessageType"); // Nouveau format
         addParam("rtpType"); // Ancien format pour compatibilité
         
+        /* Pour composants avec axes (joystick), sauvegarder les types MIDI par axe */
+        addParam("midiMessageTypeX");
+        addParam("midiMessageTypeY");
+        
         /* Lire dynamiquement les paramètres MIDI depuis def->midiMessages[].params[] */
         if(def && def->midiMessageCount > 0 && def->midiMessages) {
             for(uint8_t i = 0; i < def->midiMessageCount; i++) {
@@ -286,6 +295,20 @@ void setupPinAPI(AsyncWebServer& server) {
                             } else {
                                 /* Pour autres types (NUMBER, INFO, etc.) */
                                 addParam(param.id);
+                            }
+                            
+                            /* Si le message a un axe, sauvegarder aussi les params préfixés (X_midiCc, Y_midiCc, etc.) */
+                            if(msg.axis && strlen(msg.axis) > 0) {
+                                char axisUpper = (msg.axis[0] >= 'a' && msg.axis[0] <= 'z') ? (msg.axis[0] - 32) : msg.axis[0];
+                                if(param.type == FieldType::RANGE) {
+                                    String prefixedMinId = String(axisUpper) + "_" + String(param.id) + "Min";
+                                    String prefixedMaxId = String(axisUpper) + "_" + String(param.id) + "Max";
+                                    addParam(prefixedMinId.c_str());
+                                    addParam(prefixedMaxId.c_str());
+                                } else {
+                                    String prefixedId = String(axisUpper) + "_" + String(param.id);
+                                    addParam(prefixedId.c_str());
+                                }
                             }
                         }
                     }

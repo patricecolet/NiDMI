@@ -43,11 +43,15 @@
 
 // Lecture tactile avec échantillonnage pour stabilité
 static uint16_t readTouchValue(uint8_t gpio) {
+#if !TOUCH_AVAILABLE
+    (void)gpio;
+    return 0;
+#else
     const int samples = 5;
-        uint32_t sum = 0;
+    uint32_t sum = 0;
     static uint16_t last_raw_reads[49][5] = {0};
     static uint8_t sample_idx[49] = {0};
-    
+
     for (int i = 0; i < samples; i++) {
         uint16_t raw = touchRead(gpio);
         sum += raw;
@@ -56,17 +60,18 @@ static uint16_t readTouchValue(uint8_t gpio) {
         delayMicroseconds(200);
     }
     uint16_t avg = sum / samples;
-    
+
     // Log détaillé des échantillons (toutes les 2 secondes)
     static unsigned long last_sample_log[49] = {0};
     if (millis() - last_sample_log[gpio] > 2000) {
         TOUCH_LOG("[TouchProcessor] GPIO%d: Échantillons [%d,%d,%d,%d,%d] → avg=%d\n",
-                 gpio, last_raw_reads[gpio][0], last_raw_reads[gpio][1], 
+                 gpio, last_raw_reads[gpio][0], last_raw_reads[gpio][1],
                  last_raw_reads[gpio][2], last_raw_reads[gpio][3], last_raw_reads[gpio][4], avg);
         last_sample_log[gpio] = millis();
     }
-    
+
     return avg;
+#endif
 }
 
 // Établir la baseline pour un GPIO
@@ -128,10 +133,10 @@ static void calculateThresholds(
     uint32_t& velocity_threshold,
     uint8_t& aftertouch_threshold
 ) {
-    // Touch threshold : potMin si configuré, sinon 80% de baseline
-    if (config.potMin > 0) {
-        touch_threshold = config.potMin;
-        TOUCH_LOG("[TouchProcessor] GPIO%d: touch_threshold=%d (config potMin)\n", config.gpio, touch_threshold);
+    // Touch threshold : customInt1 (anciennement potMin) si configuré, sinon 80% de baseline
+    if (config.customInt1 > 0) {
+        touch_threshold = config.customInt1;
+        TOUCH_LOG("[TouchProcessor] GPIO%d: touch_threshold=%d (config customInt1)\n", config.gpio, touch_threshold);
     } else {
         touch_threshold = (baseline * 80) / 100;
         TOUCH_LOG("[TouchProcessor] GPIO%d: touch_threshold=%d (80%% baseline=%d)\n", 
@@ -177,8 +182,8 @@ static void processNoteVelocity(
     
     // Calculer touch_min_value pour le mapping
         uint32_t touch_min_value;
-        if (config.potMax > 0) {
-        touch_min_value = config.potMax;
+        if (config.customInt2 > 0) {
+        touch_min_value = config.customInt2;
         } else {
         touch_min_value = (baseline * 70) / 100;
         }
@@ -479,9 +484,9 @@ void TouchProcessor::process(
         return;
     }
     
-    // Configuration du filtre
-    uint8_t intensity = config.filter_intensity;
-    if (intensity == 0) intensity = 5;
+    // Configuration du filtre (filter_intensity stocké dans customField1 ou défaut 5)
+    uint8_t intensity = 5; // Défaut
+    // Touch n'a pas encore de config spécifique, utiliser le défaut
     filter.setAlphaFromIntensity(intensity);
     
     // Filtrage

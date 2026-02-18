@@ -21,6 +21,7 @@
 #include "basic/LedDef.h"
 #include "basic/VelostatDef.h"
 #include "basic/TouchDef.h"
+#include "basic/JoystickDef.h"
 
 // === FAMILLE MULTIPLEXER ===
 #include "multiplexer/MuxDef.h"

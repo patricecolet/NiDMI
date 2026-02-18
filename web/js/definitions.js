@@ -3,6 +3,75 @@
  * Module refactorisé depuis api.js
  */
 
+/**
+ * Répare un tableau JSON tronqué par corruption mémoire (NUL bytes + garbage).
+ * 1. Tronque au premier NUL (0x00)
+ * 2. Cherche le dernier objet complet du tableau (profondeur = 1 après })
+ * 3. Ferme le tableau et parse
+ * @param {string} text - Réponse brute du backend
+ * @returns {Array} Tableau parsé (éventuellement partiel), ou [] en dernier recours
+ */
+function parseDefinitionsJson(text) {
+  /* Étape 1 : essai normal */
+  try { return JSON.parse(text); } catch(firstErr) {
+    /* Étape 2 : tronquer au premier NUL si présent */
+    const nulIdx = text.indexOf('\u0000');
+    if (nulIdx >= 0) {
+      console.warn('[parseDefinitionsJson] NUL byte à position ' + nulIdx +
+        ' (text.length=' + text.length + '). Corruption mémoire détectée, tentative de récupération...');
+      text = text.substring(0, nulIdx);
+    } else {
+      console.warn('[parseDefinitionsJson] Erreur JSON sans NUL:', firstErr.message);
+    }
+
+    /* Étape 3 : essayer le texte tronqué tel quel */
+    try { return JSON.parse(text); } catch(e2) { /* continue */ }
+
+    /* Étape 4 : trouver le dernier objet top-level complet dans le tableau */
+    if (text.length > 0 && text[0] === '[') {
+      let depth = 0;
+      let inStr = false;
+      let esc = false;
+      let lastCompleteObj = -1;
+
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (esc) { esc = false; continue; }
+        if (inStr) {
+          if (ch === '\\') { esc = true; continue; }
+          if (ch === '"') { inStr = false; }
+          continue;
+        }
+        if (ch === '"') { inStr = true; continue; }
+        if (ch === '{' || ch === '[') { depth++; continue; }
+        if (ch === '}' || ch === ']') {
+          depth--;
+          /* depth 1 = on vient de fermer un objet top-level du tableau */
+          if (depth === 1 && ch === '}') { lastCompleteObj = i; }
+        }
+      }
+
+      if (lastCompleteObj > 0) {
+        const repaired = text.substring(0, lastCompleteObj + 1) + ']';
+        try {
+          const result = JSON.parse(repaired);
+          if (Array.isArray(result)) {
+            console.warn('[parseDefinitionsJson] Récupération réussie: ' + result.length +
+              ' composants sur ' + repaired.length + ' octets (tronqué de ' + (nulIdx >= 0 ? nulIdx : text.length) + ')');
+            return result;
+          }
+        } catch(e3) {
+          console.warn('[parseDefinitionsJson] Réparation échouée:', e3.message);
+        }
+      }
+    }
+
+    console.error('[parseDefinitionsJson] Impossible de parser les définitions. Réponse brute (200 premiers chars):',
+      text.substring(0, 200));
+    return [];
+  }
+}
+
 const ComponentDefinitions = {
   /**
    * Cache interne des définitions de composants
@@ -17,14 +86,15 @@ const ComponentDefinitions = {
    */
   async load() {
     try {
-      // Faire une première requête normale (sans paramètres de pagination)
+      /* Faire une première requête normale (sans paramètres de pagination) */
       const r = await fetch('/api/components/definitions');
       if(!r.ok) {
         console.warn('[ComponentDefinitions.load] Erreur chargement définitions:', r.status);
         return [];
       }
-      
-      // Vérifier si la pagination est activée (présence du header X-Total-Pages)
+      const firstText = await r.text();
+
+      /* Vérifier si la pagination est activée (présence du header X-Total-Pages) */
       const totalPagesHeader = r.headers.get('X-Total-Pages');
       const totalCountHeader = r.headers.get('X-Total-Count');
       
@@ -33,27 +103,27 @@ const ComponentDefinitions = {
         'X-Total-Count': totalCountHeader
       });
       
-      // Si les headers de pagination sont présents, la pagination est activée
+      /* Si les headers de pagination sont présents, la pagination est activée */
       if (totalPagesHeader !== null && totalCountHeader !== null) {
         const totalPages = parseInt(totalPagesHeader);
         const totalCount = parseInt(totalCountHeader);
         
         if (totalCount > 0) {
-          // Mode pagination activé : charger toutes les pages (même s'il n'y en a qu'une)
+          /* Mode pagination activé : charger toutes les pages (même s'il n'y en a qu'une) */
           console.log('[ComponentDefinitions.load] Pagination détectée, chargement de toutes les pages...', 
                      `(totalPages: ${totalPages}, totalCount: ${totalCount})`);
           this._cache = [];
           
-          // Charger toutes les pages
-          // Utiliser limit=5 pour correspondre au default du backend (buffer 12KB = ~5 composants par page)
+          /* Charger toutes les pages */
+          /* Utiliser limit=5 pour correspondre au default du backend (buffer 12KB = ~5 composants par page) */
           for (let page = 0; page < totalPages; page++) {
             const pageR = await fetch(`/api/components/definitions?page=${page}&limit=5`);
             if (!pageR.ok) {
               console.warn(`[ComponentDefinitions.load] Erreur page ${page}:`, pageR.status);
               break;
             }
-            
-            const pageData = await pageR.json();
+            const pageText = await pageR.text();
+            const pageData = parseDefinitionsJson(pageText);
             if (!Array.isArray(pageData)) {
               console.warn(`[ComponentDefinitions.load] Page ${page} invalide (pas un tableau)`);
               break;
@@ -61,7 +131,7 @@ const ComponentDefinitions = {
             
             if (pageData.length === 0) {
               console.log(`[ComponentDefinitions.load] Page ${page} vide, arrêt`);
-              break; // Page vide, arrêter
+              break; /* Page vide, arrêter */
             }
             
             this._cache.push(...pageData);
@@ -73,9 +143,9 @@ const ComponentDefinitions = {
           return this._cache;
         }
       }
-      
-      // Mode normal : utiliser les données de la première requête
-      const data = await r.json();
+
+      /* Mode normal : parser le texte de la première requête (avec secours si caractères de contrôle) */
+      const data = parseDefinitionsJson(firstText);
       if (!Array.isArray(data)) {
         console.error('[ComponentDefinitions.load] Réponse invalide (pas un tableau):', data);
         return [];
@@ -147,17 +217,17 @@ const ComponentDefinitions = {
     }
     
     const filtered = this._cache.filter(def => {
-      // Filtrer par implémenté si demandé
+      /* Filtrer par implémenté si demandé */
       if(implementedOnly && !def.implemented) return false;
-      
-      // Vérifier la compatibilité du type de pin
+
+      /* Vérifier la compatibilité du type de pin */
       switch(pinType) {
-        case 0: // PIN_ANALOG
-          return def.pinType === 0 || def.pinType === 2; // ANALOG ou ANALOG_OR_DIGITAL
-        case 1: // PIN_DIGITAL
-          return def.pinType === 1 || def.pinType === 2; // DIGITAL ou ANALOG_OR_DIGITAL
-        case 3: // PIN_PWM
-          return def.pinType === 3; // PWM uniquement
+        case 0: /* PIN_ANALOG */
+          return def.pinType === 0 || def.pinType === 2; /* ANALOG ou ANALOG_OR_DIGITAL */
+        case 1: /* PIN_DIGITAL */
+          return def.pinType === 1 || def.pinType === 2; /* DIGITAL ou ANALOG_OR_DIGITAL */
+        case 3: /* PIN_PWM */
+          return def.pinType === 3; /* PWM uniquement */
         default:
           return false;
       }

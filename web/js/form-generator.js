@@ -424,8 +424,9 @@ const FormGenerator = {
         select.appendChild(optNone);
       }
       
-      /* RESTRICTIONS DÉSACTIVÉES - Toutes les pins sont disponibles dans les selects */
-      const pinType = additionalPin.pinType !== undefined ? additionalPin.pinType : 1; /* Défaut: PIN_DIGITAL */
+      /* Déterminer le type de pin : utiliser additionalPin.pinType si défini, sinon utiliser le pinType du composant parent */
+      let pinType = additionalPin.pinType !== undefined ? additionalPin.pinType : (def.pinType !== undefined ? def.pinType : 0); /* Défaut: PIN_ANALOG */
+      console.log('[FormGenerator.generateAdditionalPins] additionalPin.id:', additionalPin.id, 'additionalPin.pinType:', additionalPin.pinType, 'def.pinType:', def.pinType, 'pinType utilisé:', pinType);
       if(typeof GpioManager === 'undefined' || !GpioManager.getPinsByType) {
         console.warn('[FormGenerator.generateAdditionalPins] GpioManager.getPinsByType non disponible');
         return;

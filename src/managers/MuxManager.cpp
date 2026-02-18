@@ -145,8 +145,7 @@ MuxManager::MuxManager() : mux_count(0), muxTaskHandle(nullptr), taskStarted(fal
                  mapped_value = 0;
              }
              
-             uint8_t intensity = config.filter_intensity;
-             if (intensity == 0) intensity = 5;
+             uint8_t intensity = 5; // Défaut (MUX n'a pas encore de config spécifique)
              cache.filters[ch].setAlphaFromIntensity(intensity);
              cache.filtered_values[ch] = cache.filters[ch].process(mapped_value);
              

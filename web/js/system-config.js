@@ -2,9 +2,9 @@
  * Configuration des paramètres système
  */
 
-let isS3 = false;  // Détecté depuis caps.board
+let isS3 = false;  /* Détecté depuis caps.board */
 
-// Vérifier si c'est un ESP32-S3
+/* Vérifier si c'est un ESP32-S3 */
 async function checkBoardType() {
   try {
     const r = await fetch('/api/pins/caps');
@@ -12,13 +12,13 @@ async function checkBoardType() {
     const caps = await r.json();
     isS3 = caps.board && caps.board.toLowerCase().includes('s3');
     
-    // Afficher/masquer la section système selon le type de board
+    /* Afficher/masquer la section système selon le type de board */
     const systemSection = $('#systemSettingsSection');
     if (systemSection) {
       systemSection.style.display = isS3 ? 'block' : 'none';
     }
     
-    // Charger la config seulement si c'est un S3
+    /* Charger la config seulement si c'est un S3 */
     if (isS3) {
       loadSystemConfig();
     }
@@ -28,8 +28,8 @@ async function checkBoardType() {
 }
 
 async function loadSystemConfig() {
-  if (!isS3) return;  // Ne rien faire si ce n'est pas un S3
-  
+  if (!isS3) return;  /* Ne rien faire si ce n'est pas un S3 */
+
   try {
     const r = await fetch('/api/system/get');
     if (!r.ok) {
@@ -47,7 +47,7 @@ async function loadSystemConfig() {
 }
 
 async function saveSystemConfig() {
-  if (!isS3) return;  // Ne rien faire si ce n'est pas un S3
+  if (!isS3) return;  /* Ne rien faire si ce n'est pas un S3 */
   
   const checkbox = $('#touchEnabled');
   if (!checkbox) return;
@@ -67,7 +67,7 @@ async function saveSystemConfig() {
       if (d.status === 'ok') {
         msgEl.textContent = 'Configuration enregistrée, rechargement des composants...';
         msgEl.style.color = '#10b981';
-        // Recharger les pins après un court délai
+        /* Recharger les pins après un court délai */
         setTimeout(() => {
           if (typeof loadConfiguredPins === 'function') {
             loadConfiguredPins();
@@ -105,7 +105,7 @@ async function clearNVS() {
       if (d.status === 'ok') {
         msgEl.textContent = 'NVS effacée avec succès. Rechargement...';
         msgEl.style.color = '#10b981';
-        // Recharger la page après un court délai
+        /* Recharger la page après un court délai */
         setTimeout(() => {
           window.location.reload();
         }, 1500);
@@ -124,12 +124,12 @@ async function clearNVS() {
   }
 }
 
-// Gérer le formulaire (sera appelé depuis app.js après chargement)
+/* Gérer le formulaire (sera appelé depuis app.js après chargement) */
 function initSystemConfig() {
-  // Vérifier le type de board d'abord
+  /* Vérifier le type de board d'abord */
   checkBoardType();
-  
-  // Gérer le formulaire
+
+  /* Gérer le formulaire */
   const systemForm = $('#system');
   if (systemForm) {
     systemForm.addEventListener('submit', (e) => {
@@ -138,7 +138,7 @@ function initSystemConfig() {
     });
   }
   
-  // Gérer le bouton Clear NVS
+  /* Gérer le bouton Clear NVS */
   const clearNvsBtn = $('#clearNvsBtn');
   if (clearNvsBtn) {
     clearNvsBtn.addEventListener('click', (e) => {

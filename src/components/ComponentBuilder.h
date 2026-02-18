@@ -144,6 +144,7 @@ public:
             newMessages[i].id = def.midiMessages[i].id;
             newMessages[i].displayName = def.midiMessages[i].displayName;
             newMessages[i].statusTemplate = def.midiMessages[i].statusTemplate;
+            newMessages[i].axis = def.midiMessages[i].axis;
             newMessages[i].paramCount = def.midiMessages[i].paramCount;
             newMessages[i].paramsCapacity = def.midiMessages[i].paramCount;
             // Copie profonde des params
@@ -161,6 +162,7 @@ public:
         newMessages[def.midiMessageCount].id = msg.id;
         newMessages[def.midiMessageCount].displayName = msg.displayName;
         newMessages[def.midiMessageCount].statusTemplate = msg.statusTemplate;
+        newMessages[def.midiMessageCount].axis = msg.axis;
         newMessages[def.midiMessageCount].paramCount = msg.paramCount;
         newMessages[def.midiMessageCount].paramsCapacity = msg.paramCount;
         if (msg.paramCount > 0 && msg.params) {

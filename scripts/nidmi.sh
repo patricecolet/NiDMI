@@ -28,9 +28,14 @@ LANG_CODE="fr"
 
 # Options d'optimisation JSON
 LIGHT_MODE=false
-PAGINATION_MODE=false
+# Pagination par défaut : NiDMI nécessite la pagination pour éviter la troncature du JSON des définitions
+PAGINATION_MODE=true
 
-# Parser les arguments pour --lang, --board, --light, --pagination
+# Partition C3 sans SPIFFS (app ~4 Mo). Par défaut activée pour C3 uniquement (évite 97% flash).
+LARGE_APP=false
+NO_LARGE_APP=false
+
+# Parser les arguments pour --lang, --board, --light, --pagination, --no-pagination, --large-app, --no-large-app
 ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -52,6 +57,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         --pagination)
             PAGINATION_MODE=true
+            shift
+            ;;
+        --no-pagination)
+            PAGINATION_MODE=false
+            shift
+            ;;
+        --large-app)
+            LARGE_APP=true
+            shift
+            ;;
+        --no-large-app)
+            NO_LARGE_APP=true
             shift
             ;;
         *)
@@ -97,6 +114,11 @@ case "$BOARD_TYPE" in
         ;;
 esac
 
+# C3 : activer --large-app par défaut (partition ~4 Mo) sauf si --no-large-app
+if [[ "$BOARD" == *"XIAO_ESP32C3"* ]] && [ "$NO_LARGE_APP" != true ]; then
+    LARGE_APP=true
+fi
+
 # Export pour build_html_simple.sh
 export LANG_CODE
 
@@ -118,16 +140,20 @@ show_help() {
     echo "  help     - Afficher cette aide"
     echo ""
     echo "Options:"
-    echo "  --lang LANG   - Langue de l'interface web (fr|en, défaut: fr)"
-    echo "                  Nécessite jq installé (brew install jq sur macOS)"
+    echo "  --lang LANG     - Langue de l'interface web (fr|en, défaut: fr)"
+    echo "                    Nécessite jq installé (brew install jq sur macOS)"
+    echo "  --large-app     - [C3] Forcer la partition sans SPIFFS (app ~4 Mo)"
+    echo "  --no-large-app  - [C3] Désactiver la partition agrandie (défaut: activée pour C3)"
     echo "  --board BOARD - Type de carte ESP32 (c3|s3, défaut: s3)"
     echo "                  c3 = XIAO ESP32-C3"
     echo "                  s3 = XIAO ESP32-S3"
     echo "  --clear-nvs   - Utiliser le sketch de reset NVS"
-    echo "  --light       - Mode LIGHT: définitions simplifiées (réduit la taille JSON)"
-    echo "  --pagination  - Mode PAGINATION: chargement par pages (pour beaucoup de composants)"
+    echo "  --light          - Mode LIGHT: définitions simplifiées (réduit la taille JSON)"
+    echo "  --pagination     - Activer la pagination (défaut: activée)"
+    echo "  --no-pagination  - Désactiver la pagination (à utiliser seulement avec --large-app sur C3)"
     echo ""
-    echo "  Les options --light et --pagination peuvent être combinées"
+    echo "  Pagination : activée par défaut (C3 et S3). Évite la troncature du JSON des définitions."
+    echo "  Partition C3 : --large-app est activé par défaut pour C3 (partition ~4 Mo). Utiliser --no-large-app pour désactiver."
     echo ""
     echo "Sketches disponibles:"
     echo "  nidmi_basic (défaut)"
@@ -136,8 +162,10 @@ show_help() {
     echo "Exemples:"
     echo "  ./scripts/nidmi.sh sync                    # Synchroniser (français, S3 par défaut)"
     echo "  ./scripts/nidmi.sh sync --lang en          # Synchroniser en anglais"
+    echo "  ./scripts/nidmi.sh compile --board c3      # C3 : pagination + partition 4 Mo par défaut"
+    echo "  ./scripts/nidmi.sh compile --board c3 --no-large-app   # C3 sans partition agrandie"
     echo "  ./scripts/nidmi.sh compile --board s3      # Compiler pour ESP32-S3"
-    echo "  ./scripts/nidmi.sh upload --board s3       # Uploader sur ESP32-S3"
+    echo "  ./scripts/nidmi.sh upload --board s3      # Uploader sur ESP32-S3"
     echo "  ./scripts/nidmi.sh build                   # Build (S3 par défaut)"
     echo "  ./scripts/nidmi.sh upload nidmi_osc        # Upload sketch OSC"
     echo "  ./scripts/nidmi.sh upload --clear-nvs      # Upload sketch reset NVS"
@@ -177,7 +205,7 @@ sync_files() {
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
-    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,midi,midi/handlers,network,osc,processors,server,ui,utils}
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,midi,midi/handlers,network,osc,processors,server,ui,utils}
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -222,6 +250,10 @@ sync_files() {
         if [ -d "$REPO_DIR/src/managers/complex/multiplexer" ]; then
             cp -f $REPO_DIR/src/managers/complex/multiplexer/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/multiplexer/ 2>/dev/null || true
             cp -f $REPO_DIR/src/managers/complex/multiplexer/*.h $ARDUINO_LIB_DIR/src/managers/complex/multiplexer/ 2>/dev/null || true
+        fi
+        if [ -d "$REPO_DIR/src/managers/complex/joystick" ]; then
+            cp -f $REPO_DIR/src/managers/complex/joystick/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/joystick/ 2>/dev/null || true
+            cp -f $REPO_DIR/src/managers/complex/joystick/*.h $ARDUINO_LIB_DIR/src/managers/complex/joystick/ 2>/dev/null || true
         fi
     fi
     cp -f $REPO_DIR/src/midi/*.cpp $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true
@@ -283,6 +315,25 @@ clean_cache() {
     echo "   ✅ Cache Arduino nettoyé"
 }
 
+# Copie la partition C3 sans SPIFFS dans le package Arduino (pour --large-app)
+setup_c3_large_app_partition() {
+    local PKG_BASE="${HOME}/Library/Arduino15/packages/esp32/hardware/esp32"
+    local SRC="$REPO_DIR/tools/nidmi_c3_no_spiffs.csv"
+    local DST_DIR
+    DST_DIR=$(ls -d "$PKG_BASE"/[0-9]*.[0-9]*.[0-9]*/tools/partitions 2>/dev/null | tail -1)
+    if [ -z "$DST_DIR" ]; then
+        echo "   ⚠️  Package ESP32 non trouvé dans $PKG_BASE, --large-app ignoré"
+        return 1
+    fi
+    if [ ! -f "$SRC" ]; then
+        echo "   ⚠️  Fichier partition manquant: $SRC, --large-app ignoré"
+        return 1
+    fi
+    cp "$SRC" "$DST_DIR/nidmi_c3_no_spiffs.csv"
+    echo "   📦 Partition C3 (no SPIFFS) installée: $DST_DIR/nidmi_c3_no_spiffs.csv"
+    return 0
+}
+
 # Fonction de compilation
 compile_sketch() {
     echo "🔨 Compilation du sketch..."
@@ -295,6 +346,11 @@ compile_sketch() {
     
     if [ "$PAGINATION_MODE" = true ]; then
         echo "   📄 Mode PAGINATION activé (chargement par pages)"
+    fi
+    
+    if [ "$LARGE_APP" = true ] && [[ "$BOARD" == *"XIAO_ESP32C3"* ]]; then
+        echo "   📦 Mode LARGE-APP activé (partition C3 sans SPIFFS, app ~4 Mo)"
+        setup_c3_large_app_partition || true
     fi
     
     if command -v arduino-cli &> /dev/null; then
@@ -311,11 +367,18 @@ compile_sketch() {
             EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
         fi
         
-        # Construire la commande arduino-cli
+        # Build properties (flags + partition C3 si --large-app)
+        BUILD_PROPS=()
         if [ ${#EXTRA_FLAGS_ARRAY[@]} -gt 0 ]; then
-            # Joindre les flags avec des espaces
-            EXTRA_FLAGS_STR="${EXTRA_FLAGS_ARRAY[*]}"
-            arduino-cli compile --fqbn $BOARD --build-property compiler.cpp.extra_flags="$EXTRA_FLAGS_STR" $SKETCH_PATH
+            BUILD_PROPS+=(--build-property "compiler.cpp.extra_flags=${EXTRA_FLAGS_ARRAY[*]}")
+        fi
+        if [ "$LARGE_APP" = true ] && [[ "$BOARD" == *"XIAO_ESP32C3"* ]]; then
+            BUILD_PROPS+=(--build-property "build.partitions=nidmi_c3_no_spiffs")
+            BUILD_PROPS+=(--build-property "upload.maximum_size=4161536")
+        fi
+        
+        if [ ${#BUILD_PROPS[@]} -gt 0 ]; then
+            arduino-cli compile --fqbn $BOARD "${BUILD_PROPS[@]}" $SKETCH_PATH
         else
             arduino-cli compile --fqbn $BOARD $SKETCH_PATH
         fi
@@ -498,6 +561,11 @@ build_binary() {
     if command -v arduino-cli &> /dev/null; then
         echo "   Utilisation d'arduino-cli..."
         
+        if [ "$LARGE_APP" = true ] && [[ "$BOARD" == *"XIAO_ESP32C3"* ]]; then
+            echo "   📦 Mode LARGE-APP activé (partition C3 sans SPIFFS)"
+            setup_c3_large_app_partition || true
+        fi
+        
         # Construire les flags de build (même logique que compile_sketch)
         EXTRA_FLAGS_ARRAY=()
         
@@ -509,11 +577,17 @@ build_binary() {
             EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
         fi
         
-        # Construire la commande arduino-cli
+        BUILD_PROPS=()
         if [ ${#EXTRA_FLAGS_ARRAY[@]} -gt 0 ]; then
-            # Joindre les flags avec des espaces
-            EXTRA_FLAGS_STR="${EXTRA_FLAGS_ARRAY[*]}"
-            arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" --build-property compiler.cpp.extra_flags="$EXTRA_FLAGS_STR" "$SKETCH_PATH"
+            BUILD_PROPS+=(--build-property "compiler.cpp.extra_flags=${EXTRA_FLAGS_ARRAY[*]}")
+        fi
+        if [ "$LARGE_APP" = true ] && [[ "$BOARD" == *"XIAO_ESP32C3"* ]]; then
+            BUILD_PROPS+=(--build-property "build.partitions=nidmi_c3_no_spiffs")
+            BUILD_PROPS+=(--build-property "upload.maximum_size=4161536")
+        fi
+        
+        if [ ${#BUILD_PROPS[@]} -gt 0 ]; then
+            arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "${BUILD_PROPS[@]}" "$SKETCH_PATH"
         else
             arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "$SKETCH_PATH"
         fi

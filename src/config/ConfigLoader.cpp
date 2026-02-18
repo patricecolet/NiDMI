@@ -2,9 +2,16 @@
 #include "../managers/ComponentManager.h"
 #include "../components/ComponentTypes.h"  // Définitions communes
 #include "../components/ComponentRegistry.h"  // Pour trouver les définitions de composants
+#include "../components/basic/ButtonDef.h"
+#include "../components/basic/LedDef.h"
+#include "../components/basic/PotentiometerDef.h"
+#include "../components/basic/VelostatDef.h"
+#include "../components/basic/JoystickDef.h"
 #include "../utils/JSONParser.h"
 #include "../utils/PinMapper.h"
 #include "../utils/ComponentInitializer.h"  // Pour setupGpio
+#include "../managers/complex/ComplexHandlerRegistry.h"
+#include "../managers/complex/joystick/JoystickHandler.h"
 #include "../midi/MidiMessageType.h"
 #include <Preferences.h>
 
@@ -219,6 +226,18 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             continue;
         }
         
+        // Joystick : enregistrer le GPIO Y dans le handler (chargement NVS)
+        if (type == ComponentType::JOYSTICK) {
+            int joyYPin = JSONParser::extractInt(pinConfig, "joyYPin", 255);
+            if (joyYPin < 255) {
+                ComplexHandler* handler = ComplexHandlerRegistry::getHandler("joystick");
+                if (handler) {
+                    JoystickHandler* jh = static_cast<JoystickHandler*>(handler);
+                    jh->registerYAxis(gpio, (uint8_t)joyYPin);
+                }
+            }
+        }
+        
         // Configurer les flags OSC si le composant a été ajouté avec succès
         if (success) {
             // Trouver l'index du composant ajouté
@@ -261,98 +280,190 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                                       pinLabelCStr, config->osc_address);
                     }
                     
-                    // Lire dynamiquement tous les formFields depuis la définition
-                    if (def && def->formFields) {
-                        uint8_t customFieldIndex = 0;  // Index pour mapper vers customField1/customField2
-                        uint8_t customIntIndex = 0;   // Index pour mapper vers customInt1/customInt2
-                        
-                        for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
-                            const FormFieldDef& field = def->formFields[i];
-                            if (field.id) {
-                                // Mapper les champs spécifiques existants (réduire la portée des String)
-                                if (strcmp(field.id, "btnMode") == 0) {
-                                    {
-                                        String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
-                                        if (fieldValue.length() > 0) {
-                                            strncpy(config->btnMode, fieldValue.c_str(), sizeof(config->btnMode) - 1);
-                                            config->btnMode[sizeof(config->btnMode) - 1] = '\0';
-                                        }
-                                    }
-                                } else if (strcmp(field.id, "btnPulseTiming") == 0) {
-                                    {
-                                        String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
-                                        if (fieldValue.length() > 0) {
-                                            strncpy(config->btnPulseTiming, fieldValue.c_str(), sizeof(config->btnPulseTiming) - 1);
-                                            config->btnPulseTiming[sizeof(config->btnPulseTiming) - 1] = '\0';
-                                        }
-                                    }
-                                } else if (strcmp(field.id, "btnPullMode") == 0) {
-                                    {
-                                        String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
-                                        if (fieldValue.length() > 0) {
-                                            strncpy(config->btnPullMode, fieldValue.c_str(), sizeof(config->btnPullMode) - 1);
-                                            config->btnPullMode[sizeof(config->btnPullMode) - 1] = '\0';
-                                        }
-                                    }
-                                } else if (strcmp(field.id, "ledMode") == 0) {
-                                    {
-                                        String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
-                                        if (fieldValue.length() > 0) {
-                                            strncpy(config->ledMode, fieldValue.c_str(), sizeof(config->ledMode) - 1);
-                                            config->ledMode[sizeof(config->ledMode) - 1] = '\0';
-                                        }
-                                    }
-                                } else if (strcmp(field.id, "filterIntensity") == 0) {
-                                    uint8_t filter_intensity = JSONParser::extractInt(pinConfig, "filterIntensity", field.defaultValue ? atoi(field.defaultValue) : 5);
-                                    if (filter_intensity < 1) filter_intensity = 1;
-                                    if (filter_intensity > 10) filter_intensity = 10;
-                                    config->filter_intensity = filter_intensity;
-                                } else {
-                                    // Mapper vers les champs génériques pour les nouveaux composants
-                                    if (field.type == FieldType::TEXT || field.type == FieldType::SELECT || field.type == FieldType::CHECKBOX) {
-                                        {
-                                            String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
-                                            if (fieldValue.length() > 0) {
-                                                const char* fieldValueCStr = fieldValue.c_str();
-                                                if (customFieldIndex == 0) {
-                                                    strncpy(config->customField1, fieldValueCStr, sizeof(config->customField1) - 1);
-                                                    config->customField1[sizeof(config->customField1) - 1] = '\0';
-                                                    customFieldIndex++;
-                                                } else if (customFieldIndex == 1) {
-                                                    strncpy(config->customField2, fieldValueCStr, sizeof(config->customField2) - 1);
-                                                    config->customField2[sizeof(config->customField2) - 1] = '\0';
-                                                    customFieldIndex++;
+                    // Charger les configurations spécifiques selon le type de composant
+                    // La config spécifique doit déjà être allouée par ComponentInitializer
+                    switch (config->type) {
+                        case ComponentType::BUTTON: {
+                            if (config->specificConfig.button) {
+                                Components::ButtonConfig* btnConfig = config->specificConfig.button;
+                                if (def && def->formFields) {
+                                    for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                                        const FormFieldDef& field = def->formFields[i];
+                                        if (field.id) {
+                                            if (strcmp(field.id, "btnMode") == 0) {
+                                                String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
+                                                if (fieldValue.length() > 0) {
+                                                    strncpy(btnConfig->btnMode, fieldValue.c_str(), sizeof(btnConfig->btnMode) - 1);
+                                                    btnConfig->btnMode[sizeof(btnConfig->btnMode) - 1] = '\0';
+                                                }
+                                            } else if (strcmp(field.id, "btnPulseTiming") == 0) {
+                                                String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
+                                                if (fieldValue.length() > 0) {
+                                                    strncpy(btnConfig->btnPulseTiming, fieldValue.c_str(), sizeof(btnConfig->btnPulseTiming) - 1);
+                                                    btnConfig->btnPulseTiming[sizeof(btnConfig->btnPulseTiming) - 1] = '\0';
+                                                }
+                                            } else if (strcmp(field.id, "btnPullMode") == 0) {
+                                                String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
+                                                if (fieldValue.length() > 0) {
+                                                    strncpy(btnConfig->btnPullMode, fieldValue.c_str(), sizeof(btnConfig->btnPullMode) - 1);
+                                                    btnConfig->btnPullMode[sizeof(btnConfig->btnPullMode) - 1] = '\0';
                                                 }
                                             }
-                                        }
-                                    } else if (field.type == FieldType::NUMBER || field.type == FieldType::RANGE) {
-                                        int fieldValue = JSONParser::extractInt(pinConfig, field.id, field.defaultValue ? atoi(field.defaultValue) : 0);
-                                        if (customIntIndex == 0) {
-                                            config->customInt1 = fieldValue;
-                                            customIntIndex++;
-                                        } else if (customIntIndex == 1) {
-                                            config->customInt2 = fieldValue;
-                                            customIntIndex++;
                                         }
                                     }
                                 }
                             }
+                            break;
                         }
-                    }
-                    
-                    // Lire potMin et potMax pour potentiomètre (seuils analogiques)
-                    if (strcmp(def->id, "potentiometer") == 0) {
-                        int potMin = JSONParser::extractInt(pinConfig, "potMin", 0);
-                        int potMax = JSONParser::extractInt(pinConfig, "potMax", 4095);
-                        // Stocker dans potMin et potMax
-                        config->potMin = (potMin >= 0 && potMin <= 4095) ? potMin : 0;
-                        config->potMax = (potMax >= 0 && potMax <= 4095) ? potMax : 4095;
-                        // S'assurer que min < max
-                        if (config->potMin >= config->potMax) {
-                            uint16_t temp = config->potMin;
-                            config->potMin = config->potMax;
-                            config->potMax = temp;
+                        case ComponentType::LED: {
+                            if (config->specificConfig.led) {
+                                Components::LedConfig* ledConfig = config->specificConfig.led;
+                                if (def && def->formFields) {
+                                    for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                                        const FormFieldDef& field = def->formFields[i];
+                                        if (field.id && strcmp(field.id, "ledMode") == 0) {
+                                            String fieldValue = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "");
+                                            if (fieldValue.length() > 0) {
+                                                strncpy(ledConfig->ledMode, fieldValue.c_str(), sizeof(ledConfig->ledMode) - 1);
+                                                ledConfig->ledMode[sizeof(ledConfig->ledMode) - 1] = '\0';
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            break;
                         }
+                        case ComponentType::POTENTIOMETER: {
+                            if (config->specificConfig.potentiometer) {
+                                Components::PotentiometerConfig* potConfig = config->specificConfig.potentiometer;
+                                int potMin = JSONParser::extractInt(pinConfig, "potMin", 0);
+                                int potMax = JSONParser::extractInt(pinConfig, "potMax", 4095);
+                                potConfig->potMin = (potMin >= 0 && potMin <= 4095) ? potMin : 0;
+                                potConfig->potMax = (potMax >= 0 && potMax <= 4095) ? potMax : 4095;
+                                if (potConfig->potMin >= potConfig->potMax) {
+                                    uint16_t temp = potConfig->potMin;
+                                    potConfig->potMin = potConfig->potMax;
+                                    potConfig->potMax = temp;
+                                }
+                                if (def && def->formFields) {
+                                    for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                                        const FormFieldDef& field = def->formFields[i];
+                                        if (field.id && strcmp(field.id, "filterIntensity") == 0) {
+                                            uint8_t filter_intensity = JSONParser::extractInt(pinConfig, "filterIntensity", field.defaultValue ? atoi(field.defaultValue) : 5);
+                                            if (filter_intensity < 1) filter_intensity = 1;
+                                            if (filter_intensity > 10) filter_intensity = 10;
+                                            potConfig->filter_intensity = filter_intensity;
+                                        }
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                        case ComponentType::VELOSTAT: {
+                            if (config->specificConfig.velostat) {
+                                Components::VelostatConfig* veloConfig = config->specificConfig.velostat;
+                                if (def && def->formFields) {
+                                    for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                                        const FormFieldDef& field = def->formFields[i];
+                                        if (field.id) {
+                                            if (strcmp(field.id, "filterIntensity") == 0) {
+                                                uint8_t filter_intensity = JSONParser::extractInt(pinConfig, "filterIntensity", field.defaultValue ? atoi(field.defaultValue) : 5);
+                                                if (filter_intensity < 1) filter_intensity = 1;
+                                                if (filter_intensity > 10) filter_intensity = 10;
+                                                veloConfig->filter_intensity = filter_intensity;
+                                            } else if (strcmp(field.id, "velocityThreshold") == 0) {
+                                                veloConfig->velocityThreshold = JSONParser::extractInt(pinConfig, "velocityThreshold", field.defaultValue ? atoi(field.defaultValue) : 50);
+                                            } else if (strcmp(field.id, "aftertouchThreshold") == 0) {
+                                                veloConfig->aftertouchThreshold = JSONParser::extractInt(pinConfig, "aftertouchThreshold", field.defaultValue ? atoi(field.defaultValue) : 4);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                        case ComponentType::JOYSTICK: {
+                            if (config->specificConfig.joystick) {
+                                Components::JoystickConfig* joyConfig = config->specificConfig.joystick;
+                                joyConfig->joyXMin = JSONParser::extractInt(pinConfig, "xMin", 200);
+                                joyConfig->joyXZeroMin = JSONParser::extractInt(pinConfig, "xZeroMin", 1900);
+                                joyConfig->joyXZeroMax = JSONParser::extractInt(pinConfig, "xZeroMax", 2100);
+                                joyConfig->joyXMax = JSONParser::extractInt(pinConfig, "xMax", 4000);
+                                joyConfig->joyYMin = JSONParser::extractInt(pinConfig, "yMin", 200);
+                                joyConfig->joyYZeroMin = JSONParser::extractInt(pinConfig, "yZeroMin", 1900);
+                                joyConfig->joyYZeroMax = JSONParser::extractInt(pinConfig, "yZeroMax", 2100);
+                                joyConfig->joyYMax = JSONParser::extractInt(pinConfig, "yMax", 4000);
+                                // Valider les valeurs (0-4095)
+                                if (joyConfig->joyXMin > 4095) joyConfig->joyXMin = 200;
+                                if (joyConfig->joyXZeroMin > 4095) joyConfig->joyXZeroMin = 1900;
+                                if (joyConfig->joyXZeroMax > 4095) joyConfig->joyXZeroMax = 2100;
+                                if (joyConfig->joyXMax > 4095) joyConfig->joyXMax = 4000;
+                                if (joyConfig->joyYMin > 4095) joyConfig->joyYMin = 200;
+                                if (joyConfig->joyYZeroMin > 4095) joyConfig->joyYZeroMin = 1900;
+                                if (joyConfig->joyYZeroMax > 4095) joyConfig->joyYZeroMax = 2100;
+                                if (joyConfig->joyYMax > 4095) joyConfig->joyYMax = 4000;
+                                if (def && def->formFields) {
+                                    for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                                        const FormFieldDef& field = def->formFields[i];
+                                        if (field.id && strcmp(field.id, "filterIntensity") == 0) {
+                                            uint8_t filter_intensity = JSONParser::extractInt(pinConfig, "filterIntensity", field.defaultValue ? atoi(field.defaultValue) : 5);
+                                            if (filter_intensity < 1) filter_intensity = 1;
+                                            if (filter_intensity > 10) filter_intensity = 10;
+                                            joyConfig->filter_intensity = filter_intensity;
+                                        }
+                                    }
+                                }
+                                
+                                // Charger les types MIDI par axe
+                                String xMsgTypeStr = JSONParser::extractStr(pinConfig, "midiMessageTypeX", "");
+                                String yMsgTypeStr = JSONParser::extractStr(pinConfig, "midiMessageTypeY", "");
+                                if (xMsgTypeStr.length() > 0) {
+                                    joyConfig->xMsgType = stringToMidiMessageType(xMsgTypeStr);
+                                } else {
+                                    // Fallback: utiliser le msg_type global (déjà parsé)
+                                    joyConfig->xMsgType = msg_type;
+                                }
+                                if (yMsgTypeStr.length() > 0) {
+                                    joyConfig->yMsgType = stringToMidiMessageType(yMsgTypeStr);
+                                } else {
+                                    joyConfig->yMsgType = joyConfig->xMsgType; // Même type que X par défaut
+                                }
+                                
+                                // Charger les paramètres MIDI par axe (préfixés X_/Y_)
+                                // Le param dépend du type de message sélectionné
+                                // CC -> midiCc, Note/Sweep -> midiNote, PitchBend/Aftertouch -> pas de param
+                                auto loadAxisParam = [&](const char* axisPrefix, MidiMessageType type, uint8_t fallback) -> uint8_t {
+                                    char key[20];
+                                    if (type == MidiMessageType::CONTROL_CHANGE) {
+                                        snprintf(key, sizeof(key), "%s_midiCc", axisPrefix);
+                                        return JSONParser::extractInt(pinConfig, key, 
+                                            JSONParser::extractInt(pinConfig, "midiCc", fallback));
+                                    } else if (type == MidiMessageType::NOTE_SWEEP || type == MidiMessageType::NOTE) {
+                                        snprintf(key, sizeof(key), "%s_midiNote", axisPrefix);
+                                        return JSONParser::extractInt(pinConfig, key, 
+                                            JSONParser::extractInt(pinConfig, "midiNote", fallback));
+                                    }
+                                    return fallback;
+                                };
+                                joyConfig->xMidiParam = loadAxisParam("X", joyConfig->xMsgType, midi_param);
+                                joyConfig->yMidiParam = loadAxisParam("Y", joyConfig->yMsgType, midi_param);
+                                joyConfig->xMidiChannel = JSONParser::extractInt(pinConfig, "X_midiChannel",
+                                    JSONParser::extractInt(pinConfig, "midiChannel", channel));
+                                joyConfig->yMidiChannel = JSONParser::extractInt(pinConfig, "Y_midiChannel",
+                                    JSONParser::extractInt(pinConfig, "midiChannel", channel));
+                                    
+                                // Aussi mettre à jour le msg_type principal pour le X
+                                config->msg_type = joyConfig->xMsgType;
+                                
+                                Serial.printf("[ConfigLoader] Joystick MIDI: X=%d(ch%d,p%d) Y=%d(ch%d,p%d)\n",
+                                    (int)joyConfig->xMsgType, joyConfig->xMidiChannel, joyConfig->xMidiParam,
+                                    (int)joyConfig->yMsgType, joyConfig->yMidiChannel, joyConfig->yMidiParam);
+                            }
+                            break;
+                        }
+                        default:
+                            // Pas de config spécifique pour ce type
+                            break;
                     }
                     
                     // Lire midiCcRangeMin et midiCcRangeMax (plage MIDI)
@@ -402,11 +513,7 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                         }
                     }
                     
-                    // Lire filter_intensity (1-10, défaut: 5)
-                    uint8_t filter_intensity = JSONParser::extractInt(pinConfig, "filterIntensity", 5);
-                    if (filter_intensity < 1) filter_intensity = 1;
-                    if (filter_intensity > 10) filter_intensity = 10;
-                    config->filter_intensity = filter_intensity;
+                    // Note: filter_intensity est maintenant chargé dans les configs spécifiques ci-dessus
                     
                     // Reconfigurer le GPIO après avoir chargé tous les champs (notamment btnPullMode pour les boutons)
                     ComponentInitializer::setupGpio(gpio, type, config);

@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include "../../components/ComponentTypes.h"
+#include "../../components/basic/PotentiometerDef.h"  // Pour PotentiometerConfig
 #include "../MidiSender.h"
 #include "../MidiMessageType.h"
 
@@ -85,13 +86,18 @@ public:
         // raw_value est maintenant la valeur brute filtrée (pas normalisée) depuis le processeur
         // Appliquer le mapping potMin/potMax DIRECTEMENT vers 0-16383 (14 bits)
         // Cela garantit que les seuils correspondent exactement aux valeurs min/max du pitchbend
-        uint16_t analog_min = config.potMin;
-        uint16_t analog_max = config.potMax;
+        uint16_t analog_min = 0;
+        uint16_t analog_max = 4095;
         
-        // Si les seuils ne sont pas configurés (0,0), utiliser les valeurs par défaut
-        if (analog_min == 0 && analog_max == 0) {
-            analog_min = 0;
-            analog_max = 4095;
+        // Lire les seuils depuis la config spécifique du potentiomètre si disponible
+        if (config.type == ComponentType::POTENTIOMETER && config.specificConfig.potentiometer) {
+            analog_min = config.specificConfig.potentiometer->potMin;
+            analog_max = config.specificConfig.potentiometer->potMax;
+            // Si les seuils ne sont pas configurés (0,0), utiliser les valeurs par défaut
+            if (analog_min == 0 && analog_max == 0) {
+                analog_min = 0;
+                analog_max = 4095;
+            }
         }
         
         uint16_t bend14bit;

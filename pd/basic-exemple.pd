@@ -13,10 +13,10 @@
 #X floatatom 466 282 5 0 0 0 - - - 0;
 #X floatatom 510 281 5 0 0 0 - - - 0;
 #X floatatom 423 281 5 0 0 0 - - - 0;
-#X text 475 55 RTP-MIDI:;
-#X text 477 73 windows: https://www.tobias-erichsen.de/software/rtpmidi.html;
-#X text 478 105 macos: https://support.apple.com/fr-ca/guide/audio-midi-setup/ams1012/mac;
-#X text 478 153 linux: https://github.com/davidmoreno/rtpmidid;
+#X text 505 23 RTP-MIDI:;
+#X text 507 41 windows: https://www.tobias-erichsen.de/software/rtpmidi.html;
+#X text 508 73 macos: https://support.apple.com/fr-ca/guide/audio-midi-setup/ams1012/mac;
+#X text 508 121 linux: https://github.com/davidmoreno/rtpmidid;
 #X text 43 58 nidmi send and receive OSC and midi paquets through RTP or USB (esp32S3);
 #X text 415 494 patko2025;
 #X floatatom 724 221 5 0 0 0 - - - 0;
@@ -62,7 +62,14 @@
 #X floatatom 821 340 5 0 0 0 - - - 0;
 #X floatatom 871 340 5 0 0 0 - - - 0;
 #X text 205 105 receive OSC via UDP \, binary at port 8000, f 20;
+#X obj 536 233 print;
+#X obj 374 137 route x y;
+#X floatatom 410 165 5 0 0 0 - - - 0;
+#X floatatom 394 188 5 0 0 0 - - - 0;
+#X obj 374 113 route joystick0;
+#X obj 371 87 list trim;
 #X connect 0 0 3 0;
+#X connect 0 0 68 0;
 #X connect 0 1 2 0;
 #X connect 2 0 3 1;
 #X connect 3 0 1 0;
@@ -104,3 +111,7 @@
 #X connect 58 0 59 0;
 #X connect 58 1 60 0;
 #X connect 58 2 61 0;
+#X connect 64 0 66 0;
+#X connect 64 1 65 0;
+#X connect 67 0 64 0;
+#X connect 68 0 67 0;
