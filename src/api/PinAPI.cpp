@@ -506,12 +506,30 @@ void setupPinAPI(AsyncWebServer& server) {
             return;
         }
         
+<<<<<<< HEAD
         Serial.printf("[PinAPI] Sauvegarde %s (%s) %u octets\n", pinLabel.c_str(), role.c_str(), (unsigned)json.length());
 
+=======
+        Serial.printf("[PinAPI] JSON sauvegardé pour %s: %s\n", pinLabel.c_str(), json.c_str());
+        
+        /* Sauvegarder en NVS */
+>>>>>>> 0bd1620 (adding touch for s3)
         Preferences preferences;
         preferences.begin("nidmi", false);
         String key = "pin_" + pinLabel;
         size_t written = preferences.putString(key.c_str(), json);
+<<<<<<< HEAD
+=======
+        if(written == 0) {
+            Serial.printf("[PinAPI] ERREUR: putString a échoué pour %s (json len=%d)\n", key.c_str(), json.length());
+        } else {
+            /* Vérifier en relisant */
+            String verify = preferences.getString(key.c_str(), "");
+            Serial.printf("[PinAPI] NVS vérifié pour %s: %s (len=%d)\n", key.c_str(), 
+                verify.length() > 0 ? "OK" : "VIDE", verify.length());
+        }
+        
+>>>>>>> 0bd1620 (adding touch for s3)
         preferences.end();
 
         if(written == 0) {
@@ -686,12 +704,19 @@ void setupPinAPI(AsyncWebServer& server) {
         }
         String pinLabel = String(pinLabelBuf);
         String key = String("pin_") + pinLabel;
+<<<<<<< HEAD
 
         Preferences preferences;
         preferences.begin("nidmi", false);
         preferences.putString(key.c_str(), buf);
         preferences.end();
 
+=======
+        Preferences preferences;
+        preferences.begin("nidmi", false);
+        preferences.putString(key.c_str(), buf); /* Écrire directement depuis le buffer, pas de String(json) */
+        preferences.end();
+>>>>>>> 0bd1620 (adding touch for s3)
         g_configCache.setConfigClean(pinLabel, buf, total);
         nidmi_requestReloadPins();
         Serial.printf("[PinAPI] JSON body %s role=%s len=%u\n", pinLabelBuf, roleBuf, (unsigned)total);

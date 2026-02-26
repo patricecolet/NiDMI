@@ -87,7 +87,11 @@ void nidmi_begin() {
     
     // Charger l'état des interfaces MIDI depuis NVS
     // bool usbMidiEnabled = preferences.getBool("usbmidi_enabled", true); // Par défaut true
+<<<<<<< HEAD
      bool usbMidiEnabled = true; // Par défaut true
+=======
+     bool usbMidiEnabled = false; // Par défaut true
+>>>>>>> 0bd1620 (adding touch for s3)
     
     preferences.end();
     

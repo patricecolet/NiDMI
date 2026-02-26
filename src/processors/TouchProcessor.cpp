@@ -25,6 +25,7 @@
 // Macro pour activer/désactiver les logs de debug
 // 1 = debug détaillé (spam), 0 = silencieux sauf WARN/ERROR
 #define DEBUG_TOUCH 0
+<<<<<<< HEAD
 #define DEBUG_TOUCH_RAW 1 
 
 #if DEBUG_TOUCH_RAW
@@ -33,6 +34,9 @@
   #define TOUCH_RAW_LOG(...)
 #endif
 
+=======
+
+>>>>>>> 0bd1620 (adding touch for s3)
 #if DEBUG_TOUCH
     #define TOUCH_LOG(...) Serial.printf(__VA_ARGS__)
     #define TOUCH_LOG_ONCE(...) do { static bool _logged = false; if (!_logged) { Serial.printf(__VA_ARGS__); _logged = true; } } while(0)
@@ -49,14 +53,19 @@
 
 // ===== FONCTIONS UTILITAIRES STATIQUES =====
 
+<<<<<<< HEAD
 // Lecture tactile avec limitation de fréquence par GPIO (domaine brut 32 bits).
 // Un cache par GPIO évite de spammer touchRead() trop souvent,
 // ce qui peut bloquer la FSM touch de l'ESP32-S3.
+=======
+// Lecture tactile avec échantillonnage pour stabilité (domaine brut 32 bits)
+>>>>>>> 0bd1620 (adding touch for s3)
 static uint32_t readTouchValue(uint8_t gpio) {
 #if !TOUCH_AVAILABLE
     (void)gpio;
     return 0;
 #else
+<<<<<<< HEAD
     static uint32_t last_value[49]   = {0};
     static uint32_t last_read_ms[49] = {0};
     static uint32_t last_log_ms[49]  = {0};
@@ -65,6 +74,34 @@ static uint32_t readTouchValue(uint8_t gpio) {
     uint32_t now = millis();
     if (last_read_ms[gpio] != 0 && (now - last_read_ms[gpio] < MIN_INTERVAL_MS)) {
         return last_value[gpio];
+=======
+    const int samples = 5;
+    uint32_t sum = 0;
+    static uint32_t last_raw_reads[49][5] = {0};
+    static uint8_t sample_idx[49] = {0};
+
+    for (int i = 0; i < samples; i++) {
+        uint32_t raw = touchRead(gpio);
+        sum += raw;
+        last_raw_reads[gpio][sample_idx[gpio]] = raw;
+        sample_idx[gpio] = (sample_idx[gpio] + 1) % 5;
+        delayMicroseconds(200);
+    }
+    uint32_t avg = sum / samples;
+
+    // Log détaillé des échantillons (toutes les 2 secondes)
+    static unsigned long last_sample_log[49] = {0};
+    if (millis() - last_sample_log[gpio] > 2000) {
+        TOUCH_LOG("[TouchProcessor] GPIO%d: Échantillons [%lu,%lu,%lu,%lu,%lu] → avg=%lu\n",
+                 gpio,
+                 (unsigned long)last_raw_reads[gpio][0],
+                 (unsigned long)last_raw_reads[gpio][1],
+                 (unsigned long)last_raw_reads[gpio][2],
+                 (unsigned long)last_raw_reads[gpio][3],
+                 (unsigned long)last_raw_reads[gpio][4],
+                 (unsigned long)avg);
+        last_sample_log[gpio] = millis();
+>>>>>>> 0bd1620 (adding touch for s3)
     }
 
     uint32_t raw = touchRead(gpio);
@@ -81,7 +118,11 @@ static uint32_t readTouchValue(uint8_t gpio) {
 #endif
 }
 
+<<<<<<< HEAD
 // État global pour la baseline et le lissage des GPIO tactiles
+=======
+// État global pour la baseline des GPIO tactiles
+>>>>>>> 0bd1620 (adding touch for s3)
 namespace {
     static uint32_t baseline_value[49]         = {0};
     static uint32_t baseline_sum[49]           = {0};
@@ -93,9 +134,12 @@ namespace {
     static uint32_t baseline_wait_last_log[49] = {0};
     static const uint32_t BASELINE_STABILIZATION_TIME_MS = 2000; // Délai pour stabilisation du signal
 
+<<<<<<< HEAD
     // Lissage flottant pour chaque GPIO (même EMA que AnalogFilter, en pleine résolution)
     static float smoothed_touch_f[49]          = {0.0f};
 
+=======
+>>>>>>> 0bd1620 (adding touch for s3)
     void resetBaselineInternal(uint8_t idx) {
         if (idx >= 49) return;
         baseline_value[idx]         = 0;
@@ -106,6 +150,7 @@ namespace {
         baseline_max[idx]           = 0;
         baseline_start_time[idx]    = 0;
         baseline_wait_last_log[idx] = 0;
+<<<<<<< HEAD
         smoothed_touch_f[idx]       = 0.0f;
     }
 }
@@ -113,6 +158,13 @@ namespace {
 // Établir la baseline pour un GPIO.
 // touch_value_in est la valeur déjà lue par l'appelant (évite un 2e appel à touchRead).
 static bool establishBaseline(uint8_t gpio, uint32_t touch_value_in, uint32_t& baseline) {
+=======
+    }
+}
+
+// Établir la baseline pour un GPIO
+static bool establishBaseline(uint8_t gpio, uint32_t& baseline) {
+>>>>>>> 0bd1620 (adding touch for s3)
     if (gpio > 48) {
         return false;
     }
@@ -132,6 +184,10 @@ static bool establishBaseline(uint8_t gpio, uint32_t touch_value_in, uint32_t& b
 
     uint32_t elapsed = millis() - baseline_start_time[idx];
     if (elapsed < BASELINE_STABILIZATION_TIME_MS) {
+<<<<<<< HEAD
+=======
+        // On attend que le signal se stabilise avant de commencer à accumuler la baseline
+>>>>>>> 0bd1620 (adding touch for s3)
         if (millis() - baseline_wait_last_log[idx] > 500) {
             TOUCH_INFO("[TouchProcessor] GPIO%d: Attente stabilisation pour baseline (%lums/%lums)\n",
                        gpio,
@@ -142,7 +198,11 @@ static bool establishBaseline(uint8_t gpio, uint32_t touch_value_in, uint32_t& b
         return false;
     }
     
+<<<<<<< HEAD
     uint32_t touch_value = touch_value_in;
+=======
+    uint32_t touch_value = readTouchValue(gpio);
+>>>>>>> 0bd1620 (adding touch for s3)
     baseline_sum[idx] += touch_value;
     baseline_count[idx]++;
     
@@ -201,6 +261,7 @@ void TouchProcessor::resetAllBaselines() {
 #endif
 }
 
+<<<<<<< HEAD
 // Parser customField2 Touch : "aft" ou "aft,onRaw,offRaw" (ex. "20000" ou "20000,2000,500")
 static void parseTouchCustomField2(const char* s, uint32_t& aft, uint32_t& on_raw, uint32_t& off_raw) {
     aft = 20000;
@@ -217,6 +278,9 @@ static void parseTouchCustomField2(const char* s, uint32_t& aft, uint32_t& on_ra
 }
 
 // Calculer les seuils depuis la configuration (customField2 = "aft,onRaw,offRaw")
+=======
+// Calculer les seuils depuis la configuration
+>>>>>>> 0bd1620 (adding touch for s3)
 static void calculateThresholds(
     const ComponentConfig& config,
     uint32_t baseline,
@@ -233,7 +297,13 @@ static void calculateThresholds(
     if (on_raw > 0) {
         note_on_threshold = baseline + on_raw;
     } else {
+<<<<<<< HEAD
         note_on_threshold = (baseline * 102) / 100 + (baseline * 2) / 100;  // auto 102%+2%
+=======
+        touch_threshold = (baseline * 102) / 100;
+        TOUCH_LOG("[TouchProcessor] GPIO%d: touch_threshold=%d (80%% baseline=%d)\n", 
+                 config.gpio, touch_threshold, baseline);
+>>>>>>> 0bd1620 (adding touch for s3)
     }
     if (off_raw > 0) {
         note_off_threshold = baseline + off_raw;
@@ -255,7 +325,10 @@ static void processNoteVelocity(
     const ComponentConfig& config,
     ComponentState& state,
     uint32_t touch_value,
+<<<<<<< HEAD
     uint32_t touch_smoothed,
+=======
+>>>>>>> 0bd1620 (adding touch for s3)
     uint32_t baseline,
     uint32_t note_on_threshold,
     uint32_t note_off_threshold,
@@ -264,6 +337,7 @@ static void processNoteVelocity(
     MidiSender* midi_sender,
     OSCQueue& osc_queue
 ) {
+<<<<<<< HEAD
     bool note_is_on = (state.last_note != 255);
     bool is_touched = note_is_on
         ? (touch_value > note_off_threshold)   // Note déjà ON → rester ON tant qu'au-dessus du seuil bas
@@ -283,6 +357,23 @@ static void processNoteVelocity(
             velocity = 1;
         } else if (touch_value >= touch_max_value) {
             velocity = 127;
+=======
+    // Hystérésis / anti-rebond : 2% de la baseline
+    // -> seuil de déclenchement (ON) plus haut que le seuil de relâchement (OFF)
+    uint32_t hysteresis_margin = (baseline * 2) / 100;
+    uint32_t note_off_threshold = velocity_threshold;                // seuil bas (relâchement)
+    uint32_t note_on_threshold  = velocity_threshold + hysteresis_margin; // seuil haut (déclenchement)
+        
+    bool note_is_on = (state.last_note != 255);
+    bool is_touched = note_is_on
+        ? (touch_value > note_off_threshold)   // Note déjà ON → rester ON tant qu'on est au-dessus du seuil bas
+        : (touch_value > note_on_threshold);   // Note OFF → déclencher uniquement au-dessus du seuil haut
+    
+    // Calculer touch_min_value pour le mapping
+        uint32_t touch_min_value;
+        if (config.customInt2 > 0) {
+        touch_min_value = config.customInt2;
+>>>>>>> 0bd1620 (adding touch for s3)
         } else {
             velocity = map(touch_value, touch_min_value, touch_max_value, 1, 127);
             if (velocity < 1) velocity = 1;
@@ -598,6 +689,7 @@ void TouchProcessor::process(
     }
     filter.setAlphaFromIntensity(intensity);
     
+<<<<<<< HEAD
     // Lissage flottant (même EMA que AnalogFilter) en pleine résolution 32 bits
     uint8_t gpio_idx = config.gpio;
     float a = filter.alpha; // alpha déjà configuré par setAlphaFromIntensity
@@ -610,6 +702,19 @@ void TouchProcessor::process(
     
     TOUCH_LOG("[TouchProcessor] GPIO%d: raw=%lu, smoothed=%lu, alpha=%.3f\n",
              config.gpio, (unsigned long)touch_raw, (unsigned long)touch_smoothed, a);
+=======
+    // Conversion 32 -> 16 bits pour le filtre (échelle simplifiée)
+    // Ici on divise par 2 pour garder l'ordre de grandeur sans saturer trop tôt
+    uint16_t touch_for_filter = (touch_raw > 131070U)
+        ? 65535U
+        : (uint16_t)(touch_raw / 2U);
+    
+    // Filtrage
+    uint16_t filtered_value = filter.process(touch_for_filter);
+    
+    TOUCH_LOG("[TouchProcessor] GPIO%d: raw=%lu, filtered=%u, filter_intensity=%d\n",
+             config.gpio, (unsigned long)touch_raw, filtered_value, intensity);
+>>>>>>> 0bd1620 (adding touch for s3)
     
     // Établir baseline (on passe touch_raw pour éviter une 2e lecture)
     uint32_t baseline;
@@ -631,11 +736,19 @@ void TouchProcessor::process(
     // Log périodique des valeurs et seuils
     static unsigned long last_debug = 0;
     if (millis() - last_debug > 1000) {
+<<<<<<< HEAD
         TOUCH_LOG("[TouchProcessor] GPIO%d: raw=%lu, smoothed=%lu, baseline=%lu, "
                  "thresh=%lu, vel_thresh=%lu\n",
                  config.gpio,
                  (unsigned long)touch_raw,
                  (unsigned long)touch_smoothed,
+=======
+        TOUCH_LOG("[TouchProcessor] GPIO%d: raw=%lu, filtered=%u, baseline=%lu, "
+                 "touch_threshold=%lu, velocity_threshold=%lu\n",
+                 config.gpio,
+                 (unsigned long)touch_raw,
+                 filtered_value,
+>>>>>>> 0bd1620 (adding touch for s3)
                  (unsigned long)baseline,
                  (unsigned long)touch_threshold,
                  (unsigned long)velocity_threshold);
@@ -646,9 +759,14 @@ void TouchProcessor::process(
     TOUCH_LOG_ONCE("[TouchProcessor] GPIO%d: Type message MIDI = %d\n", config.gpio, (int)config.msg_type);
     
     if (config.msg_type == MidiMessageType::NOTE_VELOCITY) {
+<<<<<<< HEAD
         processNoteVelocity(config, state, touch_raw, touch_smoothed, baseline,
                           note_on_threshold, note_off_threshold, velocity_threshold, aftertouch_range,
                           midi_sender, osc_queue);
+=======
+        processNoteVelocity(config, state, touch_raw, baseline, velocity_threshold, 
+                          aftertouch_threshold, midi_sender, osc_queue);
+>>>>>>> 0bd1620 (adding touch for s3)
     } else if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
         processNoteSweep(config, state, touch_raw, touch_threshold, baseline, midi_sender, osc_queue);
     } else {
