@@ -206,6 +206,7 @@ struct ComponentDefinition {
     const char* familyName;      // Nom de la famille pour l'UI (ex: "Basic", "Multiplexeur")
     ComponentType type;          // Type enum correspondant
     PinType pinType;             // Type de pin principale
+    int8_t altPinType;           // Type de pin alternatif (-1 = aucun, sinon PinType)
     bool implemented;            // true = disponible, false = grisé dans l'UI
     // Note: isComplex supprimé - utiliser additionalPinCount > 0 pour détecter un composant avec pins additionnelles
     bool supportsMidi;           // true = peut envoyer/recevoir MIDI
@@ -232,7 +233,7 @@ struct ComponentDefinition {
     ComponentDefinition() : 
         id(nullptr), displayName(nullptr), icon(nullptr), cardId(nullptr),
         family(ComponentFamily::BASIC), familyName(nullptr),
-        type(ComponentType::POTENTIOMETER), pinType(PinType::PIN_DIGITAL),
+        type(ComponentType::POTENTIOMETER), pinType(PinType::PIN_DIGITAL), altPinType(-1),
         implemented(false), supportsMidi(false), supportsOsc(false),
         statusTextTemplate(nullptr), statusValueMappings(nullptr),
         formFieldCount(0), formFields(nullptr), formFieldsCapacity(0),
@@ -343,8 +344,11 @@ struct ComponentDefinition {
         W("\",\"cardId\":\"");   WS(cardId ? cardId : "");
         W("\",\"family\":%d,\"familyName\":\"", static_cast<int>(family));
         WS(familyName ? familyName : "");
-        W("\",\"pinType\":%d,\"implemented\":%s,\"supportsMidi\":%s,\"supportsOsc\":%s,\"additionalPinCount\":%d",
-            static_cast<int>(pinType),
+        W("\",\"pinType\":%d", static_cast<int>(pinType));
+        if (altPinType >= 0) {
+            W(",\"altPinType\":%d", (int)altPinType);
+        }
+        W(",\"implemented\":%s,\"supportsMidi\":%s,\"supportsOsc\":%s,\"additionalPinCount\":%d",
             implemented ? "true" : "false",
             supportsMidi ? "true" : "false",
             supportsOsc ? "true" : "false",

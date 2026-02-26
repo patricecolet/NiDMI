@@ -21,6 +21,8 @@
 #include "VelostatProcessor.h"
 #include "UltrasonicProcessor.h"
 #include "TouchProcessor.h"
+#include "ImuProcessor.h"
+#include "Mpr121Processor.h"
 
 // Pour ajouter un nouveau processeur :
 // #include "MyComponentProcessor.h"

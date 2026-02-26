@@ -24,9 +24,10 @@ enum class ComponentType : uint8_t {
     TOUCH         = 6,
     ACTUATOR      = 7,  // Actuateurs de sortie (relais, buzzers, solénoïdes, etc.)
     BARGRAPH      = 8,  // Bargraph LED (10 segments) - réutilise LedProcessor pour l'instant
-    JOYSTICK      = 9   // Joystick 2 axes analogiques
+    JOYSTICK      = 9,  // Joystick 2 axes analogiques
+    IMU           = 10, // IMU (accéléromètre, gyroscope, etc.)
+    MPR121        = 11  // Touch capacitif 12 canaux (Grove, I2C)
     // Facilement extensible pour de nouveaux types
-    // Exemple: ENCODER = 10, FADER = 11, etc.
 };
 
 // Types de pins supportés par un composant
@@ -34,7 +35,9 @@ enum class PinType : uint8_t {
     PIN_ANALOG = 0,          // Pin analogique uniquement (ADC)
     PIN_DIGITAL = 1,         // Pin digitale uniquement
     PIN_ANALOG_OR_DIGITAL = 2, // Les deux sont acceptés
-    PIN_PWM = 3              // Pin avec capacité PWM
+    PIN_PWM = 3,             // Pin avec capacité PWM
+    PIN_I2C = 4,             // Bus I2C (SDA/SCL)
+    PIN_SPI = 5              // Bus SPI (MOSI/MISO/SCK)
 };
 
 // Forward declarations des configurations spécifiques
@@ -45,6 +48,8 @@ namespace Components {
     struct PotentiometerConfig;
     struct VelostatConfig;
     struct JoystickConfig;
+    struct ImuConfig;
+    struct Mpr121Config;
 }
 
 // Configuration optimisée d'un composant
@@ -73,6 +78,8 @@ struct ComponentConfig {
         Components::PotentiometerConfig* potentiometer;
         Components::VelostatConfig* velostat;
         Components::JoystickConfig* joystick;
+        Components::ImuConfig* imu;
+        Components::Mpr121Config* mpr121;
         void* specific;  // Pointeur générique pour accès type-agnostique
     } specificConfig;
     

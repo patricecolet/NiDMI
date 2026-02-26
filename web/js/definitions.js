@@ -220,17 +220,30 @@ const ComponentDefinitions = {
       /* Filtrer par implémenté si demandé */
       if(implementedOnly && !def.implemented) return false;
 
-      /* Vérifier la compatibilité du type de pin */
-      switch(pinType) {
-        case 0: /* PIN_ANALOG */
-          return def.pinType === 0 || def.pinType === 2; /* ANALOG ou ANALOG_OR_DIGITAL */
-        case 1: /* PIN_DIGITAL */
-          return def.pinType === 1 || def.pinType === 2; /* DIGITAL ou ANALOG_OR_DIGITAL */
-        case 3: /* PIN_PWM */
-          return def.pinType === 3; /* PWM uniquement */
-        default:
-          return false;
+      /* Vérifier la compatibilité du type de pin (primaire ou alternatif) */
+      const matchesPrimary = (() => {
+        switch(pinType) {
+          case 0: /* PIN_ANALOG */
+            return def.pinType === 0 || def.pinType === 2;
+          case 1: /* PIN_DIGITAL */
+            return def.pinType === 1 || def.pinType === 2;
+          case 3: /* PIN_PWM */
+            return def.pinType === 3;
+          case 4: /* PIN_I2C */
+            return def.pinType === 4;
+          case 5: /* PIN_SPI */
+            return def.pinType === 5;
+          default:
+            return false;
+        }
+      })();
+      if(matchesPrimary) return true;
+      if(def.altPinType !== undefined && def.altPinType !== null && def.altPinType >= 0) {
+        return def.altPinType === pinType;
       }
+      /* Fallback: composants I2C connus pour supporter aussi SPI (ex. LIS3DH) si le backend n'envoie pas altPinType */
+      if(pinType === 5 && def.pinType === 4 && def.id === 'lis3dh') return true;
+      return false;
     });
     
     console.log(`[ComponentDefinitions.getForPinType] pinType=${pinType}, implementedOnly=${implementedOnly}, trouvé ${filtered.length} composants`);

@@ -22,9 +22,9 @@ function pType(lbl) {
     if (caps.bus.spi && (gpio === caps.bus.spi.mosi || gpio === caps.bus.spi.miso || gpio === caps.bus.spi.sck)) return 'spi';
     return 'digital';
   }
-  if (lbl === 'SDA' || lbl === 'SCL') return 'i2c';
+  if (lbl === 'SDA' || lbl === 'SCL' || lbl === 'I2C') return 'i2c';
   if (lbl === 'TX' || lbl === 'RX') return 'uart';
-  if (lbl === 'MOSI' || lbl === 'MISO' || lbl === 'SCK') return 'spi';
+  if (lbl === 'MOSI' || lbl === 'MISO' || lbl === 'SCK' || lbl === 'SPI') return 'spi';
   return 'digital';
 }
 

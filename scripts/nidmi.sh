@@ -23,6 +23,9 @@ DEFAULT_SKETCH="nidmi_basic"
 NVS_RESET_SKETCH="nidmi_clear_nvs"
 CLEAR_NVS=false
 
+# Port série (optionnel, peut être forcé via --port)
+SERIAL_PORT=""
+
 # Langue par défaut (français)
 LANG_CODE="fr"
 
@@ -35,7 +38,7 @@ PAGINATION_MODE=true
 LARGE_APP=false
 NO_LARGE_APP=false
 
-# Parser les arguments pour --lang, --board, --light, --pagination, --no-pagination, --large-app, --no-large-app
+# Parser les arguments pour --lang, --board, --light, --pagination, --no-pagination, --large-app, --no-large-app, --port
 ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -70,6 +73,10 @@ while [[ $# -gt 0 ]]; do
         --no-large-app)
             NO_LARGE_APP=true
             shift
+            ;;
+        --port)
+            SERIAL_PORT="$2"
+            shift 2
             ;;
         *)
             ARGS+=("$1")
@@ -151,6 +158,7 @@ show_help() {
     echo "  --light          - Mode LIGHT: définitions simplifiées (réduit la taille JSON)"
     echo "  --pagination     - Activer la pagination (défaut: activée)"
     echo "  --no-pagination  - Désactiver la pagination (à utiliser seulement avec --large-app sur C3)"
+    echo "  --port PORT      - Forcer le port série (ex: /dev/cu.usbmodem101)"
     echo ""
     echo "  Pagination : activée par défaut (C3 et S3). Évite la troncature du JSON des définitions."
     echo "  Partition C3 : --large-app est activé par défaut pour C3 (partition ~4 Mo). Utiliser --no-large-app pour désactiver."
@@ -606,8 +614,13 @@ build_binary() {
 monitor_serial() {
     echo "📺 Ouverture du moniteur série..."
     
-    # Trouver le port série
-    PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
+    # Utiliser le port forcé si fourni, sinon auto-détection
+    if [ -n "$SERIAL_PORT" ]; then
+        PORT="$SERIAL_PORT"
+    else
+        # Trouver le port série
+        PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
+    fi
     if [ -z "$PORT" ]; then
         echo "   ❌ Aucun port série trouvé"
         echo "   📝 Ports disponibles:"
@@ -650,8 +663,12 @@ upload_sketch() {
     echo "📤 Upload vers l'ESP32..."
     
     if command -v arduino-cli &> /dev/null; then
-        # Trouver le port série (plusieurs patterns possibles)
-        PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
+        # Utiliser le port forcé si fourni, sinon auto-détection (plusieurs patterns possibles)
+        if [ -n "$SERIAL_PORT" ]; then
+            PORT="$SERIAL_PORT"
+        else
+            PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
+        fi
         if [ -z "$PORT" ]; then
             echo "   ❌ Aucun port série trouvé"
             echo "   📝 Ports disponibles:"

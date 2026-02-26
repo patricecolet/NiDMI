@@ -65,6 +65,11 @@ public:
         def.pinType = pinType;
         return *this;
     }
+
+    ComponentBuilder& setAltPinType(PinType alt) {
+        def.altPinType = static_cast<int8_t>(alt);
+        return *this;
+    }
     
     /**
      * @brief Définit les capacités (MIDI, OSC)
@@ -287,6 +292,7 @@ public:
                 result.midiMessages[i].id = def.midiMessages[i].id;
                 result.midiMessages[i].displayName = def.midiMessages[i].displayName;
                 result.midiMessages[i].statusTemplate = def.midiMessages[i].statusTemplate;
+                result.midiMessages[i].axis = def.midiMessages[i].axis;
                 result.midiMessages[i].paramCount = def.midiMessages[i].paramCount;
                 result.midiMessages[i].paramsCapacity = def.midiMessages[i].paramCount;
                 if (def.midiMessages[i].paramCount > 0 && def.midiMessages[i].params) {

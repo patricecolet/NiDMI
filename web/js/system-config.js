@@ -1,8 +1,9 @@
 /**
  * Configuration des paramètres système
  */
-
+ 
 let isS3 = false;  /* Détecté depuis caps.board */
+let touchEnabled = false; /* État courant du support touch */
 
 /* Vérifier si c'est un ESP32-S3 */
 async function checkBoardType() {
@@ -38,8 +39,15 @@ async function loadSystemConfig() {
     }
     const d = await r.json();
     const checkbox = $('#touchEnabled');
+    touchEnabled = d.touchEnabled === true;
     if (checkbox) {
-      checkbox.checked = d.touchEnabled === true;
+      checkbox.checked = touchEnabled;
+    }
+
+    // Mettre à jour la visibilité du bouton de calibration touch
+    const calContainer = $('#touchCalibrateContainer');
+    if (calContainer) {
+      calContainer.style.display = (isS3 && touchEnabled) ? 'block' : 'none';
     }
   } catch (e) {
     console.error('[loadSystemConfig] Erreur:', e);
@@ -52,19 +60,24 @@ async function saveSystemConfig() {
   const checkbox = $('#touchEnabled');
   if (!checkbox) return;
   
-  const touchEnabled = checkbox.checked;
+  const touchEnabledValue = checkbox.checked;
   
   try {
     const r = await fetch('/api/system/set', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `touchEnabled=${touchEnabled ? 'true' : 'false'}`
+      body: `touchEnabled=${touchEnabledValue ? 'true' : 'false'}`
     });
     
     const d = await r.json();
     const msgEl = $('#systemMsg');
     if (msgEl) {
       if (d.status === 'ok') {
+        touchEnabled = touchEnabledValue;
+        const calContainer = $('#touchCalibrateContainer');
+        if (calContainer) {
+          calContainer.style.display = (isS3 && touchEnabled) ? 'block' : 'none';
+        }
         msgEl.textContent = 'Configuration enregistrée, rechargement des composants...';
         msgEl.style.color = '#10b981';
         /* Recharger les pins après un court délai */
@@ -135,6 +148,30 @@ function initSystemConfig() {
     systemForm.addEventListener('submit', (e) => {
       e.preventDefault();
       saveSystemConfig();
+    });
+  }
+
+  /* Bouton global "Calibrer touch" (pins panel, seulement S3 + touch activé) */
+  const touchCalBtn = $('#touchCalibrateBtn');
+  if (touchCalBtn) {
+    touchCalBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const msgEl = $('#touchCalibrateMsg');
+
+      if (typeof websocket === 'undefined' || !websocket || websocket.readyState !== WebSocket.OPEN) {
+        if (msgEl) {
+          msgEl.textContent = 'WebSocket non connecté';
+          msgEl.style.color = '#ef4444';
+        }
+        return;
+      }
+
+      if (msgEl) {
+        msgEl.textContent = 'Calibration touch en cours...';
+        msgEl.style.color = '#6b7280';
+      }
+
+      websocket.send('TOUCH_CALIBRATE_ALL');
     });
   }
   

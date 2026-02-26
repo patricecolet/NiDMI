@@ -28,6 +28,21 @@ function updateBusVisuals() {
   Object.keys(pcfg).forEach(lbl => {
     const cfg = pcfg[lbl];
     if (!cfg) return;
+
+    /* Gérer les entrées de bus (I2C, SPI) qui n'ont pas de pin dans caps.pins */
+    const bus = caps.bus || {};
+    if (lbl === 'I2C' && bus.i2c) {
+      if (bus.i2c.sda !== undefined) usedGpios.add(Number(bus.i2c.sda));
+      if (bus.i2c.scl !== undefined) usedGpios.add(Number(bus.i2c.scl));
+      return;
+    }
+    if (lbl === 'SPI' && bus.spi) {
+      if (bus.spi.mosi !== undefined) usedGpios.add(Number(bus.spi.mosi));
+      if (bus.spi.miso !== undefined) usedGpios.add(Number(bus.spi.miso));
+      if (bus.spi.sck !== undefined) usedGpios.add(Number(bus.spi.sck));
+      return;
+    }
+
     const pin = caps.pins.find(p => p && p.label === lbl);
     if (!pin || pin.gpio === undefined) return;
 
@@ -141,12 +156,16 @@ function drawBoard() {
         if (window._selRect) window._selRect.classList.remove('selectedSquare');
         window._selRect = r;
         r.classList.add('selectedSquare');
-        cur = label;
-        $('#selPin').textContent = label;
+
+        /* Remapper les pins de bus vers leur clé pcfg */
+        let effectiveLabel = label;
+        if (['SDA','SCL'].includes(label)) effectiveLabel = 'I2C';
+        else if (['MOSI','MISO','SCK'].includes(label)) effectiveLabel = 'SPI';
+
+        cur = effectiveLabel;
+        $('#selPin').textContent = effectiveLabel;
         handlePinClick(label);
-        updFunc(label);
-        /* SIMPLIFICATION : Appliquer la config si elle existe, peu importe le type */
-        /* (updFunc() gère déjà les bus et affiche un message) */
+        updFunc(effectiveLabel);
         if (pcfg[cur]) {
           applyCfg(pcfg[cur]);
         }

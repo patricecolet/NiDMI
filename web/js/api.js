@@ -262,20 +262,23 @@ function getComponentsForPinType(pinType, implementedOnly = true) {
  }
  
  const filtered = componentDefinitions.filter(def => {
-  /* Filtrer par implémenté si demandé */
   if(implementedOnly && !def.implemented) return false;
-
-  /* Vérifier la compatibilité du type de pin */
-  switch(pinType) {
-   case 0: /* PIN_ANALOG */
-    return def.pinType === 0 || def.pinType === 2; /* ANALOG ou ANALOG_OR_DIGITAL */
-   case 1: /* PIN_DIGITAL */
-    return def.pinType === 1 || def.pinType === 2; /* DIGITAL ou ANALOG_OR_DIGITAL */
-   case 3: /* PIN_PWM */
-    return def.pinType === 3; /* PWM uniquement */
-   default:
-    return false;
+  const matchesPrimary = (() => {
+   switch(pinType) {
+    case 0: return def.pinType === 0 || def.pinType === 2;
+    case 1: return def.pinType === 1 || def.pinType === 2;
+    case 3: return def.pinType === 3;
+    case 4: return def.pinType === 4;
+    case 5: return def.pinType === 5;
+    default: return false;
+   }
+  })();
+  if(matchesPrimary) return true;
+  if(def.altPinType !== undefined && def.altPinType !== null && def.altPinType >= 0) {
+   return def.altPinType === pinType;
   }
+  if(pinType === 5 && def.pinType === 4 && def.id === 'lis3dh') return true;
+  return false;
  });
  
  console.log(`[getComponentsForPinType] pinType=${pinType}, implementedOnly=${implementedOnly}, trouvé ${filtered.length} composants:`, filtered.map(d => `${d.id} (pinType=${d.pinType}, family=${d.family})`));
@@ -395,6 +398,9 @@ async function loadConfiguredPins(){
   d.pins.forEach(pinData => {
    if(pinData && pinData.pinLabel && pinData.role) {
     pinData.role = typeof migrateRole === 'function' ? migrateRole(pinData.role) : pinData.role;
+    if(pinData.pinLabel === 'SPI' || pinData.pinLabel === 'I2C') {
+     console.log('[loadConfiguredPins] Config bus', pinData.pinLabel, ': role=' + pinData.role, 'csGpio=' + pinData.csGpio, 'range=' + pinData.range, 'dataRate=' + pinData.dataRate, 'filterIntensity=' + pinData.filterIntensity);
+    }
     pcfg[pinData.pinLabel] = pinData;
    }
   });
@@ -424,25 +430,52 @@ async function saveAll(){
  }
  
  /* Relire la configuration de la pin actuellement sélectionnée depuis le formulaire */
- /* Cela garantit que les modifications en cours sont sauvegardées */
  if(typeof cur !== 'undefined' && cur && typeof readCfg === 'function') {
-   const currentCfg = readCfg();
-   if(currentCfg && currentCfg.role) {
+   /* Passer le rôle depuis funcSelect pour éviter qu'il soit vide */
+   const funcRole = $('#funcSelect')?.value || '';
+   const currentCfg = readCfg(funcRole || null);
+   if(currentCfg && currentCfg.role && typeof isBusRole === 'function' && !isBusRole(currentCfg.role)) {
      pcfg[cur] = currentCfg;
-     console.log('[saveAll] Config de la pin courante relue depuis formulaire, cur:', cur, 'additionalPins:', currentCfg.additionalPins);
+     console.log('[saveAll] pcfg[' + cur + '] mis à jour avec role:', currentCfg.role);
+   } else if(!currentCfg || !currentCfg.role) {
+     console.warn('[saveAll] readCfg role vide pour', cur, '- funcSelect:', funcRole, 'currentCfg:', currentCfg);
    }
  }
  
  /* Sauvegarder tous les composants (simples et complexes) via /api/pins/set */
  const ps=Object.keys(pcfg).map(async lbl=>{
- const c=pcfg[lbl];
+ let c=pcfg[lbl];
  if(!c||!c.role) return null;
- 
- console.log('[saveAll] Traitement pin:', lbl, 'c:', c);
- console.log('[saveAll] c.additionalPins:', c.additionalPins);
- 
+ /* Pour la pin actuellement affichée, toujours reprendre le formulaire (évite valeurs périmées) */
+ if(typeof cur !== 'undefined' && lbl === cur && typeof readCfg === 'function') {
+  const freshRole = $('#funcSelect')?.value || '';
+  const fresh = readCfg(freshRole || null);
+  if(fresh && fresh.role && (typeof isBusRole !== 'function' || !isBusRole(fresh.role))) c = fresh;
+ }
+
  const role = migrateRole(c.role);
  const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
+
+ /* Composants I2C (LIS3DH, MPR121) : envoyer en JSON direct */
+ if(role === 'lis3dh' || role === 'mpr121') {
+  console.log('[saveAll]', role, 'config:', JSON.stringify(c).substring(0, 200));
+  const fullCfg = Object.assign({pinLabel: lbl, role: c.role}, c);
+  if(lbl === 'SPI') fullCfg.busInterface = '1';
+  else if(lbl === 'I2C') fullCfg.busInterface = '0';
+  delete fullCfg.additionalPins;
+  const jsonStr = JSON.stringify(fullCfg);
+  console.log('[saveAll]', role, 'JSON complet (' + jsonStr.length + ' chars)');
+  const resp = await fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/json'},body:jsonStr});
+  if (resp.status === 413) {
+    const d = await resp.json().catch(() => ({}));
+    throw new Error(d.message || 'Config trop grande pour NVS (max 1900 octets). Réduisez les options.');
+  }
+  console.log('[saveAll]', role, 'réponse:', resp.status);
+  return resp;
+ }
+
+ console.log('[saveAll] Traitement pin:', lbl, 'c:', c);
+ console.log('[saveAll] c.additionalPins:', c.additionalPins);
  
  /* Détecter composant complexe depuis la définition (plus fiable que vérifier sig) */
  const hasAdditionalPins = def && def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0 
@@ -505,15 +538,23 @@ async function saveAll(){
      p.set(key, c[key] || (key.endsWith('Min') ? '0' : key.endsWith('Max') ? '127' : ''));
    }
   }
-  /* Paramètres MIDI par axe (X_midiCc, Y_midiCc, X_midiChannel, Y_midiChannel, etc.) */
-  else if((key.startsWith('X_') || key.startsWith('Y_')) && c[key] !== undefined && c[key] !== null && c[key] !== '') {
-   p.set(key, c[key]);
+  /* Paramètres MIDI par axe (X_/Y_/Z_: midiCc, midiChannel, etc.) - envoyer même "0" */
+  else if((key.startsWith('X_') || key.startsWith('Y_') || key.startsWith('Z_')) && c[key] !== undefined && c[key] !== null) {
+   if(c[key] !== '' || key.includes('midiCc') || key.includes('midiChannel')) p.set(key, c[key]);
   }
   /* Anciens noms (rtp*) sauf rtpEnabled et rtpType (déjà gérés ci-dessus) */
   else if(key.startsWith('rtp') && key !== 'rtpEnabled' && key !== 'rtpType' && key !== 'rtpMidiEnabled' && c[key] !== undefined && c[key] !== null && c[key] !== '') {
    p.set(key, c[key]); /* Compatibilité ancien format */
   }
  });
+
+ /* Joystick : forcer envoi X_midiCc / Y_midiCc depuis le formulaire si absents de c */
+ if(role === 'joystick') {
+  const xCc = c.X_midiCc !== undefined && c.X_midiCc !== null ? c.X_midiCc : ($('#X_midiCc') && $('#X_midiCc').value !== undefined ? $('#X_midiCc').value : '7');
+  const yCc = c.Y_midiCc !== undefined && c.Y_midiCc !== null ? c.Y_midiCc : ($('#Y_midiCc') && $('#Y_midiCc').value !== undefined ? $('#Y_midiCc').value : '7');
+  p.set('X_midiCc', xCc);
+  p.set('Y_midiCc', yCc);
+ }
 
  /* Envoyer dynamiquement tous les formFields depuis la définition */
  if(def && def.formFields && Array.isArray(def.formFields)) {
@@ -581,9 +622,16 @@ async function saveAll(){
  if(c.oscFormat) p.set('oscFormat',c.oscFormat);
  if(c.dbgEnabled) p.set('dbgEnabled','true');
  if(c.dbgHeader) p.set('dbgHeader',c.dbgHeader);
- return fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
+ if(lbl === 'SPI' || lbl === 'I2C') {
+  console.log('[saveAll] POST body pour', lbl, ':', p.toString());
+ }
+ return fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()})
+  .then(r => { if (r.status === 413) return r.json().then(d => Promise.reject(new Error(d.message || 'Config trop grande pour NVS (max 1900 octets). Réduisez les options ou le nombre de pins.'))); return r; });
  });
  await Promise.all(ps.filter(p => p !== null));
+ 
+ /* Attendre que le backend traite le rechargement (ESP32-C3 mono-cœur) */
+ await new Promise(r => setTimeout(r, 300));
  
  const listRes=await fetch('/api/pins/list');
  if(!listRes.ok){
@@ -605,7 +653,18 @@ async function saveAll(){
  if(listData.pins && Array.isArray(listData.pins)){
  listData.pins.forEach(p=>{
  if(p.pinLabel) serverPins.add(p.pinLabel);
+ if(p.pinLabel === 'SPI' || p.pinLabel === 'I2C') {
+  console.log('[saveAll] Vérification post-save', p.pinLabel, ': csGpio=' + p.csGpio, 'range=' + p.range, 'dataRate=' + p.dataRate, 'filterIntensity=' + p.filterIntensity);
+ }
  });
+ }
+ /* Vérifier que les pins bus ont bien été sauvegardées */
+ if(typeof pcfg !== 'undefined') {
+  ['SPI','I2C'].forEach(bus => {
+   if(pcfg[bus] && pcfg[bus].role && !serverPins.has(bus)) {
+    console.error('[saveAll] ERREUR: pin', bus, 'configurée localement mais ABSENTE de la réponse backend !');
+   }
+  });
  }
  
  const localPins=new Set(Object.keys(pcfg));
@@ -616,6 +675,10 @@ async function saveAll(){
  return fetch('/api/pins/delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
  });
  await Promise.all(deletePromises);
+ /* Laisser le temps au backend (NVS) de persister avant de recharger la liste */
+ if (toDelete.length > 0) await new Promise(r => setTimeout(r, 400));
+ /* Rafraîchir pcfg et la liste des pins depuis le serveur (évite rechargement manuel) */
+ await loadConfiguredPins();
 
 /* Sauvegarder les interfaces MIDI globales */
 try {
@@ -649,7 +712,7 @@ try {
  msg.textContent='Toutes les configurations enregistrées';
  msg.style.color='#10b981';
  }catch(e){
- msg.textContent='Erreur lors de l\'enregistrement';
+ msg.textContent = e && e.message ? e.message : 'Erreur lors de l\'enregistrement';
  msg.style.color='#ef4444';
  console.error('Erreur saveAll:',e);
  }

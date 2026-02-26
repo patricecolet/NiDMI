@@ -7,6 +7,8 @@
 #include "../components/basic/PotentiometerDef.h"
 #include "../components/basic/VelostatDef.h"
 #include "../components/basic/JoystickDef.h"
+#include "../components/motion/Lis3dhDef.h"
+#include "../components/interface/Mpr121Def.h"
 #include "../midi/MidiMessageType.h"
 #include "../utils/PinMapper.h"  // Pour PinMapper::hasTouch()
 
@@ -153,6 +155,76 @@ void ComponentInitializer::initializeConfig(
                 }
             }
             config.specificConfig.joystick = joyConfig;
+            break;
+        }
+        case ComponentType::IMU: {
+            Components::ImuConfig* imuConfig = new Components::ImuConfig();
+            if (def && def->formFields) {
+                for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                    const FormFieldDef& field = def->formFields[i];
+                    if (field.id && field.defaultValue) {
+                        if (strcmp(field.id, "filterIntensity") == 0) {
+                            imuConfig->filter_intensity = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "i2cAddress") == 0) {
+                            imuConfig->i2c_address = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "csGpio") == 0) {
+                            imuConfig->cs_gpio = (uint8_t)atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "range") == 0) {
+                            imuConfig->range = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "dataRate") == 0) {
+                            imuConfig->data_rate = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xMin") == 0) {
+                            imuConfig->xMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xZeroMin") == 0) {
+                            imuConfig->xZeroMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xZeroMax") == 0) {
+                            imuConfig->xZeroMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xMax") == 0) {
+                            imuConfig->xMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yMin") == 0) {
+                            imuConfig->yMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yZeroMin") == 0) {
+                            imuConfig->yZeroMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yZeroMax") == 0) {
+                            imuConfig->yZeroMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yMax") == 0) {
+                            imuConfig->yMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "zMin") == 0) {
+                            imuConfig->zMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "zZeroMin") == 0) {
+                            imuConfig->zZeroMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "zZeroMax") == 0) {
+                            imuConfig->zZeroMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "zMax") == 0) {
+                            imuConfig->zMax = atoi(field.defaultValue);
+                        }
+                    }
+                }
+            }
+            config.specificConfig.imu = imuConfig;
+            break;
+        }
+        case ComponentType::MPR121: {
+            Components::Mpr121Config* mpr121Config = new Components::Mpr121Config();
+            if (def && def->formFields) {
+                for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                    const FormFieldDef& field = def->formFields[i];
+                    if (field.id && field.defaultValue) {
+                        if (strcmp(field.id, "i2cAddress") == 0) {
+                            mpr121Config->i2c_address = (uint8_t)atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "baseNote") == 0) {
+                            mpr121Config->base_note = (uint8_t)atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "touchThreshold") == 0) {
+                            mpr121Config->touch_threshold = (uint8_t)atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "releaseThreshold") == 0) {
+                            mpr121Config->release_threshold = (uint8_t)atoi(field.defaultValue);
+                        }
+                    }
+                }
+            }
+            mpr121Config->midi_channel = channel;
+            mpr121Config->msg_type = msg_type;
+            config.specificConfig.mpr121 = mpr121Config;
             break;
         }
         default:

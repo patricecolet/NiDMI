@@ -44,10 +44,13 @@ const MidiConfig = {
       return;
     }
     
-    /* Si c'est un joystick, générer deux sections séparées (une par axe) */
-    if(def.id === 'joystick') {
+    /* Joystick et IMU LIS3DH : sections séparées par axe */
+    if(def.id === 'joystick' || def.id === 'lis3dh') {
       this.generateAxisSection(def, currentCfg, container, 'x');
       this.generateAxisSection(def, currentCfg, container, 'y');
+      if(def.id === 'lis3dh') {
+        this.generateAxisSection(def, currentCfg, container, 'z');
+      }
       return;
     }
     
@@ -129,16 +132,45 @@ const MidiConfig = {
    */
   generateAxisSection(def, currentCfg = {}, container, axis) {
     /* Filtrer les messages MIDI pour cet axe */
+    /* D'abord vérifier si tous les messages ont un champ axis défini */
+    const allHaveAxis = def.midiMessages.every(msg => msg.axis && msg.axis.length > 0);
+    
     const axisMessages = def.midiMessages.filter(msg => {
-      /* Si le message a un champ axis, vérifier qu'il correspond */
-      if(msg.axis) {
-        return msg.axis === axis;
+      /* Si le message a un champ axis, vérifier qu'il correspond exactement */
+      if(msg.axis && msg.axis.length > 0) {
+        const msgAxis = String(msg.axis).toLowerCase().trim();
+        const targetAxis = String(axis).toLowerCase().trim();
+        const matches = msgAxis === targetAxis;
+        return matches;
       }
-      /* Sinon, répartir les messages : première moitié pour X, deuxième pour Y */
-      const index = def.midiMessages.indexOf(msg);
-      const half = Math.floor(def.midiMessages.length / 2);
-      return (axis === 'x' && index < half) || (axis === 'y' && index >= half);
+      
+      /* Fallback uniquement si aucun message n'a de champ axis (compatibilité anciens composants) */
+      if(!allHaveAxis) {
+        const index = def.midiMessages.indexOf(msg);
+        if(def.id === 'lis3dh') {
+          const third = Math.floor(def.midiMessages.length / 3);
+          return (axis === 'x' && index < third) || 
+                 (axis === 'y' && index >= third && index < (third * 2)) ||
+                 (axis === 'z' && index >= (third * 2));
+        } else {
+          /* Joystick : 2 axes seulement */
+          const half = Math.floor(def.midiMessages.length / 2);
+          return (axis === 'x' && index < half) || (axis === 'y' && index >= half);
+        }
+      }
+      
+      /* Si tous les messages devraient avoir un axis mais celui-ci n'en a pas, l'exclure */
+      return false;
     });
+    
+    console.log(`[generateAxisSection] Axe ${axis.toUpperCase()} pour ${def.id}: ${axisMessages.length} messages filtrés sur ${def.midiMessages.length}`);
+    if(axisMessages.length === 0) {
+      console.warn(`[generateAxisSection] Aucun message trouvé pour l'axe ${axis}! Messages disponibles:`, 
+                   def.midiMessages.map(m => `${m.displayName} (axis=${m.axis || 'undefined'})`));
+    } else {
+      console.log(`[generateAxisSection] Messages pour axe ${axis}:`, 
+                  axisMessages.map(m => `${m.displayName} (axis=${m.axis})`));
+    }
     
     if(axisMessages.length === 0) {
       return;
@@ -327,8 +359,9 @@ const MidiConfig = {
         inputMin.placeholder = param.defaultMin || param.min || 0;
         if(param.width) inputMin.style.width = param.width + 'px';
         /* Toujours initialiser avec une valeur (config actuelle ou valeur par défaut) */
-        if(currentCfg[param.id + 'Min'] !== undefined && currentCfg[param.id + 'Min'] !== null && currentCfg[param.id + 'Min'] !== '') {
-          inputMin.value = currentCfg[param.id + 'Min'];
+        const cfgKeyMin = fieldIdPrefix + param.id + 'Min';
+        if(currentCfg[cfgKeyMin] !== undefined && currentCfg[cfgKeyMin] !== null && currentCfg[cfgKeyMin] !== '') {
+          inputMin.value = currentCfg[cfgKeyMin];
         } else {
           inputMin.value = param.defaultMin || param.min || '0';
         }
@@ -345,8 +378,9 @@ const MidiConfig = {
         inputMax.placeholder = param.defaultMax || param.max || 127;
         if(param.width) inputMax.style.width = param.width + 'px';
         /* Toujours initialiser avec une valeur (config actuelle ou valeur par défaut) */
-        if(currentCfg[param.id + 'Max'] !== undefined && currentCfg[param.id + 'Max'] !== null && currentCfg[param.id + 'Max'] !== '') {
-          inputMax.value = currentCfg[param.id + 'Max'];
+        const cfgKeyMax = fieldIdPrefix + param.id + 'Max';
+        if(currentCfg[cfgKeyMax] !== undefined && currentCfg[cfgKeyMax] !== null && currentCfg[cfgKeyMax] !== '') {
+          inputMax.value = currentCfg[cfgKeyMax];
         } else {
           inputMax.value = param.defaultMax || param.max || '127';
         }
@@ -384,8 +418,9 @@ const MidiConfig = {
         }
         input.placeholder = param.placeholder || '';
         if(param.width) input.style.width = param.width + 'px';
-        if(currentCfg[param.id] !== undefined) {
-          input.value = currentCfg[param.id];
+        const cfgKey = fieldIdPrefix + param.id;
+        if(currentCfg[cfgKey] !== undefined && currentCfg[cfgKey] !== null && currentCfg[cfgKey] !== '') {
+          input.value = currentCfg[cfgKey];
         } else if(param.defaultValue) {
           input.value = param.defaultValue;
         } else if(param.placeholder && fieldType === 'number') {
@@ -465,6 +500,25 @@ const MidiConfig = {
       });
     }
 
+    const typeSelZ = $('#rtpMsgTypeZ');
+    const paramsZ = $('#rtpParamsZ');
+    if(typeSelZ && paramsZ) {
+      const vZ = typeSelZ.value;
+      const allRowsZ = paramsZ.querySelectorAll('[id$="Row"]');
+      allRowsZ.forEach(row => {
+        if(row._showFor) {
+          const shouldShow = row._showFor.includes(vZ);
+          if(shouldShow && row._dependsOnRole) {
+            row.style.display = row._dependsOnRole.includes(role) ? 'flex' : 'none';
+          } else {
+            row.style.display = shouldShow ? 'flex' : 'none';
+          }
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    }
+
     /* Pour les autres composants, comportement normal */
     const typeSel = $('#rtpMsgType'); /* Compatibilité: garder rtpMsgType */
     const params = $('#rtpParams'); /* Compatibilité: garder rtpParams */
@@ -507,65 +561,60 @@ const MidiConfig = {
       debugMidiEnabled: !!$('#debugMidiEnabled')?.checked
     };
 
-    /* Pour le joystick, lire les configs MIDI séparées pour X et Y */
-    if(def && def.id === 'joystick') {
-      config.midiMessageTypeX = $('#rtpMsgTypeX')?.value || '';
-      config.midiMessageTypeY = $('#rtpMsgTypeY')?.value || '';
-      config.rtpTypeX = $('#rtpMsgTypeX')?.value || '';
-      config.rtpTypeY = $('#rtpMsgTypeY')?.value || '';
+    /* Pour les composants multi-axes (joystick, lis3dh), lire les configs MIDI séparées par axe */
+    const isMultiAxis = def && (def.id === 'joystick' || def.id === 'lis3dh');
+    if(isMultiAxis) {
+      const axes = def.id === 'lis3dh' ? ['X','Y','Z'] : ['X','Y'];
+      axes.forEach(axis => {
+        const selectId = `#rtpMsgType${axis}`;
+        const keyType = `midiMessageType${axis}`;
+        const keyRtp  = `rtpType${axis}`;
+        config[keyType] = $(selectId)?.value || '';
+        config[keyRtp]  = $(selectId)?.value || '';
+      });
     } else {
       /* Pour les autres composants, comportement normal */
       config.midiMessageType = $('#rtpMsgType')?.value || '';
       config.rtpType = $('#rtpMsgType')?.value || '';
     }
 
-    /* Pour le joystick, lire les paramètres avec préfixes X_ et Y_ */
-    if(def && def.id === 'joystick') {
-      /* Lire les paramètres pour l'axe X */
-      const paramsX = $('#rtpParamsX');
-      if(paramsX && def.midiMessages) {
-        def.midiMessages.filter(m => !m.axis || m.axis === 'x').forEach(msg => {
-          if(msg.params && Array.isArray(msg.params)) {
-            msg.params.forEach(param => {
-              if(param.id) {
-                const fieldId = 'X_' + param.id;
-                if(param.type === 4) { /* RANGE */
-                  const elMin = $('#' + fieldId + 'Min');
-                  const elMax = $('#' + fieldId + 'Max');
-                  if(elMin) config[fieldId + 'Min'] = elMin.value || param.defaultMin || param.min || '0';
-                  if(elMax) config[fieldId + 'Max'] = elMax.value || param.defaultMax || param.max || '127';
-                } else {
-                  const el = $('#' + fieldId);
-                  if(el) config[fieldId] = el.value || '';
-                }
+    /* Pour les composants multi-axes, lire les paramètres avec préfixes X_/Y_/Z_ */
+    if(isMultiAxis) {
+      const axes = def.id === 'lis3dh' ? ['X','Y','Z'] : ['X','Y'];
+      axes.forEach(axis => {
+        const lowerAxis = axis.toLowerCase();
+        const paramsContainer = $(`#rtpParams${axis}`);
+        if(paramsContainer && def.midiMessages) {
+          /* Filtrer strictement : seulement les messages de cet axe */
+          def.midiMessages
+            .filter(m => {
+              if(!m.axis || m.axis.length === 0) {
+                /* Si le message n'a pas d'axis, l'exclure (sauf fallback pour compatibilité) */
+                return false;
+              }
+              const msgAxis = String(m.axis).toLowerCase().trim();
+              return msgAxis === lowerAxis;
+            })
+            .forEach(msg => {
+              if(msg.params && Array.isArray(msg.params)) {
+                msg.params.forEach(param => {
+                  if(param.id) {
+                    const fieldId = axis + '_' + param.id;
+                    if(param.type === 4) { /* RANGE */
+                      const elMin = $('#' + fieldId + 'Min');
+                      const elMax = $('#' + fieldId + 'Max');
+                      if(elMin) config[fieldId + 'Min'] = elMin.value || param.defaultMin || param.min || '0';
+                      if(elMax) config[fieldId + 'Max'] = elMax.value || param.defaultMax || param.max || '127';
+                    } else {
+                      const el = $('#' + fieldId);
+                      if(el) config[fieldId] = el.value || '';
+                    }
+                  }
+                });
               }
             });
-          }
-        });
-      }
-      
-      /* Lire les paramètres pour l'axe Y */
-      const paramsY = $('#rtpParamsY');
-      if(paramsY && def.midiMessages) {
-        def.midiMessages.filter(m => !m.axis || m.axis === 'y').forEach(msg => {
-          if(msg.params && Array.isArray(msg.params)) {
-            msg.params.forEach(param => {
-              if(param.id) {
-                const fieldId = 'Y_' + param.id;
-                if(param.type === 4) { /* RANGE */
-                  const elMin = $('#' + fieldId + 'Min');
-                  const elMax = $('#' + fieldId + 'Max');
-                  if(elMin) config[fieldId + 'Min'] = elMin.value || param.defaultMin || param.min || '0';
-                  if(elMax) config[fieldId + 'Max'] = elMax.value || param.defaultMax || param.max || '127';
-                } else {
-                  const el = $('#' + fieldId);
-                  if(el) config[fieldId] = el.value || '';
-                }
-              }
-            });
-          }
-        });
-      }
+        }
+      });
     } else {
       /* Pour les autres composants, comportement normal */
       /* Lire dynamiquement tous les paramètres MIDI depuis les définitions */
@@ -636,18 +685,20 @@ const MidiConfig = {
       if(el) el.checked = !!b;
     };
     
-    /* Pour le joystick, appliquer les configs MIDI séparées pour X et Y */
-    if(def && def.id === 'joystick') {
-      if(cfg.midiMessageTypeX) {
-        setV('rtpMsgTypeX', cfg.midiMessageTypeX);
-      } else if(cfg.rtpTypeX) {
-        setV('rtpMsgTypeX', cfg.rtpTypeX);
-      }
-      if(cfg.midiMessageTypeY) {
-        setV('rtpMsgTypeY', cfg.midiMessageTypeY);
-      } else if(cfg.rtpTypeY) {
-        setV('rtpMsgTypeY', cfg.rtpTypeY);
-      }
+    /* Pour les composants multi-axes, appliquer les configs MIDI séparées par axe */
+    const isMultiAxis = def && (def.id === 'joystick' || def.id === 'lis3dh');
+    if(isMultiAxis) {
+      const axes = def.id === 'lis3dh' ? ['X','Y','Z'] : ['X','Y'];
+      axes.forEach(axis => {
+        const keyType = `midiMessageType${axis}`;
+        const keyRtp  = `rtpType${axis}`;
+        const selectId = `rtpMsgType${axis}`;
+        if(cfg[keyType]) {
+          setV(selectId, cfg[keyType]);
+        } else if(cfg[keyRtp]) {
+          setV(selectId, cfg[keyRtp]);
+        }
+      });
     } else {
       /* Pour les autres composants, comportement normal */
       /* Appliquer le type de message (nouveau format puis ancien pour compatibilité) */
@@ -667,37 +718,35 @@ const MidiConfig = {
     /* Appliquer dynamiquement tous les paramètres MIDI depuis les définitions */
     /* Parcourt tous les messages MIDI et leurs paramètres (cc, note, channel, velocity, range, etc.) */
     if(def && def.midiMessages && Array.isArray(def.midiMessages)) {
-      if(def.id === 'joystick') {
-        /* Pour le joystick, appliquer les paramètres avec préfixes X_ et Y_ */
-        def.midiMessages.filter(m => !m.axis || m.axis === 'x').forEach(msg => {
-          if(msg.params && Array.isArray(msg.params)) {
-            msg.params.forEach(param => {
-              if(param.id) {
-                const fieldId = 'X_' + param.id;
-                if(param.type === 4) { /* RANGE */
-                  if(cfg[fieldId + 'Min'] !== undefined) setV(fieldId + 'Min', cfg[fieldId + 'Min']);
-                  if(cfg[fieldId + 'Max'] !== undefined) setV(fieldId + 'Max', cfg[fieldId + 'Max']);
-                } else {
-                  if(cfg[fieldId] !== undefined) setV(fieldId, cfg[fieldId]);
-                }
+      if(isMultiAxis) {
+        const axes = def.id === 'lis3dh' ? ['X','Y','Z'] : ['X','Y'];
+        axes.forEach(axis => {
+          const lowerAxis = axis.toLowerCase();
+          /* Filtrer strictement : seulement les messages de cet axe */
+          def.midiMessages
+            .filter(m => {
+              if(!m.axis || m.axis.length === 0) {
+                /* Si le message n'a pas d'axis, l'exclure (sauf fallback pour compatibilité) */
+                return false;
+              }
+              const msgAxis = String(m.axis).toLowerCase().trim();
+              return msgAxis === lowerAxis;
+            })
+            .forEach(msg => {
+              if(msg.params && Array.isArray(msg.params)) {
+                msg.params.forEach(param => {
+                  if(param.id) {
+                    const fieldId = axis + '_' + param.id;
+                    if(param.type === 4) { /* RANGE */
+                      if(cfg[fieldId + 'Min'] !== undefined) setV(fieldId + 'Min', cfg[fieldId + 'Min']);
+                      if(cfg[fieldId + 'Max'] !== undefined) setV(fieldId + 'Max', cfg[fieldId + 'Max']);
+                    } else {
+                      if(cfg[fieldId] !== undefined) setV(fieldId, cfg[fieldId]);
+                    }
+                  }
+                });
               }
             });
-          }
-        });
-        def.midiMessages.filter(m => !m.axis || m.axis === 'y').forEach(msg => {
-          if(msg.params && Array.isArray(msg.params)) {
-            msg.params.forEach(param => {
-              if(param.id) {
-                const fieldId = 'Y_' + param.id;
-                if(param.type === 4) { /* RANGE */
-                  if(cfg[fieldId + 'Min'] !== undefined) setV(fieldId + 'Min', cfg[fieldId + 'Min']);
-                  if(cfg[fieldId + 'Max'] !== undefined) setV(fieldId + 'Max', cfg[fieldId + 'Max']);
-                } else {
-                  if(cfg[fieldId] !== undefined) setV(fieldId, cfg[fieldId]);
-                }
-              }
-            });
-          }
         });
       } else {
         /* Pour les autres composants, comportement normal */

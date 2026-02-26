@@ -23,6 +23,9 @@ function showRoleCards(role, currentCfg = {}) {
 
   if (!role) return;
 
+  /* Les rôles de bus (I2C, SPI, UART) ne sont pas des composants */
+  if (typeof isBusRole === 'function' && isBusRole(role)) return;
+
   const migratedRole = migrateRoleValue(role);
   const def = getComponentDef(migratedRole);
   if (!def) {
@@ -40,6 +43,36 @@ function showRoleCards(role, currentCfg = {}) {
   if (def.formFields && Array.isArray(def.formFields) && def.formFields.length > 0) {
     if (typeof FormGenerator !== 'undefined' && FormGenerator.generateFormFields) {
       FormGenerator.generateFormFields(def, 'componentFormCard', currentCfg);
+    }
+  }
+
+  /* Garder certains réglages en mémoire locale (sans sauvegarde) */
+  /* filterIntensity : on le recopie dans pcfg[cur] dès que l'utilisateur le bouge,
+     pour ne pas perdre la valeur lorsqu'on change de pin puis qu'on revient */
+  const filterField = $('#filterIntensity');
+  if (filterField) {
+    const syncFilterToPcfg = () => {
+      if (typeof pcfg === 'undefined' || typeof cur === 'undefined' || !cur) return;
+      if (!pcfg[cur]) {
+        pcfg[cur] = { role: def.id || '' };
+      }
+      const v = parseInt(filterField.value, 10);
+      if (!isNaN(v)) {
+        pcfg[cur].filterIntensity = v;
+      }
+    };
+    filterField.addEventListener('input', syncFilterToPcfg);
+    filterField.addEventListener('change', syncFilterToPcfg);
+  }
+
+  /* Masquer les champs non pertinents selon le bus */
+  if (typeof cur !== 'undefined') {
+    if (cur === 'SPI') {
+      const i2cAddrEl = $('#i2cAddress');
+      if (i2cAddrEl && i2cAddrEl.closest('.r')) i2cAddrEl.closest('.r').style.display = 'none';
+    } else if (cur === 'I2C') {
+      const csGpioEl = $('#csGpio');
+      if (csGpioEl && csGpioEl.closest('.r')) csGpioEl.closest('.r').style.display = 'none';
     }
   }
 
@@ -192,7 +225,15 @@ function initComponentForm(pinLabel, roleOverride = null) {
     return;
   }
 
-  const pin = caps.pins.find(p => p && p.label === pinLabel);
+  /* Pour les bus (I2C, SPI), créer un objet pin virtuel à partir de caps.bus */
+  let pin = null;
+  if (pinLabel === 'I2C' && caps.bus && caps.bus.i2c) {
+    pin = { label: 'I2C', gpio: caps.bus.i2c.sda, bus: 'i2c' };
+  } else if (pinLabel === 'SPI' && caps.bus && caps.bus.spi) {
+    pin = { label: 'SPI', gpio: caps.bus.spi.mosi, bus: 'spi' };
+  } else {
+    pin = caps.pins.find(p => p && p.label === pinLabel);
+  }
   if (!pin || pin.gpio === undefined) {
     console.warn('[initComponentForm] Pin non trouvée:', pinLabel);
     return;

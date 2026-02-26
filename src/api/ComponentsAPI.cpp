@@ -1,5 +1,7 @@
 #include "APICommon.h"
 #include "../components/ComponentRegistry.h"
+#include "../components/ComponentTypes.h"
+#include "../components/motion/Lis3dhDef.h"
 #include "../managers/ComponentManager.h"
 #include "../Globals.h"
 #include <set>
@@ -120,12 +122,16 @@ void setupComponentsAPI(AsyncWebServer& server) {
         // Créer un set des GPIOs utilisés
         std::set<uint8_t> usedGpios;
         
-        // 1. Ajouter les GPIOs des composants simples
+        // 1. Ajouter les GPIOs des composants simples + GPIOs spécifiques (CS pour SPI IMU)
         uint8_t componentCount = g_componentManager.getComponentCount();
         for (uint8_t i = 0; i < componentCount; i++) {
             const ComponentConfig* cfg = g_componentManager.getConfig(i);
             if (cfg) {
                 usedGpios.insert(cfg->gpio);
+                if (cfg->type == ComponentType::IMU && cfg->specificConfig.imu) {
+                    uint8_t cs = cfg->specificConfig.imu->cs_gpio;
+                    if (cs != 255) usedGpios.insert(cs);
+                }
             }
         }
         

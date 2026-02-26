@@ -9,6 +9,7 @@
 #include "../Globals.h"
 #include "../server/ServerCallbacks.h"
 #include "../components/ComponentRegistry.h"
+#include "../processors/TouchProcessor.h"
 #include <Preferences.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncWebSocket.h>
@@ -134,8 +135,8 @@ String getDefaultConfig(String pin) {
     }
     
     // Bus
-    if (pin == "SDA" || pin == "SCL") return "{\"role\":\"I2C\",\"rtpMidiEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "MOSI" || pin == "MISO" || pin == "SCK") return "{\"role\":\"SPI\",\"rtpMidiEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "SDA" || pin == "SCL" || pin == "I2C") return "{\"role\":\"I2C\",\"rtpMidiEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "MOSI" || pin == "MISO" || pin == "SCK" || pin == "SPI") return "{\"role\":\"SPI\",\"rtpMidiEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
     if (pin == "TX" || pin == "RX") return "{\"role\":\"UART\",\"rtpMidiEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
     
     // Défaut
@@ -149,6 +150,13 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
         Serial.println("WebSocket client disconnected");
     } else if (type == WS_EVT_DATA) {
         String message = String((char*)data);
+
+        // Commande globale de calibration touch (toutes les baselines)
+        if (message == "TOUCH_CALIBRATE_ALL") {
+            TouchProcessor::resetAllBaselines();
+            client->text("TOUCH_CALIBRATE_DONE");
+            return;
+        }
         
         if (message.startsWith("PIN_CLICKED:")) {
             String pin = message.substring(12);
@@ -157,6 +165,17 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
             preferences.begin("nidmi", true);
             String key = "pin_" + pin;
             String config = preferences.getString(key.c_str(), "");
+            
+            // Pour les pins de bus, chercher aussi sous le label du bus
+            if (config.length() == 0) {
+                if (pin == "MOSI" || pin == "MISO" || pin == "SCK") {
+                    config = preferences.getString("pin_SPI", "");
+                    if (config.length() > 0) pin = "SPI";
+                } else if (pin == "SDA" || pin == "SCL") {
+                    config = preferences.getString("pin_I2C", "");
+                    if (config.length() > 0) pin = "I2C";
+                }
+            }
             preferences.end();
             
             if (config.length() > 0) {
