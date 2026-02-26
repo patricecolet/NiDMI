@@ -73,6 +73,9 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             continue;
         }
         
+        Serial.printf("[ConfigLoader] NVS -> pin=%s GPIO%d role=%s type=%d\n",
+                      pinLabelCStr, gpio, role.c_str(), (int)def->type);
+        
         // Vérifier que la pin a les capacités requises selon pinType
         if (def->pinType == PinType::PIN_ANALOG) {
             if (!PinMapper::hasAdc(gpio)) {

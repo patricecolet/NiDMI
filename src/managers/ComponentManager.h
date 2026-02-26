@@ -47,6 +47,9 @@ private:
     bool midiTaskStarted;
     static void midiTask(void* parameter);
     void midiTaskLoop();
+
+    // Garde NVS : suspend les tâches temps réel pendant les écritures flash
+    volatile bool _nvsWriteInProgress = false;
     
 public:
     ComponentManager();
@@ -91,6 +94,11 @@ public:
     // Calibrage OSC des seuils min/max
     bool calibrateMux(uint8_t mux_id, uint8_t channel, bool is_min, bool all_channels);
     bool resetMuxThresholds(uint8_t mux_id, uint8_t channel, bool all_channels);
+    
+    // Protection NVS : suspendre/reprendre les tâches temps réel
+    // Appeler avant/après toute écriture NVS pour éviter les stalls flash
+    void pauseRealtimeTasks();
+    void resumeRealtimeTasks();
     
     // Debug
     void printStats();

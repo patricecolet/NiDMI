@@ -152,11 +152,32 @@ void ComponentManager::update() {
 }
 
 void ComponentManager::reloadConfigs() {
-    // Serial.println("[ComponentManager] Reloading configs...");
     clearAll();
     loadMuxConfigFromNVS();
     ConfigLoader::loadFromNVS(*this);
-    // Serial.println("[ComponentManager] Configs reloaded");
+}
+
+void ComponentManager::pauseRealtimeTasks() {
+    _nvsWriteInProgress = true;
+    if (midiTaskStarted && midiTaskHandle != nullptr) {
+        vTaskSuspend(midiTaskHandle);
+    }
+    if (mux_manager.getTaskHandle() != nullptr) {
+        vTaskSuspend(mux_manager.getTaskHandle());
+    }
+    vTaskDelay(pdMS_TO_TICKS(2));
+    Serial.println("[ComponentManager] Realtime tasks paused for NVS write");
+}
+
+void ComponentManager::resumeRealtimeTasks() {
+    if (mux_manager.getTaskHandle() != nullptr) {
+        vTaskResume(mux_manager.getTaskHandle());
+    }
+    if (midiTaskStarted && midiTaskHandle != nullptr) {
+        vTaskResume(midiTaskHandle);
+    }
+    _nvsWriteInProgress = false;
+    Serial.println("[ComponentManager] Realtime tasks resumed after NVS write");
 }
 
 

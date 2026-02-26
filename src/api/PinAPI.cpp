@@ -497,7 +497,9 @@ void setupPinAPI(AsyncWebServer& server) {
         
         Serial.printf("[PinAPI] JSON sauvegardé pour %s: %s\n", pinLabel.c_str(), json.c_str());
         
-        /* Sauvegarder en NVS */
+        /* Suspendre les tâches temps réel pendant l'écriture flash NVS */
+        g_componentManager.pauseRealtimeTasks();
+
         Preferences preferences;
         preferences.begin("nidmi", false);
         String key = "pin_" + pinLabel;
@@ -505,13 +507,13 @@ void setupPinAPI(AsyncWebServer& server) {
         if(written == 0) {
             Serial.printf("[PinAPI] ERREUR: putString a échoué pour %s (json len=%d)\n", key.c_str(), json.length());
         } else {
-            /* Vérifier en relisant */
             String verify = preferences.getString(key.c_str(), "");
             Serial.printf("[PinAPI] NVS vérifié pour %s: %s (len=%d)\n", key.c_str(), 
                 verify.length() > 0 ? "OK" : "VIDE", verify.length());
         }
-        
         preferences.end();
+
+        g_componentManager.resumeRealtimeTasks();
         
         /* Si additionalPins présent, utiliser le handler générique pour ce type de composant */
         if(hasAdditionalPins && def) {
@@ -681,10 +683,14 @@ void setupPinAPI(AsyncWebServer& server) {
         }
         String pinLabel = String(pinLabelBuf);
         String key = String("pin_") + pinLabel;
+
+        g_componentManager.pauseRealtimeTasks();
         Preferences preferences;
         preferences.begin("nidmi", false);
-        preferences.putString(key.c_str(), buf); /* Écrire directement depuis le buffer, pas de String(json) */
+        preferences.putString(key.c_str(), buf);
         preferences.end();
+        g_componentManager.resumeRealtimeTasks();
+
         g_configCache.setConfigClean(pinLabel, buf, total);
         nidmi_requestReloadPins();
         Serial.printf("[PinAPI] JSON body %s role=%s len=%u\n", pinLabelBuf, roleBuf, (unsigned)total);

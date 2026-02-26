@@ -1,5 +1,6 @@
 #include "ConfigCache.h"
 #include "../Globals.h"
+#include "../managers/ComponentManager.h"
 
 /* Forward declarations */
 String mergeConfigWithDefaults(const String& nvsConfig, const String& defaultConfig);
@@ -82,6 +83,9 @@ void ConfigCache::saveAllDirty() {
     }
     
     debug_network( "[ConfigCache] DEBUG Début sauvegarde NVS...\n\n");
+
+    g_componentManager.pauseRealtimeTasks();
+
     Preferences preferences;
     preferences.begin("nidmi", false);
     for (int i = 0; i < count; i++) {
@@ -94,6 +98,8 @@ void ConfigCache::saveAllDirty() {
         }
     }
     preferences.end();
+
+    g_componentManager.resumeRealtimeTasks();
     
     lastSave = millis();
     debug_network( "[ConfigCache] Sauvegarde groupée terminée (%d pins)\n", count);
@@ -127,44 +133,39 @@ void ConfigCache::removeConfig(const String& pin) {
     int index = findPinIndex(pin);
     String key = "pin_" + pin;
     
-    /* Supprimer de la NVS avec vérification */
+    /* Suspendre les tâches temps réel pendant l'écriture flash NVS */
+    g_componentManager.pauseRealtimeTasks();
+
     Preferences preferences;
-    preferences.begin("nidmi", false);  // false = mode écriture
+    preferences.begin("nidmi", false);
     
-    /* Vérifier si la clé existe */
     bool key_exists = preferences.isKey(key.c_str());
     
     if (key_exists) {
-        /* Méthode 1 : remove() - devrait fonctionner */
         bool removed = preferences.remove(key.c_str());
         preferences.end();
         
-        /* Vérifier que ça a fonctionné */
-        preferences.begin("nidmi", true);  // true = mode lecture
+        preferences.begin("nidmi", true);
         bool still_exists = preferences.isKey(key.c_str());
         preferences.end();
         
         if (still_exists) {
-            /* Si remove() n'a pas fonctionné, forcer la suppression en mettant une valeur vide */
-            Serial.printf("[ConfigCache] ⚠️ remove() n'a pas fonctionné pour '%s', tentative de suppression forcée\n", key.c_str());
+            Serial.printf("[ConfigCache] remove() n'a pas fonctionne pour '%s', tentative forcee\n", key.c_str());
             preferences.begin("nidmi", false);
-            /* Méthode alternative : mettre une valeur vide puis supprimer */
             preferences.putString(key.c_str(), "");
             delay(5);
-            /* Essayer remove() à nouveau */
             preferences.remove(key.c_str());
             delay(5);
             preferences.end();
             
-            /* Vérification finale */
             preferences.begin("nidmi", true);
             bool final_check = preferences.isKey(key.c_str());
             preferences.end();
             
             if (final_check) {
-                Serial.printf("[ConfigCache] ⚠️ La clé '%s' existe toujours après toutes les tentatives!\n", key.c_str());
+                Serial.printf("[ConfigCache] La cle '%s' existe toujours apres toutes les tentatives!\n", key.c_str());
             } else {
-                Serial.printf("[ConfigCache] ✓ Clé '%s' supprimée avec succès (méthode forcée)\n", key.c_str());
+                Serial.printf("[ConfigCache] Cle '%s' supprimee avec succes (methode forcee)\n", key.c_str());
             }
         } else {
             Serial.printf("[ConfigCache] ✓ Clé '%s' supprimée avec succès\n", key.c_str());
@@ -174,6 +175,8 @@ void ConfigCache::removeConfig(const String& pin) {
         Serial.printf("[ConfigCache] Clé '%s' n'existait pas dans NVS\n", key.c_str());
     }
     
+    g_componentManager.resumeRealtimeTasks();
+
     /* Retirer du cache si présent */
     if (index != -1 && index < count && count > 0) {
         for (int i = index; i < count - 1; i++) {

@@ -28,9 +28,28 @@ void processComponents() {
     g_componentManager.update();
 }
 
+// Diagnostic touch au boot : mettre à 1 pour activer, 0 pour désactiver.
+#define TOUCH_BOOT_DIAG 1
+
+static void touchDiag(const char* label) {
+#if TOUCH_BOOT_DIAG && (defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV) || defined(ARDUINO_ESP32S3))
+    Serial.printf("[TOUCH DIAG] %s: ", label);
+    for (int i = 0; i < 5; i++) {
+        uint32_t v = touchRead(1); // GPIO1 = T1
+        Serial.printf("%lu ", (unsigned long)v);
+        delay(50);
+    }
+    Serial.println();
+#else
+    (void)label;
+#endif
+}
+
 void nidmi_begin() {
     Serial.begin(115200);
     delay(50);
+
+    touchDiag("AVANT tout (juste apres Serial)");
 
     // Détecter et afficher le MCU
     PinMapper::detectMcu();
@@ -95,8 +114,12 @@ void nidmi_begin() {
         Serial.println("[NiDMI] No STA configuration found");
     }
 
+    touchDiag("AVANT WiFi/serveur");
+
     // Démarre web + mDNS + AP (après connexion STA)
     serverCore.begin(apSsid, apPass, host);
+
+    touchDiag("APRES WiFi/serveur");
     
     // Appliquer l'état sauvegardé des interfaces MIDI au MidiRouter
     g_midiRouter.enableUsbMidi(usbMidiEnabled);
@@ -110,8 +133,12 @@ void nidmi_begin() {
     // Initialiser Bluetooth MIDI
     serverCore.bluetooth().begin(serverName.c_str());
     
+    touchDiag("AVANT ComponentManager.begin");
+
     // Initialiser ComponentManager
     g_componentManager.begin(&g_midiRouter);
+
+    touchDiag("APRES ComponentManager.begin (MuxTask+MidiTask demarres)");
     
     Serial.println("[NiDMI] Ready");
     Serial.print("  AP SSID: "); Serial.println(apSsid);

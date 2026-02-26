@@ -67,8 +67,9 @@ public:
     void sendMidiUpdates(MidiSender* midi_sender);
     
     // Gestion de la tâche FreeRTOS
-    void begin(); // Démarrer la tâche FreeRTOS sur Core 0
-    void stop();  // Arrêter la tâche FreeRTOS
+    void begin();
+    void stop();
+    TaskHandle_t getTaskHandle() const { return muxTaskHandle; }
     
     bool readMuxAllChannels(uint8_t mux_id, uint16_t* values);
     uint16_t readMuxChannel(uint8_t gpio);
