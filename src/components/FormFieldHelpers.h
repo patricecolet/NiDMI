@@ -130,6 +130,45 @@ inline FormFieldDef makeInfoField(
 }
 
 /**
+ * @brief Crée un champ TEXT (court, pour valeurs compactes type "0,0" ou "2000,500")
+ */
+inline FormFieldDef makeTextField(
+    const char* id,
+    const char* label,
+    const char* defaultValue = nullptr,
+    const char* placeholder = nullptr,
+    uint16_t maxLength = 32,
+    uint16_t width = 0,
+    const char* hint = nullptr
+) {
+    FormFieldDef field{};
+    field.id = id;
+    field.label = label;
+    field.type = FieldType::TEXT;
+    field.required = false;
+    field.placeholder = placeholder;
+    field.maxLength = maxLength;
+    field.pattern = nullptr;
+    field.min = 0;
+    field.max = 0;
+    field.step = 0;
+    field.options = nullptr;
+    field.separator = nullptr;
+    field.defaultValue = defaultValue;
+    field.hintPosition = hint ? HintPosition::INLINE : HintPosition::NONE;
+    field.hint = hint;
+    field.hintClass = hint ? "margin-left:8px;font-size:0.9em;color:#666;" : nullptr;
+    field.dependsOn = nullptr;
+    field.showWhen = nullptr;
+    field.wrapperClass = "r";
+    field.inputClass = nullptr;
+    field.width = width;
+    field.labelBefore = nullptr;
+    field.labelAfter = nullptr;
+    return field;
+}
+
+/**
  * @brief Crée un champ NUMBER avec hint inline (style commun pour filtrage, seuils, etc.)
  */
 inline FormFieldDef makeNumberFieldWithHint(

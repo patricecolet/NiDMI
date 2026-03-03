@@ -1,6 +1,7 @@
 #include "ComponentManager.h"
 #include <Arduino.h> // For Serial.printf
 #include <Preferences.h>
+#include <esp_task_wdt.h>
 #include "../server/ServerCore.h"
 #include "../osc/OSCQueue.h"
 #include "../midi/MidiMessageType.h"
@@ -108,14 +109,6 @@ void ComponentManager::update() {
         return;
     }
     
-    // Diagnostic WiFi (toutes les 30 secondes)
-    static unsigned long lastDiagnostic = 0;
-    if (millis() - lastDiagnostic > 30000) {
-        if (WiFi.status() == WL_CONNECTED) {
-            Serial.printf("[WiFi] Signal: %d dBm\n", WiFi.RSSI());
-        }
-        lastDiagnostic = millis();
-    }
     
     // Log périodique du nombre de composants
     static unsigned long lastComponentLog = 0;
@@ -152,32 +145,26 @@ void ComponentManager::update() {
 }
 
 void ComponentManager::reloadConfigs() {
+    bool wdt = pauseRealtimeTasks();
     clearAll();
     loadMuxConfigFromNVS();
     ConfigLoader::loadFromNVS(*this);
+    resumeRealtimeTasks(wdt);
 }
 
-void ComponentManager::pauseRealtimeTasks() {
+bool ComponentManager::pauseRealtimeTasks() {
     _nvsWriteInProgress = true;
-    if (midiTaskStarted && midiTaskHandle != nullptr) {
-        vTaskSuspend(midiTaskHandle);
-    }
-    if (mux_manager.getTaskHandle() != nullptr) {
-        vTaskSuspend(mux_manager.getTaskHandle());
-    }
-    vTaskDelay(pdMS_TO_TICKS(2));
-    Serial.println("[ComponentManager] Realtime tasks paused for NVS write");
+    bool removed = (esp_task_wdt_delete(xTaskGetCurrentTaskHandle()) == ESP_OK);
+    vTaskDelay(pdMS_TO_TICKS(20));
+    return removed;
 }
 
-void ComponentManager::resumeRealtimeTasks() {
-    if (mux_manager.getTaskHandle() != nullptr) {
-        vTaskResume(mux_manager.getTaskHandle());
-    }
-    if (midiTaskStarted && midiTaskHandle != nullptr) {
-        vTaskResume(midiTaskHandle);
-    }
+void ComponentManager::resumeRealtimeTasks(bool restoreWdt) {
     _nvsWriteInProgress = false;
-    Serial.println("[ComponentManager] Realtime tasks resumed after NVS write");
+    if (restoreWdt) {
+        esp_task_wdt_add(xTaskGetCurrentTaskHandle());
+        esp_task_wdt_reset();
+    }
 }
 
 
@@ -535,8 +522,8 @@ void ComponentManager::midiTaskLoop() {
     TickType_t xLastWakeTime = xTaskGetTickCount();
     
     for(;;) {
-        if (!midi_sender) {
-            vTaskDelay(pdMS_TO_TICKS(100)); // Attendre si pas de sender
+        if (_nvsWriteInProgress || !midi_sender) {
+            vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
         

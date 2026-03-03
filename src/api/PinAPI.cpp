@@ -302,16 +302,27 @@ void setupPinAPI(AsyncWebServer& server) {
         json += "\"role\":\"" + role + "\"";
         
         auto addParam = [&](const char* name) {
+            String keyCheck = String("\"") + name + "\":";
+            if(json.indexOf(keyCheck) >= 0) return;
             if(request->hasParam(name, true)) {
                 String val = request->getParam(name, true)->value();
                 if(val == "true" || val == "false") {
                     json += ",\"" + String(name) + "\":" + val;
+                } else if(val.indexOf(',') >= 0) {
+                    /* Valeur avec virgule (ex. "0,0" ou "2000,500") → toujours chaîne JSON échappée */
+                    String escaped = val;
+                    escaped.replace("\\", "\\\\");
+                    escaped.replace("\"", "\\\"");
+                    json += ",\"" + String(name) + "\":\"" + escaped + "\"";
                 } else if(val.length() > 0 && (val[0] >= '0' && val[0] <= '9')) {
                     json += ",\"" + String(name) + "\":" + val;
                 } else if(val.length() > 1 && val[0] == '-' && (val[1] >= '0' && val[1] <= '9')) {
                     json += ",\"" + String(name) + "\":" + val;
                 } else {
-                    json += ",\"" + String(name) + "\":\"" + val + "\"";
+                    String escaped = val;
+                    escaped.replace("\\", "\\\\");
+                    escaped.replace("\"", "\\\"");
+                    json += ",\"" + String(name) + "\":\"" + escaped + "\"";
                 }
             }
         };
@@ -495,25 +506,17 @@ void setupPinAPI(AsyncWebServer& server) {
             return;
         }
         
-        Serial.printf("[PinAPI] JSON sauvegardé pour %s: %s\n", pinLabel.c_str(), json.c_str());
-        
-        /* Suspendre les tâches temps réel pendant l'écriture flash NVS */
-        g_componentManager.pauseRealtimeTasks();
+        Serial.printf("[PinAPI] Sauvegarde %s (%s) %u octets\n", pinLabel.c_str(), role.c_str(), (unsigned)json.length());
 
         Preferences preferences;
         preferences.begin("nidmi", false);
         String key = "pin_" + pinLabel;
         size_t written = preferences.putString(key.c_str(), json);
-        if(written == 0) {
-            Serial.printf("[PinAPI] ERREUR: putString a échoué pour %s (json len=%d)\n", key.c_str(), json.length());
-        } else {
-            String verify = preferences.getString(key.c_str(), "");
-            Serial.printf("[PinAPI] NVS vérifié pour %s: %s (len=%d)\n", key.c_str(), 
-                verify.length() > 0 ? "OK" : "VIDE", verify.length());
-        }
         preferences.end();
 
-        g_componentManager.resumeRealtimeTasks();
+        if(written == 0) {
+            Serial.printf("[PinAPI] ERREUR NVS pour %s\n", pinLabel.c_str());
+        }
         
         /* Si additionalPins présent, utiliser le handler générique pour ce type de composant */
         if(hasAdditionalPins && def) {
@@ -684,12 +687,10 @@ void setupPinAPI(AsyncWebServer& server) {
         String pinLabel = String(pinLabelBuf);
         String key = String("pin_") + pinLabel;
 
-        g_componentManager.pauseRealtimeTasks();
         Preferences preferences;
         preferences.begin("nidmi", false);
         preferences.putString(key.c_str(), buf);
         preferences.end();
-        g_componentManager.resumeRealtimeTasks();
 
         g_configCache.setConfigClean(pinLabel, buf, total);
         nidmi_requestReloadPins();

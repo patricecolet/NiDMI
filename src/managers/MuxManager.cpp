@@ -2,6 +2,8 @@
 #include <Preferences.h>
 #include "../osc/OSCQueue.h"
 #include "../midi/MidiSender.h"
+#include "ComponentManager.h"
+#include "../Globals.h"
 
 MuxManager::MuxManager() : mux_count(0), muxTaskHandle(nullptr), taskStarted(false) {
      for (int i = 0; i < MAX_MUXES; i++) {
@@ -603,6 +605,10 @@ void MuxManager::muxTaskLoop() {
     TickType_t xLastWakeTime = xTaskGetTickCount();
     
     for(;;) {
+        if (g_componentManager.isNvsWriteInProgress()) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
         // Mettre à jour un multiplexeur par tour (round-robin)
         static uint8_t current_mux = 0;
         

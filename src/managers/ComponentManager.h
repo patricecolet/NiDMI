@@ -48,8 +48,12 @@ private:
     static void midiTask(void* parameter);
     void midiTaskLoop();
 
-    // Garde NVS : suspend les tâches temps réel pendant les écritures flash
+    // Garde NVS : les tâches temps réel vérifient ce flag et yieldent
     volatile bool _nvsWriteInProgress = false;
+    
+public:
+    bool isNvsWriteInProgress() const { return _nvsWriteInProgress; }
+private:
     
 public:
     ComponentManager();
@@ -97,8 +101,8 @@ public:
     
     // Protection NVS : suspendre/reprendre les tâches temps réel
     // Appeler avant/après toute écriture NVS pour éviter les stalls flash
-    void pauseRealtimeTasks();
-    void resumeRealtimeTasks();
+    bool pauseRealtimeTasks();
+    void resumeRealtimeTasks(bool restoreWdt);
     
     // Debug
     void printStats();

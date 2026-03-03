@@ -1,6 +1,7 @@
 #include "APICommon.h"
 #include "../Globals.h"
 #include "../server/ServerCore.h"
+#include "../server/ServerCallbacks.h"
 #include <Preferences.h>
 #include <WiFi.h>
 
@@ -46,7 +47,6 @@ void setupNetworkAPI(AsyncWebServer& server) {
             String gateway = request->hasParam("gw", true) ? request->getParam("gw", true)->value() : String("");
             String subnet = request->hasParam("sn", true) ? request->getParam("sn", true)->value() : String("");
             
-            // Sauvegarder en NVS
             Preferences preferences;
             preferences.begin("nidmi", false);
             preferences.putString("sta_ssid", ssid);
@@ -58,14 +58,8 @@ void setupNetworkAPI(AsyncWebServer& server) {
             }
             preferences.end();
             
-            // Envoyer la réponse HTTP AVANT le redémarrage
             request->send(200, "application/json", "{\"status\":\"ok\",\"reboot\":true}");
-            
-            // Attendre que la réponse soit envoyée
-            delay(2000);
-            
-            // Redémarrer - connectSta() sera appelé au boot
-            ESP.restart();
+            nidmi_requestReboot();
         } else {
             request->send(400, "application/json", "{\"error\":\"ssid and pass required\"}");
         }
@@ -101,7 +95,6 @@ void setupNetworkAPI(AsyncWebServer& server) {
         if(request->hasParam("name", true)){
             String name = request->getParam("name", true)->value();
             
-            // Sauvegarder en NVS
             Preferences preferences;
             preferences.begin("nidmi", false);
             preferences.putString("mdns_name", name);

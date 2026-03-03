@@ -467,22 +467,13 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                             break;
                         }
                         case ComponentType::TOUCH: {
-                            // Utilise les champs génériques pour stocker les paramètres Touch
-                            // potMin        -> customInt1 (seuil touch / velocity)
-                            // aftertouchThreshold -> customInt2
-                            // filterIntensity     -> customField1 (stocké en texte)
-                            {
-                                int touchMin = JSONParser::extractInt(pinConfig, "potMin", 0);
-                                if (touchMin < 0) touchMin = 0;
-                                if (touchMin > 255) touchMin = 255; // customInt1 est sur 8 bits
-                                config->customInt1 = (uint8_t)touchMin;
-                            }
-                            {
-                                int aft = JSONParser::extractInt(pinConfig, "aftertouchThreshold", 4);
-                                if (aft < 1) aft = 1;
-                                if (aft > 127) aft = 127;
-                                config->customInt2 = (uint8_t)aft;
-                            }
+                            // customField2 = "aftertouch,onRaw,offRaw" (ex. "20000,2000,500") pour limiter la taille JSON
+                            // filterIntensity -> customField1
+                            long aftRange = JSONParser::extractInt(pinConfig, "aftertouchRange", 20000);
+                            if (aftRange < 0) aftRange = 0;
+                            if (aftRange > 500000) aftRange = 500000;
+                            String sVal = JSONParser::extractStr(pinConfig, "s", "0,0");
+                            snprintf(config->customField2, sizeof(config->customField2), "%ld,%s", aftRange, sVal.c_str());
                             {
                                 int filt = JSONParser::extractInt(pinConfig, "filterIntensity", 5);
                                 if (filt < 1) filt = 1;

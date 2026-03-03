@@ -10,9 +10,22 @@
 MidiRouter g_midiRouter;
 ComponentManager g_componentManager;
 
-// Demande de rechargement des configs pins depuis l'API
-static bool g_requestReloadPins = false;
-extern "C" void nidmi_requestReloadPins(){ g_requestReloadPins = true; }
+// Demande de rechargement des configs pins depuis l'API (débounce 500ms)
+static volatile bool g_requestReloadPins = false;
+static unsigned long g_reloadRequestTime = 0;
+extern "C" void nidmi_requestReloadPins(){
+    g_requestReloadPins = true;
+    g_reloadRequestTime = millis();
+}
+
+// Redémarrage différé (depuis le main loop, pas depuis le handler HTTP)
+static volatile bool g_requestReboot = false;
+static unsigned long g_rebootRequestTime = 0;
+extern "C" void nidmi_requestReboot(){
+    g_rebootRequestTime = millis();
+    g_requestReboot = true;
+}
+
 
 // Le mapping GPIO est maintenant géré par PinMapper
 
@@ -74,7 +87,7 @@ void nidmi_begin() {
     
     // Charger l'état des interfaces MIDI depuis NVS
     // bool usbMidiEnabled = preferences.getBool("usbmidi_enabled", true); // Par défaut true
-     bool usbMidiEnabled = false; // Par défaut true
+     bool usbMidiEnabled = true; // Par défaut true
     
     preferences.end();
     
@@ -100,7 +113,14 @@ void nidmi_begin() {
     const char* apPass = "nidmipass";
     const char* host   = serverName.c_str();
 
-    // Tente STA si configurée (AVANT de démarrer le serveur)
+    touchDiag("AVANT WiFi/serveur");
+
+    // Démarre AP + mode APSTA d'abord
+    serverCore.begin(apSsid, apPass, host);
+
+    touchDiag("APRES WiFi/serveur");
+
+    // Tente STA après que le mode APSTA soit configuré
     if (staSsid.length() > 0) {
         if (staIpStr.length() > 0 && staGwStr.length() > 0 && staSnStr.length() > 0) {
             IPAddress ip, gw, sn;
@@ -113,13 +133,6 @@ void nidmi_begin() {
     } else {
         Serial.println("[NiDMI] No STA configuration found");
     }
-
-    touchDiag("AVANT WiFi/serveur");
-
-    // Démarre web + mDNS + AP (après connexion STA)
-    serverCore.begin(apSsid, apPass, host);
-
-    touchDiag("APRES WiFi/serveur");
     
     // Appliquer l'état sauvegardé des interfaces MIDI au MidiRouter
     g_midiRouter.enableUsbMidi(usbMidiEnabled);
@@ -151,11 +164,16 @@ void nidmi_begin() {
 }
 
 void nidmi_loop() {
+    // Redémarrage différé (laisse le temps à la réponse HTTP d'être envoyée)
+    if (g_requestReboot && millis() - g_rebootRequestTime >= 2000) {
+        ESP.restart();
+    }
+
     // Mise à jour du serveur
     serverCore.update();
     
-    // Recharger pins si demandé
-    if (g_requestReloadPins) {
+    // Recharger pins si demandé (débounce 500ms pour grouper les sauvegardes séquentielles)
+    if (g_requestReloadPins && millis() - g_reloadRequestTime >= 500) {
         g_requestReloadPins = false;
         g_componentManager.reloadConfigs();
     }

@@ -28,6 +28,12 @@ void nidmi_requestReloadPins();
  */
 void nidmi_requestReloadOsc();
 
+/**
+ * @brief Demander un redémarrage différé (2s pour laisser la réponse HTTP partir)
+ */
+void nidmi_requestReboot();
+
+
 #ifdef __cplusplus
 }
 #endif

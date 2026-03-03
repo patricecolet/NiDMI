@@ -1,6 +1,5 @@
 #include "ConfigCache.h"
 #include "../Globals.h"
-#include "../managers/ComponentManager.h"
 
 /* Forward declarations */
 String mergeConfigWithDefaults(const String& nvsConfig, const String& defaultConfig);
@@ -84,8 +83,6 @@ void ConfigCache::saveAllDirty() {
     
     debug_network( "[ConfigCache] DEBUG Début sauvegarde NVS...\n\n");
 
-    g_componentManager.pauseRealtimeTasks();
-
     Preferences preferences;
     preferences.begin("nidmi", false);
     for (int i = 0; i < count; i++) {
@@ -98,8 +95,6 @@ void ConfigCache::saveAllDirty() {
         }
     }
     preferences.end();
-
-    g_componentManager.resumeRealtimeTasks();
     
     lastSave = millis();
     debug_network( "[ConfigCache] Sauvegarde groupée terminée (%d pins)\n", count);
@@ -133,9 +128,6 @@ void ConfigCache::removeConfig(const String& pin) {
     int index = findPinIndex(pin);
     String key = "pin_" + pin;
     
-    /* Suspendre les tâches temps réel pendant l'écriture flash NVS */
-    g_componentManager.pauseRealtimeTasks();
-
     Preferences preferences;
     preferences.begin("nidmi", false);
     
@@ -175,8 +167,6 @@ void ConfigCache::removeConfig(const String& pin) {
         Serial.printf("[ConfigCache] Clé '%s' n'existait pas dans NVS\n", key.c_str());
     }
     
-    g_componentManager.resumeRealtimeTasks();
-
     /* Retirer du cache si présent */
     if (index != -1 && index < count && count > 0) {
         for (int i = index; i < count - 1; i++) {

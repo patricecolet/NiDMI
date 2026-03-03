@@ -201,38 +201,53 @@ void TouchProcessor::resetAllBaselines() {
 #endif
 }
 
-// Calculer les seuils depuis la configuration
+// Parser customField2 Touch : "aft" ou "aft,onRaw,offRaw" (ex. "20000" ou "20000,2000,500")
+static void parseTouchCustomField2(const char* s, uint32_t& aft, uint32_t& on_raw, uint32_t& off_raw) {
+    aft = 20000;
+    on_raw = 0;
+    off_raw = 0;
+    if (!s || s[0] == '\0') return;
+    aft = (uint32_t)atoi(s);
+    const char* p = strchr(s, ',');
+    if (p) {
+        on_raw = (uint32_t)atoi(p + 1);
+        p = strchr(p + 1, ',');
+        if (p) off_raw = (uint32_t)atoi(p + 1);
+    }
+}
+
+// Calculer les seuils depuis la configuration (customField2 = "aft,onRaw,offRaw")
 static void calculateThresholds(
     const ComponentConfig& config,
     uint32_t baseline,
     uint32_t& touch_threshold,
     uint32_t& velocity_threshold,
-    uint8_t& aftertouch_threshold
+    uint32_t& aftertouch_range,
+    uint32_t& note_on_threshold,
+    uint32_t& note_off_threshold
 ) {
-    // Touch threshold : customInt1 (potMin) si configuré, sinon 102% de baseline (valeur monte = touché)
-    if (config.customInt1 > 0) {
-        touch_threshold = config.customInt1;
-        TOUCH_LOG("[TouchProcessor] GPIO%d: touch_threshold=%d (config customInt1)\n", config.gpio, touch_threshold);
+    uint32_t on_raw = 0, off_raw = 0;
+    parseTouchCustomField2(config.customField2, aftertouch_range, on_raw, off_raw);
+    if (aftertouch_range == 0) aftertouch_range = (baseline * 20) / 100;
+
+    if (on_raw > 0) {
+        note_on_threshold = baseline + on_raw;
     } else {
-        touch_threshold = (baseline * 102) / 100;
-        TOUCH_LOG("[TouchProcessor] GPIO%d: touch_threshold=%lu (102%% baseline=%lu)\n",
-                 config.gpio, (unsigned long)touch_threshold, (unsigned long)baseline);
+        note_on_threshold = (baseline * 102) / 100 + (baseline * 2) / 100;  // auto 102%+2%
     }
-    
-    // Velocity threshold : customInt1 si configuré, sinon touch_threshold
-    if (config.customInt1 > 0) {
-        velocity_threshold = config.customInt1;
-        TOUCH_LOG("[TouchProcessor] GPIO%d: velocity_threshold=%d (config customInt1)\n", 
-                 config.gpio, velocity_threshold);
+    if (off_raw > 0) {
+        note_off_threshold = baseline + off_raw;
     } else {
-        velocity_threshold = touch_threshold;
-        TOUCH_LOG("[TouchProcessor] GPIO%d: velocity_threshold=%d (=touch_threshold)\n", 
-                 config.gpio, velocity_threshold);
+        note_off_threshold = (baseline * 102) / 100;  // auto 102%
     }
-    
-    // Aftertouch threshold : customInt2 si configuré, sinon 4
-    aftertouch_threshold = (config.customInt2 > 0) ? config.customInt2 : 4;
-    TOUCH_LOG("[TouchProcessor] GPIO%d: aftertouch_threshold=%d\n", config.gpio, aftertouch_threshold);
+    if (note_on_threshold < note_off_threshold) note_on_threshold = note_off_threshold;
+
+    touch_threshold = note_off_threshold;
+    velocity_threshold = note_off_threshold;
+
+    TOUCH_LOG("[TouchProcessor] GPIO%d: on=%lu off=%lu aft=%lu (baseline=%lu)\n",
+             config.gpio, (unsigned long)note_on_threshold, (unsigned long)note_off_threshold,
+             (unsigned long)aftertouch_range, (unsigned long)baseline);
 }
 
 // Traitement NOTE_VELOCITY
@@ -242,21 +257,17 @@ static void processNoteVelocity(
     uint32_t touch_value,
     uint32_t touch_smoothed,
     uint32_t baseline,
+    uint32_t note_on_threshold,
+    uint32_t note_off_threshold,
     uint32_t velocity_threshold,
-    uint8_t aftertouch_threshold,
+    uint32_t aftertouch_range,
     MidiSender* midi_sender,
     OSCQueue& osc_queue
 ) {
-    // Hystérésis / anti-rebond : 2% de la baseline
-    // -> seuil de déclenchement (ON) plus haut que le seuil de relâchement (OFF)
-    uint32_t hysteresis_margin = (baseline * 2) / 100;
-    uint32_t note_off_threshold = velocity_threshold;                // seuil bas (relâchement)
-    uint32_t note_on_threshold  = velocity_threshold + hysteresis_margin; // seuil haut (déclenchement)
-        
     bool note_is_on = (state.last_note != 255);
     bool is_touched = note_is_on
-        ? (touch_value > note_off_threshold)   // Note déjà ON → rester ON tant qu'on est au-dessus du seuil bas
-        : (touch_value > note_on_threshold);   // Note OFF → déclencher uniquement au-dessus du seuil haut
+        ? (touch_value > note_off_threshold)   // Note déjà ON → rester ON tant qu'au-dessus du seuil bas
+        : (touch_value > note_on_threshold);   // Note OFF → déclencher au-dessus du seuil haut
 
     // Capteur "valeur MONTE quand on touche" : plage [seuil .. seuil+bande] → vélocité 1..127
     uint32_t touch_min_value = note_on_threshold;  // juste au-dessus du seuil = touche légère
@@ -321,42 +332,32 @@ static void processNoteVelocity(
             state.last_aftertouch = 0;
             MidiOutputCoordinator::sendOsc(osc_queue, config, 0, touch_value);
         } else if (note_is_on && is_touched && velocity > 0) {
-        // Key Pressure (Polyphonic Aftertouch) — utilise touch_smoothed pour un contrôle stable
+        // Key Pressure : mapping [touch_threshold .. touch_threshold+aftertouch_range] → 0-127 (touch_smoothed)
+        uint32_t at_min = velocity_threshold;
+        uint32_t at_max = velocity_threshold + aftertouch_range;
+        if (at_max <= at_min) at_max = at_min + 1;
         uint8_t at_velocity = 0;
-        if (touch_smoothed <= touch_min_value) {
-            at_velocity = 1;
-        } else if (touch_smoothed >= touch_max_value) {
+        if (touch_smoothed <= at_min) {
+            at_velocity = 0;
+        } else if (touch_smoothed >= at_max) {
             at_velocity = 127;
         } else {
-            at_velocity = map(touch_smoothed, touch_min_value, touch_max_value, 1, 127);
-            if (at_velocity < 1) at_velocity = 1;
+            at_velocity = map(touch_smoothed, at_min, at_max, 0, 127);
             if (at_velocity > 127) at_velocity = 127;
         }
 
-        int velocity_diff = abs((int)at_velocity - (int)state.last_aftertouch);
-            const uint32_t MIN_KEYPRESSURE_INTERVAL_MS = 20;
-            uint32_t time_since_last = millis() - state.last_time;
-            
-        TOUCH_LOG("[TouchProcessor] GPIO%d: Key Pressure check - diff=%d (seuil=%d), time=%dms (min=%dms)\n",
-                 config.gpio, velocity_diff, aftertouch_threshold, time_since_last, MIN_KEYPRESSURE_INTERVAL_MS);
-        
-        if (velocity_diff > aftertouch_threshold && time_since_last >= MIN_KEYPRESSURE_INTERVAL_MS) {
-            TOUCH_INFO("[TouchProcessor] →→→ GPIO%d → Key Pressure (note=%d, at_vel=%d, smoothed=%lu)\n",
-                             config.gpio, note, at_velocity, (unsigned long)touch_smoothed);
-                if (midi_sender) {
-                    midi_sender->sendKeyPressure(channel, note, at_velocity);
-                TOUCH_LOG("[TouchProcessor] → MIDI Key Pressure envoyé (ch=%d, note=%d, vel=%d)\n", 
-                         channel, note, at_velocity);
-                } else {
-                TOUCH_WARN("[TouchProcessor] ⚠️ MIDI Key Pressure NON envoyé (midi_sender=NULL)\n");
-                }
-                state.last_aftertouch = at_velocity;
-                state.last_value = at_velocity;
-                state.last_time = millis();
-                MidiOutputCoordinator::sendOsc(osc_queue, config, at_velocity, touch_smoothed);
-            } else {
-            TOUCH_LOG("[TouchProcessor] ⚠️ GPIO%d: Key Pressure bloqué - diff=%d (seuil=%d) ou time=%dms < %dms\n",
-                     config.gpio, velocity_diff, aftertouch_threshold, time_since_last, MIN_KEYPRESSURE_INTERVAL_MS);
+        const uint32_t MIN_KEYPRESSURE_INTERVAL_MS = 20;
+        uint32_t time_since_last = millis() - state.last_time;
+        if (time_since_last >= MIN_KEYPRESSURE_INTERVAL_MS || at_velocity != state.last_aftertouch) {
+            TOUCH_LOG("[TouchProcessor] GPIO%d: Key Pressure at_vel=%d (smoothed %lu in [%lu..%lu])\n",
+                     config.gpio, at_velocity, (unsigned long)touch_smoothed, (unsigned long)at_min, (unsigned long)at_max);
+            if (midi_sender) {
+                midi_sender->sendKeyPressure(channel, note, at_velocity);
+            }
+            state.last_aftertouch = at_velocity;
+            state.last_value = at_velocity;
+            state.last_time = millis();
+            MidiOutputCoordinator::sendOsc(osc_queue, config, at_velocity, touch_smoothed);
         }
     }
 }
@@ -618,11 +619,14 @@ void TouchProcessor::process(
         return; // Baseline pas encore établie
     }
     
-    // Calculer les seuils
+    // Calculer les seuils (customField2 = "aft,onRaw,offRaw")
     uint32_t touch_threshold;
     uint32_t velocity_threshold;
-    uint8_t aftertouch_threshold;
-    calculateThresholds(config, baseline, touch_threshold, velocity_threshold, aftertouch_threshold);
+    uint32_t aftertouch_range;
+    uint32_t note_on_threshold;
+    uint32_t note_off_threshold;
+    calculateThresholds(config, baseline, touch_threshold, velocity_threshold, aftertouch_range,
+                        note_on_threshold, note_off_threshold);
     
     // Log périodique des valeurs et seuils
     static unsigned long last_debug = 0;
@@ -642,8 +646,9 @@ void TouchProcessor::process(
     TOUCH_LOG_ONCE("[TouchProcessor] GPIO%d: Type message MIDI = %d\n", config.gpio, (int)config.msg_type);
     
     if (config.msg_type == MidiMessageType::NOTE_VELOCITY) {
-        processNoteVelocity(config, state, touch_raw, touch_smoothed, baseline, velocity_threshold, 
-                          aftertouch_threshold, midi_sender, osc_queue);
+        processNoteVelocity(config, state, touch_raw, touch_smoothed, baseline,
+                          note_on_threshold, note_off_threshold, velocity_threshold, aftertouch_range,
+                          midi_sender, osc_queue);
     } else if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
         processNoteSweep(config, state, touch_raw, touch_threshold, baseline, midi_sender, osc_queue);
     } else {

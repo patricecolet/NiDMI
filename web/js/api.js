@@ -442,10 +442,16 @@ async function saveAll(){
    }
  }
  
- /* Sauvegarder tous les composants (simples et complexes) via /api/pins/set */
- const ps=Object.keys(pcfg).map(async lbl=>{
+ /* Sauvegarder tous les composants séquentiellement (évite saturation NVS ESP32) */
+ const pinLabels = Object.keys(pcfg);
+ const validPins = pinLabels.filter(l => pcfg[l] && pcfg[l].role);
+ let savedCount = 0;
+ for (const lbl of pinLabels) {
  let c=pcfg[lbl];
- if(!c||!c.role) return null;
+ if(!c||!c.role) continue;
+ savedCount++;
+ msg.textContent='Enregistrement ' + savedCount + '/' + validPins.length + ' (' + lbl + ')...';
+ const savePin = async () => {
  /* Pour la pin actuellement affichée, toujours reprendre le formulaire (évite valeurs périmées) */
  if(typeof cur !== 'undefined' && lbl === cur && typeof readCfg === 'function') {
   const freshRole = $('#funcSelect')?.value || '';
@@ -625,12 +631,15 @@ async function saveAll(){
  if(lbl === 'SPI' || lbl === 'I2C') {
   console.log('[saveAll] POST body pour', lbl, ':', p.toString());
  }
- return fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()})
-  .then(r => { if (r.status === 413) return r.json().then(d => Promise.reject(new Error(d.message || 'Config trop grande pour NVS (max 1900 octets). Réduisez les options ou le nombre de pins.'))); return r; });
- });
- await Promise.all(ps.filter(p => p !== null));
- 
- /* Attendre que le backend traite le rechargement (ESP32-C3 mono-cœur) */
+ const r = await fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
+ if (r.status === 413) { const d = await r.json().catch(() => ({})); throw new Error(d.message || 'Config trop grande pour NVS (max 1900 octets).'); }
+ return r;
+ };
+ await savePin();
+ await new Promise(r => setTimeout(r, 80));
+ }
+
+ /* Attendre que le backend traite le rechargement */
  await new Promise(r => setTimeout(r, 300));
  
  const listRes=await fetch('/api/pins/list');
@@ -669,14 +678,13 @@ async function saveAll(){
  
  const localPins=new Set(Object.keys(pcfg));
  const toDelete=Array.from(serverPins).filter(p=>!localPins.has(p));
- const deletePromises=toDelete.map(async pinLabel=>{
- const p=new URLSearchParams();
- p.set('pin',pinLabel);
- return fetch('/api/pins/delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
- });
- await Promise.all(deletePromises);
- /* Laisser le temps au backend (NVS) de persister avant de recharger la liste */
- if (toDelete.length > 0) await new Promise(r => setTimeout(r, 400));
+ for (const pinLabel of toDelete) {
+  const p=new URLSearchParams();
+  p.set('pin',pinLabel);
+  await fetch('/api/pins/delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
+  await new Promise(r => setTimeout(r, 80));
+ }
+ if (toDelete.length > 0) await new Promise(r => setTimeout(r, 200));
  /* Rafraîchir pcfg et la liste des pins depuis le serveur (évite rechargement manuel) */
  await loadConfiguredPins();
 
