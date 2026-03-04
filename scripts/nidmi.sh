@@ -15,8 +15,32 @@ set -e  # Arrêter en cas d'erreur
 
 # Variables
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ARDUINO_LIB_DIR="/Users/patricecolet/Documents/Arduino/libraries/NiDMI"
-ARDUINO_CACHE_DIR="/Users/patricecolet/Library/Caches/arduino/sketches"
+
+# Détection de la plateforme (macOS, WSL, Linux)
+PLATFORM="linux"
+if grep -qi microsoft /proc/version 2>/dev/null; then
+    PLATFORM="wsl"
+elif [[ "$OSTYPE" == darwin* ]]; then
+    PLATFORM="mac"
+fi
+
+# Dossiers Arduino (valeurs par défaut, surchargeables via ARDUINO_LIB_DIR / ARDUINO_CACHE_DIR)
+MAC_LIB_DEFAULT="$HOME/Documents/Arduino/libraries/NiDMI"
+MAC_CACHE_DEFAULT="$HOME/Library/Caches/arduino/sketches"
+LINUX_LIB_DEFAULT="$HOME/Arduino/libraries/NiDMI"
+LINUX_CACHE_DEFAULT="$HOME/.arduino15/sketches"
+
+case "$PLATFORM" in
+    mac)
+        ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$MAC_LIB_DEFAULT}"
+        ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$MAC_CACHE_DEFAULT}"
+        ;;
+    wsl|linux)
+        ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$LINUX_LIB_DEFAULT}"
+        ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$LINUX_CACHE_DEFAULT}"
+        ;;
+esac
+
 BOARD_TYPE="s3"  # Par défaut: S3
 BOARD="esp32:esp32:XIAO_ESP32S3"
 DEFAULT_SKETCH="nidmi_basic"
@@ -262,7 +286,11 @@ clean_cache() {
     fi
     
     # Nettoyer les bibliothèques staging (copies temporaires Arduino)
-    ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
+    if [ "$PLATFORM" = "mac" ]; then
+        ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
+    else
+        ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
+    fi
     if [ -d "$ARDUINO_STAGING_DIR" ]; then
         rm -rf "$ARDUINO_STAGING_DIR"/* 2>/dev/null || true
         echo "   ✅ Bibliothèques staging nettoyées: $ARDUINO_STAGING_DIR"
