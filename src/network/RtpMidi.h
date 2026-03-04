@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
-#include <WiFiUDP.h>
+#include <WiFiUdp.h>
 #include <AppleMIDI.h>
 
 USING_NAMESPACE_APPLEMIDI
