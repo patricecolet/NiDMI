@@ -2,7 +2,7 @@
 #include "../Globals.h"
 #include "../server/ServerCore.h"
 #include <Preferences.h>
-#include <ESP.h>
+#include <Esp.h>
 
 void setupRTPAPI(AsyncWebServer& server) {
     // API - Configuration RTP-MIDI

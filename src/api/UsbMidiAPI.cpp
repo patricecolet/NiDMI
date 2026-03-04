@@ -3,7 +3,7 @@
 #include "../server/ServerCore.h"
 #include "../midi/MidiRouter.h"
 #include <Preferences.h>
-#include <ESP.h>
+#include <Esp.h>
 
 void setupUsbMidiAPI(AsyncWebServer& server) {
     // API - Activation/Désactivation USB MIDI
