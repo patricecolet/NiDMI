@@ -14,7 +14,7 @@
 set -e  # Arrêter en cas d'erreur
 
 # Variables
-REPO_DIR="/Users/patricecolet/repo/NiDMI"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARDUINO_LIB_DIR="/Users/patricecolet/Documents/Arduino/libraries/NiDMI"
 ARDUINO_CACHE_DIR="/Users/patricecolet/Library/Caches/arduino/sketches"
 BOARD_TYPE="s3"  # Par défaut: S3
