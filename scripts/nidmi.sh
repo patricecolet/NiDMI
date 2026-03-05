@@ -537,6 +537,8 @@ build_binary() {
             EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
         fi
         
+        EXTRA_FLAGS_ARRAY+=("-fpermissive")
+
         # Construire la commande arduino-cli
         if [ ${#EXTRA_FLAGS_ARRAY[@]} -gt 0 ]; then
             # Joindre les flags avec des espaces
