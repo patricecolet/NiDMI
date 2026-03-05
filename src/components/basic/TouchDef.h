@@ -34,7 +34,7 @@ struct Touch {
     static constexpr ComponentFamily FAMILY = ComponentFamily::BASIC;
     static constexpr ComponentType TYPE = ComponentType::TOUCH;
     static constexpr PinType PIN_TYPE = PinType::PIN_ANALOG;
-    static constexpr bool IMPLEMENTED = false;
+    static constexpr bool IMPLEMENTED = true;
     static constexpr bool SUPPORTS_MIDI = true;
     static constexpr bool SUPPORTS_OSC = true;
     
@@ -42,8 +42,8 @@ struct Touch {
     static constexpr uint8_t DEFAULT_NOTE = 60;
     static constexpr uint8_t DEFAULT_CHANNEL = 1;
     static constexpr uint8_t DEFAULT_FILTER_INTENSITY = 5;
-    static constexpr uint16_t DEFAULT_TOUCH_THRESHOLD = 50;  // Seuil pour Note On (0-4095, plus bas = touché)
-    static constexpr uint8_t DEFAULT_AFTERTOUCH_THRESHOLD = 4;  // Sensibilité aftertouch (1-127)
+    static constexpr const char* DEFAULT_SEUILS_RAW = "0,0";  // ON,OFF raw depuis baseline (0,0=auto)
+    static constexpr uint32_t DEFAULT_AFTERTOUCH_RANGE = 20000;  // Plage raw pour aftertouch 0-127
     
     /**
      * @brief Validation : vérifie que le GPIO a une capacité Touch et que c'est un ESP32-S3
