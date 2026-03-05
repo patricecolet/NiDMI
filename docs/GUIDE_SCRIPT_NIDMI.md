@@ -79,6 +79,26 @@ Spécifie le type de carte ESP32.
 - `c3` → `esp32:esp32:XIAO_ESP32C3`
 - `s3` → `esp32:esp32:XIAO_ESP32S3`
 
+### Pagination (par défaut, C3 et S3)
+   - La pagination est activée par défaut pour C3 et S3.
+   - L'API renvoie les définitions de composants par pages (12 Ko).
+
+**Options :**
+- `--pagination`
+- `--no-pagination`
+
+### Partition C3 (large-app, par défaut pour C3 uniquement)
+Sur C3, le script utilise par défaut une partition sans SPIFFS, 4 Mo app `tools/nidmi_c3_no_spiffs.csv`
+
+**Comment la désactiver?** : `--no-large-app`
+
+Et, ça ne s’applique pas au S3.
+
+
+### Résumé des défauts :
+- La pagination est toujours activée pour C3 et S3.
+- La partition large-app est activée par défaut sur C3 et elle est désactivable.
+
 ## 📖 Exemples d'utilisation
 
 ### Synchronisation simple
