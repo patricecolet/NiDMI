@@ -155,7 +155,7 @@ bool OSCQueue::enqueueIntArray(const String& address, const uint16_t* values, in
     // Créer un message avec toutes les valeurs brutes (0-4095) comme int32
     OSCMessage msg(address.c_str());
     for (int i = 0; i < count; i++) {
-        msg.add((int32_t)values[i]);
+        msg.add((intOSC_t)values[i]);
     }
     
     // Envoyer directement (pas de queue pour les messages batch)
@@ -176,7 +176,7 @@ bool OSCQueue::enqueueMidiArray(const String& address, const uint8_t* values, in
     // Créer un message avec toutes les valeurs MIDI (0-127) comme int32
     OSCMessage msg(address.c_str());
     for (int i = 0; i < count; i++) {
-        msg.add((int32_t)values[i]);
+        msg.add((intOSC_t)values[i]);
     }
     
     // Envoyer directement (pas de queue pour les messages batch)
@@ -212,9 +212,9 @@ void OSCQueue::update() {
             msg.add(item.value);  // Canal
             msg.add(item.value2); // Valeur
         } else { // MIDI
-            msg.add((int32_t)item.data1);
-            msg.add((int32_t)item.data2);
-            msg.add((int32_t)item.channel);
+            msg.add((intOSC_t)item.data1);
+            msg.add((intOSC_t)item.data2);
+            msg.add((intOSC_t)item.channel);
         }
         
         if (sendOSCMessage(msg)) {

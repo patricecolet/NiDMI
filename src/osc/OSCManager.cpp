@@ -98,7 +98,7 @@ bool OSCManager::sendInt(const String& address, int value) {
     }
 
     OSCMessage msg(address.c_str());
-    msg.add((int32_t)value);
+    msg.add((intOSC_t)value);
 
     return sendOSCMessage(msg);
 }
@@ -109,8 +109,8 @@ bool OSCManager::sendNote(const String& address, uint8_t note, uint8_t velocity)
     }
 
     OSCMessage msg(address.c_str());
-    msg.add((int32_t)note);
-    msg.add((int32_t)velocity);
+    msg.add((intOSC_t)note);
+    msg.add((intOSC_t)velocity);
 
     return sendOSCMessage(msg);
 }
@@ -121,9 +121,9 @@ bool OSCManager::sendMidiMessage(const String& address, uint8_t data1, uint8_t d
     }
 
     OSCMessage msg(address.c_str());
-    msg.add((int32_t)data1);    // Note/Control
-    msg.add((int32_t)data2);    // Velocity/Value  
-    msg.add((int32_t)channel);  // Canal MIDI
+    msg.add((intOSC_t)data1);    // Note/Control
+    msg.add((intOSC_t)data2);    // Velocity/Value  
+    msg.add((intOSC_t)channel);  // Canal MIDI
 
     return sendOSCMessage(msg);
 }
