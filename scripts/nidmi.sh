@@ -14,47 +14,31 @@
 set -e  # Arrêter en cas d'erreur
 
 # Variables
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-# Détection de la plateforme (macOS, WSL, Linux)
-PLATFORM="linux"
-if grep -qi microsoft /proc/version 2>/dev/null; then
-    PLATFORM="wsl"
-elif [[ "$OSTYPE" == darwin* ]]; then
-    PLATFORM="mac"
-fi
-
-# Dossiers Arduino (valeurs par défaut, surchargeables via ARDUINO_LIB_DIR / ARDUINO_CACHE_DIR)
-MAC_LIB_DEFAULT="$HOME/Documents/Arduino/libraries/NiDMI"
-MAC_CACHE_DEFAULT="$HOME/Library/Caches/arduino/sketches"
-LINUX_LIB_DEFAULT="$HOME/Arduino/libraries/NiDMI"
-LINUX_CACHE_DEFAULT="$HOME/.arduino15/sketches"
-
-case "$PLATFORM" in
-    mac)
-        ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$MAC_LIB_DEFAULT}"
-        ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$MAC_CACHE_DEFAULT}"
-        ;;
-    wsl|linux)
-        ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$LINUX_LIB_DEFAULT}"
-        ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$LINUX_CACHE_DEFAULT}"
-        ;;
-esac
-
+REPO_DIR="/Users/patricecolet/repo/NiDMI"
+ARDUINO_LIB_DIR="/Users/patricecolet/Documents/Arduino/libraries/NiDMI"
+ARDUINO_CACHE_DIR="/Users/patricecolet/Library/Caches/arduino/sketches"
 BOARD_TYPE="s3"  # Par défaut: S3
 BOARD="esp32:esp32:XIAO_ESP32S3"
 DEFAULT_SKETCH="nidmi_basic"
 NVS_RESET_SKETCH="nidmi_clear_nvs"
 CLEAR_NVS=false
 
+# Port série (optionnel, peut être forcé via --port)
+SERIAL_PORT=""
+
 # Langue par défaut (français)
 LANG_CODE="fr"
 
 # Options d'optimisation JSON
 LIGHT_MODE=false
-PAGINATION_MODE=false
+# Pagination par défaut : NiDMI nécessite la pagination pour éviter la troncature du JSON des définitions
+PAGINATION_MODE=true
 
-# Parser les arguments pour --lang, --board, --light, --pagination
+# Partition C3 sans SPIFFS (app ~4 Mo). Par défaut activée pour C3 uniquement (évite 97% flash).
+LARGE_APP=false
+NO_LARGE_APP=false
+
+# Parser les arguments pour --lang, --board, --light, --pagination, --no-pagination, --large-app, --no-large-app, --port
 ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -77,6 +61,22 @@ while [[ $# -gt 0 ]]; do
         --pagination)
             PAGINATION_MODE=true
             shift
+            ;;
+        --no-pagination)
+            PAGINATION_MODE=false
+            shift
+            ;;
+        --large-app)
+            LARGE_APP=true
+            shift
+            ;;
+        --no-large-app)
+            NO_LARGE_APP=true
+            shift
+            ;;
+        --port)
+            SERIAL_PORT="$2"
+            shift 2
             ;;
         *)
             ARGS+=("$1")
@@ -121,6 +121,11 @@ case "$BOARD_TYPE" in
         ;;
 esac
 
+# C3 : activer --large-app par défaut (partition ~4 Mo) sauf si --no-large-app
+if [[ "$BOARD" == *"XIAO_ESP32C3"* ]] && [ "$NO_LARGE_APP" != true ]; then
+    LARGE_APP=true
+fi
+
 # Export pour build_html_simple.sh
 export LANG_CODE
 
@@ -142,16 +147,21 @@ show_help() {
     echo "  help     - Afficher cette aide"
     echo ""
     echo "Options:"
-    echo "  --lang LANG   - Langue de l'interface web (fr|en, défaut: fr)"
-    echo "                  Nécessite jq installé (brew install jq sur macOS)"
+    echo "  --lang LANG     - Langue de l'interface web (fr|en, défaut: fr)"
+    echo "                    Nécessite jq installé (brew install jq sur macOS)"
+    echo "  --large-app     - [C3] Forcer la partition sans SPIFFS (app ~4 Mo)"
+    echo "  --no-large-app  - [C3] Désactiver la partition agrandie (défaut: activée pour C3)"
     echo "  --board BOARD - Type de carte ESP32 (c3|s3, défaut: s3)"
     echo "                  c3 = XIAO ESP32-C3"
     echo "                  s3 = XIAO ESP32-S3"
     echo "  --clear-nvs   - Utiliser le sketch de reset NVS"
-    echo "  --light       - Mode LIGHT: définitions simplifiées (réduit la taille JSON)"
-    echo "  --pagination  - Mode PAGINATION: chargement par pages (pour beaucoup de composants)"
+    echo "  --light          - Mode LIGHT: définitions simplifiées (réduit la taille JSON)"
+    echo "  --pagination     - Activer la pagination (défaut: activée)"
+    echo "  --no-pagination  - Désactiver la pagination (à utiliser seulement avec --large-app sur C3)"
+    echo "  --port PORT      - Forcer le port série (ex: /dev/cu.usbmodem101)"
     echo ""
-    echo "  Les options --light et --pagination peuvent être combinées"
+    echo "  Pagination : activée par défaut (C3 et S3). Évite la troncature du JSON des définitions."
+    echo "  Partition C3 : --large-app est activé par défaut pour C3 (partition ~4 Mo). Utiliser --no-large-app pour désactiver."
     echo ""
     echo "Sketches disponibles:"
     echo "  nidmi_basic (défaut)"
@@ -160,8 +170,10 @@ show_help() {
     echo "Exemples:"
     echo "  ./scripts/nidmi.sh sync                    # Synchroniser (français, S3 par défaut)"
     echo "  ./scripts/nidmi.sh sync --lang en          # Synchroniser en anglais"
+    echo "  ./scripts/nidmi.sh compile --board c3      # C3 : pagination + partition 4 Mo par défaut"
+    echo "  ./scripts/nidmi.sh compile --board c3 --no-large-app   # C3 sans partition agrandie"
     echo "  ./scripts/nidmi.sh compile --board s3      # Compiler pour ESP32-S3"
-    echo "  ./scripts/nidmi.sh upload --board s3       # Uploader sur ESP32-S3"
+    echo "  ./scripts/nidmi.sh upload --board s3      # Uploader sur ESP32-S3"
     echo "  ./scripts/nidmi.sh build                   # Build (S3 par défaut)"
     echo "  ./scripts/nidmi.sh upload nidmi_osc        # Upload sketch OSC"
     echo "  ./scripts/nidmi.sh upload --clear-nvs      # Upload sketch reset NVS"
@@ -201,7 +213,7 @@ sync_files() {
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
-    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,midi,midi/handlers,network,osc,processors,server,ui,utils}
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,midi,midi/handlers,network,osc,processors,server,ui,utils}
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -247,6 +259,10 @@ sync_files() {
             cp -f $REPO_DIR/src/managers/complex/multiplexer/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/multiplexer/ 2>/dev/null || true
             cp -f $REPO_DIR/src/managers/complex/multiplexer/*.h $ARDUINO_LIB_DIR/src/managers/complex/multiplexer/ 2>/dev/null || true
         fi
+        if [ -d "$REPO_DIR/src/managers/complex/joystick" ]; then
+            cp -f $REPO_DIR/src/managers/complex/joystick/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/joystick/ 2>/dev/null || true
+            cp -f $REPO_DIR/src/managers/complex/joystick/*.h $ARDUINO_LIB_DIR/src/managers/complex/joystick/ 2>/dev/null || true
+        fi
     fi
     cp -f $REPO_DIR/src/midi/*.cpp $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true
     cp -f $REPO_DIR/src/midi/*.h $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true
@@ -286,11 +302,7 @@ clean_cache() {
     fi
     
     # Nettoyer les bibliothèques staging (copies temporaires Arduino)
-    if [ "$PLATFORM" = "mac" ]; then
-        ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
-    else
-        ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
-    fi
+    ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
     if [ -d "$ARDUINO_STAGING_DIR" ]; then
         rm -rf "$ARDUINO_STAGING_DIR"/* 2>/dev/null || true
         echo "   ✅ Bibliothèques staging nettoyées: $ARDUINO_STAGING_DIR"
@@ -311,6 +323,25 @@ clean_cache() {
     echo "   ✅ Cache Arduino nettoyé"
 }
 
+# Copie la partition C3 sans SPIFFS dans le package Arduino (pour --large-app)
+setup_c3_large_app_partition() {
+    local PKG_BASE="${HOME}/Library/Arduino15/packages/esp32/hardware/esp32"
+    local SRC="$REPO_DIR/tools/nidmi_c3_no_spiffs.csv"
+    local DST_DIR
+    DST_DIR=$(ls -d "$PKG_BASE"/[0-9]*.[0-9]*.[0-9]*/tools/partitions 2>/dev/null | tail -1)
+    if [ -z "$DST_DIR" ]; then
+        echo "   ⚠️  Package ESP32 non trouvé dans $PKG_BASE, --large-app ignoré"
+        return 1
+    fi
+    if [ ! -f "$SRC" ]; then
+        echo "   ⚠️  Fichier partition manquant: $SRC, --large-app ignoré"
+        return 1
+    fi
+    cp "$SRC" "$DST_DIR/nidmi_c3_no_spiffs.csv"
+    echo "   📦 Partition C3 (no SPIFFS) installée: $DST_DIR/nidmi_c3_no_spiffs.csv"
+    return 0
+}
+
 # Fonction de compilation
 compile_sketch() {
     echo "🔨 Compilation du sketch..."
@@ -323,6 +354,11 @@ compile_sketch() {
     
     if [ "$PAGINATION_MODE" = true ]; then
         echo "   📄 Mode PAGINATION activé (chargement par pages)"
+    fi
+    
+    if [ "$LARGE_APP" = true ] && [[ "$BOARD" == *"XIAO_ESP32C3"* ]]; then
+        echo "   📦 Mode LARGE-APP activé (partition C3 sans SPIFFS, app ~4 Mo)"
+        setup_c3_large_app_partition || true
     fi
     
     if command -v arduino-cli &> /dev/null; then
@@ -339,11 +375,19 @@ compile_sketch() {
             EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
         fi
         
-        # Construire la commande arduino-cli
+        
+        # Build properties (flags + partition C3 si --large-app)
+        BUILD_PROPS=()
         if [ ${#EXTRA_FLAGS_ARRAY[@]} -gt 0 ]; then
-            # Joindre les flags avec des espaces
-            EXTRA_FLAGS_STR="${EXTRA_FLAGS_ARRAY[*]}"
-            arduino-cli compile --fqbn $BOARD --build-property compiler.cpp.extra_flags="$EXTRA_FLAGS_STR" $SKETCH_PATH
+            BUILD_PROPS+=(--build-property "compiler.cpp.extra_flags=${EXTRA_FLAGS_ARRAY[*]}")
+        fi
+        if [ "$LARGE_APP" = true ] && [[ "$BOARD" == *"XIAO_ESP32C3"* ]]; then
+            BUILD_PROPS+=(--build-property "build.partitions=nidmi_c3_no_spiffs")
+            BUILD_PROPS+=(--build-property "upload.maximum_size=4161536")
+        fi
+        
+        if [ ${#BUILD_PROPS[@]} -gt 0 ]; then
+            arduino-cli compile --fqbn $BOARD "${BUILD_PROPS[@]}" $SKETCH_PATH
         else
             arduino-cli compile --fqbn $BOARD $SKETCH_PATH
         fi
@@ -353,155 +397,6 @@ compile_sketch() {
         echo "   📝 Veuillez compiler manuellement dans l'IDE Arduino"
         echo "   📝 Sketch: $SKETCH_PATH"
         echo "   📝 Board: $BOARD"
-    fi
-}
-
-# Fonction de génération UF2 en bash pur (sans Python)
-generate_uf2() {
-    echo "📦 Génération du fichier UF2..."
-    
-    # Déterminer le nom de base du sketch
-    SKETCH_BASENAME=$(basename "$SKETCH_PATH" .ino)
-    BIN_DIR="$REPO_DIR/bin"
-    MERGED_BIN="$BIN_DIR/${SKETCH_BASENAME}.ino.merged.bin"
-    UF2_FILE="$BIN_DIR/${SKETCH_BASENAME}.uf2"
-    
-    # Vérifier que le fichier merged.bin existe
-    if [ ! -f "$MERGED_BIN" ]; then
-        echo "   ⚠️  Fichier merged.bin non trouvé: $MERGED_BIN"
-        return 1
-    fi
-    
-    # Vérifier que xxd est disponible (nécessaire pour la conversion)
-    if ! command -v xxd &> /dev/null; then
-        echo "   ⚠️  xxd non trouvé, impossible de générer UF2"
-        echo "   📝 xxd est généralement inclus dans les systèmes Unix"
-        return 1
-    fi
-    
-    # Déterminer l'adresse de base selon la carte ESP32
-    BASE_ADDR=0
-    if [[ "$BOARD" == *"XIAO_ESP32C3"* ]]; then
-        BASE_ADDR=0
-    elif [[ "$BOARD" == *"XIAO_ESP32S3"* ]]; then
-        BASE_ADDR=0
-    fi
-    
-    echo "   🔨 Conversion en UF2 (adresse: 0x$(printf '%08x' $BASE_ADDR))..."
-    
-    # Obtenir la taille du fichier binaire
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        BIN_SIZE=$(stat -f%z "$MERGED_BIN" 2>/dev/null)
-    else
-        BIN_SIZE=$(stat -c%s "$MERGED_BIN" 2>/dev/null)
-    fi
-    
-    if [ -z "$BIN_SIZE" ] || [ "$BIN_SIZE" -eq 0 ]; then
-        echo "   ❌ Impossible de déterminer la taille du fichier ou fichier vide"
-        return 1
-    fi
-    
-    # Calculer le nombre de blocs nécessaires (476 bytes de données par bloc)
-    DATA_PER_BLOCK=476
-    NUM_BLOCKS=$(( (BIN_SIZE + DATA_PER_BLOCK - 1) / DATA_PER_BLOCK ))
-    
-    # Créer le fichier UF2
-    rm -f "$UF2_FILE"
-    
-    # Lire le fichier binaire et créer les blocs UF2
-    BLOCK_NUM=0
-    OFFSET=0
-    
-    while [ $OFFSET -lt $BIN_SIZE ]; do
-        # Calculer la taille des données pour ce bloc
-        REMAINING=$((BIN_SIZE - OFFSET))
-        BLOCK_DATA_SIZE=$((REMAINING < DATA_PER_BLOCK ? REMAINING : DATA_PER_BLOCK))
-        
-        # Adresse flash pour ce bloc
-        FLASH_ADDR=$((BASE_ADDR + OFFSET))
-        
-        # Créer l'en-tête du bloc (32 bytes)
-        # Magic: "UF2\n" (0x0A324655)
-        printf "UF2\n" > /tmp/uf2_header.bin
-        
-        # Flags: 0x00002000 (file container)
-        printf "\x00\x00\x20\x00" >> /tmp/uf2_header.bin
-        
-        # Address dans la flash (little-endian, 4 bytes)
-        printf "%08x" $FLASH_ADDR | sed 's/\(..\)\(..\)\(..\)\(..\)/\4\3\2\1/' | xxd -r -p >> /tmp/uf2_header.bin
-        
-        # Taille des données (little-endian, 4 bytes)
-        printf "%08x" $BLOCK_DATA_SIZE | sed 's/\(..\)\(..\)\(..\)\(..\)/\4\3\2\1/' | xxd -r -p >> /tmp/uf2_header.bin
-        
-        # Numéro de bloc (little-endian, 4 bytes)
-        printf "%08x" $BLOCK_NUM | sed 's/\(..\)\(..\)\(..\)\(..\)/\4\3\2\1/' | xxd -r -p >> /tmp/uf2_header.bin
-        
-        # Nombre total de blocs (little-endian, 4 bytes)
-        printf "%08x" $NUM_BLOCKS | sed 's/\(..\)\(..\)\(..\)\(..\)/\4\3\2\1/' | xxd -r -p >> /tmp/uf2_header.bin
-        
-        # Famille ID: 0x00000000 (generic) - ESP32 utilise generic
-        printf "\x00\x00\x00\x00" >> /tmp/uf2_header.bin
-        
-        # Padding (8 bytes)
-        printf "\x00\x00\x00\x00\x00\x00\x00\x00" >> /tmp/uf2_header.bin
-        
-        # Extraire les données du fichier binaire pour ce bloc
-        dd if="$MERGED_BIN" of=/tmp/uf2_data.bin bs=1 skip=$OFFSET count=$BLOCK_DATA_SIZE 2>/dev/null
-        
-        # Remplir avec des zéros si nécessaire pour atteindre 476 bytes
-        PADDING_SIZE=$((DATA_PER_BLOCK - BLOCK_DATA_SIZE))
-        if [ $PADDING_SIZE -gt 0 ]; then
-            dd if=/dev/zero of=/tmp/uf2_padding.bin bs=1 count=$PADDING_SIZE 2>/dev/null
-            cat /tmp/uf2_data.bin /tmp/uf2_padding.bin > /tmp/uf2_data_full.bin
-        else
-            cp /tmp/uf2_data.bin /tmp/uf2_data_full.bin
-        fi
-        
-        # Footer: 0x0AB16F30 (magic end)
-        printf "\x30\x6f\xb1\x0a" > /tmp/uf2_footer.bin
-        
-        # Assembler le bloc complet (32 + 476 + 4 = 512 bytes)
-        cat /tmp/uf2_header.bin /tmp/uf2_data_full.bin /tmp/uf2_footer.bin >> "$UF2_FILE"
-        
-        OFFSET=$((OFFSET + BLOCK_DATA_SIZE))
-        BLOCK_NUM=$((BLOCK_NUM + 1))
-    done
-    
-    # Nettoyer les fichiers temporaires
-    rm -f /tmp/uf2_*.bin
-    
-    if [ -f "$UF2_FILE" ]; then
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            UF2_SIZE=$(stat -f%z "$UF2_FILE" 2>/dev/null)
-        else
-            UF2_SIZE=$(stat -c%s "$UF2_FILE" 2>/dev/null)
-        fi
-        
-        # Formater la taille de manière lisible
-        if command -v numfmt &> /dev/null; then
-            UF2_SIZE_H=$(numfmt --to=iec-i --suffix=B $UF2_SIZE 2>/dev/null)
-        else
-            # Fallback simple
-            if [ $UF2_SIZE -gt 1048576 ]; then
-                UF2_SIZE_H=$(printf "%.1f MB" $(echo "scale=1; $UF2_SIZE / 1048576" | bc))
-            elif [ $UF2_SIZE -gt 1024 ]; then
-                UF2_SIZE_H=$(printf "%.1f KB" $(echo "scale=1; $UF2_SIZE / 1024" | bc))
-            else
-                UF2_SIZE_H="${UF2_SIZE} bytes"
-            fi
-        fi
-        
-        echo "   ✅ Fichier UF2 généré: $UF2_FILE"
-        echo "   📊 Taille: $UF2_SIZE_H"
-        echo ""
-        echo "   📋 Instructions pour upload:"
-        echo "   1. Mettre le XIAO en mode bootloader (double-clic rapide sur RESET)"
-        echo "   2. Le XIAO apparaîtra comme un disque USB"
-        echo "   3. Glisser-déposer le fichier $UF2_FILE sur le disque"
-        echo "   4. Le XIAO redémarrera automatiquement"
-    else
-        echo "   ❌ Le fichier UF2 n'a pas été généré"
-        return 1
     fi
 }
 
@@ -526,6 +421,11 @@ build_binary() {
     if command -v arduino-cli &> /dev/null; then
         echo "   Utilisation d'arduino-cli..."
         
+        if [ "$LARGE_APP" = true ] && [[ "$BOARD" == *"XIAO_ESP32C3"* ]]; then
+            echo "   📦 Mode LARGE-APP activé (partition C3 sans SPIFFS)"
+            setup_c3_large_app_partition || true
+        fi
+        
         # Construire les flags de build (même logique que compile_sketch)
         EXTRA_FLAGS_ARRAY=()
         
@@ -537,11 +437,17 @@ build_binary() {
             EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
         fi
         
-        # Construire la commande arduino-cli
+        BUILD_PROPS=()
         if [ ${#EXTRA_FLAGS_ARRAY[@]} -gt 0 ]; then
-            # Joindre les flags avec des espaces
-            EXTRA_FLAGS_STR="${EXTRA_FLAGS_ARRAY[*]}"
-            arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" --build-property compiler.cpp.extra_flags="$EXTRA_FLAGS_STR" "$SKETCH_PATH"
+            BUILD_PROPS+=(--build-property "compiler.cpp.extra_flags=${EXTRA_FLAGS_ARRAY[*]}")
+        fi
+        if [ "$LARGE_APP" = true ] && [[ "$BOARD" == *"XIAO_ESP32C3"* ]]; then
+            BUILD_PROPS+=(--build-property "build.partitions=nidmi_c3_no_spiffs")
+            BUILD_PROPS+=(--build-property "upload.maximum_size=4161536")
+        fi
+        
+        if [ ${#BUILD_PROPS[@]} -gt 0 ]; then
+            arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "${BUILD_PROPS[@]}" "$SKETCH_PATH"
         else
             arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "$SKETCH_PATH"
         fi
@@ -560,8 +466,13 @@ build_binary() {
 monitor_serial() {
     echo "📺 Ouverture du moniteur série..."
     
-    # Trouver le port série
-    PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
+    # Utiliser le port forcé si fourni, sinon auto-détection
+    if [ -n "$SERIAL_PORT" ]; then
+        PORT="$SERIAL_PORT"
+    else
+        # Trouver le port série
+        PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
+    fi
     if [ -z "$PORT" ]; then
         echo "   ❌ Aucun port série trouvé"
         echo "   📝 Ports disponibles:"
@@ -604,8 +515,12 @@ upload_sketch() {
     echo "📤 Upload vers l'ESP32..."
     
     if command -v arduino-cli &> /dev/null; then
-        # Trouver le port série (plusieurs patterns possibles)
-        PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
+        # Utiliser le port forcé si fourni, sinon auto-détection (plusieurs patterns possibles)
+        if [ -n "$SERIAL_PORT" ]; then
+            PORT="$SERIAL_PORT"
+        else
+            PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
+        fi
         if [ -z "$PORT" ]; then
             echo "   ❌ Aucun port série trouvé"
             echo "   📝 Ports disponibles:"
