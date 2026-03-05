@@ -9,7 +9,6 @@ Le script `nidmi.sh` automatise les tâches de développement pour NiDMI :
 - Minification de l'interface web
 - Compilation des sketches
 - Upload du firmware
-- Génération de fichiers binaires (UF2)
 - Monitor série
 
 ## 📋 Prérequis
