@@ -14,9 +14,10 @@
 set -e  # Arrêter en cas d'erreur
 
 # Variables
-REPO_DIR="/Users/patricecolet/repo/NiDMI"
-ARDUINO_LIB_DIR="/Users/patricecolet/Documents/Arduino/libraries/NiDMI"
-ARDUINO_CACHE_DIR="/Users/patricecolet/Library/Caches/arduino/sketches"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-"$HOME/Documents/Arduino/libraries/NiDMI"}"
+ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-"$HOME/Library/Caches/arduino/sketches"}"
 BOARD_TYPE="s3"  # Par défaut: S3
 BOARD="esp32:esp32:XIAO_ESP32S3"
 DEFAULT_SKETCH="nidmi_basic"
