@@ -375,6 +375,7 @@ compile_sketch() {
             EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
         fi
         
+        
         # Build properties (flags + partition C3 si --large-app)
         BUILD_PROPS=()
         if [ ${#EXTRA_FLAGS_ARRAY[@]} -gt 0 ]; then
