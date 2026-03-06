@@ -24,20 +24,71 @@ elif [[ "$OSTYPE" == darwin* ]]; then
     PLATFORM="mac"
 fi
 
+# Tentative de détection automatique du sketchbook Arduino de l'IDE
+detect_sketchbook_path() {
+    local prefs_file
+    case "$PLATFORM" in
+        mac)
+            prefs_file="$HOME/Library/Arduino15/preferences.txt"
+            ;;
+        wsl)
+            prefs_file="$HOME/.arduino15/preferences.txt"
+            ;;
+        linux)
+            prefs_file="$HOME/.arduino15/preferences.txt"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    if [ -f "$prefs_file" ]; then
+        local path
+        path="$(grep -E '^sketchbook.path=' "$prefs_file" 2>/dev/null | sed 's/^sketchbook.path=//')"
+        if [ -n "$path" ]; then
+            printf "%s" "$path"
+            return 0
+        fi
+    fi
+    return 1
+}
+
 # Dossiers Arduino (valeurs par défaut, surchargeables via ARDUINO_LIB_DIR / ARDUINO_CACHE_DIR)
 MAC_LIB_DEFAULT="$HOME/Documents/Arduino/libraries/NiDMI"
 MAC_CACHE_DEFAULT="$HOME/Library/Caches/arduino/sketches"
+WSL_LIB_DEFAULT="$HOME/Arduino/libraries/NiDMI"
+WSL_CACHE_DEFAULT="$HOME/.arduino15/sketches"
 LINUX_LIB_DEFAULT="$HOME/Arduino/libraries/NiDMI"
 LINUX_CACHE_DEFAULT="$HOME/.arduino15/sketches"
 
+# Si possible, aligner la synchro sur le sketchbook utilisé par l'IDE Arduino
+SKETCHBOOK_FROM_PREFS="$(detect_sketchbook_path || true)"
+
 case "$PLATFORM" in
     mac)
+        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "$ARDUINO_LIB_DIR" ]; then
+            ARDUINO_LIB_DIR="$SKETCHBOOK_FROM_PREFS/libraries/NiDMI"
+        fi
         ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$MAC_LIB_DEFAULT}"
         ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$MAC_CACHE_DEFAULT}"
         ;;
-    wsl|linux)
+    wsl)
+        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "$ARDUINO_LIB_DIR" ]; then
+            ARDUINO_LIB_DIR="$SKETCHBOOK_FROM_PREFS/libraries/NiDMI"
+        fi
+        ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$WSL_LIB_DEFAULT}"
+        ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$WSL_CACHE_DEFAULT}"
+        ;;
+    linux)
+        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "$ARDUINO_LIB_DIR" ]; then
+            ARDUINO_LIB_DIR="$SKETCHBOOK_FROM_PREFS/libraries/NiDMI"
+        fi
         ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$LINUX_LIB_DEFAULT}"
         ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$LINUX_CACHE_DEFAULT}"
+        ;;
+    *)
+        echo "⚠️  Plateforme non reconnue: $PLATFORM"
+        exit 1
         ;;
 esac
 
@@ -286,11 +337,20 @@ clean_cache() {
     fi
     
     # Nettoyer les bibliothèques staging (copies temporaires Arduino)
-    if [ "$PLATFORM" = "mac" ]; then
-        ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
-    else
-        ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
-    fi
+    case "$PLATFORM" in
+        mac)
+            ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
+            ;;
+        wsl)
+            ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
+            ;;
+        linux)
+            ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
+            ;;
+        *)
+            ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
+            ;;
+    esac
     if [ -d "$ARDUINO_STAGING_DIR" ]; then
         rm -rf "$ARDUINO_STAGING_DIR"/* 2>/dev/null || true
         echo "   ✅ Bibliothèques staging nettoyées: $ARDUINO_STAGING_DIR"
