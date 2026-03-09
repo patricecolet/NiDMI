@@ -52,7 +52,7 @@ LANG_CODE="fr"
 
 # Options d'optimisation JSON
 LIGHT_MODE=false
-PAGINATION_MODE=false
+PAGINATION_MODE=true
 
 # Parser les arguments pour --lang, --board, --light, --pagination
 ARGS=()
@@ -76,6 +76,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --pagination)
             PAGINATION_MODE=true
+            shift
+            ;;
+        --no-pagination)
+            PAGINATION_MODE=false
             shift
             ;;
         *)
@@ -149,7 +153,8 @@ show_help() {
     echo "                  s3 = XIAO ESP32-S3"
     echo "  --clear-nvs   - Utiliser le sketch de reset NVS"
     echo "  --light       - Mode LIGHT: définitions simplifiées (réduit la taille JSON)"
-    echo "  --pagination  - Mode PAGINATION: chargement par pages (pour beaucoup de composants)"
+    echo "  --pagination  - Mode PAGINATION: chargement par pages (défaut: activé)"
+    echo "  --no-pagination - Désactiver la pagination (debug uniquement)"
     echo ""
     echo "  Les options --light et --pagination peuvent être combinées"
     echo ""
