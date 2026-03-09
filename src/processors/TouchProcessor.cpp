@@ -43,6 +43,10 @@
 
 // Lecture tactile avec échantillonnage pour stabilité
 static uint16_t readTouchValue(uint8_t gpio) {
+    #if !TOUCH_AVAILABLE
+        (void)gpio;
+        return 0;
+    #else
     const int samples = 5;
         uint32_t sum = 0;
     static uint16_t last_raw_reads[49][5] = {0};
@@ -65,8 +69,9 @@ static uint16_t readTouchValue(uint8_t gpio) {
                  last_raw_reads[gpio][2], last_raw_reads[gpio][3], last_raw_reads[gpio][4], avg);
         last_sample_log[gpio] = millis();
     }
-    
+
     return avg;
+    #endif
 }
 
 // Établir la baseline pour un GPIO

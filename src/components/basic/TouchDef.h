@@ -62,7 +62,7 @@ struct Touch {
      */
     static ComponentDefinition createDefinition() {
         return ComponentBuilder()
-            .setBasicInfo(ID, DISPLAY_NAME, "cardTouch")
+            .setBasicInfo(ID, DISPLAY_NAME, "cardTouch debug")
             .setFamily(FAMILY, FAMILY_NAME)
             .setType(TYPE, PIN_TYPE)
             .setCapabilities(SUPPORTS_MIDI, SUPPORTS_OSC)
