@@ -29,15 +29,21 @@ MAC_LIB_DEFAULT="$HOME/Documents/Arduino/libraries/NiDMI"
 MAC_CACHE_DEFAULT="$HOME/Library/Caches/arduino/sketches"
 LINUX_LIB_DEFAULT="$HOME/Arduino/libraries/NiDMI"
 LINUX_CACHE_DEFAULT="$HOME/.arduino15/sketches"
+WSL_LIB_DEFAULT="mnt/c/Users/Public/Documents/Arduino/libraries/NiDMI"
+WSL_CACHE_DEFAULT="mnt/c/Users/Public/AppData/Local/Arduino15/sketches"
 
 case "$PLATFORM" in
     mac)
         ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$MAC_LIB_DEFAULT}"
         ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$MAC_CACHE_DEFAULT}"
         ;;
-    wsl|linux)
+    linux)
         ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$LINUX_LIB_DEFAULT}"
         ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$LINUX_CACHE_DEFAULT}"
+        ;;
+    wsl)
+        ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$WSL_LIB_DEFAULT}"
+        ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$WSL_CACHE_DEFAULT}"
         ;;
 esac
 
