@@ -33,20 +33,18 @@ function pType(lbl) {
  * @param {string} role - Rôle du composant
  * @returns {string} Label d'affichage
  */
-function getRoleDisplayLabel(role) {
+function getRoleDisplayLabel(role, count, customName) {
+  if (customName && customName.trim() !== '') {
+    return customName;
+  }
   if (!role) return '';
-  
-  /* Migrer les anciens formats si nécessaire */
   const migratedRole = typeof migrateRole === 'function' ? migrateRole(role) : role;
-  
-  /* Utiliser les définitions du backend */
+  let displayName = migratedRole;
   if (typeof getComponentDefinition === 'function') {
     const def = getComponentDefinition(migratedRole);
-    if (def) return def.displayName;
+    if (def && def.displayName) displayName = def.displayName;
   }
-  
-  /* Fallback: retourner le rôle tel quel */
-  return role;
+  return count > 0 ? `${displayName} ${count}` : displayName;
 }
 
 /**
