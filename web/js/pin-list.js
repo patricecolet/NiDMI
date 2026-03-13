@@ -18,6 +18,7 @@ function updatePinsList() {
       const cfg = pcfg[lbl];
       if (!cfg || !cfg.role) return;
       const cfgRole = typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role;
+      if (typeof isBusRole === 'function' && isBusRole(cfgRole)) return;
       const cfgDef = typeof getComponentDefinition === 'function' ? getComponentDefinition(cfgRole) : null;
       const cfgHasAdditionalPins = cfgDef && cfgDef.additionalPins && Array.isArray(cfgDef.additionalPins) && cfgDef.additionalPins.length > 0
         && cfg.additionalPins && typeof cfg.additionalPins === 'object' && Object.keys(cfg.additionalPins).length > 0;
@@ -42,6 +43,8 @@ function updatePinsList() {
 
     /* Détecter composant avec additionalPins depuis la définition */
     const role = typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role;
+    /* Les rôles de bus (I2C, SPI, UART) ne sont pas des composants */
+    if (typeof isBusRole === 'function' && isBusRole(role)) return;
     const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
     const hasAdditionalPinsFromDef = def && def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0;
     const hasAdditionalPinsInCfg = cfg.additionalPins && typeof cfg.additionalPins === 'object' && Object.keys(cfg.additionalPins).length > 0;
@@ -58,7 +61,7 @@ function updatePinsList() {
         const roleName = getRoleDisplayLabel(cfg.role);
         const statText = stat(cfg, lbl);
         const it = document.createElement('div');
-        it.className = 'item complex';
+        it.className = `item complex ${pType(lbl)}`;
         it.innerHTML = `<span class="lbl">${lbl}</span><span class="role">${roleName}</span><span class="stat">${statText}</span><button class="del-btn">×</button>`;
         it.onclick = () => {
           if (window._selRect) window._selRect.classList.remove('selectedSquare');
@@ -78,12 +81,17 @@ function updatePinsList() {
         const delBtn = it.querySelector('.del-btn');
         if (delBtn) delBtn.onclick = (e) => {
           e.stopPropagation();
-          console.log('[deletePin] Marquage pour suppression composant complexe sur pin:', lbl);
-          /* Supprimer uniquement de pcfg (sauvegarde NVS lors du clic sur "Enregistrer tout") */
           delete pcfg[lbl];
+          /* Si c'est la pin en cours d'édition, vider le formulaire pour éviter que saveAll ne la ré-ajoute */
+          if (typeof cur !== 'undefined' && cur === lbl) {
+            cur = '';
+            const selPin = $('#selPin');
+            if (selPin) selPin.textContent = '';
+            const roleCards = $('#roleCards');
+            if (roleCards) roleCards.innerHTML = '';
+          }
           updatePinsList();
           updateBusVisuals();
-          console.log('[deletePin] Composant complexe marqué pour suppression, enregistrer pour valider');
         };
         pl.appendChild(it);
       }
@@ -122,12 +130,16 @@ function updatePinsList() {
     const delBtn = it.querySelector('.del-btn');
     if (delBtn) delBtn.onclick = (e) => {
       e.stopPropagation();
-      console.log('[deletePin] Marquage pour suppression composant simple sur pin:', lbl);
-      /* Supprimer uniquement de pcfg (sauvegarde NVS lors du clic sur "Enregistrer tout") */
       delete pcfg[lbl];
+      if (typeof cur !== 'undefined' && cur === lbl) {
+        cur = '';
+        const selPin = $('#selPin');
+        if (selPin) selPin.textContent = '';
+        const roleCards = $('#roleCards');
+        if (roleCards) roleCards.innerHTML = '';
+      }
       updatePinsList();
       updateBusVisuals();
-      console.log('[deletePin] Composant simple marqué pour suppression, enregistrer pour valider');
     };
     pl.appendChild(it);
   });

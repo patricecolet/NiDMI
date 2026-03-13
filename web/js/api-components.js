@@ -76,38 +76,14 @@
         return global.ComponentDefinitions.getForPinType(pinType, implementedOnly);
       }
 
-      const source = (typeof global.componentDefinitions !== 'undefined' &&
-                      Array.isArray(global.componentDefinitions))
-        ? global.componentDefinitions
-        : [];
-
-      if (source.length === 0) {
-        console.warn('[ApiComponents.getForPinType] Aucun composant disponible (fallback), pinType=', pinType);
-        return [];
+      // Fallback: déléguer à la fonction globale historique si elle existe,
+      // sans réimplémenter la logique de compatibilité ici.
+      if (typeof global.getComponentsForPinType === 'function') {
+        return global.getComponentsForPinType(pinType, implementedOnly);
       }
 
-      const filtered = source.filter(def => {
-        if (implementedOnly && !def.implemented) return false;
-        switch (pinType) {
-          case 0: // ANALOG
-            return def.pinType === 0 || def.pinType === 2;
-          case 1: // DIGITAL
-            return def.pinType === 1 || def.pinType === 2;
-          case 3: // PWM
-            return def.pinType === 3;
-          case 4:
-            return def.pinType === 4;
-          case 5:
-            return def.pinType === 5;
-          default:
-            return false;
-        }
-      });
-
-      console.log('[ApiComponents.getForPinType] pinType=', pinType,
-                  'implementedOnly=', implementedOnly,
-                  'count=', filtered.length);
-      return filtered;
+      console.warn('[ApiComponents.getForPinType] Aucune implémentation disponible (ni ComponentDefinitions ni getComponentsForPinType), retour tableau vide (fallback)');
+      return [];
     },
 
     /**
