@@ -2,6 +2,13 @@
 #include "../components/ComponentTypes.h"  // Définitions communes
 #include "../components/ComponentRegistry.h"  // Pour obtenir les définitions
 #include "../components/ComponentDefinition.h"  // Pour FormFieldDef, FieldType, MAX_FORM_FIELDS
+#include "../components/basic/ButtonDef.h"
+#include "../components/basic/LedDef.h"
+#include "../components/basic/PotentiometerDef.h"
+#include "../components/basic/VelostatDef.h"
+#include "../components/basic/JoystickDef.h"
+#include "../components/motion/Lis3dhDef.h"
+#include "../components/interface/Mpr121Def.h"
 #include "../midi/MidiMessageType.h"
 #include "../utils/PinMapper.h"  // Pour PinMapper::hasTouch()
 
@@ -35,70 +42,195 @@ void ComponentInitializer::initializeConfig(
     config.midiCcOnOffMin = 0;   // Défaut: 0 (OFF)
     config.midiCcOnOffMax = 127; // Défaut: 127 (ON)
     
-    // Initialiser les seuils pour potentiomètre
-    config.potMin = 0;    // Défaut: 0
-    config.potMax = 4095; // Défaut: 4095
-    
     // Initialiser les champs génériques à zéro/vide
     config.customField1[0] = '\0';
     config.customField2[0] = '\0';
     config.customInt1 = 0;
     config.customInt2 = 0;
     
-    // Initialiser les champs spécifiques depuis ComponentDefinition.formFields
+    // Allouer et initialiser la configuration spécifique selon le type
     const ComponentDefinition* def = ComponentRegistry::findByType(type);
-    if (def && def->formFields) {
-        for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
-            const FormFieldDef& field = def->formFields[i];
-            if (field.id && field.defaultValue) {
-                // Mapper vers les champs de ComponentConfig
-                if (strcmp(field.id, "btnMode") == 0) {
-                    strncpy(config.btnMode, field.defaultValue, sizeof(config.btnMode) - 1);
-                    config.btnMode[sizeof(config.btnMode) - 1] = '\0';
-                } else if (strcmp(field.id, "btnPulseTiming") == 0) {
-                    strncpy(config.btnPulseTiming, field.defaultValue, sizeof(config.btnPulseTiming) - 1);
-                    config.btnPulseTiming[sizeof(config.btnPulseTiming) - 1] = '\0';
-                } else if (strcmp(field.id, "btnPullMode") == 0) {
-                    strncpy(config.btnPullMode, field.defaultValue, sizeof(config.btnPullMode) - 1);
-                    config.btnPullMode[sizeof(config.btnPullMode) - 1] = '\0';
-                } else if (strcmp(field.id, "ledMode") == 0) {
-                    strncpy(config.ledMode, field.defaultValue, sizeof(config.ledMode) - 1);
-                    config.ledMode[sizeof(config.ledMode) - 1] = '\0';
-                } else if (strcmp(field.id, "filterIntensity") == 0) {
-                    config.filter_intensity = atoi(field.defaultValue);
-                } else {
-                    // Mapper vers les champs génériques pour les nouveaux composants
-                    // Utiliser customField1 et customField2 pour les champs string
-                    // Utiliser customInt1 et customInt2 pour les champs numériques
-                    if (field.type == FieldType::TEXT || field.type == FieldType::SELECT || field.type == FieldType::CHECKBOX) {
-                        if (config.customField1[0] == '\0') {
-                            strncpy(config.customField1, field.defaultValue, sizeof(config.customField1) - 1);
-                            config.customField1[sizeof(config.customField1) - 1] = '\0';
-                        } else if (config.customField2[0] == '\0') {
-                            strncpy(config.customField2, field.defaultValue, sizeof(config.customField2) - 1);
-                            config.customField2[sizeof(config.customField2) - 1] = '\0';
-                        }
-                    } else if (field.type == FieldType::NUMBER || field.type == FieldType::RANGE) {
-                        if (config.customInt1 == 0) {
-                            config.customInt1 = atoi(field.defaultValue);
-                        } else if (config.customInt2 == 0) {
-                            config.customInt2 = atoi(field.defaultValue);
+    
+    switch (type) {
+        case ComponentType::BUTTON: {
+            Components::ButtonConfig* btnConfig = new Components::ButtonConfig();
+            if (def && def->formFields) {
+                for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                    const FormFieldDef& field = def->formFields[i];
+                    if (field.id && field.defaultValue) {
+                        if (strcmp(field.id, "btnMode") == 0) {
+                            strncpy(btnConfig->btnMode, field.defaultValue, sizeof(btnConfig->btnMode) - 1);
+                            btnConfig->btnMode[sizeof(btnConfig->btnMode) - 1] = '\0';
+                        } else if (strcmp(field.id, "btnPulseTiming") == 0) {
+                            strncpy(btnConfig->btnPulseTiming, field.defaultValue, sizeof(btnConfig->btnPulseTiming) - 1);
+                            btnConfig->btnPulseTiming[sizeof(btnConfig->btnPulseTiming) - 1] = '\0';
+                        } else if (strcmp(field.id, "btnPullMode") == 0) {
+                            strncpy(btnConfig->btnPullMode, field.defaultValue, sizeof(btnConfig->btnPullMode) - 1);
+                            btnConfig->btnPullMode[sizeof(btnConfig->btnPullMode) - 1] = '\0';
                         }
                     }
                 }
             }
+            config.specificConfig.button = btnConfig;
+            break;
         }
-    } else {
-        // Fallback : valeurs par défaut hardcodées si ComponentDefinition non disponible
-        strncpy(config.btnMode, "press_release", sizeof(config.btnMode));
-        config.btnMode[sizeof(config.btnMode)-1] = '\0';
-        strncpy(config.btnPulseTiming, "release", sizeof(config.btnPulseTiming));
-        config.btnPulseTiming[sizeof(config.btnPulseTiming)-1] = '\0';
-        strncpy(config.btnPullMode, "pullup", sizeof(config.btnPullMode));
-        config.btnPullMode[sizeof(config.btnPullMode)-1] = '\0';
-        strncpy(config.ledMode, "onoff", sizeof(config.ledMode));
-        config.ledMode[sizeof(config.ledMode)-1] = '\0';
-        config.filter_intensity = 5;
+        case ComponentType::LED: {
+            Components::LedConfig* ledConfig = new Components::LedConfig();
+            if (def && def->formFields) {
+                for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                    const FormFieldDef& field = def->formFields[i];
+                    if (field.id && field.defaultValue && strcmp(field.id, "ledMode") == 0) {
+                        strncpy(ledConfig->ledMode, field.defaultValue, sizeof(ledConfig->ledMode) - 1);
+                        ledConfig->ledMode[sizeof(ledConfig->ledMode) - 1] = '\0';
+                    }
+                }
+            }
+            config.specificConfig.led = ledConfig;
+            break;
+        }
+        case ComponentType::POTENTIOMETER: {
+            Components::PotentiometerConfig* potConfig = new Components::PotentiometerConfig();
+            if (def && def->formFields) {
+                for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                    const FormFieldDef& field = def->formFields[i];
+                    if (field.id && field.defaultValue) {
+                        if (strcmp(field.id, "filterIntensity") == 0) {
+                            potConfig->filter_intensity = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "potMin") == 0) {
+                            potConfig->potMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "potMax") == 0) {
+                            potConfig->potMax = atoi(field.defaultValue);
+                        }
+                    }
+                }
+            }
+            config.specificConfig.potentiometer = potConfig;
+            break;
+        }
+        case ComponentType::VELOSTAT: {
+            Components::VelostatConfig* veloConfig = new Components::VelostatConfig();
+            if (def && def->formFields) {
+                for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                    const FormFieldDef& field = def->formFields[i];
+                    if (field.id && field.defaultValue) {
+                        if (strcmp(field.id, "filterIntensity") == 0) {
+                            veloConfig->filter_intensity = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "velocityThreshold") == 0) {
+                            veloConfig->velocityThreshold = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "aftertouchThreshold") == 0) {
+                            veloConfig->aftertouchThreshold = atoi(field.defaultValue);
+                        }
+                    }
+                }
+            }
+            config.specificConfig.velostat = veloConfig;
+            break;
+        }
+        case ComponentType::JOYSTICK: {
+            Components::JoystickConfig* joyConfig = new Components::JoystickConfig();
+            if (def && def->formFields) {
+                for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                    const FormFieldDef& field = def->formFields[i];
+                    if (field.id && field.defaultValue) {
+                        if (strcmp(field.id, "filterIntensity") == 0) {
+                            joyConfig->filter_intensity = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xMin") == 0) {
+                            joyConfig->joyXMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xZeroMin") == 0) {
+                            joyConfig->joyXZeroMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xZeroMax") == 0) {
+                            joyConfig->joyXZeroMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xMax") == 0) {
+                            joyConfig->joyXMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yMin") == 0) {
+                            joyConfig->joyYMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yZeroMin") == 0) {
+                            joyConfig->joyYZeroMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yZeroMax") == 0) {
+                            joyConfig->joyYZeroMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yMax") == 0) {
+                            joyConfig->joyYMax = atoi(field.defaultValue);
+                        }
+                    }
+                }
+            }
+            config.specificConfig.joystick = joyConfig;
+            break;
+        }
+        case ComponentType::IMU: {
+            Components::ImuConfig* imuConfig = new Components::ImuConfig();
+            if (def && def->formFields) {
+                for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                    const FormFieldDef& field = def->formFields[i];
+                    if (field.id && field.defaultValue) {
+                        if (strcmp(field.id, "filterIntensity") == 0) {
+                            imuConfig->filter_intensity = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "i2cAddress") == 0) {
+                            imuConfig->i2c_address = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "csGpio") == 0) {
+                            imuConfig->cs_gpio = (uint8_t)atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "range") == 0) {
+                            imuConfig->range = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "dataRate") == 0) {
+                            imuConfig->data_rate = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xMin") == 0) {
+                            imuConfig->xMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xZeroMin") == 0) {
+                            imuConfig->xZeroMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xZeroMax") == 0) {
+                            imuConfig->xZeroMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xMax") == 0) {
+                            imuConfig->xMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yMin") == 0) {
+                            imuConfig->yMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yZeroMin") == 0) {
+                            imuConfig->yZeroMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yZeroMax") == 0) {
+                            imuConfig->yZeroMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yMax") == 0) {
+                            imuConfig->yMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "zMin") == 0) {
+                            imuConfig->zMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "zZeroMin") == 0) {
+                            imuConfig->zZeroMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "zZeroMax") == 0) {
+                            imuConfig->zZeroMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "zMax") == 0) {
+                            imuConfig->zMax = atoi(field.defaultValue);
+                        }
+                    }
+                }
+            }
+            config.specificConfig.imu = imuConfig;
+            break;
+        }
+        case ComponentType::MPR121: {
+            Components::Mpr121Config* mpr121Config = new Components::Mpr121Config();
+            if (def && def->formFields) {
+                for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                    const FormFieldDef& field = def->formFields[i];
+                    if (field.id && field.defaultValue) {
+                        if (strcmp(field.id, "i2cAddress") == 0) {
+                            mpr121Config->i2c_address = (uint8_t)atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "baseNote") == 0) {
+                            mpr121Config->base_note = (uint8_t)atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "touchThreshold") == 0) {
+                            mpr121Config->touch_threshold = (uint8_t)atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "releaseThreshold") == 0) {
+                            mpr121Config->release_threshold = (uint8_t)atoi(field.defaultValue);
+                        }
+                    }
+                }
+            }
+            mpr121Config->midi_channel = channel;
+            mpr121Config->msg_type = msg_type;
+            config.specificConfig.mpr121 = mpr121Config;
+            break;
+        }
+        default:
+            // Pas de config spécifique pour ce type
+            config.specificConfig.specific = nullptr;
+            break;
     }
 }
 
@@ -156,8 +288,8 @@ void ComponentInitializer::setupGpio(uint8_t gpio, ComponentType type, const Com
             if (type == ComponentType::BUTTON) {
                 // Configurer le mode pull selon btnPullMode
                 String pullMode = "pullup"; // Défaut
-                if (config && strlen(config->btnPullMode) > 0) {
-                    pullMode = String(config->btnPullMode);
+                if (config && config->specificConfig.button && strlen(config->specificConfig.button->btnPullMode) > 0) {
+                    pullMode = String(config->specificConfig.button->btnPullMode);
                 }
                 
                 if (pullMode == "pullup") {

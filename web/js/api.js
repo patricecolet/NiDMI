@@ -73,7 +73,7 @@ async function loadStaConfig(){
 
 async function loadMidiInterfaces(){
   try {
-    // Charger l'état RTP-MIDI
+    /* Charger l'état RTP-MIDI */
     const rtpRes = await fetch('/api/rtp/status');
     if(rtpRes.ok) {
       const rtpData = await rtpRes.json();
@@ -82,7 +82,7 @@ async function loadMidiInterfaces(){
       }
     }
     
-    // Charger l'état USB MIDI (statut uniquement, pas de checkbox)
+    /* Charger l'état USB MIDI (statut uniquement, pas de checkbox) */
     const usbRes = await fetch('/api/usbmidi/status');
     if(usbRes.ok) {
       const usbData = await usbRes.json();
@@ -191,8 +191,8 @@ function initForms(){
  });
 }
 
-// Variable globale pour stocker les définitions de composants (compatibilité avec ancien code)
-// DÉPRÉCIÉ: Utiliser ComponentDefinitions.cache à la place
+/* Variable globale pour stocker les définitions de composants (compatibilité avec ancien code) */
+/* DÉPRÉCIÉ: Utiliser ComponentDefinitions.cache à la place */
 let componentDefinitions = [];
 
 /**
@@ -201,15 +201,15 @@ let componentDefinitions = [];
  * @returns {Promise<Array>} Tableau des définitions de composants
  */
 async function loadComponentDefinitions(){
- // Déléguer à ComponentDefinitions.load() si disponible, sinon ancienne implémentation
+ /* Déléguer à ComponentDefinitions.load() si disponible, sinon ancienne implémentation */
  if(typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.load) {
   const defs = await ComponentDefinitions.load();
-  // Maintenir la compatibilité avec l'ancienne variable globale
+  /* Maintenir la compatibilité avec l'ancienne variable globale */
   componentDefinitions = ComponentDefinitions.cache;
   return defs;
  }
- 
- // Ancienne implémentation (fallback si ComponentDefinitions n'est pas disponible)
+
+ /* Ancienne implémentation (fallback si ComponentDefinitions n'est pas disponible) */
  try {
   const r=await fetch('/api/components/definitions');
   if(!r.ok) {
@@ -232,12 +232,12 @@ async function loadComponentDefinitions(){
  * @returns {Object|null} Définition du composant ou null
  */
 function getComponentDefinition(componentId) {
- // Déléguer à ComponentDefinitions.getById() si disponible
+ /* Déléguer à ComponentDefinitions.getById() si disponible */
  if(typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.getById) {
   return ComponentDefinitions.getById(componentId);
  }
- 
- // Ancienne implémentation (fallback)
+
+ /* Ancienne implémentation (fallback) */
  if(!componentDefinitions || componentDefinitions.length === 0) return null;
  return componentDefinitions.find(def => def.id === componentId) || null;
 }
@@ -250,32 +250,35 @@ function getComponentDefinition(componentId) {
  * @returns {Array} Liste des composants compatibles
  */
 function getComponentsForPinType(pinType, implementedOnly = true) {
- // Déléguer à ComponentDefinitions.getForPinType() si disponible
+ /* Déléguer à ComponentDefinitions.getForPinType() si disponible */
  if(typeof ComponentDefinitions !== 'undefined' && ComponentDefinitions.getForPinType) {
   return ComponentDefinitions.getForPinType(pinType, implementedOnly);
  }
- 
- // Ancienne implémentation (fallback si ComponentDefinitions n'est pas disponible)
+
+ /* Ancienne implémentation (fallback si ComponentDefinitions n'est pas disponible) */
  if(!componentDefinitions || componentDefinitions.length === 0) {
   console.log('[getComponentsForPinType] Aucune définition disponible');
   return [];
  }
  
  const filtered = componentDefinitions.filter(def => {
-  // Filtrer par implémenté si demandé
   if(implementedOnly && !def.implemented) return false;
-  
-  // Vérifier la compatibilité du type de pin
-  switch(pinType) {
-   case 0: // PIN_ANALOG
-    return def.pinType === 0 || def.pinType === 2; // ANALOG ou ANALOG_OR_DIGITAL
-   case 1: // PIN_DIGITAL
-    return def.pinType === 1 || def.pinType === 2; // DIGITAL ou ANALOG_OR_DIGITAL
-   case 3: // PIN_PWM
-    return def.pinType === 3; // PWM uniquement
-   default:
-    return false;
+  const matchesPrimary = (() => {
+   switch(pinType) {
+    case 0: return def.pinType === 0 || def.pinType === 2;
+    case 1: return def.pinType === 1 || def.pinType === 2;
+    case 3: return def.pinType === 3;
+    case 4: return def.pinType === 4;
+    case 5: return def.pinType === 5;
+    default: return false;
+   }
+  })();
+  if(matchesPrimary) return true;
+  if(def.altPinType !== undefined && def.altPinType !== null && def.altPinType >= 0) {
+   return def.altPinType === pinType;
   }
+  if(pinType === 5 && def.pinType === 4 && def.id === 'lis3dh') return true;
+  return false;
  });
  
  console.log(`[getComponentsForPinType] pinType=${pinType}, implementedOnly=${implementedOnly}, trouvé ${filtered.length} composants:`, filtered.map(d => `${d.id} (pinType=${d.pinType}, family=${d.family})`));
@@ -287,7 +290,7 @@ async function loadCaps(){
  caps=await r.json();
 }
 
-// Variable pour stocker les GPIOs utilisés (cache)
+/* Variable pour stocker les GPIOs utilisés (cache) */
 let cachedUsedGpios = new Set();
 
 /**
@@ -331,20 +334,20 @@ function getUsedGpiosWithEditing(editingConfig) {
  
  if(!editingConfig) return gpios;
  
- // Ajouter le GPIO principal
+ /* Ajouter le GPIO principal */
  if(editingConfig.gpio !== undefined && editingConfig.gpio !== null) {
   gpios.add(parseInt(editingConfig.gpio));
  }
  
- // Pour les composants complexes, utiliser les additionalPins du backend
+ /* Pour les composants complexes, utiliser les additionalPins du backend */
  if(editingConfig.role && typeof getComponentDefinition === 'function') {
   const migratedRole = typeof migrateRole === 'function' ? migrateRole(editingConfig.role) : editingConfig.role;
   const def = getComponentDefinition(migratedRole);
-  
+
   if(def && def.additionalPins && def.additionalPinCount > 0) {
-   // Parcourir les pins additionnelles définies par le backend
+   /* Parcourir les pins additionnelles définies par le backend */
    def.additionalPins.forEach(pinDef => {
-    const pinId = pinDef.id; // ex: "s0", "s1", "en"
+    const pinId = pinDef.id; /* ex: "s0", "s1", "en" */
     const gpio = editingConfig[pinId];
     if(gpio !== undefined && gpio !== null && gpio !== 255) {
      gpios.add(parseInt(gpio));
@@ -365,16 +368,16 @@ function getUsedGpiosWithEditing(editingConfig) {
 function migrateRole(role){
  if(!role) return role;
  
- // Si c'est déjà un ID valide (format backend), retourner tel quel
+ /* Si c'est déjà un ID valide (format backend), retourner tel quel */
  if(/^[a-z0-9_-]+$/.test(role)) return role;
- 
- // Chercher dans les définitions du backend par displayName
+
+ /* Chercher dans les définitions du backend par displayName */
  if(typeof componentDefinitions !== 'undefined' && componentDefinitions.length > 0) {
   const def = componentDefinitions.find(d => d.displayName === role);
   if(def) return def.id;
  }
- 
- // Si rien n'est trouvé, retourner tel quel
+
+ /* Si rien n'est trouvé, retourner tel quel */
  return role;
 }
 
@@ -395,6 +398,9 @@ async function loadConfiguredPins(){
   d.pins.forEach(pinData => {
    if(pinData && pinData.pinLabel && pinData.role) {
     pinData.role = typeof migrateRole === 'function' ? migrateRole(pinData.role) : pinData.role;
+    if(pinData.pinLabel === 'SPI' || pinData.pinLabel === 'I2C') {
+     console.log('[loadConfiguredPins] Config bus', pinData.pinLabel, ': role=' + pinData.role, 'csGpio=' + pinData.csGpio, 'range=' + pinData.range, 'dataRate=' + pinData.dataRate, 'filterIntensity=' + pinData.filterIntensity);
+    }
     pcfg[pinData.pinLabel] = pinData;
    }
   });
@@ -424,30 +430,65 @@ async function saveAll(){
  }
  
  /* Relire la configuration de la pin actuellement sélectionnée depuis le formulaire */
- /* Cela garantit que les modifications en cours sont sauvegardées */
  if(typeof cur !== 'undefined' && cur && typeof readCfg === 'function') {
-   const currentCfg = readCfg();
-   if(currentCfg && currentCfg.role) {
+   /* Passer le rôle depuis funcSelect pour éviter qu'il soit vide */
+   const funcRole = $('#funcSelect')?.value || '';
+   const currentCfg = readCfg(funcRole || null);
+   if(currentCfg && currentCfg.role && typeof isBusRole === 'function' && !isBusRole(currentCfg.role)) {
      pcfg[cur] = currentCfg;
-     console.log('[saveAll] Config de la pin courante relue depuis formulaire, cur:', cur, 'additionalPins:', currentCfg.additionalPins);
+     console.log('[saveAll] pcfg[' + cur + '] mis à jour avec role:', currentCfg.role);
+   } else if(!currentCfg || !currentCfg.role) {
+     console.warn('[saveAll] readCfg role vide pour', cur, '- funcSelect:', funcRole, 'currentCfg:', currentCfg);
    }
  }
  
+<<<<<<< HEAD
  /* Sauvegarder tous les composants séquentiellement (évite saturation NVS ESP32) */
  const pinLabels = Object.keys(pcfg);
  const validPins = pinLabels.filter(l => pcfg[l] && pcfg[l].role);
  let savedCount = 0;
  for (const lbl of pinLabels) {
- const c=pcfg[lbl];
+ let c=pcfg[lbl];
  if(!c||!c.role) continue;
  savedCount++;
  msg.textContent='Enregistrement ' + savedCount + '/' + validPins.length + ' (' + lbl + ')...';
- 
- console.log('[saveAll] Traitement pin:', lbl, 'c:', c);
- console.log('[saveAll] c.additionalPins:', c.additionalPins);
- 
+ const savePin = async () => {
+=======
+ /* Sauvegarder tous les composants (simples et complexes) via /api/pins/set */
+ const ps=Object.keys(pcfg).map(async lbl=>{
+ let c=pcfg[lbl];
+ if(!c||!c.role) return null;
+>>>>>>> 0bd1620 (adding touch for s3)
+ /* Pour la pin actuellement affichée, toujours reprendre le formulaire (évite valeurs périmées) */
+ if(typeof cur !== 'undefined' && lbl === cur && typeof readCfg === 'function') {
+  const freshRole = $('#funcSelect')?.value || '';
+  const fresh = readCfg(freshRole || null);
+  if(fresh && fresh.role && (typeof isBusRole !== 'function' || !isBusRole(fresh.role))) c = fresh;
+ }
+
  const role = migrateRole(c.role);
  const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
+
+ /* Composants I2C (LIS3DH, MPR121) : envoyer en JSON direct */
+ if(role === 'lis3dh' || role === 'mpr121') {
+  console.log('[saveAll]', role, 'config:', JSON.stringify(c).substring(0, 200));
+  const fullCfg = Object.assign({pinLabel: lbl, role: c.role}, c);
+  if(lbl === 'SPI') fullCfg.busInterface = '1';
+  else if(lbl === 'I2C') fullCfg.busInterface = '0';
+  delete fullCfg.additionalPins;
+  const jsonStr = JSON.stringify(fullCfg);
+  console.log('[saveAll]', role, 'JSON complet (' + jsonStr.length + ' chars)');
+  const resp = await fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/json'},body:jsonStr});
+  if (resp.status === 413) {
+    const d = await resp.json().catch(() => ({}));
+    throw new Error(d.message || 'Config trop grande pour NVS (max 1900 octets). Réduisez les options.');
+  }
+  console.log('[saveAll]', role, 'réponse:', resp.status);
+  return resp;
+ }
+
+ console.log('[saveAll] Traitement pin:', lbl, 'c:', c);
+ console.log('[saveAll] c.additionalPins:', c.additionalPins);
  
  /* Détecter composant complexe depuis la définition (plus fiable que vérifier sig) */
  const hasAdditionalPins = def && def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0 
@@ -493,40 +534,52 @@ async function saveAll(){
  const p=new URLSearchParams();
  p.set('pinLabel',lbl);
  p.set('role',c.role);
- // Envoyer rtpMidiEnabled (ou rtpEnabled pour compatibilité)
+ /* Envoyer rtpMidiEnabled (ou rtpEnabled pour compatibilité) */
  if(c.rtpMidiEnabled) p.set('rtpMidiEnabled','true');
- else if(c.rtpEnabled) p.set('rtpEnabled','true'); // Compatibilité ancien format
- // Envoyer midiMessageType (ou rtpType pour compatibilité)
+ else if(c.rtpEnabled) p.set('rtpEnabled','true'); /* Compatibilité ancien format */
+ /* Envoyer midiMessageType (ou rtpType pour compatibilité) */
  if(c.midiMessageType) p.set('midiMessageType',c.midiMessageType);
- else if(c.rtpType) p.set('rtpType',c.rtpType); // Compatibilité ancien format
- 
- // Envoyer dynamiquement tous les paramètres MIDI (nouveaux noms midi* puis anciens rtp* pour compatibilité)
+ else if(c.rtpType) p.set('rtpType',c.rtpType); /* Compatibilité ancien format */
+
+ /* Envoyer dynamiquement tous les paramètres MIDI (nouveaux noms midi* puis anciens rtp* pour compatibilité) */
  Object.keys(c).forEach(key => {
-  // Nouveaux noms (midi*)
-  // Pour les paramètres RANGE (midiCcRangeMin/Max), toujours envoyer même si valeur par défaut
+  /* Nouveaux noms (midi*) */
+  /* Pour les paramètres RANGE (midiCcRangeMin/Max), toujours envoyer même si valeur par défaut */
   if(key.startsWith('midi') && c[key] !== undefined && c[key] !== null) {
-   // Accepter les chaînes vides et les valeurs "0" pour midiCcRangeMin/Max
+   /* Accepter les chaînes vides et les valeurs "0" pour midiCcRangeMin/Max */
    if(c[key] !== '' || key.endsWith('Min') || key.endsWith('Max')) {
      p.set(key, c[key] || (key.endsWith('Min') ? '0' : key.endsWith('Max') ? '127' : ''));
    }
   }
-  // Anciens noms (rtp*) sauf rtpEnabled et rtpType (déjà gérés ci-dessus)
+  /* Paramètres MIDI par axe (X_/Y_/Z_: midiCc, midiChannel, etc.) - envoyer même "0" */
+  else if((key.startsWith('X_') || key.startsWith('Y_') || key.startsWith('Z_')) && c[key] !== undefined && c[key] !== null) {
+   if(c[key] !== '' || key.includes('midiCc') || key.includes('midiChannel')) p.set(key, c[key]);
+  }
+  /* Anciens noms (rtp*) sauf rtpEnabled et rtpType (déjà gérés ci-dessus) */
   else if(key.startsWith('rtp') && key !== 'rtpEnabled' && key !== 'rtpType' && key !== 'rtpMidiEnabled' && c[key] !== undefined && c[key] !== null && c[key] !== '') {
-   p.set(key, c[key]); // Compatibilité ancien format
+   p.set(key, c[key]); /* Compatibilité ancien format */
   }
  });
- 
- // Envoyer dynamiquement tous les formFields depuis la définition
+
+ /* Joystick : forcer envoi X_midiCc / Y_midiCc depuis le formulaire si absents de c */
+ if(role === 'joystick') {
+  const xCc = c.X_midiCc !== undefined && c.X_midiCc !== null ? c.X_midiCc : ($('#X_midiCc') && $('#X_midiCc').value !== undefined ? $('#X_midiCc').value : '7');
+  const yCc = c.Y_midiCc !== undefined && c.Y_midiCc !== null ? c.Y_midiCc : ($('#Y_midiCc') && $('#Y_midiCc').value !== undefined ? $('#Y_midiCc').value : '7');
+  p.set('X_midiCc', xCc);
+  p.set('Y_midiCc', yCc);
+ }
+
+ /* Envoyer dynamiquement tous les formFields depuis la définition */
  if(def && def.formFields && Array.isArray(def.formFields)) {
   def.formFields.forEach(field => {
    if(field.id && !field.id.startsWith('_')) {
     const value = c[field.id];
     if(value !== undefined && value !== null && value !== '') {
-     if(field.type === 3) { // CHECKBOX
+     if(field.type === 3) { /* CHECKBOX */
       if(value === true || value === 'true') {
        p.set(field.id, 'true');
       }
-     } else if(field.type === 4) { // RANGE
+     } else if(field.type === 4) { /* RANGE */
       if(c[field.id + 'Min'] !== undefined && c[field.id + 'Min'] !== null && c[field.id + 'Min'] !== '') {
        p.set(field.id + 'Min', c[field.id + 'Min']);
       }
@@ -551,17 +604,19 @@ async function saveAll(){
        console.log('[saveAll] Vérification pinDef.id:', pinDef.id, 'value:', value, 'optional:', pinDef.optional);
        
        if(value !== undefined && value !== null) {
-         /* Ne pas envoyer si valeur est 255 (pin non connectée) sauf si c'est optionnel */
+         /* Toujours envoyer les pins requises, même si valeur est 255 */
+         /* Pour les pins optionnelles, ne pas envoyer si valeur est 255 */
          if(value !== 255 || !pinDef.optional) {
            p.set(pinDef.id, value);
            console.log('[saveAll] additionalPin envoyé:', pinDef.id, '=', value);
          } else {
            console.log('[saveAll] additionalPin ignoré (255 et optionnel):', pinDef.id);
          }
-       } else if(!pinDef.optional && pinDef.defaultValue !== undefined && pinDef.defaultValue !== 255) {
-         /* Pin requise absente, utiliser la valeur par défaut */
-         p.set(pinDef.id, pinDef.defaultValue);
-         console.log('[saveAll] additionalPin par défaut:', pinDef.id, '=', pinDef.defaultValue);
+       } else if(!pinDef.optional) {
+         /* Pin requise absente - utiliser la valeur par défaut ou 255 */
+         const defaultValue = (pinDef.defaultValue !== undefined) ? pinDef.defaultValue : 255;
+         p.set(pinDef.id, defaultValue);
+         console.log('[saveAll] additionalPin requise absente, utilisation defaultValue:', pinDef.id, '=', defaultValue);
        } else {
          console.warn('[saveAll] ERREUR: Pin requise absente:', pinDef.id, 'value:', value, 'defaultValue:', pinDef.defaultValue);
        }
@@ -574,21 +629,34 @@ async function saveAll(){
 }
 /* Sinon, c'est normal - composant simple sans additionalPins */
 
- // Champs OSC et Debug (communs à tous)
+ /* Champs OSC et Debug (communs à tous) */
  if(c.oscEnabled) p.set('oscEnabled','true');
  if(c.oscAddress) p.set('oscAddress',c.oscAddress);
  if(c.oscFormat) p.set('oscFormat',c.oscFormat);
  if(c.dbgEnabled) p.set('dbgEnabled','true');
  if(c.dbgHeader) p.set('dbgHeader',c.dbgHeader);
- const r = await fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
- if (r.status === 413) {
-  const d = await r.json().catch(() => ({}));
-  throw new Error(d.message || 'Config trop grande pour NVS (max 1900 octets).');
+ if(lbl === 'SPI' || lbl === 'I2C') {
+  console.log('[saveAll] POST body pour', lbl, ':', p.toString());
  }
+<<<<<<< HEAD
+ const r = await fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
+ if (r.status === 413) { const d = await r.json().catch(() => ({})); throw new Error(d.message || 'Config trop grande pour NVS (max 1900 octets).'); }
+ return r;
+ };
+ await savePin();
  await new Promise(r => setTimeout(r, 80));
  }
+
+ /* Attendre que le backend traite le rechargement */
+ await new Promise(r => setTimeout(r, 300));
+=======
+ return fetch('/api/pins/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()})
+  .then(r => { if (r.status === 413) return r.json().then(d => Promise.reject(new Error(d.message || 'Config trop grande pour NVS (max 1900 octets). Réduisez les options ou le nombre de pins.'))); return r; });
+ });
+ await Promise.all(ps.filter(p => p !== null));
+>>>>>>> 0bd1620 (adding touch for s3)
  
- /* Laisser le backend terminer les rechargements */
+ /* Attendre que le backend traite le rechargement (ESP32-C3 mono-cœur) */
  await new Promise(r => setTimeout(r, 300));
  
  const listRes=await fetch('/api/pins/list');
@@ -611,44 +679,76 @@ async function saveAll(){
  if(listData.pins && Array.isArray(listData.pins)){
  listData.pins.forEach(p=>{
  if(p.pinLabel) serverPins.add(p.pinLabel);
+ if(p.pinLabel === 'SPI' || p.pinLabel === 'I2C') {
+  console.log('[saveAll] Vérification post-save', p.pinLabel, ': csGpio=' + p.csGpio, 'range=' + p.range, 'dataRate=' + p.dataRate, 'filterIntensity=' + p.filterIntensity);
+ }
  });
+ }
+ /* Vérifier que les pins bus ont bien été sauvegardées */
+ if(typeof pcfg !== 'undefined') {
+  ['SPI','I2C'].forEach(bus => {
+   if(pcfg[bus] && pcfg[bus].role && !serverPins.has(bus)) {
+    console.error('[saveAll] ERREUR: pin', bus, 'configurée localement mais ABSENTE de la réponse backend !');
+   }
+  });
  }
  
  const localPins=new Set(Object.keys(pcfg));
  const toDelete=Array.from(serverPins).filter(p=>!localPins.has(p));
+<<<<<<< HEAD
  for (const pinLabel of toDelete) {
- const p=new URLSearchParams();
- p.set('pin',pinLabel);
- await fetch('/api/pins/delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
- await new Promise(r => setTimeout(r, 80));
+  const p=new URLSearchParams();
+  p.set('pin',pinLabel);
+  await fetch('/api/pins/delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
+  await new Promise(r => setTimeout(r, 80));
  }
  if (toDelete.length > 0) await new Promise(r => setTimeout(r, 200));
+=======
+ const deletePromises=toDelete.map(async pinLabel=>{
+ const p=new URLSearchParams();
+ p.set('pin',pinLabel);
+ return fetch('/api/pins/delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()});
+ });
+ await Promise.all(deletePromises);
+ /* Laisser le temps au backend (NVS) de persister avant de recharger la liste */
+ if (toDelete.length > 0) await new Promise(r => setTimeout(r, 400));
+>>>>>>> 0bd1620 (adding touch for s3)
+ /* Rafraîchir pcfg et la liste des pins depuis le serveur (évite rechargement manuel) */
+ await loadConfiguredPins();
 
-// Sauvegarder les interfaces MIDI globales
+/* Sauvegarder les interfaces MIDI globales */
 try {
-  // Sauvegarder RTP-MIDI
+  /* Sauvegarder RTP-MIDI */
   const rtpMidiElement = $('#rtpMidiEnabled');
   if (rtpMidiElement && rtpMidiElement.type === 'checkbox' && typeof rtpMidiElement.checked !== 'undefined') {
     const rtpFormData = new URLSearchParams();
     rtpFormData.append('enable', rtpMidiElement.checked ? 'true' : 'false');
     const bodyString = rtpFormData.toString();
     if (bodyString && bodyString.includes('enable=')) {
-      await fetch('/api/rtp/enable', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: bodyString});
+      try {
+        const rtpResponse = await fetch('/api/rtp/enable', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: bodyString});
+        if (!rtpResponse.ok) {
+          const errorText = await rtpResponse.text();
+          console.warn('[saveAll] Erreur RTP-MIDI:', rtpResponse.status, errorText);
+        }
+      } catch(e) {
+        console.warn('[saveAll] Erreur lors de la sauvegarde RTP-MIDI:', e);
+      }
     }
   }
-  // Note: USB MIDI s'active automatiquement au boot si supporté, pas de contrôle via interface
+  /* Note: USB MIDI s'active automatiquement au boot si supporté, pas de contrôle via interface */
 } catch(e) {
   console.error('Erreur sauvegarde interfaces MIDI:', e);
 }
 
- // Rafraîchir le cache des GPIOs utilisés depuis le backend
+ /* Rafraîchir le cache des GPIOs utilisés depuis le backend */
  await loadUsedGpiosFromBackend();
  updateBusVisuals();
  
  msg.textContent='Toutes les configurations enregistrées';
  msg.style.color='#10b981';
  }catch(e){
- msg.textContent='Erreur lors de l\'enregistrement';
+ msg.textContent = e && e.message ? e.message : 'Erreur lors de l\'enregistrement';
  msg.style.color='#ef4444';
  console.error('Erreur saveAll:',e);
  }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ComponentTypes.h"
+#include <cstdarg>
 
 /**
  * @file ComponentDefinition.h
@@ -118,12 +119,13 @@ struct MidiMessageDef {
     const char* id;              // Identifiant (ex: "cc", "note", "pc")
     const char* displayName;     // Nom affiché (ex: "Control Change", "Note")
     const char* statusTemplate;  // Template pour le texte de statut (ex: "CC#{cc}", "Note {note}")
+    const char* axis;            // Axe pour joystick ("x", "y", ou nullptr pour les deux)
     uint8_t paramCount;          // Nombre de paramètres requis pour ce message
     MidiParamDef* params;        // Pointeur vers heap (alloué avec new[])
     size_t paramsCapacity;       // Taille allouée (pour vérification)
     
     // Constructeur par défaut
-    MidiMessageDef() : params(nullptr), paramsCapacity(0), paramCount(0) {}
+    MidiMessageDef() : params(nullptr), paramsCapacity(0), paramCount(0), axis(nullptr) {}
     
     // Cleanup : libère la mémoire allouée
     void cleanup() {
@@ -204,6 +206,7 @@ struct ComponentDefinition {
     const char* familyName;      // Nom de la famille pour l'UI (ex: "Basic", "Multiplexeur")
     ComponentType type;          // Type enum correspondant
     PinType pinType;             // Type de pin principale
+    int8_t altPinType;           // Type de pin alternatif (-1 = aucun, sinon PinType)
     bool implemented;            // true = disponible, false = grisé dans l'UI
     // Note: isComplex supprimé - utiliser additionalPinCount > 0 pour détecter un composant avec pins additionnelles
     bool supportsMidi;           // true = peut envoyer/recevoir MIDI
@@ -230,7 +233,7 @@ struct ComponentDefinition {
     ComponentDefinition() : 
         id(nullptr), displayName(nullptr), icon(nullptr), cardId(nullptr),
         family(ComponentFamily::BASIC), familyName(nullptr),
-        type(ComponentType::POTENTIOMETER), pinType(PinType::PIN_DIGITAL),
+        type(ComponentType::POTENTIOMETER), pinType(PinType::PIN_DIGITAL), altPinType(-1),
         implemented(false), supportsMidi(false), supportsOsc(false),
         statusTextTemplate(nullptr), statusValueMappings(nullptr),
         formFieldCount(0), formFields(nullptr), formFieldsCapacity(0),
@@ -259,353 +262,236 @@ struct ComponentDefinition {
             midiMessagesCapacity = 0;
         }
     }
-    
+
+    /**
+     * @brief Écrit une chaîne dans le buffer avec échappement JSON (" \ et caractères de contrôle)
+     * @return Nombre d'octets écrits, ou -1 si buffer insuffisant
+     */
+    static int appendJsonString(char* dest, size_t destSize, const char* src) {
+        if (!dest || destSize == 0) return src ? -1 : 0;
+        if (!src) { dest[0] = '\0'; return 0; }
+        int w = 0;
+        for (; *src && (size_t)w < destSize - 1; src++) {
+            unsigned char c = (unsigned char)*src;
+            if (c == '"') {
+                if ((size_t)(w + 2) > destSize) return -1;
+                dest[w++] = '\\'; dest[w++] = '"';
+            } else if (c == '\\') {
+                if ((size_t)(w + 2) > destSize) return -1;
+                dest[w++] = '\\'; dest[w++] = '\\';
+            } else if (c == '\n') {
+                if ((size_t)(w + 2) > destSize) return -1;
+                dest[w++] = '\\'; dest[w++] = 'n';
+            } else if (c == '\r') {
+                if ((size_t)(w + 2) > destSize) return -1;
+                dest[w++] = '\\'; dest[w++] = 'r';
+            } else if (c == '\t') {
+                if ((size_t)(w + 2) > destSize) return -1;
+                dest[w++] = '\\'; dest[w++] = 't';
+            } else if (c < 0x20 || c == 0x7F) {
+                if ((size_t)(w + 6) > destSize) return -1;
+                dest[w++] = '\\'; dest[w++] = 'u';
+                static const char hex[] = "0123456789abcdef";
+                dest[w++] = '0'; dest[w++] = '0';
+                dest[w++] = hex[c >> 4];   dest[w++] = hex[c & 0xf];
+            } else {
+                dest[w++] = (char)c;
+            }
+        }
+        dest[w] = '\0';
+        return w;
+    }
+
+    /**
+     * @brief Écrit dans le buffer via snprintf avec vérification de troncation.
+     * snprintf retourne le nombre de caractères VOULUS, pas écrits.
+     * Si le buffer est trop petit, written saute au-delà et les écritures suivantes
+     * vont dans de la mémoire garbage (cause de corruption JSON).
+     * Cette méthode retourne le nombre réellement écrit, ou -1 si tronqué.
+     */
+    static int safeSnprintf(char* buf, size_t size, const char* fmt, ...)
+#if defined(__GNUC__)
+        __attribute__((format(printf, 3, 4)))
+#endif
+    {
+        if (size == 0) return -1;
+        va_list args;
+        va_start(args, fmt);
+        int ret = vsnprintf(buf, size, fmt, args);
+        va_end(args);
+        if (ret < 0 || (size_t)ret >= size) return -1;
+        return ret;
+    }
+
     /**
      * @brief Convertit la définition en JSON pour l'API
      * @param buffer Buffer de sortie
      * @param bufferSize Taille du buffer
-     * @return Nombre de caractères écrits
+     * @return Nombre de caractères écrits, 0 si buffer insuffisant
      */
     int toJson(char* buffer, size_t bufferSize) const {
-        // Protection contre buffer null ou trop petit
         if (!buffer || bufferSize < 100) return 0;
-        
-        int written = snprintf(buffer, bufferSize,
-            "{\"id\":\"%s\",\"displayName\":\"%s\",\"cardId\":\"%s\",\"family\":%d,\"familyName\":\"%s\","
-            "\"pinType\":%d,\"implemented\":%s,"
-            "\"supportsMidi\":%s,\"supportsOsc\":%s,\"additionalPinCount\":%d",
-            id,
-            displayName,
-            cardId ? cardId : "",
-            static_cast<int>(family),
-            familyName ? familyName : "",
-            static_cast<int>(pinType),
+        int written = 0;
+        int r;
+
+        /* Macro locale pour snprintf sécurisé : retourne 0 du toJson si tronqué */
+        #define W(...) do { r = safeSnprintf(buffer + written, bufferSize - (size_t)written, __VA_ARGS__); if (r < 0) return 0; written += r; } while(0)
+        /* Macro pour appendJsonString sécurisé */
+        #define WS(str) do { r = appendJsonString(buffer + written, bufferSize - (size_t)written, (str)); if (r < 0) return 0; written += r; } while(0)
+
+        W("{\"id\":\"");   WS(id ? id : "");
+        W("\",\"displayName\":\"");   WS(displayName ? displayName : "");
+        W("\",\"cardId\":\"");   WS(cardId ? cardId : "");
+        W("\",\"family\":%d,\"familyName\":\"", static_cast<int>(family));
+        WS(familyName ? familyName : "");
+        W("\",\"pinType\":%d", static_cast<int>(pinType));
+        if (altPinType >= 0) {
+            W(",\"altPinType\":%d", (int)altPinType);
+        }
+        W(",\"implemented\":%s,\"supportsMidi\":%s,\"supportsOsc\":%s,\"additionalPinCount\":%d",
             implemented ? "true" : "false",
             supportsMidi ? "true" : "false",
             supportsOsc ? "true" : "false",
-            additionalPinCount
-        );
-        
-        // Vérifier que le premier snprintf a réussi
-        if (written < 0 || written >= (int)bufferSize) return 0;
-        
-        // Ajouter statusTextTemplate si présent
-        if (statusTextTemplate && written < (int)bufferSize - 50) {
-            int added = snprintf(buffer + written, bufferSize - written,
-                ",\"statusTextTemplate\":\"%s\"",
-                statusTextTemplate
-            );
-            if (added < 0 || written + added >= (int)bufferSize) return 0;
-            written += added;
+            additionalPinCount);
+
+        if (statusTextTemplate) {
+            W(",\"statusTextTemplate\":\"");  WS(statusTextTemplate);  W("\"");
         }
-        
-        // Ajouter statusValueMappings si présent (omis en mode LIGHT)
+
 #ifndef NIDMI_COMPONENT_DEFS_LIGHT
-        if (statusValueMappings && written < (int)bufferSize - 50) {
-            int added = snprintf(buffer + written, bufferSize - written,
-                ",\"statusValueMappings\":%s",
-                statusValueMappings
-            );
-            if (added < 0 || written + added >= (int)bufferSize) return 0;
-            written += added;
+        if (statusValueMappings) {
+            W(",\"statusValueMappings\":\"");  WS(statusValueMappings);  W("\"");
         }
 #endif
-        
-        // Ajouter les pins additionnelles si présentes
-        if (additionalPinCount > 0 && additionalPins && written < (int)bufferSize - 50) {
-            written += snprintf(buffer + written, bufferSize - written, ",\"additionalPins\":[");
+
+        /* Pins additionnelles */
+        if (additionalPinCount > 0 && additionalPins) {
+            W(",\"additionalPins\":[");
             for (uint8_t i = 0; i < additionalPinCount && i < additionalPinsCapacity; i++) {
-                if (i > 0) {
-                    written += snprintf(buffer + written, bufferSize - written, ",");
-                }
-                written += snprintf(buffer + written, bufferSize - written,
-                    "{\"id\":\"%s\",\"displayName\":\"%s\",\"pinType\":%d,\"optional\":%s}",
-                    additionalPins[i].id,
-                    additionalPins[i].displayName,
+                if (i > 0) W(",");
+                W("{\"id\":\"");  WS(additionalPins[i].id ? additionalPins[i].id : "");
+                W("\",\"displayName\":\"");  WS(additionalPins[i].displayName ? additionalPins[i].displayName : "");
+                W("\",\"pinType\":%d,\"optional\":%s}",
                     static_cast<int>(additionalPins[i].pinType),
-                    additionalPins[i].optional ? "true" : "false"
-                );
+                    additionalPins[i].optional ? "true" : "false");
             }
-            written += snprintf(buffer + written, bufferSize - written, "]");
+            W("]");
         }
-        
-        // Ajouter les messages MIDI supportés
-        if (midiMessageCount > 0 && midiMessages && written < (int)bufferSize - 50) {
-            written += snprintf(buffer + written, bufferSize - written, ",\"midiMessages\":[");
+
+        /* Messages MIDI */
+        if (midiMessageCount > 0 && midiMessages) {
+            W(",\"midiMessages\":[");
             for (uint8_t i = 0; i < midiMessageCount && i < midiMessagesCapacity; i++) {
-                if (i > 0) {
-                    written += snprintf(buffer + written, bufferSize - written, ",");
+                if (i > 0) W(",");
+                W("{\"id\":\"");  WS(midiMessages[i].id ? midiMessages[i].id : "");
+                W("\",\"displayName\":\"");  WS(midiMessages[i].displayName ? midiMessages[i].displayName : "");
+                W("\"");
+                if (midiMessages[i].axis) {
+                    W(",\"axis\":\"");  WS(midiMessages[i].axis);  W("\"");
                 }
-                written += snprintf(buffer + written, bufferSize - written,
-                    "{\"id\":\"%s\",\"displayName\":\"%s\"",
-                    midiMessages[i].id,
-                    midiMessages[i].displayName
-                );
-                // Ajouter statusTemplate si présent
-                if (midiMessages[i].statusTemplate && written < (int)bufferSize - 50) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"statusTemplate\":\"%s\"",
-                        midiMessages[i].statusTemplate
-                    );
+                if (midiMessages[i].statusTemplate) {
+                    W(",\"statusTemplate\":\"");  WS(midiMessages[i].statusTemplate);  W("\"");
                 }
-                // Ajouter les paramètres MIDI
-                if (midiMessages[i].paramCount > 0 && midiMessages[i].params && written < (int)bufferSize - 50) {
-                    written += snprintf(buffer + written, bufferSize - written, ",\"params\":[");
+                /* Paramètres MIDI */
+                if (midiMessages[i].paramCount > 0 && midiMessages[i].params) {
+                    W(",\"params\":[");
                     for (uint8_t j = 0; j < midiMessages[i].paramCount && j < midiMessages[i].paramsCapacity; j++) {
-                        if (j > 0) {
-                            written += snprintf(buffer + written, bufferSize - written, ",");
-                        }
+                        if (j > 0) W(",");
                         const MidiParamDef& param = midiMessages[i].params[j];
-                        written += snprintf(buffer + written, bufferSize - written,
-                            "{\"id\":\"%s\",\"type\":%d",
-                            param.id ? param.id : "",
-                            static_cast<int>(param.type)
-                        );
-                        
+                        W("{\"id\":\"");  WS(param.id ? param.id : "");
+                        W("\",\"type\":%d", static_cast<int>(param.type));
+
                         if (param.label) {
-                            written += snprintf(buffer + written, bufferSize - written,
-                                ",\"label\":\"%s\"",
-                                param.label
-                            );
+                            W(",\"label\":\"");  WS(param.label);  W("\"");
                         }
-                        
                         if (param.type == FieldType::NUMBER || param.type == FieldType::RANGE) {
-                            written += snprintf(buffer + written, bufferSize - written,
-                                ",\"min\":%d,\"max\":%d",
-                                param.min,
-                                param.max
-                            );
+                            W(",\"min\":%d,\"max\":%d", param.min, param.max);
                         }
-                        
                         if (param.placeholder) {
-                            written += snprintf(buffer + written, bufferSize - written,
-                                ",\"placeholder\":\"%s\"",
-                                param.placeholder
-                            );
+                            W(",\"placeholder\":\"");  WS(param.placeholder);  W("\"");
                         }
-                        
                         if (param.defaultValue) {
-                            written += snprintf(buffer + written, bufferSize - written,
-                                ",\"defaultValue\":\"%s\"",
-                                param.defaultValue
-                            );
+                            W(",\"defaultValue\":\"");  WS(param.defaultValue);  W("\"");
                         }
-                        
                         if (param.type == FieldType::RANGE) {
-                            if (param.defaultMin) {
-                                written += snprintf(buffer + written, bufferSize - written,
-                                    ",\"defaultMin\":\"%s\"",
-                                    param.defaultMin
-                                );
-                            }
-                            if (param.defaultMax) {
-                                written += snprintf(buffer + written, bufferSize - written,
-                                    ",\"defaultMax\":\"%s\"",
-                                    param.defaultMax
-                                );
-                            }
-                            if (param.separator) {
-                                written += snprintf(buffer + written, bufferSize - written,
-                                    ",\"separator\":\"%s\"",
-                                    param.separator
-                                );
-                            }
+                            if (param.defaultMin) { W(",\"defaultMin\":\"");  WS(param.defaultMin);  W("\""); }
+                            if (param.defaultMax) { W(",\"defaultMax\":\"");  WS(param.defaultMax);  W("\""); }
+                            if (param.separator)  { W(",\"separator\":\"");   WS(param.separator);   W("\""); }
                         }
-                        
-                        // Hint pour INFO (omis en mode LIGHT)
 #ifndef NIDMI_COMPONENT_DEFS_LIGHT
                         if (param.type == FieldType::INFO && param.hint) {
-                            written += snprintf(buffer + written, bufferSize - written,
-                                ",\"hint\":\"%s\"",
-                                param.hint
-                            );
-                            if (param.hintClass) {
-                                written += snprintf(buffer + written, bufferSize - written,
-                                    ",\"hintClass\":\"%s\"",
-                                    param.hintClass
-                                );
-                            }
+                            W(",\"hint\":\"");  WS(param.hint);  W("\"");
+                            if (param.hintClass) { W(",\"hintClass\":\"");  WS(param.hintClass);  W("\""); }
                         }
 #endif
-                        
                         if (param.dependsOnRole) {
-                            written += snprintf(buffer + written, bufferSize - written,
-                                ",\"dependsOnRole\":%s",
-                                param.dependsOnRole
-                            );
+                            W(",\"dependsOnRole\":\"");  WS(param.dependsOnRole);  W("\"");
                         }
-                        
                         if (param.width > 0) {
-                            written += snprintf(buffer + written, bufferSize - written,
-                                ",\"width\":%d",
-                                param.width
-                            );
+                            W(",\"width\":%d", param.width);
                         }
-                        
-                        written += snprintf(buffer + written, bufferSize - written, "}");
+                        W("}");
                     }
-                    written += snprintf(buffer + written, bufferSize - written, "]");
+                    W("]");
                 }
-                written += snprintf(buffer + written, bufferSize - written, "}");
+                W("}");
             }
-            written += snprintf(buffer + written, bufferSize - written, "]");
+            W("]");
         }
-        
-        // Ajouter les champs de formulaire
-        if (formFieldCount > 0 && formFields && written < (int)bufferSize - 50) {
-            written += snprintf(buffer + written, bufferSize - written, ",\"formFields\":[");
+
+        /* Champs de formulaire */
+        if (formFieldCount > 0 && formFields) {
+            W(",\"formFields\":[");
             for (uint8_t i = 0; i < formFieldCount && i < formFieldsCapacity; i++) {
-                if (i > 0) {
-                    written += snprintf(buffer + written, bufferSize - written, ",");
-                }
+                if (i > 0) W(",");
                 const FormFieldDef& field = formFields[i];
-                written += snprintf(buffer + written, bufferSize - written,
-                    "{\"id\":\"%s\",\"type\":%d",
-                    field.id ? field.id : "",
-                    static_cast<int>(field.type)
-                );
-                
-                if (field.label) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"label\":\"%s\"",
-                        field.label
-                    );
-                }
-                
-                if (field.required) {
-                    written += snprintf(buffer + written, bufferSize - written, ",\"required\":true");
-                }
-                
-                if (field.placeholder) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"placeholder\":\"%s\"",
-                        field.placeholder
-                    );
-                }
-                
-                if (field.maxLength > 0) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"maxLength\":%d",
-                        field.maxLength
-                    );
-                }
-                
-                if (field.pattern) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"pattern\":\"%s\"",
-                        field.pattern
-                    );
-                }
-                
+                W("{\"id\":\"");  WS(field.id ? field.id : "");
+                W("\",\"type\":%d", static_cast<int>(field.type));
+
+                if (field.label)       { W(",\"label\":\"");       WS(field.label);       W("\""); }
+                if (field.required)      W(",\"required\":true");
+                if (field.placeholder) { W(",\"placeholder\":\""); WS(field.placeholder); W("\""); }
+                if (field.maxLength > 0) W(",\"maxLength\":%d", field.maxLength);
+                if (field.pattern)     { W(",\"pattern\":\"");     WS(field.pattern);     W("\""); }
+
                 if (field.type == FieldType::NUMBER || field.type == FieldType::RANGE) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"min\":%d,\"max\":%d",
-                        field.min,
-                        field.max
-                    );
-                    if (field.step != 1) {
-                        written += snprintf(buffer + written, bufferSize - written,
-                            ",\"step\":%d",
-                            field.step
-                        );
-                    }
+                    W(",\"min\":%d,\"max\":%d", field.min, field.max);
+                    if (field.step != 1) W(",\"step\":%d", field.step);
                 }
-                
                 if (field.type == FieldType::SELECT && field.options) {
-                    // field.options est déjà du JSON valide (ex: [{"value":"v","label":"L"}])
-                    // L'insérer directement sans guillemets autour (pas de %s avec guillemets)
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"options\":%s",
-                        field.options
-                    );
+                    W(",\"options\":\"");  WS(field.options);  W("\"");
                 }
-                
                 if (field.type == FieldType::RANGE && field.separator) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"separator\":\"%s\"",
-                        field.separator
-                    );
+                    W(",\"separator\":\"");  WS(field.separator);  W("\"");
                 }
-                
-                if (field.defaultValue) {
-                    // Échapper les guillemets dans defaultValue si nécessaire
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"defaultValue\":\"%s\"",
-                        field.defaultValue
-                    );
-                }
-                
-                // Hints pour formFields (omis en mode LIGHT)
+                if (field.defaultValue) { W(",\"defaultValue\":\"");  WS(field.defaultValue);  W("\""); }
+
 #ifndef NIDMI_COMPONENT_DEFS_LIGHT
                 if (field.hintPosition != HintPosition::NONE && field.hint) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"hintPosition\":%d,\"hint\":\"%s\"",
-                        static_cast<int>(field.hintPosition),
-                        field.hint
-                    );
-                    if (field.hintClass) {
-                        written += snprintf(buffer + written, bufferSize - written,
-                            ",\"hintClass\":\"%s\"",
-                            field.hintClass
-                        );
-                    }
+                    W(",\"hintPosition\":%d,\"hint\":\"", static_cast<int>(field.hintPosition));
+                    WS(field.hint);  W("\"");
+                    if (field.hintClass) { W(",\"hintClass\":\"");  WS(field.hintClass);  W("\""); }
                 }
 #endif
-                
                 if (field.dependsOn) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"dependsOn\":\"%s\"",
-                        field.dependsOn
-                    );
-                    if (field.showWhen) {
-                        written += snprintf(buffer + written, bufferSize - written,
-                            ",\"showWhen\":%s",
-                            field.showWhen
-                        );
-                    }
+                    W(",\"dependsOn\":\"");  WS(field.dependsOn);  W("\"");
+                    if (field.showWhen) { W(",\"showWhen\":\"");  WS(field.showWhen);  W("\""); }
                 }
-                
-                if (field.wrapperClass) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"wrapperClass\":\"%s\"",
-                        field.wrapperClass
-                    );
-                }
-                
-                if (field.inputClass) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"inputClass\":\"%s\"",
-                        field.inputClass
-                    );
-                }
-                
-                if (field.width > 0) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"width\":%d",
-                        field.width
-                    );
-                }
-                
-                if (field.labelBefore) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"labelBefore\":\"%s\"",
-                        field.labelBefore
-                    );
-                }
-                
-                if (field.labelAfter) {
-                    written += snprintf(buffer + written, bufferSize - written,
-                        ",\"labelAfter\":\"%s\"",
-                        field.labelAfter
-                    );
-                }
-                
-                written += snprintf(buffer + written, bufferSize - written, "}");
+                if (field.wrapperClass) { W(",\"wrapperClass\":\"");  WS(field.wrapperClass);  W("\""); }
+                if (field.inputClass)   { W(",\"inputClass\":\"");    WS(field.inputClass);    W("\""); }
+                if (field.width > 0)      W(",\"width\":%d", field.width);
+                if (field.labelBefore)  { W(",\"labelBefore\":\"");   WS(field.labelBefore);   W("\""); }
+                if (field.labelAfter)   { W(",\"labelAfter\":\"");    WS(field.labelAfter);    W("\""); }
+
+                W("}");
             }
-            written += snprintf(buffer + written, bufferSize - written, "]");
+            W("]");
         }
-        
-        written += snprintf(buffer + written, bufferSize - written, "}");
+
+        W("}");
+
+        #undef W
+        #undef WS
         return written;
     }
 };

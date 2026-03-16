@@ -4,6 +4,18 @@
  */
 
 /**
+ * Vérifie si un rôle correspond à un bus hardware (I2C, SPI, UART)
+ * Les bus ne sont pas des composants et n'ont pas de définition dans le registre.
+ * @param {string} role - Rôle à vérifier
+ * @returns {boolean} true si c'est un rôle de bus
+ */
+function isBusRole(role) {
+  if (!role) return false;
+  const lower = role.toLowerCase();
+  return lower === 'i2c' || lower === 'spi' || lower === 'uart';
+}
+
+/**
  * Obtient une définition de composant par son ID
  * @param {string} roleId - ID du rôle (ex: "potentiometer", "hc4067")
  * @returns {Object|null} Définition du composant ou null

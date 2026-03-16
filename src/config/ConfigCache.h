@@ -42,9 +42,8 @@ public:
     
     /* Mettre en cache sans marquer dirty (pour synchronisation avec NVS) */
     void setConfigClean(const String& pin, const String& config);
-    /** Même chose avec buffer (évite une copie String complète, utile pour body handler PinAPI) */
+    /** Même chose avec buffer (évite une copie String complète, réduit la pile dans le body handler) */
     void setConfigClean(const String& pin, const char* config, size_t configLen);
-    
 private:
     /* Sauvegarder toutes les pins dirty en NVS */
     void saveAllDirty();

@@ -95,7 +95,6 @@ void setupNetworkAPI(AsyncWebServer& server) {
         if(request->hasParam("name", true)){
             String name = request->getParam("name", true)->value();
             
-            // Sauvegarder en NVS
             Preferences preferences;
             preferences.begin("nidmi", false);
             preferences.putString("mdns_name", name);

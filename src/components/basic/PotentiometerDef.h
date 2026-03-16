@@ -19,6 +19,17 @@
 namespace Components {
 
 /**
+ * @brief Configuration spécifique au potentiomètre
+ */
+struct PotentiometerConfig {
+    uint8_t filter_intensity;  // Intensité du filtrage (1-10): 1=rapide, 10=stable
+    uint16_t potMin;           // Seuil minimum (0-4095)
+    uint16_t potMax;           // Seuil maximum (0-4095)
+    
+    PotentiometerConfig() : filter_intensity(5), potMin(0), potMax(4095) {}
+};
+
+/**
  * @brief Définition complète du Potentiomètre
  */
 struct Potentiometer {

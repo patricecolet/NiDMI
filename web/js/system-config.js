@@ -44,7 +44,7 @@ async function loadSystemConfig() {
       checkbox.checked = touchEnabled;
     }
 
-    /* Mettre à jour la visibilité du bouton de calibration touch */
+    // Mettre à jour la visibilité du bouton de calibration touch
     const calContainer = $('#touchCalibrateContainer');
     if (calContainer) {
       calContainer.style.display = (isS3 && touchEnabled) ? 'block' : 'none';

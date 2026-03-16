@@ -1,5 +1,7 @@
 #include "APICommon.h"
 #include "../components/ComponentRegistry.h"
+#include "../components/ComponentTypes.h"
+#include "../components/motion/Lis3dhDef.h"
 #include "../managers/ComponentManager.h"
 #include "../Globals.h"
 #include <set>
@@ -64,26 +66,26 @@ void setupComponentsAPI(AsyncWebServer& server) {
             request->send(500, "application/json", "{\"error\":\"Serialization failed\"}");
         }
 #else
-        // Mode normal (sans pagination) - code existant
-        // Buffer plus grand pour inclure toutes les métadonnées (MIDI params, formFields, etc.)
-        // Avec les nouvelles structures, chaque composant peut prendre ~500-800 bytes
-        // Pour ~10 composants, on a besoin d'au moins 8-10KB
-        // Augmenté à 24KB pour permettre l'ajout de nouveaux composants (ultrasonic, etc.)
-        static char jsonBuffer[24576];  // 24KB pour tester avec plusieurs composants
-        
+        /* Mode normal (sans pagination)
+         * Buffer 32 Ko pour les définitions avec MIDI params, formFields, etc.
+         * Chaque composant peut prendre ~500-2000 bytes selon sa complexité. */
+        static char jsonBuffer[32768];
+
         int written = ComponentRegistry::toJsonArray(jsonBuffer, sizeof(jsonBuffer));
-        
-        #ifdef ARDUINO
-        int totalCount = static_cast<int>(ComponentRegistry::count());
-        Serial.printf("[ComponentsAPI] Mode normal: totalCount=%d, written=%d\n", totalCount, written);
-        #endif
-        
-        if (written > 0 && written < (int)sizeof(jsonBuffer)) {
-            request->send(200, "application/json", jsonBuffer);
+
+        /* Sécurité : s'assurer que written correspond au contenu réel (strlen).
+         * Protège contre un compteur written désynchronisé du buffer réel
+         * (par ex. si snprintf a tronqué mais que toJson n'a pas détecté). */
+        size_t actualLen = strlen(jsonBuffer);
+        if (written > 0 && actualLen > 0 && actualLen < sizeof(jsonBuffer)) {
+            if ((size_t)written != actualLen) {
+                Serial.printf("[ComponentsAPI] WARNING: written=%d != strlen=%zu, utilisation strlen\n", written, actualLen);
+            }
+            /* Envoyer avec la longueur réelle (strlen) via String pour éviter d'envoyer du garbage */
+            request->send(200, "application/json", String(jsonBuffer));
         } else {
-            // Si le buffer est trop petit, envoyer une erreur plutôt que de crasher
-            Serial.printf("[ComponentsAPI] WARNING: Buffer too small or serialization failed (written=%d, size=%zu)\n", 
-                         written, sizeof(jsonBuffer));
+            Serial.printf("[ComponentsAPI] WARNING: Serialization failed (written=%d, strlen=%zu, bufSize=%zu)\n",
+                         written, actualLen, sizeof(jsonBuffer));
             request->send(500, "application/json", "{\"error\":\"Buffer too small for component definitions\"}");
         }
 #endif
@@ -120,12 +122,16 @@ void setupComponentsAPI(AsyncWebServer& server) {
         // Créer un set des GPIOs utilisés
         std::set<uint8_t> usedGpios;
         
-        // 1. Ajouter les GPIOs des composants simples
+        // 1. Ajouter les GPIOs des composants simples + GPIOs spécifiques (CS pour SPI IMU)
         uint8_t componentCount = g_componentManager.getComponentCount();
         for (uint8_t i = 0; i < componentCount; i++) {
             const ComponentConfig* cfg = g_componentManager.getConfig(i);
             if (cfg) {
                 usedGpios.insert(cfg->gpio);
+                if (cfg->type == ComponentType::IMU && cfg->specificConfig.imu) {
+                    uint8_t cs = cfg->specificConfig.imu->cs_gpio;
+                    if (cs != 255) usedGpios.insert(cs);
+                }
             }
         }
         
