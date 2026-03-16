@@ -1,0 +1,6 @@
+{
+  "requires": [
+    "CONFIG_SOC_USB_OTG_SUPPORTED=y",
+    "CONFIG_SOC_TOUCH_SENSOR_SUPPORTED=y"
+  ]
+}

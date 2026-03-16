@@ -144,6 +144,7 @@ function drawBoard() {
         cur = label;
         $('#selPin').textContent = label;
         handlePinClick(label);
+        showPinEditor(label);
         updFunc(label);
         /* SIMPLIFICATION : Appliquer la config si elle existe, peu importe le type */
         /* (updFunc() gère déjà les bus et affiche un message) */
@@ -408,6 +409,11 @@ function drawBoard() {
   if (boardNameEl && caps.board) {
     const boardUpper = caps.board.toUpperCase().replace('-', '-');
     boardNameEl.textContent = boardUpper;
+  }
+
+  const globalBtn = document.getElementById('globalModeBtn');
+  if (globalBtn) {
+    globalBtn.addEventListener("click", () => {showGlobalEditor()});
   }
 
   updateBusVisuals();

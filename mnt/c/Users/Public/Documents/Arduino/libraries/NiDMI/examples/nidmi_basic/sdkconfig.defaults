@@ -1,0 +1,9 @@
+# Configuration pour augmenter la taille de la pile du loopTask
+# Permet d'éviter les crashes "Stack canary watchpoint triggered"
+CONFIG_ARDUINO_LOOP_STACK_SIZE=16384
+
+# Activation USB-OTG pour ESP32-S3 (requis pour USB-MIDI)
+CONFIG_SOC_USB_OTG_SUPPORTED=y
+
+# Activation Touch Sensor pour ESP32-S3 (requis pour touchRead())
+CONFIG_SOC_TOUCH_SENSOR_SUPPORTED=y

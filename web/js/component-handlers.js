@@ -292,6 +292,10 @@ function updateConfig() {
  * @param {string} lbl - Label de la pin (ex: "A0", "D7")
  */
 function updFunc(lbl) {
+  /*Protection pour eviter les incoherences*/
+  if (pinsViewMode === 'global') {
+    showPinEditor(lbl);
+  }
   const sel = $('#funcSelect');
   const familySel = $('#familySelect');
   if (!sel || !familySel) return;

@@ -69,6 +69,7 @@ function updatePinsList() {
           }
           cur = lbl;
           $('#selPin').textContent = lbl;
+          showPinEditor(lbl);
           updFunc(lbl);
           /* SIMPLIFICATION : Appliquer la config si elle existe */
           if (pcfg[lbl]) {
@@ -113,6 +114,7 @@ function updatePinsList() {
       }
       cur = lbl;
       $('#selPin').textContent = lbl;
+      showPinEditor(lbl);
       updFunc(lbl);
       /* SIMPLIFICATION : Appliquer la config si elle existe */
       if (pcfg[lbl]) {

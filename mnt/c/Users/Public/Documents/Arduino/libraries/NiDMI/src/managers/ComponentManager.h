@@ -1,0 +1,104 @@
+#pragma once
+
+#include <Arduino.h>
+#include <Preferences.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include "../utils/PinMapper.h"
+#include "../midi/MidiSender.h"
+#include "../midi/MidiMessageType.h"
+#include "../osc/OSCManager.h"
+#include "../osc/OSCQueue.h"
+#include "../utils/Hysteresis.h"
+#include "../utils/JSONParser.h"
+#include "../utils/AnalogFilter.h"
+#include "../components/ComponentTypes.h"  // Définitions communes (ComponentType, ComponentConfig, ComponentState)
+#include "MuxManager.h"
+
+/**
+ * @brief Manager des composants avec architecture template optimisée
+ * 
+ * Implémente l'architecture de ARCHITECTURE_MIDI.md :
+ * - Structures compactes (8 bytes config + 12 bytes state)
+ * - Filtrage analogique adaptatif
+ * - Anti-rebond intelligent
+ * - Support multi-MCU via PinMapper
+ * - Optimisation mémoire (75% de réduction)
+ */
+class ComponentManager {
+private:
+    /* MAX_COMPONENTS doit supporter 2 MUX (32 pins) + autres composants */
+    static constexpr uint8_t MAX_COMPONENTS = 64;
+    
+    ComponentConfig configs[MAX_COMPONENTS];
+    ComponentState states[MAX_COMPONENTS];
+    uint8_t component_count;
+    MidiSender* midi_sender;
+    OSCManager osc_manager;
+    OSCQueue osc_queue;
+    
+    // Multiplexeurs analogiques
+    MuxManager mux_manager;
+    
+    AnalogFilter filters[MAX_COMPONENTS];
+    
+    // FreeRTOS task pour traitement composants et MIDI sur Core 0
+    TaskHandle_t midiTaskHandle;
+    bool midiTaskStarted;
+    static void midiTask(void* parameter);
+    void midiTaskLoop();
+    
+public:
+    ComponentManager();
+    ~ComponentManager();
+    
+    void begin(MidiSender* sender);
+    void update();
+    void reloadConfigs();
+    void syncOSCConfig();
+    // Gestion des composants
+    bool addComponent(uint8_t gpio, ComponentType type, uint8_t midi_param, uint8_t channel, MidiMessageType msg_type = MidiMessageType::NOTE);
+    bool removeComponent(uint8_t gpio);
+    void clearAll();
+    
+    // Réception MIDI pour piloter les LEDs
+    void handleMidiNoteOn(uint8_t channel, uint8_t note, uint8_t velocity);
+    void handleMidiNoteOff(uint8_t channel, uint8_t note, uint8_t velocity);
+    void handleMidiControlChange(uint8_t channel, uint8_t control, uint8_t value);
+    
+    // Getters
+    uint8_t getComponentCount() const { return component_count; }
+    const ComponentConfig* getConfig(uint8_t index) const;
+    ComponentConfig* getConfigMutable(uint8_t index); // Pour ConfigLoader
+    const ComponentState* getState(uint8_t index) const;
+    
+    // Gestion des multiplexeurs
+    bool addMux(uint8_t mux_id, uint8_t sig, uint8_t s0, uint8_t s1, uint8_t s2, uint8_t s3,
+                uint8_t en = 255, uint16_t analog_min = 0, uint16_t analog_max = 4095,
+                bool hysteresis_enabled = true, MuxOSCFormat osc_format = MuxOSCFormat::FLOAT,
+                uint8_t filter_intensity = 5, uint8_t cc_base = 1, uint8_t midi_channel = 1,
+                const char* osc_base = nullptr);
+    bool removeMux(uint8_t mux_id);
+    uint8_t getMuxCount() const { return mux_manager.getMuxCount(); }
+    const MuxConfig* getMuxConfig(uint8_t mux_id) const;
+    bool isMuxGpio(uint8_t gpio) const { return mux_manager.isMuxGpio(gpio); }
+    uint16_t readMuxChannel(uint8_t gpio);
+    
+    // Lecture batch optimisée de tous les canaux d'un MUX
+    bool readMuxAllChannels(uint8_t mux_id, uint16_t* values);
+    void updateMuxCache(uint8_t mux_id); // Mettre à jour le cache MUX
+    
+    // Calibrage OSC des seuils min/max
+    bool calibrateMux(uint8_t mux_id, uint8_t channel, bool is_min, bool all_channels);
+    bool resetMuxThresholds(uint8_t mux_id, uint8_t channel, bool all_channels);
+    
+    // Debug
+    void printStats();
+    
+    
+    // Utilitaires
+    uint8_t findComponentByGpio(uint8_t gpio) const;
+    void loadMuxConfigFromNVS();
+    void saveConfigToNVS();
+    
+};

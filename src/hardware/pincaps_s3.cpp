@@ -10,8 +10,8 @@ const char PINCAPS_S3[] PROGMEM = R"JSON({
     {"gpio":4,  "label":"D3", "caps":{"in":true,"out":true,"adc":true,"pwm":true,"touch":true},  "sensitive":false},
     {"gpio":5,  "label":"D4", "caps":{"in":true,"out":true,"adc":true,"pwm":true,"touch":true},  "sensitive":false},
     {"gpio":6,  "label":"D5", "caps":{"in":true,"out":true,"adc":false,"pwm":true,"touch":true}, "sensitive":false},
-    {"gpio":7,  "label":"D6", "caps":{"in":true,"out":true,"adc":false,"pwm":true,"touch":true}, "sensitive":false},
-    {"gpio":8,  "label":"D7", "caps":{"in":true,"out":true,"adc":false,"pwm":true,"touch":true}, "sensitive":false},
+    {"gpio":43,  "label":"D6", "caps":{"in":true,"out":true,"adc":false,"pwm":true,"touch":false}, "sensitive":false},
+    {"gpio":44,  "label":"D7", "caps":{"in":true,"out":true,"adc":false,"pwm":true,"touch":false}, "sensitive":false},
     {"gpio":9,  "label":"D8", "caps":{"in":true,"out":true,"adc":false,"pwm":true,"touch":true}, "sensitive":false},
     {"gpio":10, "label":"D9", "caps":{"in":true,"out":true,"adc":false,"pwm":true,"touch":true}, "sensitive":false}
   ],

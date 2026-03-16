@@ -50,6 +50,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .modal-overlay.active{display:flex}
 .modal{background:#fff;border-radius:8px;padding:25px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,.3)}
 .modal h3{margin-bottom:20px;color:#1f2937;font-size:18px}
+.hidden{display:none !important;}
+.global-btn{fill:#e5e7eb;stroke:#9ca3af;cursor:pointer;transition:all .15s;}
+.global-btn:hover{fill:#dbeafe;stroke:#3b82f6;}
+.is-global-active{fill:#3b82f6 !important;stroke:#1d4ed8 !important;}
 </style>
 <script src="/bundle"></script>
 </head>
@@ -70,27 +74,60 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div class="lp">
  <h3 id="boardName">ESP32‑C3</h3>
  <div class="l"><span class="s digital"></span> Digital <span class="s analog"></span> Analog <span class="s i2c"></span> I2C <span class="s uart"></span> UART <span class="s spi"></span> SPI <span class="s power"></span> Power <span class="s gnd"></span> GND</div>
- <svg class="b" viewBox="50 -20 260 260"><rect x="114" y="20" width="122" height="188" rx="10" fill="#ffffff" stroke="#9ca3af"/><text x="174" y="114" text-anchor="middle" font-size="12" fill="#6b7280">MCU</text><rect x="144" y="2" width="60" height="60" rx="6" fill="#e5e7eb" stroke="#9ca3af"/><g id="pinsLeft"></g><g id="pinsRight"></g></svg>
+ 
+ <svg class="b" viewBox="50 -20 260 260">
+ <rect x="114" y="20" width="122" height="188" rx="10" fill="#ffffff" stroke="#9ca3af"/>
+ <g id="globalModeBtn" style="cursor:pointer;" onclick="showGlobalEditor()">
+ <rect id="globalModeBtnRect" x="140" y="90" width="70" height="40" rx="6" fill="#f3f4f6" stroke="#9ca3af"/>
+ <text x="174" y="114" text-anchor="middle" font-size="11" font-weight="bold" fill="#374151" style="pointer-events: none;">GLOBAL</text></g>
+ <rect x="144" y="2" width="60" height="60" rx="6" fill="#e5e7eb" stroke="#9ca3af"/>
+ <g id="pinsLeft"></g><g id="pinsRight"></g>
+ </svg>
+
+ <div id="touchCalibrateContainer" class="f" style="margin-top:10px;display:none;"><button type="button" id="touchCalibrateBtn" class="btn" style="width:100%;">Calibrer touch</button><div class="hint" id="touchCalibrateMsg"></div></div>
  <div class="plist"><h4>Pins configurées</h4><div id="pinsList" class="list"></div><button id="saveAllBtn" class="btn-p">Enregistrer tout</button><div id="saveAllMsg" class="hint"></div></div>
  </div>
- <div class="rp"><div class="cp">
+
+ <div class="rp"><div id="pinEditorCard" class="cp">
  <h4>Fonction du pin</h4>
  <div class="r"><label>Pin:</label><span id="selPin">-</span></div>
  <div class="r"><label>Famille:</label><select id="familySelect"></select></div>
  <div class="r"><label>Composant:</label><select id="funcSelect"></select></div>
-<div id="componentFormCard" class="subcard" style="display:none;"></div>
-<h4>MIDI</h4>
-<div id="rtpMidiSection"></div>
-<h4>Interfaces MIDI</h4>
-<div class="r switch"><input type="checkbox" id="rtpMidiEnabled"><label for="rtpMidiEnabled">RTP-MIDI</label></div>
-<div class="r"><label>USB-MIDI:</label><span id="usbMidiStatus">-</span></div>
-<div class="r switch"><input type="checkbox" id="debugMidiEnabled"><label for="debugMidiEnabled">Debug MIDI</label></div>
+ <div id="componentFormCard" class="subcard" style="display:none;"></div>
+ <h4>MIDI</h4>
+ <div id="rtpMidiSection"></div>
+ <h4>Interfaces MIDI</h4>
+ <div class="r switch"><input type="checkbox" id="rtpMidiEnabled"><label for="rtpMidiEnabled">RTP-MIDI</label></div>
+ <div class="r"><label>USB-MIDI:</label><span id="usbMidiStatus">-</span></div>
+ <div class="r switch"><input type="checkbox" id="debugMidiEnabled"><label for="debugMidiEnabled">Debug MIDI</label></div>
  <h4>OSC</h4>
  <div class="r switch"><input type="checkbox" id="oscEnabled2"><label for="oscEnabled2">Activer</label><label>Addr:</label><input type="text" id="oscAddress" placeholder="/ctl"></div>
  <div class="r"><label>Format:</label><select id="oscFormat"><option value="float">Float (0-1)</option><option value="midi">MIDI (3 int)</option><option value="raw">Raw</option></select></div>
  <h4>Debug</h4>
  <div class="r switch"><input type="checkbox" id="dbgEnabled"><label for="dbgEnabled">Activer</label><label>Hdr:</label><input type="text" id="dbgHeader" placeholder="[DBG]"></div>
- </div></div>
+ </div>
+ </div>
+
+ <div id="globalEditorCard" class="cp hidden">
+ <h4>Global configuration</h4>
+ <div class="subcard">
+ <h4>Mapping global</h4>
+ <div class ="r"><label>MIDI Channel</label><input type="number" id="globalMidiChannel" min="1" max="16" value="1"></div>
+ <div class ="r"><label>Clock Source</label><select id="globalClockSource"><option value="internal">Internal</option><option value="external">External</option></select></div>
+ </div>
+ <div class="subcard">
+ <h4>Step Sequencer</h4>
+ <div class="r"><label>Steps</label><select id="seqSteps"><option> 16</option></select>></div>
+ <div class="r"><label> Tempo</label><input type="number" id="seqTempo"value="120"></div>
+ </div>
+ <div class ="subcard">
+ <button id="globalSaveBtn" class="btn">Save</button>
+ <button id="globalReloadBtn" class="btn">Reload</button>
+ <div class="hint" id="globalStatusMsg"></div>
+ </div>
+ </div>
+
+
  </div>
  </div>
  </div>

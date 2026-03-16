@@ -30,6 +30,12 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   await loadUsedGpiosFromBackend();
   /* Mettre à jour les visuels après chargement complet */
   updateBusVisuals();
+
+  /* Vue globale*/
+  if (typeof initGlobalView === 'function') initGlobalView();
+  if (typeof loadGlobalConfig === 'function') await loadGlobalConfig();
+  if (typeof applyPinsViewMode === 'function') applyPinsViewMode();
+
  }).catch(err => {
   console.warn('Erreur chargement définitions composants:', err);
   // Continuer quand même avec le board (sans définitions)
@@ -42,6 +48,11 @@ document.addEventListener('DOMContentLoaded', async ()=>{
    await loadConfiguredPins();
    await loadUsedGpiosFromBackend();
    updateBusVisuals();
+
+   /* Vue globale : fallback*/
+    if (typeof initGlobalView === 'function') initGlobalView();
+    if (typeof loadGlobalConfig === 'function') await loadGlobalConfig();
+    if (typeof applyPinsViewMode === 'function') applyPinsViewMode();
   });
  });
  /* Initialiser le bouton "Enregistrer tout" */

@@ -24,26 +24,71 @@ elif [[ "$OSTYPE" == darwin* ]]; then
     PLATFORM="mac"
 fi
 
+# Tentative de détection automatique du sketchbook Arduino de l'IDE
+detect_sketchbook_path() {
+    local prefs_file
+    case "$PLATFORM" in
+        mac)
+            prefs_file="$HOME/Library/Arduino15/preferences.txt"
+            ;;
+        wsl)
+            prefs_file="$HOME/.arduino15/preferences.txt"
+            ;;
+        linux)
+            prefs_file="$HOME/.arduino15/preferences.txt"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    if [ -f "$prefs_file" ]; then
+        local path
+        path="$(grep -E '^sketchbook.path=' "$prefs_file" 2>/dev/null | sed 's/^sketchbook.path=//')"
+        if [ -n "$path" ]; then
+            printf "%s" "$path"
+            return 0
+        fi
+    fi
+    return 1
+}
+
 # Dossiers Arduino (valeurs par défaut, surchargeables via ARDUINO_LIB_DIR / ARDUINO_CACHE_DIR)
 MAC_LIB_DEFAULT="$HOME/Documents/Arduino/libraries/NiDMI"
 MAC_CACHE_DEFAULT="$HOME/Library/Caches/arduino/sketches"
+WSL_LIB_DEFAULT="$HOME/Arduino/libraries/NiDMI"
+WSL_CACHE_DEFAULT="$HOME/.arduino15/sketches"
 LINUX_LIB_DEFAULT="$HOME/Arduino/libraries/NiDMI"
 LINUX_CACHE_DEFAULT="$HOME/.arduino15/sketches"
-WSL_LIB_DEFAULT="/mnt/c/Users/Public/Documents/Arduino/libraries/NiDMI"
-WSL_CACHE_DEFAULT="/mnt/c/Users/Public/AppData/Local/Arduino15/sketches"
+
+# Si possible, aligner la synchro sur le sketchbook utilisé par l'IDE Arduino
+SKETCHBOOK_FROM_PREFS="$(detect_sketchbook_path || true)"
 
 case "$PLATFORM" in
     mac)
+        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "$ARDUINO_LIB_DIR" ]; then
+            ARDUINO_LIB_DIR="$SKETCHBOOK_FROM_PREFS/libraries/NiDMI"
+        fi
         ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$MAC_LIB_DEFAULT}"
         ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$MAC_CACHE_DEFAULT}"
         ;;
+    wsl)
+        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "$ARDUINO_LIB_DIR" ]; then
+            ARDUINO_LIB_DIR="$SKETCHBOOK_FROM_PREFS/libraries/NiDMI"
+        fi
+        ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$WSL_LIB_DEFAULT}"
+        ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$WSL_CACHE_DEFAULT}"
+        ;;
     linux)
+        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "$ARDUINO_LIB_DIR" ]; then
+            ARDUINO_LIB_DIR="$SKETCHBOOK_FROM_PREFS/libraries/NiDMI"
+        fi
         ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$LINUX_LIB_DEFAULT}"
         ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$LINUX_CACHE_DEFAULT}"
         ;;
-    wsl)
-        ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$WSL_LIB_DEFAULT}"
-        ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$WSL_CACHE_DEFAULT}"
+    *)
+        echo "⚠️  Plateforme non reconnue: $PLATFORM"
+        exit 1
         ;;
 esac
 
@@ -52,6 +97,7 @@ BOARD="esp32:esp32:XIAO_ESP32S3"
 DEFAULT_SKETCH="nidmi_basic"
 NVS_RESET_SKETCH="nidmi_clear_nvs"
 CLEAR_NVS=false
+PORT_OVERRIDE=""
 
 # Langue par défaut (français)
 LANG_CODE="fr"
@@ -60,7 +106,7 @@ LANG_CODE="fr"
 LIGHT_MODE=false
 PAGINATION_MODE=true
 
-# Parser les arguments pour --lang, --board, --light, --pagination
+# Parser les arguments pour --lang, --board, --port, --light, --pagination
 ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -70,6 +116,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --board)
             BOARD_TYPE="$2"
+            shift 2
+            ;;
+        --port)
+            PORT_OVERRIDE="$2"
             shift 2
             ;;
         --clear-nvs)
@@ -139,7 +189,7 @@ show_help() {
     echo "🚀 NiDMI - Script unifié"
     echo "=============================="
     echo ""
-    echo "Usage: ./scripts/nidmi.sh [OPTION] [SKETCH] [--lang LANG] [--board BOARD]"
+    echo "Usage: ./scripts/nidmi.sh [OPTION] [SKETCH] [--lang LANG] [--board BOARD] [--port DEVICE]"
     echo ""
     echo "Options:"
     echo "  sync     - Synchroniser les fichiers seulement"
@@ -157,6 +207,7 @@ show_help() {
     echo "  --board BOARD - Type de carte ESP32 (c3|s3, défaut: s3)"
     echo "                  c3 = XIAO ESP32-C3"
     echo "                  s3 = XIAO ESP32-S3"
+    echo "  --port DEVICE - Port série explicite (ex: /dev/ttyUSB0, /dev/ttyACM0, /dev/cu.usbmodem*)"
     echo "  --clear-nvs   - Utiliser le sketch de reset NVS"
     echo "  --light       - Mode LIGHT: définitions simplifiées (réduit la taille JSON)"
     echo "  --pagination  - Mode PAGINATION: chargement par pages (défaut: activé)"
@@ -173,6 +224,7 @@ show_help() {
     echo "  ./scripts/nidmi.sh sync --lang en          # Synchroniser en anglais"
     echo "  ./scripts/nidmi.sh compile --board s3      # Compiler pour ESP32-S3"
     echo "  ./scripts/nidmi.sh upload --board s3       # Uploader sur ESP32-S3"
+    echo "  ./scripts/nidmi.sh upload --port /dev/ttyUSB0  # Uploader en forçant le port"
     echo "  ./scripts/nidmi.sh build                   # Build (S3 par défaut)"
     echo "  ./scripts/nidmi.sh upload nidmi_osc        # Upload sketch OSC"
     echo "  ./scripts/nidmi.sh upload --clear-nvs      # Upload sketch reset NVS"
@@ -297,11 +349,20 @@ clean_cache() {
     fi
     
     # Nettoyer les bibliothèques staging (copies temporaires Arduino)
-    if [ "$PLATFORM" = "mac" ]; then
-        ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
-    else
-        ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
-    fi
+    case "$PLATFORM" in
+        mac)
+            ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
+            ;;
+        wsl)
+            ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
+            ;;
+        linux)
+            ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
+            ;;
+        *)
+            ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
+            ;;
+    esac
     if [ -d "$ARDUINO_STAGING_DIR" ]; then
         rm -rf "$ARDUINO_STAGING_DIR"/* 2>/dev/null || true
         echo "   ✅ Bibliothèques staging nettoyées: $ARDUINO_STAGING_DIR"
@@ -573,13 +634,29 @@ build_binary() {
 monitor_serial() {
     echo "📺 Ouverture du moniteur série..."
     
-    # Trouver le port série
-    PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
+    # Déterminer le port série (priorité: --port, NIDMI_PORT, auto-détection)
+    if [ -n "$PORT_OVERRIDE" ]; then
+        PORT="$PORT_OVERRIDE"
+    elif [ -n "$NIDMI_PORT" ]; then
+        PORT="$NIDMI_PORT"
+    else
+        case "$PLATFORM" in
+            mac)
+                PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
+                ;;
+            wsl|linux)
+                PORT=$(ls /dev/ttyUSB* /dev/ttyACM* /dev/ttyS* 2>/dev/null | head -1)
+                ;;
+            *)
+                PORT=""
+                ;;
+        esac
+    fi
     if [ -z "$PORT" ]; then
         echo "   ❌ Aucun port série trouvé"
-        echo "   📝 Ports disponibles:"
-        ls /dev/cu.* 2>/dev/null | head -5 || echo "   📝 Aucun port trouvé"
-        echo "   📝 Vérifiez que l'ESP32 est connecté"
+        echo "   📝 Ports disponibles (tty*/cu*):"
+        ls /dev/ttyUSB* /dev/ttyACM* /dev/ttyS* /dev/cu.* 2>/dev/null | head -5 || echo "   📝 Aucun port trouvé"
+        echo "   📝 Vérifiez que l'ESP32 est connecté et/ou utilisez --port ou NIDMI_PORT"
         exit 1
     fi
     
@@ -617,13 +694,29 @@ upload_sketch() {
     echo "📤 Upload vers l'ESP32..."
     
     if command -v arduino-cli &> /dev/null; then
-        # Trouver le port série (plusieurs patterns possibles)
-        PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
+        # Déterminer le port série (priorité: --port, NIDMI_PORT, auto-détection)
+        if [ -n "$PORT_OVERRIDE" ]; then
+            PORT="$PORT_OVERRIDE"
+        elif [ -n "$NIDMI_PORT" ]; then
+            PORT="$NIDMI_PORT"
+        else
+            case "$PLATFORM" in
+                mac)
+                    PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
+                    ;;
+                wsl|linux)
+                    PORT=$(ls /dev/ttyUSB* /dev/ttyACM* /dev/ttyS* 2>/dev/null | head -1)
+                    ;;
+                *)
+                    PORT=""
+                    ;;
+            esac
+        fi
         if [ -z "$PORT" ]; then
             echo "   ❌ Aucun port série trouvé"
-            echo "   📝 Ports disponibles:"
-            ls /dev/cu.* 2>/dev/null | head -5 || echo "   📝 Aucun port trouvé"
-            echo "   📝 Vérifiez que l'ESP32 est connecté"
+            echo "   📝 Ports disponibles (tty*/cu*):"
+            ls /dev/ttyUSB* /dev/ttyACM* /dev/ttyS* /dev/cu.* 2>/dev/null | head -5 || echo "   📝 Aucun port trouvé"
+            echo "   📝 Vérifiez que l'ESP32 est connecté et/ou utilisez --port ou NIDMI_PORT"
             exit 1
         fi
         
