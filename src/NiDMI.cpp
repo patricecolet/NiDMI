@@ -10,9 +10,21 @@
 MidiRouter g_midiRouter;
 ComponentManager g_componentManager;
 
-// Demande de rechargement des configs pins depuis l'API
-static bool g_requestReloadPins = false;
-extern "C" void nidmi_requestReloadPins(){ g_requestReloadPins = true; }
+// Demande de rechargement des configs pins depuis l'API (débounce 500 ms pour grouper les sauvegardes séquentielles)
+static volatile bool g_requestReloadPins = false;
+static unsigned long g_reloadRequestTime = 0;
+extern "C" void nidmi_requestReloadPins(){
+    g_requestReloadPins = true;
+    g_reloadRequestTime = millis();
+}
+
+// Redémarrage différé (depuis la loop, pas depuis le handler HTTP — évite de couper la NVS en plein écriture)
+static volatile bool g_requestReboot = false;
+static unsigned long g_rebootRequestTime = 0;
+extern "C" void nidmi_requestReboot(){
+    g_rebootRequestTime = millis();
+    g_requestReboot = true;
+}
 
 // Le mapping GPIO est maintenant géré par PinMapper
 
@@ -40,22 +52,28 @@ void nidmi_begin() {
     // (décommentez la ligne suivante pour forcer le reset)
     // Preferences::clear("nidmi\n\n");
 
-    // Lire nom serveur + STA depuis NVS
+    // Lire nom serveur + STA depuis NVS (lecture seule d'abord pour éviter crash si NVS abîmée)
     Preferences preferences;
-    preferences.begin("nidmi", false);
+    if (!preferences.begin("nidmi", true)) {
+        Serial.println("[NiDMI] ERREUR: ouverture NVS en lecture échouée - NVS peut être corrompue");
+        Serial.println("[NiDMI] Utilisation des valeurs par défaut. Flashez nidmi_clear_nvs pour réinitialiser.");
+    }
     
     String serverName = preferences.getString("mdns_name", "nidmi");
-    
-    // Lire STA config une par une pour limiter le nombre de String simultanées
     String staSsid = preferences.getString("sta_ssid", "");
     String staPass = preferences.getString("sta_pass", "");
     String staIpStr = preferences.getString("sta_ip", "");
     String staGwStr = preferences.getString("sta_gw", "");
     String staSnStr = preferences.getString("sta_sn", "");
+    bool touchEnabled = preferences.getBool("touch_enabled", false);
+    bool usbMidiEnabled = false;
     
-    // Charger l'état des interfaces MIDI depuis NVS
-    // bool usbMidiEnabled = preferences.getBool("usbmidi_enabled", true); // Par défaut true
-     bool usbMidiEnabled = false ; // Par défaut true
+    Serial.println("===== NVS DEBUG (boot) =====");
+    Serial.printf("sta_ssid: '%s'\n", staSsid.c_str());
+    Serial.printf("sta_pass length: %d\n", (int)staPass.length());
+    Serial.printf("sta_ip: '%s' sta_gw: '%s' sta_sn: '%s'\n", staIpStr.c_str(), staGwStr.c_str(), staSnStr.c_str());
+    Serial.printf("touch_enabled: %s\n", touchEnabled ? "true" : "false");
+    Serial.println("============================");
     
     preferences.end();
     
@@ -67,11 +85,12 @@ void nidmi_begin() {
     serverName.replace("\t", "");
     if (serverName.length() == 0) serverName = "nidmi";
     
-    // Sauvegarder le nom mDNS dans NVS pour RTP-MIDI
-    preferences.begin("nidmi", false);
-    preferences.putString("mdns_name", serverName);
-    preferences.putString("rtp_name", serverName);  // Même nom pour RTP-MIDI
-    preferences.end();
+    // Sauvegarder le nom mDNS dans NVS pour RTP-MIDI (seulement si NVS ouvre en écriture)
+    if (preferences.begin("nidmi", false)) {
+        preferences.putString("mdns_name", serverName);
+        preferences.putString("rtp_name", serverName);
+        preferences.end();
+    }
     
     Serial.println("[NiDMI] Names synchronized:");
     Serial.printf("  SSID: %s\n", serverName.c_str());
@@ -124,16 +143,19 @@ void nidmi_begin() {
 }
 
 void nidmi_loop() {
-    // Mise à jour du serveur
+    // Redémarrage différé (laisse le temps à la réponse HTTP et à la NVS de se fermer proprement)
+    if (g_requestReboot && (millis() - g_rebootRequestTime >= 2000)) {
+        ESP.restart();
+    }
+    
     serverCore.update();
     
-    // Recharger pins si demandé
-    if (g_requestReloadPins) {
+    // Recharger pins si demandé (débounce 500 ms pour grouper les sauvegardes séquentielles)
+    if (g_requestReloadPins && (millis() - g_reloadRequestTime >= 500)) {
         g_requestReloadPins = false;
         g_componentManager.reloadConfigs();
     }
     
-    // Traitement des composants
     processComponents();
 }
 

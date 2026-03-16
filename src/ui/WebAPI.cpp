@@ -30,11 +30,27 @@ String getDefaultConfig(String pin) {
         PinMapper::detectMcu();
         uint8_t gpio = PinMapper::labelToGpio(pin.c_str());
         if (gpio != 255 && PinMapper::hasAdc(gpio)) {
-            // Extraire le numéro de la pin pour le CC par défaut
+            // Sur ESP32-S3, si la pin supporte le touch, proposer par défaut un Touch avec note incrémentée
+            #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV) || defined(ARDUINO_ESP32S3)
+            if (PinMapper::hasTouch(gpio)) {
+                int pinNum = pin.substring(1).toInt();
+                int noteVal = 60 + pinNum; // A0 -> 60, A1 -> 61, etc.
+                if (noteVal > 127) noteVal = 127;
+                String config = "{\"role\":\"touch\",\"rtpMidiEnabled\":true,";
+                config += "\"midiMessageType\":\"Note + Key Pressure\",";
+                config += "\"midiNote\":" + String(noteVal) + ",\"midiChannel\":1,";
+                // OSC en mode raw par défaut pour faciliter le calibrage
+                config += "\"oscEnabled\":true,\"oscAddress\":\"/touch\",\"oscFormat\":\"raw\",";
+                config += "\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+                return config;
+            }
+            #endif
+
+            // Sinon, comportement historique : potentiomètre CC avec CC basé sur l’index de pin
             int pinNum = pin.substring(1).toInt();
             int default_cc = pinNum + 1; // A0 -> CC1, A1 -> CC2, etc.
             if (default_cc > 127) default_cc = 127;
-            
+
             String config = "{\"role\":\"potentiometer\",\"rtpMidiEnabled\":true,\"midiMessageType\":\"Control Change\",";
             config += "\"midiCc\":" + String(default_cc) + ",\"midiChannel\":1,";
             config += "\"filterIntensity\":5,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",";

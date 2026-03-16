@@ -235,6 +235,19 @@ void ConfigCache::setConfigClean(const String& pin, const String& config) {
     }
 }
 
+void ConfigCache::setConfigClean(const String& pin, const char* config, size_t configLen) {
+    if (!config) return;
+    int index = findPinIndex(pin);
+    if (index == -1 && count < MAX_PINS) {
+        index = count++;
+        pinNames[index] = pin;
+        dirty[index] = false;
+    }
+    if (index != -1) {
+        cache[index] = String(config, configLen);
+    }
+}
+
 /* Fusionner la config NVS avec les valeurs par défaut manquantes */
 String mergeConfigWithDefaults(const String& nvsConfig, const String& defaultConfig) {
     // Vérifier si oscFormat est présent dans la config NVS

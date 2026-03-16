@@ -12,6 +12,9 @@
 /* Forward declarations */
 String getDefaultConfig(String pin);
 
+/* Limite NVS : une valeur ne doit pas dépasser ~1984 octets (ESP-IDF). Garder marge pour éviter corruption quand on sauvegarde beaucoup de pins. */
+static const size_t NVS_MAX_PIN_CONFIG_SIZE = 1900U;
+
 void setupPinAPI(AsyncWebServer& server) {
     /* API - Capacités des pins (dynamique selon MCU) */
     server.on("/api/pins/caps", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -244,10 +247,22 @@ void setupPinAPI(AsyncWebServer& server) {
                 String val = request->getParam(name, true)->value();
                 if(val == "true" || val == "false") {
                     json += ",\"" + String(name) + "\":" + val;
-                } else if(val.length() > 0 && (val[0] >= '0' && val[0] <= '9')) {
+                } else if(val.indexOf(',') >= 0) {
+                    // Valeurs contenant des virgules (ex. "0,0") → toujours chaînes JSON
+                    String escaped = val;
+                    escaped.replace("\\", "\\\\");
+                    escaped.replace("\"", "\\\"");
+                    json += ",\"" + String(name) + "\":\"" + escaped + "\"";
+                } else if(val.length() > 0 && ((val[0] >= '0' && val[0] <= '9') ||
+                          (val[0] == '-' && val.length() > 1 && (val[1] >= '0' && val[1] <= '9')))) {
+                    // Nombres (y compris négatifs) sans virgule
                     json += ",\"" + String(name) + "\":" + val;
                 } else {
-                    json += ",\"" + String(name) + "\":\"" + val + "\"";
+                    // Chaînes génériques, avec échappement basique
+                    String escaped = val;
+                    escaped.replace("\\", "\\\\");
+                    escaped.replace("\"", "\\\"");
+                    json += ",\"" + String(name) + "\":\"" + escaped + "\"";
                 }
             }
         };
@@ -376,15 +391,22 @@ void setupPinAPI(AsyncWebServer& server) {
         
         json += "}";
         
-        /* Sauvegarder en NVS */
+        if (json.length() > NVS_MAX_PIN_CONFIG_SIZE) {
+            Serial.printf("[PinAPI] JSON trop gros pour NVS: %u > %u (pin=%s) - refus d'écriture pour éviter corruption\n",
+                (unsigned)json.length(), (unsigned)NVS_MAX_PIN_CONFIG_SIZE, pinLabel.c_str());
+            request->send(413, "application/json", "{\"status\":\"error\",\"message\":\"Config trop grande pour NVS (max 1900 octets)\"}");
+            return;
+        }
+        
         Preferences preferences;
         preferences.begin("nidmi", false);
         String key = "pin_" + pinLabel;
-        preferences.putString(key.c_str(), json);
-        
-        /* Note: complexId supprimé - plus besoin de sauvegarder pinLabel/role avec ID explicite */
-        
+        size_t written = preferences.putString(key.c_str(), json);
         preferences.end();
+        
+        if (written == 0) {
+            Serial.printf("[PinAPI] ERREUR NVS: putString a échoué pour %s\n", pinLabel.c_str());
+        }
         
         /* Si additionalPins présent, utiliser le handler générique pour ce type de composant */
         if(hasAdditionalPins && def) {

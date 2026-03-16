@@ -465,7 +465,7 @@ void TouchProcessor::process(
     // Log essentiel de la valeur brute toutes les 200ms
     static unsigned long last_raw_info[49] = {0};
     if (millis() - last_raw_info[config.gpio] > 200) {
-        TOUCH_INFO("[TouchProcessor] GPIO%d: raw=%d (lecture brute)\n", config.gpio, touch_value);
+        TOUCH_LOG("[TouchProcessor] GPIO%d: raw=%d (lecture brute)\n", config.gpio, touch_value);
         last_raw_info[config.gpio] = millis();
     }
     

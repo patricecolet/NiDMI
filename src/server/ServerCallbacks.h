@@ -28,6 +28,11 @@ void nidmi_requestReloadPins();
  */
 void nidmi_requestReloadOsc();
 
+/**
+ * @brief Demander un redémarrage différé (2 s pour laisser la réponse HTTP partir et la NVS se fermer proprement)
+ */
+void nidmi_requestReboot();
+
 #ifdef __cplusplus
 }
 #endif
