@@ -24,9 +24,9 @@
 
 // Macro pour activer/désactiver les logs de debug
 // Décommenter la ligne suivante pour activer les logs détaillés
-#define DEBUG_TOUCH 1
+#define DEBUG_TOUCH 0
 
-#ifdef DEBUG_TOUCH
+#if DEBUG_TOUCH
     #define TOUCH_LOG(...) Serial.printf(__VA_ARGS__)
     #define TOUCH_LOG_ONCE(...) do { static bool _logged = false; if (!_logged) { Serial.printf(__VA_ARGS__); _logged = true; } } while(0)
 #else
@@ -128,28 +128,27 @@ static void calculateThresholds(
     uint32_t& velocity_threshold,
     uint8_t& aftertouch_threshold
 ) {
-    // Touch threshold : potMin si configuré, sinon 80% de baseline
-    if (config.potMin > 0) {
-        touch_threshold = config.potMin;
-        TOUCH_LOG("[TouchProcessor] GPIO%d: touch_threshold=%d (config potMin)\n", config.gpio, touch_threshold);
+    // Mapping champs génériques :
+    // - customInt1 ← champ de formulaire "potMin" (seuil touch 0-4095)
+    // - customInt2 ← champ de formulaire "aftertouchThreshold" (1-127)
+
+    // Touch threshold : customInt1 (potMin) si configuré, sinon 80% de baseline
+    if (config.customInt1 > 0) {
+        touch_threshold = config.customInt1;
+        TOUCH_LOG("[TouchProcessor] GPIO%d: touch_threshold=%d (config customInt1/potMin)\n",
+                  config.gpio, touch_threshold);
     } else {
         touch_threshold = (baseline * 80) / 100;
-        TOUCH_LOG("[TouchProcessor] GPIO%d: touch_threshold=%d (80%% baseline=%d)\n", 
-                 config.gpio, touch_threshold, baseline);
+        TOUCH_LOG("[TouchProcessor] GPIO%d: touch_threshold=%d (80%% baseline=%d)\n",
+                  config.gpio, touch_threshold, baseline);
     }
-    
-    // Velocity threshold : customInt1 si configuré, sinon touch_threshold
-    if (config.customInt1 > 0) {
-        velocity_threshold = config.customInt1;
-        TOUCH_LOG("[TouchProcessor] GPIO%d: velocity_threshold=%d (config customInt1)\n", 
-                 config.gpio, velocity_threshold);
-    } else {
-        velocity_threshold = touch_threshold;
-        TOUCH_LOG("[TouchProcessor] GPIO%d: velocity_threshold=%d (=touch_threshold)\n", 
-                 config.gpio, velocity_threshold);
-    }
-    
-    // Aftertouch threshold : customInt2 si configuré, sinon 4
+
+    // Velocity threshold : même seuil que touch_threshold (plus de champ dédié)
+    velocity_threshold = touch_threshold;
+    TOUCH_LOG("[TouchProcessor] GPIO%d: velocity_threshold=%d (=touch_threshold)\n",
+              config.gpio, velocity_threshold);
+
+    // Aftertouch threshold : customInt2 (aftertouchThreshold) si configuré, sinon 4
     aftertouch_threshold = (config.customInt2 > 0) ? config.customInt2 : 4;
     TOUCH_LOG("[TouchProcessor] GPIO%d: aftertouch_threshold=%d\n", config.gpio, aftertouch_threshold);
 }
