@@ -42,14 +42,9 @@ struct Touch {
     static constexpr uint8_t DEFAULT_NOTE = 60;
     static constexpr uint8_t DEFAULT_CHANNEL = 1;
     static constexpr uint8_t DEFAULT_FILTER_INTENSITY = 5;
-<<<<<<< HEAD
     static constexpr const char* DEFAULT_SEUILS_RAW = "0,0";  // ON,OFF raw depuis baseline (0,0=auto)
     static constexpr uint32_t DEFAULT_AFTERTOUCH_RANGE = 20000;  // Plage raw pour aftertouch 0-127
-=======
-    static constexpr uint16_t DEFAULT_TOUCH_THRESHOLD = 0;   // 0 = auto (baseline), sinon seuil manuel (1-4095)
-    static constexpr uint8_t DEFAULT_AFTERTOUCH_THRESHOLD = 4;  // Sensibilité aftertouch (1-127)
->>>>>>> 0bd1620 (adding touch for s3)
-    
+
     /**
      * @brief Validation : vérifie que le GPIO a une capacité Touch et que c'est un ESP32-S3
      */
@@ -72,18 +67,11 @@ struct Touch {
             .setType(TYPE, PIN_TYPE)
             .setCapabilities(SUPPORTS_MIDI, SUPPORTS_OSC)
             .setImplemented(IMPLEMENTED)
-<<<<<<< HEAD
             .addFormField(makeTextField(
                 "s",
                 "Seuils ON,OFF (raw)",
                 "0,0", "0,0", 16, 80,
                 "Depuis baseline: déclenchement,relâchement (0,0=auto)"
-=======
-            .addFormField(makeNumberFieldWithHint(
-                "potMin",
-                "Seuil touch (0 = auto)",
-                0, 4095, "0", "0 = auto depuis baseline, sinon seuil manuel (1-4095)", 60
->>>>>>> 0bd1620 (adding touch for s3)
             ))
             .addFormField(makeNumberFieldWithHint(
                 "aftertouchRange",
