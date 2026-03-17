@@ -87,12 +87,6 @@ void nidmi_begin() {
     bool touchEnabled = preferences.getBool("touch_enabled", false);
     bool usbMidiEnabled = false;
     
-    Serial.println("===== NVS DEBUG (boot) =====");
-    Serial.printf("sta_ssid: '%s'\n", staSsid.c_str());
-    Serial.printf("sta_pass length: %d\n", (int)staPass.length());
-    Serial.printf("sta_ip: '%s' sta_gw: '%s' sta_sn: '%s'\n", staIpStr.c_str(), staGwStr.c_str(), staSnStr.c_str());
-    Serial.printf("touch_enabled: %s\n", touchEnabled ? "true" : "false");
-    Serial.println("============================");
     
     preferences.end();
     
@@ -166,6 +160,7 @@ void nidmi_begin() {
     Serial.print("  mDNS: http://"); Serial.print(host); Serial.println(".local/");
     Serial.print("  RTP-MIDI: "); Serial.println(serverCore.rtpMidi().isInitialized() ? "Initialized" : "Failed");
     Serial.print("  Bluetooth: "); Serial.println(serverCore.bluetooth().isInitialized() ? "Initialized" : "Failed");
+    Serial.printf("Touch Enabled: %s\n", touchEnabled ? "true" : "false");
     Serial.println();
 }
 

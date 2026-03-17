@@ -325,6 +325,7 @@ static void processNoteVelocity(
                          config.gpio, note, touch_value);
             if (midi_sender) {
                 midi_sender->sendNoteOff(channel, note, 0);
+                midi_sender->sendKeyPressure(channel, note, 0);
             TOUCH_LOG("[TouchProcessor] → MIDI Note Off envoyé (ch=%d, note=%d)\n", channel, note);
             } else {
             TOUCH_WARN("[TouchProcessor] ⚠️ MIDI Note Off NON envoyé (midi_sender=NULL)\n");
@@ -350,7 +351,7 @@ static void processNoteVelocity(
 
         const uint32_t MIN_KEYPRESSURE_INTERVAL_MS = 20;
         uint32_t time_since_last = millis() - state.last_time;
-        if (time_since_last >= MIN_KEYPRESSURE_INTERVAL_MS || at_velocity != state.last_aftertouch) {
+        if (time_since_last >= MIN_KEYPRESSURE_INTERVAL_MS && at_velocity != state.last_aftertouch) {
             TOUCH_LOG("[TouchProcessor] GPIO%d: Key Pressure at_vel=%d (smoothed %lu in [%lu..%lu])\n",
                      config.gpio, at_velocity, (unsigned long)touch_smoothed, (unsigned long)at_min, (unsigned long)at_max);
             if (midi_sender) {
