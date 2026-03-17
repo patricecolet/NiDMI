@@ -47,6 +47,11 @@ struct ImuConfig {
     int16_t zZeroMax;
     int16_t zMax;
     
+    // Inversion par axe
+    bool invertX;
+    bool invertY;
+    bool invertZ;
+    
     // Configuration MIDI par axe
     MidiMessageType xMsgType;  // Type de message MIDI pour l'axe X
     MidiMessageType yMsgType;  // Type de message MIDI pour l'axe Y
@@ -69,6 +74,7 @@ struct ImuConfig {
         , xMin(-2000), xZeroMin(-100), xZeroMax(100), xMax(2000)
         , yMin(-2000), yZeroMin(-100), yZeroMax(100), yMax(2000)
         , zMin(-2000), zZeroMin(-100), zZeroMax(100), zMax(2000)
+        , invertX(false), invertY(false), invertZ(false)
         , xMsgType(MidiMessageType::CONTROL_CHANGE)
         , yMsgType(MidiMessageType::CONTROL_CHANGE)
         , zMsgType(MidiMessageType::CONTROL_CHANGE)
@@ -172,6 +178,29 @@ struct Lis3dh {
             .addFormField(makeNumberField("zZeroMin", "Z Zero Min", -32768, 32767, "-100", 1, 100, "f"))
             .addFormField(makeNumberField("zZeroMax", "Z Zero Max", -32768, 32767, "100", 1, 100, "f"))
             .addFormField(makeNumberField("zMax", "Z Max", -32768, 32767, "2000", 1, 100, "f"))
+            
+            // Inversion d'axes
+            .addFormField(makeSelectField(
+                "invertX",
+                "Inverser axe X",
+                "[{\"value\":\"0\",\"label\":\"Normal\"},{\"value\":\"1\",\"label\":\"Inversé\"}]",
+                "0",
+                "r"
+            ))
+            .addFormField(makeSelectField(
+                "invertY",
+                "Inverser axe Y",
+                "[{\"value\":\"0\",\"label\":\"Normal\"},{\"value\":\"1\",\"label\":\"Inversé\"}]",
+                "0",
+                "r"
+            ))
+            .addFormField(makeSelectField(
+                "invertZ",
+                "Inverser axe Z",
+                "[{\"value\":\"0\",\"label\":\"Normal\"},{\"value\":\"1\",\"label\":\"Inversé\"}]",
+                "0",
+                "r"
+            ))
             
             // Filtrage
             .addFormField(makeNumberFieldWithHint(

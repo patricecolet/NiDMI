@@ -116,8 +116,8 @@ const ComponentDefinitions = {
           
           /* Charger toutes les pages */
           /* Utiliser limit=5 pour correspondre au default du backend (buffer 12KB = ~5 composants par page) */
-          for (let page = 0; page < totalPages; page++) {
-            const pageR = await fetch(`/api/components/definitions?page=${page}&limit=5`);
+          for (let page = 0; ; page++) {
+            const pageR = await fetch(`/api/components/definitions?page=${page}&limit=3`);
             if (!pageR.ok) {
               console.warn(`[ComponentDefinitions.load] Erreur page ${page}:`, pageR.status);
               break;

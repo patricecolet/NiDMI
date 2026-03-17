@@ -6,6 +6,7 @@
 #include "../utils/PinMapper.h"
 #include "../midi/MidiMessageType.h"
 #include "../midi/handlers/MidiOutputCoordinator.h"
+#include "../utils/AxisUtils.h"
 
 // Instance statique du driver LIS3DH (singleton par GPIO)
 static Lis3dhDriver* lis3dh_driver = nullptr;
@@ -136,10 +137,10 @@ void ImuProcessor::process(
     int16_t yFiltered = filterSignedValue(yFilter, accel.y);
     int16_t zFiltered = filterSignedValue(zFilter, accel.z);
     
-    // Normaliser les valeurs
-    int8_t xNorm = mapAxisValue(xFiltered, imuConfig->xMin, imuConfig->xZeroMin, imuConfig->xZeroMax, imuConfig->xMax);
-    int8_t yNorm = mapAxisValue(yFiltered, imuConfig->yMin, imuConfig->yZeroMin, imuConfig->yZeroMax, imuConfig->yMax);
-    int8_t zNorm = mapAxisValue(zFiltered, imuConfig->zMin, imuConfig->zZeroMin, imuConfig->zZeroMax, imuConfig->zMax);
+    // Normaliser les valeurs (avec inversion éventuelle)
+    int8_t xNorm = mapAxisValue(xFiltered, imuConfig->xMin, imuConfig->xZeroMin, imuConfig->xZeroMax, imuConfig->xMax, imuConfig->invertX);
+    int8_t yNorm = mapAxisValue(yFiltered, imuConfig->yMin, imuConfig->yZeroMin, imuConfig->yZeroMax, imuConfig->yMax, imuConfig->invertY);
+    int8_t zNorm = mapAxisValue(zFiltered, imuConfig->zMin, imuConfig->zZeroMin, imuConfig->zZeroMax, imuConfig->zMax, imuConfig->invertZ);
     
     // Récupérer les dernières valeurs normalisées
     int8_t lastXNorm = (lastXNormPtr && *lastXNormPtr != 255) ? (int8_t)(*lastXNormPtr - 127) : 128;
@@ -178,33 +179,21 @@ void ImuProcessor::process(
     state.last_time = millis();
 }
 
-int8_t ImuProcessor::mapAxisValue(int16_t value, int16_t min, int16_t zeroMin, int16_t zeroMax, int16_t max) {
-    // Zone morte au centre
-    if (value >= zeroMin && value <= zeroMax) {
-        return 0;
-    }
-    
-    // Côté minimum (négatif)
-    if (value < zeroMin) {
-        if (value <= min) return -127;
-        // Map [min, zeroMin[ -> [-127, 0[
-        long mapped = map(value, min, zeroMin, -127, 0);
-        if (mapped < -127) mapped = -127;
-        if (mapped > 0) mapped = 0;
-        return (int8_t)mapped;
-    }
-    
-    // Côté maximum (positif)
-    if (value > zeroMax) {
-        if (value >= max) return 127;
-        // Map ]zeroMax, max] -> ]0, +127]
-        long mapped = map(value, zeroMax, max, 0, 127);
-        if (mapped > 127) mapped = 127;
-        if (mapped < 0) mapped = 0;
-        return (int8_t)mapped;
-    }
-    
-    return 0;
+int8_t ImuProcessor::mapAxisValue(
+    int16_t value,
+    int16_t min,
+    int16_t zeroMin,
+    int16_t zeroMax,
+    int16_t max,
+    bool invert
+) {
+    AxisRangeConfig cfg;
+    cfg.min     = static_cast<int32_t>(min);
+    cfg.zeroMin = static_cast<int32_t>(zeroMin);
+    cfg.zeroMax = static_cast<int32_t>(zeroMax);
+    cfg.max     = static_cast<int32_t>(max);
+    cfg.invert  = invert;
+    return mapAxisValueGeneric(static_cast<int32_t>(value), cfg);
 }
 
 void ImuProcessor::sendMidiForAxis(

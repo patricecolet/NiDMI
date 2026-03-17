@@ -10,6 +10,17 @@
 MidiRouter g_midiRouter;
 ComponentManager g_componentManager;
 
+// Configuration STA mise en cache pour permettre une reconnexion automatique
+static String g_staSsid;
+static String g_staPass;
+static String g_staIpStr;
+static String g_staGwStr;
+static String g_staSnStr;
+
+// Gestion de la reconnexion STA
+static unsigned long g_lastStaConnectAttempt = 0;
+static const unsigned long STA_RECONNECT_INTERVAL_MS = 10000; // 10 s
+
 // Demande de rechargement des configs pins depuis l'API (débounce 500 ms pour grouper les sauvegardes séquentielles)
 static volatile bool g_requestReloadPins = false;
 static unsigned long g_reloadRequestTime = 0;
@@ -79,11 +90,11 @@ void nidmi_begin() {
     }
     
     String serverName = preferences.getString("mdns_name", "nidmi");
-    String staSsid = preferences.getString("sta_ssid", "");
-    String staPass = preferences.getString("sta_pass", "");
-    String staIpStr = preferences.getString("sta_ip", "");
-    String staGwStr = preferences.getString("sta_gw", "");
-    String staSnStr = preferences.getString("sta_sn", "");
+    g_staSsid = preferences.getString("sta_ssid", "");
+    g_staPass = preferences.getString("sta_pass", "");
+    g_staIpStr = preferences.getString("sta_ip", "");
+    g_staGwStr = preferences.getString("sta_gw", "");
+    g_staSnStr = preferences.getString("sta_sn", "");
     bool touchEnabled = preferences.getBool("touch_enabled", false);
     bool usbMidiEnabled = false;
     
@@ -121,15 +132,15 @@ void nidmi_begin() {
     touchDiag("APRES WiFi/serveur");
 
     // Tente STA après que le mode APSTA soit configuré
-    if (staSsid.length() > 0) {
-        if (staIpStr.length() > 0 && staGwStr.length() > 0 && staSnStr.length() > 0) {
+    if (g_staSsid.length() > 0) {
+        if (g_staIpStr.length() > 0 && g_staGwStr.length() > 0 && g_staSnStr.length() > 0) {
             IPAddress ip, gw, sn;
-            if (ip.fromString(staIpStr) && gw.fromString(staGwStr) && sn.fromString(staSnStr)) {
+            if (ip.fromString(g_staIpStr) && gw.fromString(g_staGwStr) && sn.fromString(g_staSnStr)) {
                 serverCore.setStaticStaIp(ip, gw, sn);
-                Serial.printf("[NiDMI] STA static IP: %s GW: %s SN: %s\n", staIpStr.c_str(), staGwStr.c_str(), staSnStr.c_str());
+                Serial.printf("[NiDMI] STA static IP: %s GW: %s SN: %s\n", g_staIpStr.c_str(), g_staGwStr.c_str(), g_staSnStr.c_str());
             }
         }
-        serverCore.connectSta(staSsid.c_str(), staPass.length() > 0 ? staPass.c_str() : nullptr);
+        serverCore.connectSta(g_staSsid.c_str(), g_staPass.length() > 0 ? g_staPass.c_str() : nullptr);
     } else {
         Serial.println("[NiDMI] No STA configuration found");
     }
@@ -169,7 +180,26 @@ void nidmi_loop() {
     if (g_requestReboot && (millis() - g_rebootRequestTime >= 2000)) {
         ESP.restart();
     }
-    
+
+    // Tentative de reconnexion STA automatique si des identifiants sont connus
+    if (g_staSsid.length() > 0) {
+        wl_status_t staStatus = WiFi.status();
+        unsigned long now = millis();
+        if (staStatus != WL_CONNECTED &&
+            now - g_lastStaConnectAttempt >= STA_RECONNECT_INTERVAL_MS) {
+            Serial.println("[NiDMI] STA not connected, attempting automatic reconnection...");
+            // Reconfigurer éventuellement l'IP statique
+            if (g_staIpStr.length() > 0 && g_staGwStr.length() > 0 && g_staSnStr.length() > 0) {
+                IPAddress ip, gw, sn;
+                if (ip.fromString(g_staIpStr) && gw.fromString(g_staGwStr) && sn.fromString(g_staSnStr)) {
+                    serverCore.setStaticStaIp(ip, gw, sn);
+                }
+            }
+            serverCore.connectSta(g_staSsid.c_str(), g_staPass.length() > 0 ? g_staPass.c_str() : nullptr);
+            g_lastStaConnectAttempt = now;
+        }
+    }
+
     serverCore.update();
     
     // Recharger pins si demandé (débounce 500 ms pour grouper les sauvegardes séquentielles)

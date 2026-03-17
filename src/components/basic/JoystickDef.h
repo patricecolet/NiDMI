@@ -37,6 +37,10 @@ struct JoystickConfig {
     uint16_t joyYZeroMax;      // Fin zone morte axe Y (0-4095)
     uint16_t joyYMax;          // Seuil maximum axe Y (0-4095)
     
+    // Inversion par axe
+    bool invertX;              // true = inverser l'axe X
+    bool invertY;              // true = inverser l'axe Y
+    
     // Configuration MIDI par axe
     MidiMessageType xMsgType;  // Type de message MIDI pour l'axe X
     MidiMessageType yMsgType;  // Type de message MIDI pour l'axe Y
@@ -49,6 +53,7 @@ struct JoystickConfig {
         : filter_intensity(5)
         , joyXMin(200), joyXZeroMin(1900), joyXZeroMax(2100), joyXMax(4000)
         , joyYMin(200), joyYZeroMin(1900), joyYZeroMax(2100), joyYMax(4000)
+        , invertX(false), invertY(false)
         , xMsgType(MidiMessageType::CONTROL_CHANGE), yMsgType(MidiMessageType::CONTROL_CHANGE)
         , xMidiParam(1), yMidiParam(2)
         , xMidiChannel(1), yMidiChannel(1) {}
@@ -111,6 +116,22 @@ struct Joystick {
             .addFormField(makeNumberField("yZeroMin", "Y Zero Min", 0, 4095, "1900", 1, 100, "f"))
             .addFormField(makeNumberField("yZeroMax", "Y Zero Max", 0, 4095, "2100", 1, 100, "f"))
             .addFormField(makeNumberField("yMax", "Y Max", 0, 4095, "4000", 1, 100, "f"))
+            
+            // Inversion d'axes
+            .addFormField(makeSelectField(
+                "invertX",
+                "Inverser axe X",
+                "[{\"value\":\"0\",\"label\":\"Normal\"},{\"value\":\"1\",\"label\":\"Inversé\"}]",
+                "0",
+                "r"
+            ))
+            .addFormField(makeSelectField(
+                "invertY",
+                "Inverser axe Y",
+                "[{\"value\":\"0\",\"label\":\"Normal\"},{\"value\":\"1\",\"label\":\"Inversé\"}]",
+                "0",
+                "r"
+            ))
             
             // Filtrage
             .addFormField(makeNumberFieldWithHint(

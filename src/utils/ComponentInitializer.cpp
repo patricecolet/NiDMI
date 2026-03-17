@@ -150,6 +150,10 @@ void ComponentInitializer::initializeConfig(
                             joyConfig->joyYZeroMax = atoi(field.defaultValue);
                         } else if (strcmp(field.id, "yMax") == 0) {
                             joyConfig->joyYMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "invertX") == 0) {
+                            joyConfig->invertX = (atoi(field.defaultValue) != 0);
+                        } else if (strcmp(field.id, "invertY") == 0) {
+                            joyConfig->invertY = (atoi(field.defaultValue) != 0);
                         }
                     }
                 }
@@ -197,6 +201,12 @@ void ComponentInitializer::initializeConfig(
                             imuConfig->zZeroMax = atoi(field.defaultValue);
                         } else if (strcmp(field.id, "zMax") == 0) {
                             imuConfig->zMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "invertX") == 0) {
+                            imuConfig->invertX = (atoi(field.defaultValue) != 0);
+                        } else if (strcmp(field.id, "invertY") == 0) {
+                            imuConfig->invertY = (atoi(field.defaultValue) != 0);
+                        } else if (strcmp(field.id, "invertZ") == 0) {
+                            imuConfig->invertZ = (atoi(field.defaultValue) != 0);
                         }
                     }
                 }

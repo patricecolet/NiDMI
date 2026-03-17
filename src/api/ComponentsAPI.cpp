@@ -41,7 +41,7 @@ void setupComponentsAPI(AsyncWebServer& server) {
             if (limit > 15) limit = 15; // Max 15 par page pour éviter les buffers trop grands (avec buffer 12KB)
         }
         
-        static char jsonBuffer[12288];  // Buffer 12KB par page (augmenté pour éviter la troncature)
+        static char jsonBuffer[24576];  // Buffer 12KB par page (augmenté pour éviter la troncature)
         int written = ComponentRegistry::toJsonArrayPage(jsonBuffer, sizeof(jsonBuffer), page, limit);
         
         if (written > 0 && written < (int)sizeof(jsonBuffer)) {

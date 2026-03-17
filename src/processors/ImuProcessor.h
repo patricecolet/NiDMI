@@ -49,9 +49,17 @@ private:
      * @param zeroMin Début de la zone morte
      * @param zeroMax Fin de la zone morte
      * @param max Valeur maximale utile
+     * @param invert true pour inverser le signe de la valeur normalisée
      * @return Valeur normalisée (-127..127)
      */
-    static int8_t mapAxisValue(int16_t value, int16_t min, int16_t zeroMin, int16_t zeroMax, int16_t max);
+    static int8_t mapAxisValue(
+        int16_t value,
+        int16_t min,
+        int16_t zeroMin,
+        int16_t zeroMax,
+        int16_t max,
+        bool invert
+    );
     
     /**
      * @brief Envoie un message MIDI pour un axe

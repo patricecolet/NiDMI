@@ -5,6 +5,7 @@
 #include "../midi/handlers/MidiOutputCoordinator.h"
 #include "../midi/MidiMessageType.h"
 #include "../utils/PinMapper.h"
+#include "../utils/AxisUtils.h"
 #include "../managers/complex/joystick/JoystickHandler.h"
 #include "../managers/complex/ComplexHandlerRegistry.h"
 
@@ -33,6 +34,8 @@ void JoystickProcessor::process(
     uint8_t intensity = 5;
     uint16_t xMin = 200, xZeroMin = 1900, xZeroMax = 2100, xMax = 4000;
     uint16_t yMin = 200, yZeroMin = 1900, yZeroMax = 2100, yMax = 4000;
+    bool invertX = false;
+    bool invertY = false;
     
     if (config.specificConfig.joystick) {
         Components::JoystickConfig* joyConfig = config.specificConfig.joystick;
@@ -46,6 +49,8 @@ void JoystickProcessor::process(
         yZeroMin = joyConfig->joyYZeroMin;
         yZeroMax = joyConfig->joyYZeroMax;
         yMax = joyConfig->joyYMax;
+        invertX = joyConfig->invertX;
+        invertY = joyConfig->invertY;
     }
     
     xFilter.setAlphaFromIntensity(intensity);
@@ -54,8 +59,8 @@ void JoystickProcessor::process(
     uint16_t xFiltered = xFilter.process(xRaw);
     uint16_t yFiltered = yFilter.process(yRaw);
     
-    int8_t xNorm = mapAxisValue(xFiltered, xMin, xZeroMin, xZeroMax, xMax);
-    int8_t yNorm = mapAxisValue(yFiltered, yMin, yZeroMin, yZeroMax, yMax);
+    int8_t xNorm = mapAxisValue(xFiltered, xMin, xZeroMin, xZeroMax, xMax, invertX);
+    int8_t yNorm = mapAxisValue(yFiltered, yMin, yZeroMin, yZeroMax, yMax, invertY);
     
     int8_t lastXNorm = (lastXNormPtr && *lastXNormPtr != 255) ? (int8_t)(*lastXNormPtr - 127) : 128;
     int8_t lastYNorm = (lastYNormPtr && *lastYNormPtr != 255) ? (int8_t)(*lastYNormPtr - 127) : 128;
@@ -76,33 +81,21 @@ void JoystickProcessor::process(
     state.last_time = millis();
 }
 
-int8_t JoystickProcessor::mapAxisValue(uint16_t value, uint16_t min, uint16_t zeroMin, uint16_t zeroMax, uint16_t max) {
-    // Zone morte au centre
-    if (value >= zeroMin && value <= zeroMax) {
-        return 0;
-    }
-    
-    // Côté minimum (gauche / bas)
-    if (value < zeroMin) {
-        if (value <= min) return -127;
-        // Map [min, zeroMin[ -> [-127, 0[
-        long mapped = map(value, min, zeroMin, -127, 0);
-        if (mapped < -127) mapped = -127;
-        if (mapped > 0) mapped = 0;
-        return (int8_t)mapped;
-    }
-    
-    // Côté maximum (droite / haut)
-    if (value > zeroMax) {
-        if (value >= max) return 127;
-        // Map ]zeroMax, max] -> ]0, +127]
-        long mapped = map(value, zeroMax, max, 0, 127);
-        if (mapped > 127) mapped = 127;
-        if (mapped < 0) mapped = 0;
-        return (int8_t)mapped;
-    }
-    
-    return 0;
+int8_t JoystickProcessor::mapAxisValue(
+    uint16_t value,
+    uint16_t min,
+    uint16_t zeroMin,
+    uint16_t zeroMax,
+    uint16_t max,
+    bool invert
+) {
+    AxisRangeConfig cfg;
+    cfg.min     = static_cast<int32_t>(min);
+    cfg.zeroMin = static_cast<int32_t>(zeroMin);
+    cfg.zeroMax = static_cast<int32_t>(zeroMax);
+    cfg.max     = static_cast<int32_t>(max);
+    cfg.invert  = invert;
+    return mapAxisValueGeneric(static_cast<int32_t>(value), cfg);
 }
 
 void JoystickProcessor::sendMidiForAxis(

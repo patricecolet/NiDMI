@@ -419,6 +419,10 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                                     }
                                 }
                                 
+                                // Inversion d'axes (checkbox → "0"/"1" dans le JSON)
+                                joyConfig->invertX = JSONParser::extractBool(pinConfig, "invertX", false);
+                                joyConfig->invertY = JSONParser::extractBool(pinConfig, "invertY", false);
+                                
                                 // Charger les types MIDI par axe
                                 String xMsgTypeStr = JSONParser::extractStr(pinConfig, "midiMessageTypeX", "");
                                 String yMsgTypeStr = JSONParser::extractStr(pinConfig, "midiMessageTypeY", "");
@@ -531,6 +535,12 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                                                 imuConfig->zZeroMax = JSONParser::extractInt(pinConfig, "zZeroMax", field.defaultValue ? atoi(field.defaultValue) : 100);
                                             } else if (strcmp(field.id, "zMax") == 0) {
                                                 imuConfig->zMax = JSONParser::extractInt(pinConfig, "zMax", field.defaultValue ? atoi(field.defaultValue) : 2000);
+                                            } else if (strcmp(field.id, "invertX") == 0) {
+                                                imuConfig->invertX = JSONParser::extractBool(pinConfig, "invertX", false);
+                                            } else if (strcmp(field.id, "invertY") == 0) {
+                                                imuConfig->invertY = JSONParser::extractBool(pinConfig, "invertY", false);
+                                            } else if (strcmp(field.id, "invertZ") == 0) {
+                                                imuConfig->invertZ = JSONParser::extractBool(pinConfig, "invertZ", false);
                                             }
                                         }
                                     }
