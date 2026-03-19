@@ -10,6 +10,14 @@ UsbMidiManager::UsbMidiManager()
 
 UsbMidiManager::~UsbMidiManager() {
     stop();
+
+#ifdef NIDMI_USB_MIDI_SUPPORTED
+    // Nettoyer explicitement l'objet alloué (évite fuite mémoire si on re-désactive/active souvent)
+    if (usbMidi) {
+        delete usbMidi;
+        usbMidi = nullptr;
+    }
+#endif
 }
 
 bool UsbMidiManager::isSupported() const {
@@ -58,12 +66,18 @@ bool UsbMidiManager::begin() {
         return false;
     }
     
-    // Initialiser USB MIDI
-    usbMidi = new USBMIDI();
-    usbMidi->begin();
-    USB.begin();
-    
-    usbInitialized = true;
+    // Ne pas ré-initialiser complètement à chaque activation.
+    // On crée l'objet une fois, puis on réutilise l'initialisation USB déjà faite.
+    if (!usbMidi) {
+        usbMidi = new USBMIDI();
+    }
+
+    if (!usbInitialized) {
+        usbMidi->begin();
+        USB.begin();
+        usbInitialized = true;
+    }
+
     isStarted = true;
     available = true;
     
@@ -78,14 +92,13 @@ bool UsbMidiManager::begin() {
 
 void UsbMidiManager::stop() {
 #ifdef NIDMI_USB_MIDI_SUPPORTED
-    if (isStarted && usbInitialized) {
-        if (usbMidi) {
-            delete usbMidi;
-            usbMidi = nullptr;
-        }
-        usbInitialized = false;
-    }
+    // Désactiver le routage (etat "connected/enabled" pour l'API/UI),
+    // sans détruire l'instance USB pour limiter les risques de crash
+    // lors d'un toggle depuis l'interface web.
+    isStarted = false;
+    available = false;
 #endif
+    // Pour les builds non supportés aussi, garantir un état "désactivé"
     isStarted = false;
     available = false;
 }

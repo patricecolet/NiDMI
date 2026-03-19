@@ -82,23 +82,30 @@ async function loadMidiInterfaces(){
       }
     }
     
-    /* Charger l'état USB MIDI (statut uniquement, pas de checkbox) */
+    /* Charger l'état USB MIDI (supporté/activé/mémorisé + statut) */
     const usbRes = await fetch('/api/usbmidi/status');
     if(usbRes.ok) {
       const usbData = await usbRes.json();
       const statusEl = document.getElementById('usbMidiStatus');
+      const usbCheckbox = $('#usbMidiEnabled');
+      if(usbCheckbox && usbCheckbox.type === 'checkbox') {
+        usbCheckbox.disabled = !usbData.supported;
+        // On préfère l'état mémorisé (NVS) si disponible
+        const nextChecked = (usbData.savedEnabled !== undefined) ? !!usbData.savedEnabled : !!usbData.enabled;
+        usbCheckbox.checked = nextChecked;
+      }
       if(statusEl) {
         let statusText = '';
-        if(usbData.supported) {
-          if(usbData.connected) {
-            statusText = '✅ Connecté';
-          } else if(usbData.enabled) {
-            statusText = '⚠️ Initialisé (non connecté)';
-          } else {
-            statusText = '❌ Non initialisé';
-          }
-        } else {
+        if(!usbData.supported) {
           statusText = '❌ Non supporté';
+        } else if(usbData.savedEnabled === false || usbData.enabled === false) {
+          statusText = '⛔ Désactivé';
+        } else if(usbData.connected) {
+          statusText = '✅ Connecté';
+        } else if(usbData.enabled) {
+          statusText = '⚠️ Activé (non connecté)';
+        } else {
+          statusText = '❌ Non initialisé';
         }
         statusEl.textContent = statusText;
       }
@@ -128,6 +135,45 @@ function initForms(){
  oscTarget.addEventListener('change', updateOscForm);
  updateOscForm();
  }
+
+  /* USB-MIDI : toggle depuis la checkbox */
+  const usbCheckbox = $('#usbMidiEnabled');
+  if(usbCheckbox && usbCheckbox.type === 'checkbox') {
+    usbCheckbox.addEventListener('change', async () => {
+      if(usbCheckbox.disabled) return;
+      const enabled = !!usbCheckbox.checked;
+      const statusEl = document.getElementById('usbMidiStatus');
+      if(statusEl) statusEl.textContent = enabled ? 'Activation...' : 'Désactivation...';
+
+      try {
+        usbCheckbox.disabled = true;
+        const formData = new URLSearchParams();
+        formData.append('enable', enabled ? 'true' : 'false');
+
+        const resp = await fetch('/api/usbmidi/enable', {
+          method: 'POST',
+          headers: {'Content-Type':'application/x-www-form-urlencoded'},
+          body: formData.toString()
+        });
+
+        if(!resp.ok) {
+          const txt = await resp.text().catch(()=>'');
+          throw new Error(txt || ('HTTP ' + resp.status));
+        }
+
+        // Quand on désactive, on force un "reconnect" côté navigateur après reboot.
+        if(!enabled) {
+          setTimeout(() => location.reload(), 3500);
+        }
+      } catch(err) {
+        console.log('Erreur toggle USB-MIDI:', err);
+      } finally {
+        usbCheckbox.disabled = false;
+        // Si on reboot, la page va se recharger: éviter les appels inutiles.
+        if(enabled) await loadMidiInterfaces();
+      }
+    });
+  }
  
  $('#mdns').addEventListener('submit', async (e) => {
  e.preventDefault();
@@ -708,7 +754,7 @@ try {
       }
     }
   }
-  /* Note: USB MIDI s'active automatiquement au boot si supporté, pas de contrôle via interface */
+  /* USB MIDI : toggle via checkbox (via /api/usbmidi/enable), pas via saveAll */
 } catch(e) {
   console.error('Erreur sauvegarde interfaces MIDI:', e);
 }
