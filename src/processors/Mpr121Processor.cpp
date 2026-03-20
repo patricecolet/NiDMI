@@ -66,6 +66,13 @@ void Mpr121Processor::process(
             return;
         }
         state.last_value = 0;
+        state.last_raw_value_u32 = 0;
+        state.last_midi_value_u8 = 0;
+        state.last_telemetry_ts = 0;
+        state.aux_gpio = 255;
+        state.last_raw_value_aux_u32 = 0;
+        state.last_midi_value_aux_u8 = 0;
+        state.last_telemetry_ts_aux = 0;
         mpr121_logged_ok = false;
     }
 
@@ -96,6 +103,8 @@ void Mpr121Processor::process(
     }
 
     uint16_t previous_mask = state.last_value & 0x0FFF;  // 12 bits
+    bool mask_changed = (current_mask != previous_mask);
+    state.last_raw_value_u32 = current_mask & 0x0FFF;   // RAW mode: mask 0..4095
     uint8_t ch = mpr121Config->midi_channel;
     if (ch < 1) ch = 1;
     if (ch > 16) ch = 16;
@@ -124,6 +133,8 @@ void Mpr121Processor::process(
                     snprintf(addr, sizeof(addr), "%s/%d", config.osc_address[0] ? config.osc_address : "/mpr121", i);
                     osc_queue.enqueueMidi(addr, note, 100, ch);
                 }
+                // MIDI mode display: last data1 (note/CC) du dernier pad touché
+                state.last_midi_value_u8 = note;
             } else {
                 uint8_t cc = base + i;
                 if (cc > 127) cc = 127;
@@ -135,6 +146,8 @@ void Mpr121Processor::process(
                     snprintf(addr, sizeof(addr), "%s/%d", config.osc_address[0] ? config.osc_address : "/mpr121", i);
                     osc_queue.enqueueMidi(addr, cc, 127, ch);
                 }
+                // MIDI mode display: last data1 (note/CC) du dernier pad touché
+                state.last_midi_value_u8 = cc;
             }
         } else if (!now_touched && was_touched) {
             // Front descendant : release
@@ -169,6 +182,9 @@ void Mpr121Processor::process(
     }
 
     state.last_value = current_mask & 0x0FFF;
+    if (mask_changed) {
+        state.last_telemetry_ts = millis(); // LED activity: flash à chaque changement de mask
+    }
 }
 
 static void processWrapper(

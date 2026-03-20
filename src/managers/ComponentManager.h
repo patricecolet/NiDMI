@@ -41,6 +41,10 @@ private:
     MuxManager mux_manager;
     
     AnalogFilter filters[MAX_COMPONENTS];
+
+    // Dernière télémétrie SVG envoyée (per component index)
+    uint32_t last_telemetry_sent_ts[MAX_COMPONENTS];
+    uint32_t last_telemetry_sent_ts_aux[MAX_COMPONENTS];
     
     // FreeRTOS task pour traitement composants et MIDI sur Core 0
     TaskHandle_t midiTaskHandle;

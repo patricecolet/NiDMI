@@ -68,6 +68,7 @@ void ButtonProcessor::process(
     }
     
     // Fonction helper pour envoyer Note On (utilise le coordinateur)
+    uint32_t raw_for_event = 0; // RAW digital monitoring : 1=press, 0=release (valeur physique stable au moment du handler)
     auto sendNoteOn = [&]() {
         uint8_t value = 127; // Défaut pour Note
         if (config.msg_type == MidiMessageType::CONTROL_CHANGE) {
@@ -76,6 +77,9 @@ void ButtonProcessor::process(
             value = config.midiCcOnOffMin;
         }
         MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, value);
+        state.last_raw_value_u32 = raw_for_event;
+        state.last_midi_value_u8 = value;
+        state.last_telemetry_ts = millis();
     };
     
     // Fonction helper pour envoyer Note Off (utilise le coordinateur)
@@ -94,6 +98,9 @@ void ButtonProcessor::process(
         }
         // Pour les autres types, envoyer avec value=0 (le handler gère Note Off vs CC=0)
         MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, value);
+        state.last_raw_value_u32 = raw_for_event;
+        state.last_midi_value_u8 = value;
+        state.last_telemetry_ts = millis();
     };
     
     // Déterminer le mode (défaut: press_release)
@@ -116,6 +123,7 @@ void ButtonProcessor::process(
     
     // Implémenter les 3 modes
     if (falling) {
+        raw_for_event = 1;
         // Falling edge (press détecté)
         if (btnMode == "pulse") {
             // Mode pulse: selon le timing configuré
@@ -146,6 +154,7 @@ void ButtonProcessor::process(
             state.last_value = 127;
         }
     } else if (rising) {
+        raw_for_event = 0;
         // Rising edge (release détecté)
         if (btnMode == "pulse") {
             // Mode pulse: envoyer Note On + Note Off seulement si on avait été pressé

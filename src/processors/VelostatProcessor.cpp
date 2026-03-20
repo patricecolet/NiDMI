@@ -67,6 +67,9 @@ void VelostatProcessor::process(
         }
         state.last_note = note;
         state.last_value = velocity;
+        state.last_raw_value_u32 = filtered_value;
+        state.last_midi_value_u8 = velocity;
+        state.last_telemetry_ts = millis();
         state.last_aftertouch = velocity; // Initialiser last_aftertouch avec la vélocité
         state.last_time = millis();
         
@@ -79,6 +82,9 @@ void VelostatProcessor::process(
         }
         state.last_note = 255;
         state.last_value = 0;
+        state.last_raw_value_u32 = filtered_value;
+        state.last_midi_value_u8 = 0;
+        state.last_telemetry_ts = millis();
         state.last_aftertouch = 0;
         
         // Envoyer aussi en OSC si configuré
@@ -97,6 +103,9 @@ void VelostatProcessor::process(
                 midi_sender->sendKeyPressure(channel, note, velocity);
             }
             state.last_aftertouch = velocity;
+            state.last_raw_value_u32 = filtered_value;
+            state.last_midi_value_u8 = velocity;
+            state.last_telemetry_ts = millis();
             state.last_time = millis();
             
             // Envoyer aussi en OSC si configuré

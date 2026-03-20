@@ -1,3 +1,61 @@
+// --- Monitoring SVG (RAW vs MIDI) ---
+const telemetryByLabel = {};
+const ledDecayTimersByLabel = {};
+let telemetryMode = 'raw';
+let telemetryEnabled = false; // OFF par défaut (runtime-only, non persistant)
+
+function getTelemetryModeFromUI() {
+  const el = document.getElementById('telemetryMode');
+  if (!el) return telemetryMode;
+  telemetryMode = el.value;
+  return telemetryMode;
+}
+
+function updateValueTextForLabel(label) {
+  if (typeof valueTextByLabel === 'undefined' || !valueTextByLabel) return;
+  const payload = telemetryByLabel[label];
+  if (!payload) return;
+
+  const tVal = valueTextByLabel[label];
+  if (!tVal) return;
+
+  if (!payload.show_value) {
+    tVal.style.visibility = 'hidden';
+    return;
+  }
+
+  const mode = getTelemetryModeFromUI();
+  const v = (mode === 'midi') ? payload.midi : payload.raw;
+  tVal.textContent = String(v);
+  tVal.style.visibility = 'visible';
+}
+
+function updateAllValuesForMode() {
+  Object.keys(telemetryByLabel).forEach(updateValueTextForLabel);
+}
+
+function clearTelemetryVisuals() {
+  Object.keys(telemetryByLabel).forEach(k => delete telemetryByLabel[k]);
+  if (typeof valueTextByLabel !== 'undefined' && valueTextByLabel) {
+    Object.keys(valueTextByLabel).forEach(lbl => {
+      const el = valueTextByLabel[lbl];
+      if (!el) return;
+      el.textContent = '';
+      el.style.visibility = 'hidden';
+    });
+  }
+  if (typeof ledByLabel !== 'undefined' && ledByLabel) {
+    Object.keys(ledByLabel).forEach(lbl => {
+      if (ledDecayTimersByLabel[lbl]) {
+        clearTimeout(ledDecayTimersByLabel[lbl]);
+        delete ledDecayTimersByLabel[lbl];
+      }
+      const led = ledByLabel[lbl];
+      if (led) led.style.visibility = 'hidden';
+    });
+  }
+}
+
 function applyPinReplacementLogic(pin){
  if(typeof pin !== 'string' || !pin) return;
  if(typeof pcfg === 'undefined' || !pcfg) return;
@@ -116,6 +174,8 @@ function initWebSocket(){
   websocket = new WebSocket(wsUrl);
   websocket.onopen = function(){
    console.log('WebSocket connected');
+   // OFF par défaut à chaque connexion, côté serveur aussi
+   websocket.send('PIN_MONITORING:0');
   };
   websocket.onmessage = function(event){
   if(!event || !event.data) return;
@@ -129,6 +189,53 @@ function initWebSocket(){
     msgEl.style.color = '#10b981';
    }
    return;
+  }
+
+  if (message.startsWith('PIN_MONITORING_STATE:')) {
+    telemetryEnabled = message.endsWith(':1');
+    const enabledEl = document.getElementById('telemetryEnabled');
+    const modeEl = document.getElementById('telemetryMode');
+    if (enabledEl) enabledEl.checked = telemetryEnabled;
+    if (modeEl) modeEl.disabled = !telemetryEnabled;
+    if (!telemetryEnabled) clearTelemetryVisuals();
+    return;
+  }
+
+  // Monitoring SVG : télémétrie temps réel
+  if (message.startsWith('PIN_TELEMETRY:')) {
+    if (!telemetryEnabled) return;
+    const prefix = 'PIN_TELEMETRY:';
+    const rest = message.substring(prefix.length);
+    const sep = rest.indexOf(':');
+    if (sep === -1) return;
+
+    const pinLabel = rest.substring(0, sep);
+    const jsonStr = rest.substring(sep + 1);
+
+    try {
+      const payload = JSON.parse(jsonStr);
+      telemetryByLabel[pinLabel] = payload;
+
+      // Valeur numérique (si show_value=true)
+      updateValueTextForLabel(pinLabel);
+
+      // LED d’activité (binaire + decay côté front)
+      if (typeof ledByLabel !== 'undefined' && ledByLabel) {
+        const led = ledByLabel[pinLabel];
+        if (led && payload && payload.active) {
+          led.style.visibility = 'visible';
+          if (ledDecayTimersByLabel[pinLabel]) {
+            clearTimeout(ledDecayTimersByLabel[pinLabel]);
+          }
+          ledDecayTimersByLabel[pinLabel] = setTimeout(() => {
+            if (led) led.style.visibility = 'hidden';
+          }, 300);
+        }
+      }
+    } catch (e) {
+      console.error('[PIN_TELEMETRY] JSON parse error:', e);
+    }
+    return;
   }
 
   if(message.startsWith('PIN_CONFIG:')){
@@ -171,6 +278,30 @@ function initWebSocket(){
     }
    }
   };
+
+  // Toggle RAW/MIDI : re-render sur changement
+  const modeEl = document.getElementById('telemetryMode');
+  if (modeEl && !modeEl._listenerAttached) {
+    modeEl._listenerAttached = true;
+    modeEl.addEventListener('change', () => {
+      telemetryMode = modeEl.value;
+      updateAllValuesForMode();
+    });
+  }
+  const enabledEl = document.getElementById('telemetryEnabled');
+  if (enabledEl && !enabledEl._listenerAttached) {
+    enabledEl._listenerAttached = true;
+    enabledEl.checked = false;
+    if (modeEl) modeEl.disabled = true;
+    enabledEl.addEventListener('change', () => {
+      telemetryEnabled = !!enabledEl.checked;
+      if (modeEl) modeEl.disabled = !telemetryEnabled;
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        websocket.send(`PIN_MONITORING:${telemetryEnabled ? '1' : '0'}`);
+      }
+      if (!telemetryEnabled) clearTelemetryVisuals();
+    });
+  }
   websocket.onerror = function(error){
    console.error('[initWebSocket] Erreur WebSocket:', error);
   };

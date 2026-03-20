@@ -3,6 +3,11 @@
  * @brief Gestion visuelle des pins (SVG board + grisage)
  */
 
+// Références SVG pour le monitoring en temps réel
+// (utilisées par `web/js/websocket.js` sur les messages PIN_TELEMETRY)
+const valueTextByLabel = {};
+const ledByLabel = {};
+
 /**
  * Met à jour le grisage visuel des pins utilisées
  */
@@ -139,6 +144,31 @@ function drawBoard() {
       t.setAttribute('class', 'svg-t');
       t.textContent = label;
       g.appendChild(t);
+    }
+
+    if (label) {
+      // Valeur RAW/MIDI (affichée dynamiquement par WebSocket)
+      const tVal = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      tVal.setAttribute('x', x + w / 2);
+      tVal.setAttribute('y', y + h - 4);
+      tVal.setAttribute('text-anchor', 'middle');
+      tVal.setAttribute('class', 'svg-val');
+      tVal.textContent = '';
+      tVal.style.visibility = 'hidden';
+      tVal.style.pointerEvents = 'none';
+      g.appendChild(tVal);
+      valueTextByLabel[label] = tVal;
+
+      // LED d’activité (binaire, decay côté front)
+      const led = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      led.setAttribute('cx', x + w / 2);
+      led.setAttribute('cy', y + 6);
+      led.setAttribute('r', isS3 ? 2.3 : 2.2);
+      led.setAttribute('class', 'svg-led');
+      led.style.visibility = 'hidden';
+      led.style.pointerEvents = 'none';
+      g.appendChild(led);
+      ledByLabel[label] = led;
     }
     if (clk && label) {
       g.style.cursor = 'pointer';

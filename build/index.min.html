@@ -39,6 +39,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .btn-p{width:100%;margin-top:15px;padding:12px;background:var(--cd);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer}
 .btn-p:hover{background:#2563eb}
 .svg-t{font-size:9px;fill:#ffffff;dominant-baseline:middle;pointer-events:none;user-select:none}
+.svg-val{font-size:8px;fill:#ffffff;dominant-baseline:middle;pointer-events:none;user-select:none}
+.svg-led{fill:#10b981;pointer-events:none}
 .selectedSquare{stroke:#1d4ed8;stroke-width:2}
 .subcard{background:#f9fafb;border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:8px}
 .subcard .r{margin:6px 0}
@@ -70,7 +72,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div class="lp">
  <h3 id="boardName">ESP32‑C3</h3>
  <div class="l"><span class="s digital"></span> Digital <span class="s analog"></span> Analog <span class="s i2c"></span> I2C <span class="s uart"></span> UART <span class="s spi"></span> SPI <span class="s power"></span> Power <span class="s gnd"></span> GND</div>
- <svg class="b" viewBox="50 -20 260 260"><rect x="114" y="20" width="122" height="188" rx="10" fill="#ffffff" stroke="#9ca3af"/><text x="174" y="114" text-anchor="middle" font-size="12" fill="#6b7280">MCU</text><rect x="144" y="2" width="60" height="60" rx="6" fill="#e5e7eb" stroke="#9ca3af"/><g id="pinsLeft"></g><g id="pinsRight"></g></svg>
+ <svg class="b" viewBox="50 -30 260 280"><rect x="114" y="20" width="122" height="188" rx="10" fill="#ffffff" stroke="#9ca3af"/><text x="174" y="114" text-anchor="middle" font-size="12" fill="#6b7280">MCU</text><rect x="144" y="2" width="60" height="60" rx="6" fill="#e5e7eb" stroke="#9ca3af"/><g id="pinsLeft"></g><g id="pinsRight"></g></svg>
+ <div class="f" style="margin-top:10px">
+ <div class="r"><label><input type="checkbox" id="telemetryEnabled"> Monitoring pins (runtime)</label></div>
+ <div class="r"><label>Mode valeur:</label><select id="telemetryMode"><option value="raw" selected>RAW</option><option value="midi">MIDI</option></select></div>
+ </div>
  <div id="touchCalibrateContainer" class="f" style="margin-top:10px;display:none;"><button type="button" id="touchCalibrateBtn" class="btn" style="width:100%;">Calibrer touch</button><div class="hint" id="touchCalibrateMsg"></div></div>
  <div class="plist"><h4>Pins configurées</h4><div id="pinsList" class="list"></div><button id="saveAllBtn" class="btn-p">Enregistrer tout</button><div id="saveAllMsg" class="hint"></div></div>
  </div>
