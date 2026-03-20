@@ -267,9 +267,25 @@ function applyConfigValues(c, def, setV, setC) {
   }
 
   /* Appliquer les champs OSC et Debug */
-  setC('oscEnabled2', c.oscEnabled);
   setV('oscAddress', c.oscAddress);
   setV('oscFormat', c.oscFormat);
+
+  // IMPORTANT: on retire tout "grisage" potentiel du champ d'adresse OSC.
+  // Même si oscEnabled2 est off, on laisse l'édition de l'adresse possible côté UI.
+  const oscAddressEl = $('#oscAddress');
+  if (oscAddressEl) {
+    oscAddressEl.disabled = false;
+    oscAddressEl.style.opacity = '';
+    oscAddressEl.style.filter = '';
+    oscAddressEl.style.pointerEvents = '';
+  }
+  const oscFormatEl = $('#oscFormat');
+  if (oscFormatEl) {
+    oscFormatEl.disabled = false;
+    oscFormatEl.style.opacity = '';
+    oscFormatEl.style.pointerEvents = '';
+  }
+
   setC('dbgEnabled', c.dbgEnabled);
   setV('dbgHeader', c.dbgHeader);
 }

@@ -183,4 +183,24 @@ function initSystemConfig() {
       clearNVS();
     });
   }
+
+  /* Reset appareil (comme le bouton reset physique) */
+  const resetBtn = $('#resetDeviceBtn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      try {
+        const msgEl = $('#clearNvsMsg');
+        if (msgEl) {
+          msgEl.textContent = 'Redémarrage...';
+          msgEl.style.color = '#6b7280';
+        }
+        await fetch('/api/system/reboot', { method: 'POST' });
+      } catch (err) {
+        console.log('Erreur reboot:', err);
+      } finally {
+        setTimeout(() => location.reload(), 3000);
+      }
+    });
+  }
 }

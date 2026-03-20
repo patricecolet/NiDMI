@@ -5,6 +5,9 @@
 #include "midi/MidiRouter.h"
 #include "Globals.h"
 #include <Preferences.h>
+#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV) || defined(ARDUINO_ESP32S3)
+#include <esp32-hal-tinyusb.h>
+#endif
 
 // Variables globales pour la gestion des composants
 MidiRouter g_midiRouter;
@@ -148,7 +151,7 @@ void nidmi_begin() {
     
     // Appliquer l'état sauvegardé des interfaces MIDI au MidiRouter
     g_midiRouter.enableUsbMidi(usbMidiEnabled);
-    
+
     // Initialiser MidiRouter (qui initialisera USB MIDI si activé et supporté)
     g_midiRouter.begin();
     

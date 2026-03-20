@@ -456,6 +456,17 @@ async function loadConfiguredPins(){
 
  updatePinsList();
  updateBusVisuals();
+
+ /* Initialiser l'activation globale OSC selon les pins chargées */
+ const oscCheckboxEl = $('#oscEnabled2');
+ if(oscCheckboxEl && oscCheckboxEl.type === 'checkbox' && typeof pcfg !== 'undefined' && pcfg) {
+   let anyEnabled = false;
+   for (const lbl of Object.keys(pcfg)) {
+     const c = pcfg[lbl];
+     if (c && c.oscEnabled) { anyEnabled = true; break; }
+   }
+   oscCheckboxEl.checked = anyEnabled;
+ }
  } catch(err) {
  console.log('Erreur chargement pins:', err);
  }
@@ -488,6 +499,10 @@ async function saveAll(){
    }
  }
  
+ /* OSC (global) : activer/désactiver tous les OSC à partir de la checkbox globale */
+ const oscCheckboxEl = $('#oscEnabled2');
+ const globalOscEnabled = (oscCheckboxEl && oscCheckboxEl.type === 'checkbox') ? !!oscCheckboxEl.checked : undefined;
+
 /* Sauvegarder tous les composants séquentiellement (évite saturation NVS ESP32) */
  const pinLabels = Object.keys(pcfg);
  const validPins = pinLabels.filter(l => pcfg[l] && pcfg[l].role);
@@ -504,6 +519,8 @@ async function saveAll(){
   const fresh = readCfg(freshRole || null);
   if(fresh && fresh.role && (typeof isBusRole !== 'function' || !isBusRole(fresh.role))) c = fresh;
  }
+
+  if(globalOscEnabled !== undefined) c.oscEnabled = globalOscEnabled;
 
  const role = migrateRole(c.role);
  const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
