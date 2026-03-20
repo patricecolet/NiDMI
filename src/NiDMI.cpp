@@ -99,8 +99,8 @@ void nidmi_begin() {
     g_staGwStr = preferences.getString("sta_gw", "");
     g_staSnStr = preferences.getString("sta_sn", "");
     bool touchEnabled = preferences.getBool("touch_enabled", false);
-    // Persisté via /api/usbmidi/enable (NVS) : par défaut on laisse USB-MIDI actif
-    bool usbMidiEnabled = preferences.getBool("usbmidi_enabled", true);
+    // Persisté via /api/usbmidi/enable (NVS) : USB-MIDI désactivé par défaut
+    bool usbMidiEnabled = preferences.getBool("usbmidi_enabled", false);
     
     
     preferences.end();

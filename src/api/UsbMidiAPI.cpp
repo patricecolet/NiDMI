@@ -50,7 +50,7 @@ void setupUsbMidiAPI(AsyncWebServer& server) {
         
         Preferences preferences;
         preferences.begin("nidmi", true);
-        bool savedEnabled = preferences.getBool("usbmidi_enabled", true); // Par défaut true
+        bool savedEnabled = preferences.getBool("usbmidi_enabled", false); // Par défaut false
         preferences.end();
         
         String json = "{";
