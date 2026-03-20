@@ -15,27 +15,17 @@ document.addEventListener('DOMContentLoaded', async ()=>{
  /* Initialiser les formulaires */
  initForms();
  
- /* --- GESTION DU NOM PERSONNALISÉ --- */
  const compNameInput = document.getElementById('ComponentName');
  if (compNameInput) {
   compNameInput.oninput = (e) => {
    if (typeof cur !== 'undefined' && cur && pcfg && pcfg[cur]) {
+    // Save the name to the global config object
     pcfg[cur].name = e.target.value;
+    // Refresh the left list so "Bouton 1" becomes "Bout" instantly
     updatePinsList();
    }
   };
  }
-
- /* --- GESTION DU SCRIPT DE MAPPING --- */
-const mappingInput = document.getElementById('mappingPin');
-if (mappingInput) {
-    mappingInput.oninput = (e) => {
-        if (typeof cur !== 'undefined' && cur && pcfg[cur]) {
-            // On stocke le texte brut dans la config
-            pcfg[cur].mapping = e.target.value;
-        }
-    };
-}
 
  /* Charger les définitions de composants AVANT de dessiner le board */
  loadComponentDefinitions().then(async () => {

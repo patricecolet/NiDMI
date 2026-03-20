@@ -327,57 +327,37 @@ const MidiConfig = {
    * @returns {Object} Configuration MIDI
    */
   readConfig(def) {
+    // 1. RÉCUPÉRER L'EXISTANT : On prend ce qu'il y a déjà dans la mémoire
+    // cur est la pin actuelle (ex: "D0")
+    const existingCfg = (typeof cur !== 'undefined' && pcfg[cur]) ? pcfg[cur] : {};
+
+    // 2. PRÉPARER LA BASE : On garde le NOM et le MAPPING s'ils existent
     const config = {
-      // Nouveau format (prioritaire)
+      ...existingCfg, // <--- C'EST CETTE LIGNE QUI SAUVE TON NOM !
+      
+      // On écrase ensuite avec les nouvelles valeurs du formulaire
       midiMessageType: $('#rtpMsgType')?.value || '',
-      // Compatibilité: rtpType (ancien format)
       rtpType: $('#rtpMsgType')?.value || '',
-      // Interfaces MIDI (checkboxes HTML, codées en dur OK)
       rtpMidiEnabled: !!$('#rtpMidiEnabled')?.checked,
-      rtpEnabled: !!$('#rtpMidiEnabled')?.checked || !!$('#rtpEnabled2')?.checked, // Alias pour compatibilité
-      // USB-MIDI et Debug MIDI sont hardcodés dans HTML (si présents)
+      rtpEnabled: !!$('#rtpMidiEnabled')?.checked || !!$('#rtpEnabled2')?.checked,
       usbMidiEnabled: !!$('#usbMidiEnabled')?.checked,
       debugMidiEnabled: !!$('#debugMidiEnabled')?.checked
     };
     
-    // Lire dynamiquement tous les paramètres MIDI depuis les définitions
-    // Parcourt tous les messages MIDI et leurs paramètres (cc, note, channel, velocity, range, etc.)
+    // 3. Lire dynamiquement tous les paramètres MIDI (le reste de ton code inchangé)
     if(def && def.midiMessages && Array.isArray(def.midiMessages)) {
       def.midiMessages.forEach(msg => {
         if(msg.params && Array.isArray(msg.params)) {
           msg.params.forEach(param => {
             if(param.id) {
-              // Pour les paramètres RANGE, traiter différemment car il n'y a pas d'élément avec param.id
               if(param.type === 4) { // RANGE
                 const elMin = $('#' + param.id + 'Min');
                 const elMax = $('#' + param.id + 'Max');
-                // Toujours collecter les valeurs (même si par défaut ou cachées)
-                if(elMin) {
-                  const minValue = elMin.value || (param.defaultMin ? String(param.defaultMin) : (param.min ? String(param.min) : '0'));
-                  config[param.id + 'Min'] = minValue;
-                } else if(param.defaultMin) {
-                  // Si le champ n'existe pas, utiliser la valeur par défaut
-                  config[param.id + 'Min'] = String(param.defaultMin);
-                } else {
-                  // Fallback final
-                  config[param.id + 'Min'] = String(param.min || '0');
-                }
-                if(elMax) {
-                  const maxValue = elMax.value || (param.defaultMax ? String(param.defaultMax) : (param.max ? String(param.max) : '127'));
-                  config[param.id + 'Max'] = maxValue;
-                } else if(param.defaultMax) {
-                  // Si le champ n'existe pas, utiliser la valeur par défaut
-                  config[param.id + 'Max'] = String(param.defaultMax);
-                } else {
-                  // Fallback final
-                  config[param.id + 'Max'] = String(param.max || '127');
-                }
+                if(elMin) config[param.id + 'Min'] = elMin.value || '0';
+                if(elMax) config[param.id + 'Max'] = elMax.value || '127';
               } else {
-                // Pour les autres types, chercher l'élément normal
                 const el = $('#' + param.id);
-                if(el) {
-                  config[param.id] = el.value || '';
-                }
+                if(el) config[param.id] = el.value || '';
               }
             }
           });

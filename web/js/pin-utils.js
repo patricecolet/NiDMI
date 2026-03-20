@@ -34,16 +34,22 @@ function pType(lbl) {
  * @returns {string} Label d'affichage
  */
 function getRoleDisplayLabel(role, count, customName) {
+  // PRIORITÉ 1 : Si un nom personnalisé existe, on l'utilise direct
   if (customName && customName.trim() !== '') {
     return customName;
   }
+  
+  // PRIORITÉ 2 : Sinon, on génère le nom par défaut
   if (!role) return '';
   const migratedRole = typeof migrateRole === 'function' ? migrateRole(role) : role;
   let displayName = migratedRole;
+  
   if (typeof getComponentDefinition === 'function') {
     const def = getComponentDefinition(migratedRole);
     if (def && def.displayName) displayName = def.displayName;
   }
+  
+  // Ajoute le numéro (ex: Bouton 1) seulement s'il n'y a pas de nom custom
   return count > 0 ? `${displayName} ${count}` : displayName;
 }
 

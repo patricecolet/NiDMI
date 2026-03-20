@@ -114,9 +114,4 @@ function setupPinEvents(it, lbl, defaultGeneratedName) {
     };
   }
 
-  const mappingInput = document.getElementById('mappingPin');
-  if (mappingInput && pcfg[lbl]) {
-      // If a mapping exists, show it; otherwise, clear the box
-      mappingInput.value = pcfg[lbl].mapping || '';
-  }
 }
