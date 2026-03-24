@@ -19,9 +19,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
  if (compNameInput) {
   compNameInput.oninput = (e) => {
    if (typeof cur !== 'undefined' && cur && pcfg && pcfg[cur]) {
-    // Save the name to the global config object
+  // Enregistrer le nom dans l'objet de configuration global
     pcfg[cur].name = e.target.value;
-    // Refresh the left list so "Bouton 1" becomes "Bout" instantly
     updatePinsList();
    }
   };

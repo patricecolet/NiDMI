@@ -415,6 +415,14 @@ async function saveAll(){
   console.error('[saveAll] Élément saveAllMsg non trouvé');
   return;
  }
+ /* --- 1. VALIDATION : ANTI-DOUBLONS --- */
+  const duplicateName = findDuplicateComponentName();
+  if (duplicateName) {
+    msg.textContent = `Erreur: Le nom "${duplicateName}" est utilisé plusieurs fois.`;
+    msg.style.color = '#ef4444';
+    // On arrête tout ici pour éviter une config invalide sur l'ESP32
+    return; 
+  }
  msg.textContent='Enregistrement...';
  try{
  if(typeof pcfg === 'undefined' || !pcfg) {

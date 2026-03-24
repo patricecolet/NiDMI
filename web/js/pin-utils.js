@@ -27,7 +27,34 @@ function pType(lbl) {
   if (lbl === 'MOSI' || lbl === 'MISO' || lbl === 'SCK') return 'spi';
   return 'digital';
 }
+/**
+ * Checks for duplicate names in the current configuration
+ * @returns {string|null} The duplicate name found, or null if all are unique
+ */
+function findDuplicateComponentName() {
+  const namesSeen = new Set();
+  const roleCounters = {};
 
+  if (typeof pcfg === 'undefined' || !pcfg) return null;
+
+  for (const lbl of Object.keys(pcfg)) {
+    const cfg = pcfg[lbl];
+    if (!cfg || !cfg.role || lbl.startsWith('M')) continue;
+
+    // We must calculate the name exactly like updatePinsList does
+    roleCounters[cfg.role] = (roleCounters[cfg.role] || 0) + 1;
+    const currentCount = roleCounters[cfg.role];
+    
+    // Get the name (Custom Name or Generated Default)
+    const finalName = getRoleDisplayLabel(cfg.role, currentCount, cfg.name);
+
+    if (namesSeen.has(finalName)) {
+      return finalName; // Found a duplicate!
+    }
+    namesSeen.add(finalName);
+  }
+  return null;
+}
 /**
  * Obtient le label d'affichage d'un rôle
  * @param {string} role - Rôle du composant
