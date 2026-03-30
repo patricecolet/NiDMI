@@ -5,10 +5,29 @@ let gcfg = defaultGlobalConfig();
 /* default config*/
 function defaultGlobalConfig() {
     return {
+        mapping: {
+            enabled : true,
+            source: "midi_cc",
+            target: "global_param",
+            mode: "scale",
+            inMin: 0,
+            inMax: 127,
+            outMin: 0,
+            outMax: 100
+        },
+        sequencer: {
+            enabled: false,
+            clockSource: "internal",
+            tempo: 120,
+            steps: 16,
+            swing: 0,
+            direction: "forward",
+            gateMs: 80
+        },
         midiChannel: 1,
-        clockSource: "internal",
-        steps: 16,
-        tempo: 120
+        midiNote: 60,
+        velocite: 100
+        
     };
 
 }
@@ -50,36 +69,36 @@ function showGlobalEditor(){
 /* Render global config form*/
 function renderGlobalForm(){
     const ch = document.getElementById('globalMidiChannel');
-    const clock = document.getElementById('globalClockSource');
+    const note = document.getElementById('globalMidiNote');
+    const vel = document.getElementById('globalMidiVelocity');
     const steps = document.getElementById('seqSteps');
-    const tempo = document.getElementById('seqTempo');
 
     if(ch) ch.value = gcfg.midiChannel;
-    if(clock) clock.value = gcfg.clockSource;
-    if(steps) steps.value = gcfg.steps;
-    if(tempo) tempo.value = gcfg.tempo;
+    if(steps) steps.value = gcfg.sequencer.steps;
+    if(note) note.value = gcfg.midiNote;
+    if(vel) vel.value = gcfg.velocite;
 }
 
 /* Form read */
 function readGlobalForm(){
     const ch = document.getElementById('globalMidiChannel');
-    const clock = document.getElementById('globalClockSource');
+    const note = document.getElementById('globalMidiNote');
+    const vel = document.getElementById('globalMidiVelocity');
     const steps = document.getElementById('seqSteps');
-    const tempo = document.getElementById('seqTempo');
 
     gcfg.midiChannel = ch ? parseInt(ch.value) : 1;
-    gcfg.clockSource = clock ? clock.value : "internal";
-    gcfg.steps = steps ? parseInt(steps.value) : 16;
-    gcfg.tempo = tempo ? parseInt(tempo.value) : 120;
+    gcfg.midiNote = note ? parseInt(note.value) : 60;
+    gcfg.sequencer.steps = steps ? parseInt(steps.value) : 16;
+    gcfg.velocite = vel ? parseInt(vel.value) : 100;
 }
 
 /* Load config */
 async function loadGlobalConfig(){
     try{
-        const res = await fetch('/global-config');
+        const res = await fetch('/api/pins/global');
         if(!res.ok) return;
         const data = await res.json();
-        gcfg = Object.assign(defaultGlobalConfig(), data);
+        gcfg = {...defaultGlobalConfig(), ...data, sequencer: {...defaultGlobalConfig().sequencer, ...(data.sequencer || {})}};
         renderGlobalForm();
     }
     catch(err){console.warn("global config load failed", err);}
@@ -90,7 +109,7 @@ async function saveGlobalConfig(){
     readGlobalForm();
     const msg = document.getElementById('globalStatusMsg');
     try{
-        const res = await fetch('/global-config', {
+        const res = await fetch('/api/pins/global', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(gcfg)
@@ -100,6 +119,8 @@ async function saveGlobalConfig(){
             msg.textContent = "Config saved"; 
             setTimeout(() => { msg.textContent = ""; }, 2000);
         }
+
+        console.log("Sending global config:", gcfg);
     }
     catch(err){
         if(msg) msg.textContent = "Save failed";

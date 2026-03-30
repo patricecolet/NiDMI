@@ -30,6 +30,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   await loadUsedGpiosFromBackend();
   /* Mettre à jour les visuels après chargement complet */
   updateBusVisuals();
+  /* Initialiser le chargeur de fichiers NiDMI */
+  initNidmidLoader();
 
   /* Vue globale*/
   if (typeof initGlobalView === 'function') initGlobalView();
