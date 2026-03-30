@@ -206,6 +206,26 @@ function applyCfg(c) {
  * Applique les valeurs de configuration au formulaire (helper pour applyCfg)
  */
 function applyConfigValues(c, def, setV, setC) {
+  const nameInput = document.getElementById('ComponentName');
+  if (nameInput) {
+    // 1. Calcul du rang (ex: c'est le 2ème bouton)
+    let count = 0;
+    for (const l of Object.keys(pcfg)) {
+      if (pcfg[l] && pcfg[l].role === c.role) {
+        count++;
+        if (l === cur) break; 
+      }
+    }
+
+    // 2. Remplissage auto : Nom sauvegardé OU Nom par défaut (ex: Bouton 1)
+    nameInput.value = c.name || getRoleDisplayLabel(c.role, count);
+
+    // 3. Capture immédiate de la saisie pour éviter de perdre le nom au Save
+    nameInput.oninput = (e) => { 
+      if(pcfg[cur]) pcfg[cur].name = e.target.value; 
+      if(typeof updatePinsList === 'function') updatePinsList();
+    };
+  }
   const migratedRole = migrateRoleValue(c.role);
   
   updateRtpForRole(migratedRole);
