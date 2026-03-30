@@ -1,8 +1,7 @@
-// --- Monitoring SVG (RAW vs MIDI) ---
+// --- Monitoring SVG : select unique off | raw | midi (runtime-only, non NVS) ---
 const telemetryByLabel = {};
 const ledDecayTimersByLabel = {};
-let telemetryMode = 'raw';
-let telemetryEnabled = false; // OFF par défaut (runtime-only, non persistant)
+let telemetryMode = 'off';
 
 function getTelemetryModeFromUI() {
   const el = document.getElementById('telemetryMode');
@@ -11,23 +10,35 @@ function getTelemetryModeFromUI() {
   return telemetryMode;
 }
 
+function isTelemetryMonitoringOn() {
+  const m = getTelemetryModeFromUI();
+  return m === 'raw' || m === 'midi';
+}
+
 function updateValueTextForLabel(label) {
-  if (typeof valueTextByLabel === 'undefined' || !valueTextByLabel) return;
+  if (typeof valueTextByLabel === 'undefined' || !valueTextByLabel) { console.warn('[DBG VAL] valueTextByLabel undefined'); return; }
   const payload = telemetryByLabel[label];
-  if (!payload) return;
+  if (!payload) { console.warn('[DBG VAL] pas de payload pour', label); return; }
 
   const tVal = valueTextByLabel[label];
-  if (!tVal) return;
+  if (!tVal) { console.warn('[DBG VAL] pas de tVal pour label="' + label + '"'); return; }
 
-  if (!payload.show_value) {
+  const mode = getTelemetryModeFromUI();
+  if (mode === 'off') {
     tVal.style.visibility = 'hidden';
     return;
   }
 
-  const mode = getTelemetryModeFromUI();
+  if (!payload.show_value) {
+    console.log('[DBG VAL] show_value=false pour', label);
+    tVal.style.visibility = 'hidden';
+    return;
+  }
+
   const v = (mode === 'midi') ? payload.midi : payload.raw;
   tVal.textContent = String(v);
   tVal.style.visibility = 'visible';
+  console.log('[DBG VAL] affiché label="' + label + '" mode=' + mode + ' v=' + v);
 }
 
 function updateAllValuesForMode() {
@@ -192,25 +203,31 @@ function initWebSocket(){
   }
 
   if (message.startsWith('PIN_MONITORING_STATE:')) {
-    telemetryEnabled = message.endsWith(':1');
-    const enabledEl = document.getElementById('telemetryEnabled');
     const modeEl = document.getElementById('telemetryMode');
-    if (enabledEl) enabledEl.checked = telemetryEnabled;
-    if (modeEl) modeEl.disabled = !telemetryEnabled;
-    if (!telemetryEnabled) clearTelemetryVisuals();
+    if (message.endsWith(':0')) {
+      if (modeEl) modeEl.value = 'off';
+      telemetryMode = 'off';
+      clearTelemetryVisuals();
+    }
     return;
   }
 
   // Monitoring SVG : télémétrie temps réel
   if (message.startsWith('PIN_TELEMETRY:')) {
-    if (!telemetryEnabled) return;
+    const _monOn = isTelemetryMonitoringOn();
+    console.log('[DBG TELEM] reçu: ' + message.substring(0, 120) + ' | on:' + _monOn + ' | mode:' + telemetryMode);
+    if (!_monOn) return;
     const prefix = 'PIN_TELEMETRY:';
     const rest = message.substring(prefix.length);
     const sep = rest.indexOf(':');
-    if (sep === -1) return;
+    if (sep === -1) { console.warn('[DBG TELEM] séparateur absent'); return; }
 
     const pinLabel = rest.substring(0, sep);
     const jsonStr = rest.substring(sep + 1);
+    const _hasVal = typeof valueTextByLabel !== 'undefined' && !!valueTextByLabel[pinLabel];
+    const _hasLed = typeof ledByLabel !== 'undefined' && !!ledByLabel[pinLabel];
+    const _knownLabels = typeof valueTextByLabel !== 'undefined' ? Object.keys(valueTextByLabel) : [];
+    console.log('[DBG TELEM] label="' + pinLabel + '" hasValEl:' + _hasVal + ' hasLedEl:' + _hasLed + ' knownLabels:' + JSON.stringify(_knownLabels));
 
     try {
       const payload = JSON.parse(jsonStr);
@@ -279,27 +296,22 @@ function initWebSocket(){
    }
   };
 
-  // Toggle RAW/MIDI : re-render sur changement
+  // Off / RAW / MIDI : une seule commande PIN_MONITORING (0 = off, 1 = actif)
   const modeEl = document.getElementById('telemetryMode');
   if (modeEl && !modeEl._listenerAttached) {
     modeEl._listenerAttached = true;
     modeEl.addEventListener('change', () => {
       telemetryMode = modeEl.value;
-      updateAllValuesForMode();
-    });
-  }
-  const enabledEl = document.getElementById('telemetryEnabled');
-  if (enabledEl && !enabledEl._listenerAttached) {
-    enabledEl._listenerAttached = true;
-    enabledEl.checked = false;
-    if (modeEl) modeEl.disabled = true;
-    enabledEl.addEventListener('change', () => {
-      telemetryEnabled = !!enabledEl.checked;
-      if (modeEl) modeEl.disabled = !telemetryEnabled;
+      const on = telemetryMode === 'raw' || telemetryMode === 'midi';
+      console.log('[DBG SELECT] mode changé:', telemetryMode, '| on:', on, '| ws.readyState:', websocket ? websocket.readyState : 'null');
       if (websocket && websocket.readyState === WebSocket.OPEN) {
-        websocket.send(`PIN_MONITORING:${telemetryEnabled ? '1' : '0'}`);
+        websocket.send(`PIN_MONITORING:${on ? '1' : '0'}`);
+        console.log('[DBG SELECT] PIN_MONITORING:' + (on ? '1' : '0') + ' envoyé');
+      } else {
+        console.warn('[DBG SELECT] WebSocket non disponible, état:', websocket ? websocket.readyState : 'null');
       }
-      if (!telemetryEnabled) clearTelemetryVisuals();
+      if (!on) clearTelemetryVisuals();
+      else updateAllValuesForMode();
     });
   }
   websocket.onerror = function(error){
