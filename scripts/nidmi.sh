@@ -13,10 +13,28 @@
 
 set -e  # Arrêter en cas d'erreur
 
-# Variables
-REPO_DIR="/Users/patricecolet/repo/NiDMI"
-ARDUINO_LIB_DIR="/Users/patricecolet/Documents/Arduino/libraries/NiDMI"
-ARDUINO_CACHE_DIR="/Users/patricecolet/Library/Caches/arduino/sketches"
+# Répertoire du dépôt Git : parent du dossier scripts/ (portable entre machines)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+REPO_DIR="$(cd "$_SCRIPT_DIR/.." && pwd)"
+unset _SCRIPT_DIR
+
+# Bibliothèque Arduino (copie sync) — surcharge : export ARDUINO_LIB_DIR=/chemin/vers/NiDMI
+if [ -z "${ARDUINO_LIB_DIR:-}" ]; then
+    ARDUINO_LIB_DIR="$HOME/Documents/Arduino/libraries/NiDMI"
+fi
+
+# Cache sketches Arduino — surcharge : export ARDUINO_CACHE_DIR=...
+if [ -z "${ARDUINO_CACHE_DIR:-}" ]; then
+    case "$(uname -s 2>/dev/null || echo Linux)" in
+        Darwin*)
+            ARDUINO_CACHE_DIR="$HOME/Library/Caches/arduino/sketches"
+            ;;
+        *)
+            ARDUINO_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/arduino/sketches"
+            ;;
+    esac
+fi
+
 BOARD_TYPE="s3"  # Par défaut: S3
 BOARD="esp32:esp32:XIAO_ESP32S3"
 DEFAULT_SKETCH="nidmi_basic"
@@ -160,6 +178,10 @@ show_help() {
     echo "  --no-pagination  - Désactiver la pagination (à utiliser seulement avec --large-app sur C3)"
     echo "  --port PORT      - Forcer le port série (ex: /dev/cu.usbmodem101)"
     echo ""
+    echo "Variables d'environnement (optionnel) :"
+    echo "  ARDUINO_LIB_DIR   Bibliothèque NiDMI (défaut: \$HOME/Documents/Arduino/libraries/NiDMI)"
+    echo "  ARDUINO_CACHE_DIR Cache sketches Arduino (défaut: macOS ~/Library/Caches/... ; Linux ~/.cache/...)"
+    echo ""
     echo "  Pagination : activée par défaut (C3 et S3). Évite la troncature du JSON des définitions."
     echo "  Partition C3 : --large-app est activé par défaut pour C3 (partition ~4 Mo). Utiliser --no-large-app pour désactiver."
     echo ""
@@ -302,7 +324,16 @@ clean_cache() {
     fi
     
     # Nettoyer les bibliothèques staging (copies temporaires Arduino)
-    ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
+    if [ -z "${ARDUINO_STAGING_DIR:-}" ]; then
+        case "$(uname -s 2>/dev/null || echo Linux)" in
+            Darwin*)
+                ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
+                ;;
+            *)
+                ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
+                ;;
+        esac
+    fi
     if [ -d "$ARDUINO_STAGING_DIR" ]; then
         rm -rf "$ARDUINO_STAGING_DIR"/* 2>/dev/null || true
         echo "   ✅ Bibliothèques staging nettoyées: $ARDUINO_STAGING_DIR"
@@ -325,12 +356,19 @@ clean_cache() {
 
 # Copie la partition C3 sans SPIFFS dans le package Arduino (pour --large-app)
 setup_c3_large_app_partition() {
-    local PKG_BASE="${HOME}/Library/Arduino15/packages/esp32/hardware/esp32"
+    local PKG_BASE=""
+    if [ -d "$HOME/Library/Arduino15/packages/esp32/hardware/esp32" ]; then
+        PKG_BASE="$HOME/Library/Arduino15/packages/esp32/hardware/esp32"
+    elif [ -d "$HOME/.arduino15/packages/esp32/hardware/esp32" ]; then
+        PKG_BASE="$HOME/.arduino15/packages/esp32/hardware/esp32"
+    fi
     local SRC="$REPO_DIR/tools/nidmi_c3_no_spiffs.csv"
-    local DST_DIR
-    DST_DIR=$(ls -d "$PKG_BASE"/[0-9]*.[0-9]*.[0-9]*/tools/partitions 2>/dev/null | tail -1)
-    if [ -z "$DST_DIR" ]; then
-        echo "   ⚠️  Package ESP32 non trouvé dans $PKG_BASE, --large-app ignoré"
+    local DST_DIR=""
+    if [ -n "$PKG_BASE" ]; then
+        DST_DIR=$(ls -d "$PKG_BASE"/[0-9]*.[0-9]*.[0-9]*/tools/partitions 2>/dev/null | tail -1)
+    fi
+    if [ -z "$PKG_BASE" ] || [ -z "$DST_DIR" ]; then
+        echo "   ⚠️  Package ESP32 non trouvé (Arduino15), --large-app ignoré"
         return 1
     fi
     if [ ! -f "$SRC" ]; then
