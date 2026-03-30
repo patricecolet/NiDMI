@@ -1,11 +1,18 @@
-document.getElementById("midiFileInput").addEventListener("change", async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+async function uploadFile() {
+    const file = document.getElementById('nidmidFile').files[0];
+    if (!file) return alert("Select file");
 
-    const bytes = await readMidiFile(file);
-    const notes = parseNidmid(bytes);
+    const buffer = await file.arrayBuffer();
 
-    console.log(notes);
-    displayNotes(notes);
-});
+    await fetch('/api/sequencer/load', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/octet-stream'
+        },
+        body: buffer
+    });
 
+    console.log("✅ Uploaded");
+
+    loadView();
+}
