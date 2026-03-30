@@ -598,6 +598,7 @@ async function saveAll(){
  const p=new URLSearchParams();
  p.set('pinLabel',lbl);
  p.set('role',c.role);
+ if(c.name) p.set('name', c.name);
  /* Envoyer rtpMidiEnabled (ou rtpEnabled pour compatibilité) */
  if(c.rtpMidiEnabled) p.set('rtpMidiEnabled','true');
  else if(c.rtpEnabled) p.set('rtpEnabled','true'); /* Compatibilité ancien format */

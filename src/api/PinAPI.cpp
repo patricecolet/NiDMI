@@ -454,6 +454,9 @@ void setupPinAPI(AsyncWebServer& server) {
         addParam("dbgEnabled");
         addParam("dbgHeader");
         
+        /* Nom personnalisé du composant */
+        addParam("name");
+        
         /* Vérifier si le composant a des additionalPins */
         bool hasAdditionalPins = false;
         

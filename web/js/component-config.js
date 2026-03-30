@@ -100,6 +100,13 @@ function applyAdditionalPins(def, c, setV) {
  */
 function readCfg(roleOverride = null) {
   const c = {};
+  /* Lire le nom personnalisé depuis l'input avant tout écrasement */
+  const nameInput = document.getElementById('ComponentName');
+  if (nameInput && nameInput.value) {
+    c.name = nameInput.value;
+  } else if (typeof cur !== 'undefined' && cur && typeof pcfg !== 'undefined' && pcfg[cur] && pcfg[cur].name) {
+    c.name = pcfg[cur].name;
+  }
   /* Utiliser le roleOverride si fourni, sinon lire depuis le select, sinon depuis pcfg */
   c.role = roleOverride || $('#funcSelect')?.value || '';
   /* Fallback : si funcSelect est vide mais qu'on a un composant dans pcfg, l'utiliser */
