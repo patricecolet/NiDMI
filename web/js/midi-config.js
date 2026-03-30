@@ -569,21 +569,17 @@ const MidiConfig = {
       debugMidiEnabled: !!$('#debugMidiEnabled')?.checked
     };
     
-    // 3. Lire dynamiquement tous les paramètres MIDI (le reste de ton code inchangé)
+    // 3. Lire dynamiquement tous les paramètres MIDI (joystick/lis3dh : par axe, sinon global)
+    const isMultiAxis = def && (def.id === 'joystick' || def.id === 'lis3dh');
+
     if(def && def.midiMessages && Array.isArray(def.midiMessages)) {
-      def.midiMessages.forEach(msg => {
-        if(msg.params && Array.isArray(msg.params)) {
-          msg.params.forEach(param => {
-            if(param.id) {
-              if(param.type === 4) { // RANGE
-                const elMin = $('#' + param.id + 'Min');
-                const elMax = $('#' + param.id + 'Max');
-                if(elMin) config[param.id + 'Min'] = elMin.value || '0';
-                if(elMax) config[param.id + 'Max'] = elMax.value || '127';
-              } else {
-                const el = $('#' + param.id);
-                if(el) config[param.id] = el.value || '';
-              }
+      if(isMultiAxis) {
+        const axes = def.id === 'lis3dh' ? ['X', 'Y', 'Z'] : ['X', 'Y'];
+        axes.forEach(axis => {
+          const lowerAxis = axis.toLowerCase();
+          def.midiMessages
+            .filter(m => {
+              if(!m.axis || m.axis.length === 0) return false;
               const msgAxis = String(m.axis).toLowerCase().trim();
               return msgAxis === lowerAxis;
             })
@@ -605,48 +601,34 @@ const MidiConfig = {
                 });
               }
             });
-        }
-      });
-    } else {
-      /* Pour les autres composants, comportement normal */
-      /* Lire dynamiquement tous les paramètres MIDI depuis les définitions */
-      /* Parcourt tous les messages MIDI et leurs paramètres (cc, note, channel, velocity, range, etc.) */
-      if(def && def.midiMessages && Array.isArray(def.midiMessages)) {
+        });
+      } else {
         def.midiMessages.forEach(msg => {
           if(msg.params && Array.isArray(msg.params)) {
             msg.params.forEach(param => {
               if(param.id) {
-                /* Pour les paramètres RANGE, traiter différemment car il n'y a pas d'élément avec param.id */
                 if(param.type === 4) { /* RANGE */
                   const elMin = $('#' + param.id + 'Min');
                   const elMax = $('#' + param.id + 'Max');
-                  /* Toujours collecter les valeurs (même si par défaut ou cachées) */
                   if(elMin) {
                     const minValue = elMin.value || (param.defaultMin ? String(param.defaultMin) : (param.min ? String(param.min) : '0'));
                     config[param.id + 'Min'] = minValue;
                   } else if(param.defaultMin) {
-                    /* Si le champ n'existe pas, utiliser la valeur par défaut */
                     config[param.id + 'Min'] = String(param.defaultMin);
                   } else {
-                    /* Fallback final */
                     config[param.id + 'Min'] = String(param.min || '0');
                   }
                   if(elMax) {
                     const maxValue = elMax.value || (param.defaultMax ? String(param.defaultMax) : (param.max ? String(param.max) : '127'));
                     config[param.id + 'Max'] = maxValue;
                   } else if(param.defaultMax) {
-                    /* Si le champ n'existe pas, utiliser la valeur par défaut */
                     config[param.id + 'Max'] = String(param.defaultMax);
                   } else {
-                    /* Fallback final */
                     config[param.id + 'Max'] = String(param.max || '127');
                   }
                 } else {
-                  /* Pour les autres types, chercher l'élément normal */
                   const el = $('#' + param.id);
-                  if(el) {
-                    config[param.id] = el.value || '';
-                  }
+                  if(el) config[param.id] = el.value || '';
                 }
               }
             });
