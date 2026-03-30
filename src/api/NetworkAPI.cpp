@@ -1,6 +1,7 @@
 #include "APICommon.h"
 #include "../Globals.h"
 #include "../server/ServerCore.h"
+#include "../server/ServerCallbacks.h"
 #include <Preferences.h>
 #include <WiFi.h>
 
@@ -38,34 +39,34 @@ void setupNetworkAPI(AsyncWebServer& server) {
     });
     
     // API - Configuration Wi-Fi STA
+    //
+    // NOTE:
+    // On ne redémarre plus automatiquement l'ESP après sauvegarde STA.
+    // Le reboot auto pouvait donner l'impression que "le serveur plante"
+    // (perte temporaire de l'AP, reconnexion WiFi côté client, etc.).
+    // Le nom de réseau et la connexion STA seront pris en compte
+    // au prochain redémarrage manuel (ou reset bouton).
     server.on("/api/sta", HTTP_POST, [](AsyncWebServerRequest *request){
-        if(request->hasParam("ssid", true) && request->hasParam("pass", true)){
+        if (request->hasParam("ssid", true) && request->hasParam("pass", true)) {
             String ssid = request->getParam("ssid", true)->value();
             String pass = request->getParam("pass", true)->value();
             String ip = request->hasParam("ip", true) ? request->getParam("ip", true)->value() : String("");
             String gateway = request->hasParam("gw", true) ? request->getParam("gw", true)->value() : String("");
             String subnet = request->hasParam("sn", true) ? request->getParam("sn", true)->value() : String("");
-            
-            // Sauvegarder en NVS
+
             Preferences preferences;
             preferences.begin("nidmi", false);
             preferences.putString("sta_ssid", ssid);
             preferences.putString("sta_pass", pass);
-            if(ip.length() > 0 && gateway.length() > 0 && subnet.length() > 0){
+            if (ip.length() > 0 && gateway.length() > 0 && subnet.length() > 0) {
                 preferences.putString("sta_ip", ip);
                 preferences.putString("sta_gw", gateway);
                 preferences.putString("sta_sn", subnet);
             }
             preferences.end();
-            
-            // Envoyer la réponse HTTP AVANT le redémarrage
-            request->send(200, "application/json", "{\"status\":\"ok\",\"reboot\":true}");
-            
-            // Attendre que la réponse soit envoyée
-            delay(2000);
-            
-            // Redémarrer - connectSta() sera appelé au boot
-            ESP.restart();
+
+            // Indiquer à l'UI qu'un reboot manuel est requis
+            request->send(200, "application/json", "{\"status\":\"ok\",\"reboot\":false}");
         } else {
             request->send(400, "application/json", "{\"error\":\"ssid and pass required\"}");
         }
@@ -101,7 +102,6 @@ void setupNetworkAPI(AsyncWebServer& server) {
         if(request->hasParam("name", true)){
             String name = request->getParam("name", true)->value();
             
-            // Sauvegarder en NVS
             Preferences preferences;
             preferences.begin("nidmi", false);
             preferences.putString("mdns_name", name);

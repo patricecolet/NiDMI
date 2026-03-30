@@ -9,7 +9,7 @@ const $=s=>{
 
 /* Configuration des pins - objet global qui stocke toutes les configs */
 const pcfg={};
-
+window.pcfg = pcfg; /* Exporter pcfg pour les autres modules */
 /* Pin actuellement sélectionnée dans l'interface */
 let cur='';
 

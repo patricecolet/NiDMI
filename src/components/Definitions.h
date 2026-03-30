@@ -21,6 +21,7 @@
 #include "basic/LedDef.h"
 #include "basic/VelostatDef.h"
 #include "basic/TouchDef.h"
+#include "basic/JoystickDef.h"
 
 // === FAMILLE MULTIPLEXER ===
 #include "multiplexer/MuxDef.h"
@@ -45,6 +46,7 @@
 #include "motion/MotionGenericDef.h"
 #include "motion/PirMotionDef.h"
 #include "motion/Imu6AxisDef.h"
+#include "motion/Lis3dhDef.h"
 #include "motion/GestureIrDef.h"
 #include "motion/RadarDopplerDef.h"
 
@@ -55,6 +57,7 @@
 // On garde uniquement les contrôles qui n’existent pas déjà dans BASIC
 // (FSR, encodeurs complexes, joystick...). Boutons et sliders restent dans BASIC.
 #include "interface/FsrDef.h"
+#include "interface/Mpr121Def.h"
 #include "interface/RotaryAngleGroveDef.h"
 #include "interface/ThumbJoystickGroveDef.h"
 

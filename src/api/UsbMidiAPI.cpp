@@ -1,6 +1,7 @@
 #include "APICommon.h"
 #include "../Globals.h"
 #include "../server/ServerCore.h"
+#include "../server/ServerCallbacks.h"
 #include "../midi/MidiRouter.h"
 #include <Preferences.h>
 #include <Esp.h>
@@ -29,6 +30,13 @@ void setupUsbMidiAPI(AsyncWebServer& server) {
             }
             
             request->send(200, "application/json", "{\"status\":\"ok\"}");
+            
+            // Sur certains hôtes, la désactivation ne "dé-universe" pas correctement sans reboot.
+            // On force donc un reboot différé (après l'envoi HTTP).
+            if(!isEnabled) {
+                Serial.println("[USB-MIDI] Désactivation: reboot différé demandé");
+                nidmi_requestReboot();
+            }
         } else {
             request->send(400, "application/json", "{\"error\":\"enable parameter required\"}");
         }
@@ -42,7 +50,7 @@ void setupUsbMidiAPI(AsyncWebServer& server) {
         
         Preferences preferences;
         preferences.begin("nidmi", true);
-        bool savedEnabled = preferences.getBool("usbmidi_enabled", true); // Par défaut true
+        bool savedEnabled = preferences.getBool("usbmidi_enabled", false); // Par défaut false
         preferences.end();
         
         String json = "{";

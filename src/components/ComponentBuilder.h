@@ -65,6 +65,11 @@ public:
         def.pinType = pinType;
         return *this;
     }
+
+    ComponentBuilder& setAltPinType(PinType alt) {
+        def.altPinType = static_cast<int8_t>(alt);
+        return *this;
+    }
     
     /**
      * @brief Définit les capacités (MIDI, OSC)
@@ -144,6 +149,7 @@ public:
             newMessages[i].id = def.midiMessages[i].id;
             newMessages[i].displayName = def.midiMessages[i].displayName;
             newMessages[i].statusTemplate = def.midiMessages[i].statusTemplate;
+            newMessages[i].axis = def.midiMessages[i].axis;
             newMessages[i].paramCount = def.midiMessages[i].paramCount;
             newMessages[i].paramsCapacity = def.midiMessages[i].paramCount;
             // Copie profonde des params
@@ -161,6 +167,7 @@ public:
         newMessages[def.midiMessageCount].id = msg.id;
         newMessages[def.midiMessageCount].displayName = msg.displayName;
         newMessages[def.midiMessageCount].statusTemplate = msg.statusTemplate;
+        newMessages[def.midiMessageCount].axis = msg.axis;
         newMessages[def.midiMessageCount].paramCount = msg.paramCount;
         newMessages[def.midiMessageCount].paramsCapacity = msg.paramCount;
         if (msg.paramCount > 0 && msg.params) {
@@ -285,6 +292,7 @@ public:
                 result.midiMessages[i].id = def.midiMessages[i].id;
                 result.midiMessages[i].displayName = def.midiMessages[i].displayName;
                 result.midiMessages[i].statusTemplate = def.midiMessages[i].statusTemplate;
+                result.midiMessages[i].axis = def.midiMessages[i].axis;
                 result.midiMessages[i].paramCount = def.midiMessages[i].paramCount;
                 result.midiMessages[i].paramsCapacity = def.midiMessages[i].paramCount;
                 if (def.midiMessages[i].paramCount > 0 && def.midiMessages[i].params) {

@@ -16,6 +16,7 @@ function updatePinsList() {
       const cfg = pcfg[lbl];
       if (!cfg || !cfg.role) return;
       const cfgRole = typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role;
+      if (typeof isBusRole === 'function' && isBusRole(cfgRole)) return;
       const cfgDef = typeof getComponentDefinition === 'function' ? getComponentDefinition(cfgRole) : null;
       const cfgHasAdditionalPins = cfgDef && cfgDef.additionalPins && Array.isArray(cfgDef.additionalPins) && cfgDef.additionalPins.length > 0
         && cfg.additionalPins && typeof cfg.additionalPins === 'object' && Object.keys(cfg.additionalPins).length > 0;
@@ -44,6 +45,8 @@ function updatePinsList() {
     // --------------------------------------
 
     const role = typeof migrateRole === 'function' ? migrateRole(cfg.role) : cfg.role;
+    /* Les rôles de bus (I2C, SPI, UART) ne sont pas des composants */
+    if (typeof isBusRole === 'function' && isBusRole(role)) return;
     const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
     const hasAdditionalPinsFromDef = def && def.additionalPins && Array.isArray(def.additionalPins) && def.additionalPins.length > 0;
     const hasAdditionalPinsInCfg = cfg.additionalPins && typeof cfg.additionalPins === 'object' && Object.keys(cfg.additionalPins).length > 0;
@@ -56,7 +59,7 @@ function updatePinsList() {
 
         const statText = stat(cfg, lbl);
         const it = document.createElement('div');
-        it.className = 'item complex';
+        it.className = `item complex ${pType(lbl)}`;
         it.innerHTML = `<span class="lbl">${lbl}</span><span class="role">${roleName}</span><span class="stat">${statText}</span><button class="del-btn">×</button>`;
         
         setupPinEvents(it, lbl, roleName);

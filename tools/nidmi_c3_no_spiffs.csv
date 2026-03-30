@@ -1,0 +1,9 @@
+# Table de partitions ESP32-C3 sans SPIFFS - partition app agrandie (~4 Mo)
+# Utilisation : build avec --board c3 --large-app (voir scripts/nidmi.sh)
+# Réduit la troncature du JSON des définitions de composants (plus de place en flash/RAM)
+#
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x5000,
+otadata,  data, ota,     0xe000,   0x2000,
+app0,     app,  ota_0,    0x10000,  0x3E0000,
+coredump, data, coredump, 0x3F0000, 0x10000,

@@ -24,20 +24,17 @@ struct AnalogFilter {
      * 10 → alpha = 0.05 (filtrage maximum, réponse lente)
      */
     static float mapFilterIntensity(uint8_t intensity) {
-        // Clamp entre 1 et 10
         if (intensity < 1) intensity = 1;
         if (intensity > 10) intensity = 10;
         
-        // Mapping inverse : plus la valeur est élevée, plus alpha est faible
-        // Utiliser une courbe quadratique pour plus de contrôle dans la plage utile
         float normalized = (intensity - 1) / 9.0f; // 0.0 (valeur=1) à 1.0 (valeur=10)
         
-        // Courbe quadratique inversée pour plus de contrôle dans la plage haute (filtrage max)
-        float alpha_min = 0.05f;  // Filtrage maximum (valeur=10)
-        float alpha_max = 0.5f;   // Filtrage minimum (valeur=1)
+        float alpha_min = 0.01f;  // Filtrage maximum (valeur=10) — très lissé
+        float alpha_max = 0.5f;   // Filtrage minimum (valeur=1) — très réactif
         
-        // Inverser : normalized=0 → alpha_max, normalized=1 → alpha_min
-        float alpha = alpha_max - (alpha_max - alpha_min) * (normalized * normalized);
+        // Courbe exponentielle pour une variation plus progressive
+        // normalized=0 → alpha_max (0.5), normalized=1 → alpha_min (0.01)
+        float alpha = alpha_max * powf(alpha_min / alpha_max, normalized);
         
         return alpha;
     }

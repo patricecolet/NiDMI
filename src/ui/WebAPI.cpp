@@ -9,6 +9,7 @@
 #include "../Globals.h"
 #include "../server/ServerCallbacks.h"
 #include "../components/ComponentRegistry.h"
+#include "../processors/TouchProcessor.h"
 #include <Preferences.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncWebSocket.h>
@@ -30,11 +31,27 @@ String getDefaultConfig(String pin) {
         PinMapper::detectMcu();
         uint8_t gpio = PinMapper::labelToGpio(pin.c_str());
         if (gpio != 255 && PinMapper::hasAdc(gpio)) {
-            // Extraire le numéro de la pin pour le CC par défaut
+            // Sur ESP32-S3, si la pin supporte le touch, proposer par défaut un Touch avec note incrémentée
+            #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV) || defined(ARDUINO_ESP32S3)
+            if (PinMapper::hasTouch(gpio)) {
+                int pinNum = pin.substring(1).toInt();
+                int noteVal = 60 + pinNum; // A0 -> 60, A1 -> 61, etc.
+                if (noteVal > 127) noteVal = 127;
+                String config = "{\"role\":\"touch\",\"rtpMidiEnabled\":true,";
+                config += "\"midiMessageType\":\"Note + Key Pressure\",";
+                config += "\"midiNote\":" + String(noteVal) + ",\"midiChannel\":1,";
+                // OSC en mode raw par défaut pour faciliter le calibrage
+                config += "\"oscEnabled\":true,\"oscAddress\":\"/touch\",\"oscFormat\":\"raw\",";
+                config += "\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+                return config;
+            }
+            #endif
+
+            // Sinon, comportement historique : potentiomètre CC avec CC basé sur l’index de pin
             int pinNum = pin.substring(1).toInt();
             int default_cc = pinNum + 1; // A0 -> CC1, A1 -> CC2, etc.
             if (default_cc > 127) default_cc = 127;
-            
+
             String config = "{\"role\":\"potentiometer\",\"rtpMidiEnabled\":true,\"midiMessageType\":\"Control Change\",";
             config += "\"midiCc\":" + String(default_cc) + ",\"midiChannel\":1,";
             config += "\"filterIntensity\":5,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",";
@@ -134,8 +151,8 @@ String getDefaultConfig(String pin) {
     }
     
     // Bus
-    if (pin == "SDA" || pin == "SCL") return "{\"role\":\"I2C\",\"rtpMidiEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
-    if (pin == "MOSI" || pin == "MISO" || pin == "SCK") return "{\"role\":\"SPI\",\"rtpMidiEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "SDA" || pin == "SCL" || pin == "I2C") return "{\"role\":\"I2C\",\"rtpMidiEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
+    if (pin == "MOSI" || pin == "MISO" || pin == "SCK" || pin == "SPI") return "{\"role\":\"SPI\",\"rtpMidiEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
     if (pin == "TX" || pin == "RX") return "{\"role\":\"UART\",\"rtpMidiEnabled\":false,\"oscEnabled\":true,\"oscAddress\":\"/ctl\",\"dbgEnabled\":false,\"dbgHeader\":\"\"}";
     
     // Défaut
@@ -149,6 +166,13 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
         Serial.println("WebSocket client disconnected");
     } else if (type == WS_EVT_DATA) {
         String message = String((char*)data);
+
+        // Commande globale de calibration touch (toutes les baselines)
+        if (message == "TOUCH_CALIBRATE_ALL") {
+            TouchProcessor::resetAllBaselines();
+            client->text("TOUCH_CALIBRATE_DONE");
+            return;
+        }
         
         if (message.startsWith("PIN_CLICKED:")) {
             String pin = message.substring(12);
@@ -157,6 +181,17 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
             preferences.begin("nidmi", true);
             String key = "pin_" + pin;
             String config = preferences.getString(key.c_str(), "");
+            
+            // Pour les pins de bus, chercher aussi sous le label du bus
+            if (config.length() == 0) {
+                if (pin == "MOSI" || pin == "MISO" || pin == "SCK") {
+                    config = preferences.getString("pin_SPI", "");
+                    if (config.length() > 0) pin = "SPI";
+                } else if (pin == "SDA" || pin == "SCL") {
+                    config = preferences.getString("pin_I2C", "");
+                    if (config.length() > 0) pin = "I2C";
+                }
+            }
             preferences.end();
             
             if (config.length() > 0) {

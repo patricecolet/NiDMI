@@ -28,6 +28,15 @@ void nidmi_requestReloadPins();
  */
 void nidmi_requestReloadOsc();
 
+/**
+ * @brief Demander un redémarrage différé (2 s pour laisser la réponse HTTP partir et la NVS se fermer proprement)
+ */
+void nidmi_requestReboot();
+
+/**
+ * @brief Demander un redémarrage différé "persist USB"
+ * (utile quand on change la configuration/dé-énumération USB via TinyUSB)
+ */
 #ifdef __cplusplus
 }
 #endif

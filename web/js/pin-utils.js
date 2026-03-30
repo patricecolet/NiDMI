@@ -22,9 +22,9 @@ function pType(lbl) {
     if (caps.bus.spi && (gpio === caps.bus.spi.mosi || gpio === caps.bus.spi.miso || gpio === caps.bus.spi.sck)) return 'spi';
     return 'digital';
   }
-  if (lbl === 'SDA' || lbl === 'SCL') return 'i2c';
+  if (lbl === 'SDA' || lbl === 'SCL' || lbl === 'I2C') return 'i2c';
   if (lbl === 'TX' || lbl === 'RX') return 'uart';
-  if (lbl === 'MOSI' || lbl === 'MISO' || lbl === 'SCK') return 'spi';
+  if (lbl === 'MOSI' || lbl === 'MISO' || lbl === 'SCK' || lbl === 'SPI') return 'spi';
   return 'digital';
 }
 /**
@@ -109,16 +109,16 @@ function replaceTemplate(template, cfg, def) {
   
   /* Remplacer les variables {variable} avec les valeurs de cfg */
   return template.replace(/\{(\w+)\}/g, (match, key) => {
-    // Essayer d'abord la clé directe
+    /* Essayer d'abord la clé directe */
     let value = cfg[key];
-    
-    // Si pas trouvé, essayer avec le préfixe 'midi' (ex: cc -> midiCc, note -> midiNote)
+
+    /* Si pas trouvé, essayer avec le préfixe 'midi' (ex: cc -> midiCc, note -> midiNote) */
     if (value === undefined || value === null) {
       const midiKey = 'midi' + key.charAt(0).toUpperCase() + key.slice(1);
       value = cfg[midiKey];
     }
     
-    // Si toujours pas trouvé, essayer quelques variantes communes
+    /* Si toujours pas trouvé, essayer quelques variantes communes */
     if (value === undefined || value === null) {
       const keyMap = {
         'cc': 'midiCc',
@@ -134,13 +134,13 @@ function replaceTemplate(template, cfg, def) {
       }
     }
     
-    // Si toujours pas trouvé, essayer l'ancien format rtp* pour compatibilité
+    /* Si toujours pas trouvé, essayer l'ancien format rtp* pour compatibilité */
     if (value === undefined || value === null) {
       const rtpKey = 'rtp' + key.charAt(0).toUpperCase() + key.slice(1);
       value = cfg[rtpKey];
     }
     
-    // Si toujours pas trouvé, essayer les variantes rtp* communes
+    /* Si toujours pas trouvé, essayer les variantes rtp* communes */
     if (value === undefined || value === null) {
       const rtpKeyMap = {
         'cc': 'rtpCc',
@@ -184,7 +184,7 @@ function getComponentStatusText(def, cfg, pinLabel) {
   if (!def || !cfg) return '';
   
   /* Si midiMessageType (ou rtpType pour compatibilité) est défini, utiliser le template du message MIDI */
-  const msgType = cfg.midiMessageType || cfg.rtpType; // Nouveau format puis ancien pour compatibilité
+  const msgType = cfg.midiMessageType || cfg.rtpType; /* Nouveau format puis ancien pour compatibilité */
   if (msgType && def.midiMessages && Array.isArray(def.midiMessages)) {
     const msg = def.midiMessages.find(m => m.displayName === msgType);
     if (msg && msg.statusTemplate) {

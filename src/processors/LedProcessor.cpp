@@ -1,6 +1,7 @@
 #include "LedProcessor.h"
 #include "ProcessorRegistry.h"
 #include "../components/ComponentTypes.h"  // Définitions communes
+#include "../components/basic/LedDef.h"
 #include "../utils/AnalogFilter.h"
 #include "../utils/PinMapper.h"
 
@@ -19,7 +20,11 @@ void LedProcessor::handleMidiNoteOn(
             config.midi_param == note) {
             
             // Allumer la LED (PWM si disponible et mode pwm, sinon digital)
-            if (strcmp(config.ledMode, "pwm") == 0 && PinMapper::hasPwm(config.gpio)) {
+            const char* ledMode = "onoff"; // Défaut
+            if (config.specificConfig.led) {
+                ledMode = config.specificConfig.led->ledMode;
+            }
+            if (strcmp(ledMode, "pwm") == 0 && PinMapper::hasPwm(config.gpio)) {
                 // Mode PWM : utiliser la vélocité pour contrôler la luminosité (0-127 -> 0-255)
                 uint8_t pwmValue = (velocity * 2); // 0-127 -> 0-254, on peut aller jusqu'à 255
                 if (pwmValue > 255) pwmValue = 255;
@@ -50,7 +55,11 @@ void LedProcessor::handleMidiNoteOff(
             config.midi_param == note) {
             
             // Éteindre la LED (PWM si disponible et mode pwm, sinon digital)
-            if (strcmp(config.ledMode, "pwm") == 0 && PinMapper::hasPwm(config.gpio)) {
+            const char* ledMode = "onoff"; // Défaut
+            if (config.specificConfig.led) {
+                ledMode = config.specificConfig.led->ledMode;
+            }
+            if (strcmp(ledMode, "pwm") == 0 && PinMapper::hasPwm(config.gpio)) {
                 analogWrite(config.gpio, 0); // PWM à 0%
             } else {
                 digitalWrite(config.gpio, LOW);
@@ -76,7 +85,11 @@ void LedProcessor::handleMidiControlChange(
             config.midi_param == control) {
             
             // Allumer/éteindre selon la valeur (PWM si disponible et mode pwm, sinon digital)
-            if (strcmp(config.ledMode, "pwm") == 0 && PinMapper::hasPwm(config.gpio)) {
+            const char* ledMode = "onoff"; // Défaut
+            if (config.specificConfig.led) {
+                ledMode = config.specificConfig.led->ledMode;
+            }
+            if (strcmp(ledMode, "pwm") == 0 && PinMapper::hasPwm(config.gpio)) {
                 // Mode PWM : utiliser la valeur directement (0-127 -> 0-255)
                 uint8_t pwmValue = (value * 2); // 0-127 -> 0-254, on peut aller jusqu'à 255
                 if (pwmValue > 255) pwmValue = 255;
