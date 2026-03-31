@@ -78,6 +78,7 @@ const ComponentDefinitions = {
    * @private
    */
   _cache: [],
+  _loadingPromise: null,
 
   /**
    * Charge les définitions de composants depuis l'API backend
@@ -85,14 +86,27 @@ const ComponentDefinitions = {
    * @returns {Promise<Array>} Tableau des définitions de composants
    */
   async load() {
+    if (this._loadingPromise) {
+      return this._loadingPromise;
+    }
+    this._loadingPromise = (async () => {
     try {
       /* Faire une première requête normale (sans paramètres de pagination) */
-      const r = await fetch('/api/components/definitions');
+      let r = await fetch('/api/components/definitions');
       if(!r.ok) {
         console.warn('[ComponentDefinitions.load] Erreur chargement définitions:', r.status);
         return [];
       }
-      const firstText = await r.text();
+      let firstText = await r.text();
+      if (!firstText || !firstText.trim()) {
+        console.warn('[ComponentDefinitions.load] Réponse vide sur requête initiale, retry...');
+        r = await fetch('/api/components/definitions?_retry=1');
+        if (!r.ok) {
+          console.warn('[ComponentDefinitions.load] Retry échoué:', r.status);
+          return [];
+        }
+        firstText = await r.text();
+      }
 
       /* Vérifier si la pagination est activée (présence du header X-Total-Pages) */
       const totalPagesHeader = r.headers.get('X-Total-Pages');
@@ -117,12 +131,25 @@ const ComponentDefinitions = {
           /* Charger toutes les pages */
           /* Utiliser limit=5 pour correspondre au default du backend (buffer 12KB = ~5 composants par page) */
           for (let page = 0; ; page++) {
-            const pageR = await fetch(`/api/components/definitions?page=${page}&limit=3`);
+            let pageR = await fetch(`/api/components/definitions?page=${page}&limit=3`);
             if (!pageR.ok) {
               console.warn(`[ComponentDefinitions.load] Erreur page ${page}:`, pageR.status);
               break;
             }
-            const pageText = await pageR.text();
+            let pageText = await pageR.text();
+            if (!pageText || !pageText.trim()) {
+              console.warn(`[ComponentDefinitions.load] Page ${page} vide, retry...`);
+              pageR = await fetch(`/api/components/definitions?page=${page}&limit=3&_retry=1`);
+              if (!pageR.ok) {
+                console.warn(`[ComponentDefinitions.load] Retry page ${page} échoué:`, pageR.status);
+                break;
+              }
+              pageText = await pageR.text();
+              if (!pageText || !pageText.trim()) {
+                console.warn(`[ComponentDefinitions.load] Page ${page} encore vide après retry, arrêt`);
+                break;
+              }
+            }
             const pageData = parseDefinitionsJson(pageText);
             if (!Array.isArray(pageData)) {
               console.warn(`[ComponentDefinitions.load] Page ${page} invalide (pas un tableau)`);
@@ -157,7 +184,11 @@ const ComponentDefinitions = {
     } catch(err) {
       console.error('[ComponentDefinitions.load] Erreur:', err);
       return [];
+    } finally {
+      this._loadingPromise = null;
     }
+    })();
+    return this._loadingPromise;
   },
 
   /**

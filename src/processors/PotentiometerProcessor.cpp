@@ -135,6 +135,9 @@ void PotentiometerProcessor::process(
         state.last_note = newNote;
         state.last_value = stable_midi_value;
         state.last_time = millis();
+        state.last_raw_value_u32 = filtered_value;
+        state.last_midi_value_u8 = stable_midi_value;
+        state.last_telemetry_ts = state.last_time;
         
         // 9. OSC si activé (même valeur que MIDI)
         MidiOutputCoordinator::sendOsc(osc_queue, config, stable_midi_value, filtered_value);
@@ -173,6 +176,9 @@ void PotentiometerProcessor::process(
     // Mettre à jour last_value UNE SEULE FOIS après l'envoi (comme le MUX)
     state.last_value = midi_value;
     state.last_time = millis();
+    state.last_raw_value_u32 = raw_value_for_handler;
+    state.last_midi_value_u8 = midi_value;
+    state.last_telemetry_ts = state.last_time;
 }
 
 // Wrapper pour normaliser la signature (filter par pointeur au lieu de référence)

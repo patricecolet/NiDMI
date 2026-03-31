@@ -21,7 +21,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
-
+*.code-workspace
 # Fichiers de développement local
 TODO.md
 

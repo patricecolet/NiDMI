@@ -22,10 +22,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .hint{margin-top:10px;color:var(--mt);font-size:14px}
 .g{display:grid;grid-template-columns:1fr 1fr;gap:20px}.card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:15px}
 .card h3{color:#1f2937;margin-bottom:10px;font-size:16px}.card p{color:var(--mt);font-size:14px;margin-bottom:5px}
-.pl{display:flex;gap:20px;align-items:flex-start}.lp{flex:0 0 30%;min-width:300px}.rp{flex:1 1 auto}
+.pl{display:flex;gap:20px;align-items:flex-start}.lp{flex:0 0 30%;min-width:300px}.rp{flex:1 1 auto;position:relative;left:75px}
 .cp{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:16px}.cp h4{margin:6px 0 10px;font-size:15px;color:#1f2937}
 .r{display:flex;gap:12px;align-items:center;margin:8px 0;flex-wrap:wrap}.r label{color:var(--tx);font-size:14px}
-.b{width:100%;height:260px;border:1px solid var(--bd);border-radius:8px;background:var(--bg)}
+.b{display:block;width:100%;min-width:360px;height:280px;max-width:100%;border:1px solid var(--bd);border-radius:8px;background:var(--bg);overflow:visible}
 .l{display:flex;gap:14px;align-items:center;margin:10px 0 8px;flex-wrap:wrap}.s{width:14px;height:14px;border-radius:3px;display:inline-block;margin-right:6px}
 .s.digital{background:var(--cd)}.s.analog{background:var(--ca)}.s.i2c{background:var(--ci)}.s.uart{background:var(--cu)}.s.spi{background:var(--cs)}.s.touch{background:#F59E0B}.s.power{background:var(--cp)}.s.gnd{background:var(--cg)}
 .plist{margin-top:20px;padding:15px;background:var(--bg);border-radius:8px}.plist h4{margin:0 0 10px;font-size:15px;color:var(--tx)}
@@ -39,6 +39,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .btn-p{width:100%;margin-top:15px;padding:12px;background:var(--cd);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer}
 .btn-p:hover{background:#2563eb}
 .svg-t{font-size:9px;fill:#ffffff;dominant-baseline:middle;pointer-events:none;user-select:none}
+.svg-val{font-size:9px;fill:var(--tx);dominant-baseline:middle;pointer-events:none;user-select:none}
+.svg-led{fill:#10b981;pointer-events:none}
 .selectedSquare{stroke:#1d4ed8;stroke-width:2}
 .subcard{background:#f9fafb;border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:8px}
 .subcard .r{margin:6px 0}
@@ -76,6 +78,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <h3 id="boardName">ESP32‑C3</h3>
  <div class="l"><span class="s digital"></span> Digital <span class="s analog"></span> Analog <span class="s i2c"></span> I2C <span class="s uart"></span> UART <span class="s spi"></span> SPI <span class="s power"></span> Power <span class="s gnd"></span> GND</div>
 <<<<<<< HEAD
+<<<<<<< HEAD
  
  <svg class="b" viewBox="50 -20 260 260">
  <rect x="114" y="20" width="122" height="188" rx="10" fill="#ffffff" stroke="#9ca3af"/>
@@ -88,6 +91,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 =======
  <svg class="b" viewBox="50 -20 260 260"><rect x="114" y="20" width="122" height="188" rx="10" fill="#ffffff" stroke="#9ca3af"/><text x="174" y="114" text-anchor="middle" font-size="12" fill="#6b7280">MCU</text><rect x="144" y="2" width="60" height="60" rx="6" fill="#e5e7eb" stroke="#9ca3af"/><g id="pinsLeft"></g><g id="pinsRight"></g></svg>
+>>>>>>> main
+=======
+ <svg class="b" viewBox="-32 -35 400 295" preserveAspectRatio="xMidYMid meet"><rect x="114" y="20" width="122" height="188" rx="10" fill="#ffffff" stroke="#9ca3af"/><text x="174" y="114" text-anchor="middle" font-size="12" fill="#6b7280">MCU</text><rect x="144" y="2" width="60" height="60" rx="6" fill="#e5e7eb" stroke="#9ca3af"/><g id="pinsLeft"></g><g id="pinsRight"></g></svg>
+ <div class="f" style="margin-top:10px">
+  <div class="r"><label>Monitoring pins:</label><select id="telemetryMode"><option value="off" selected>Off</option><option value="raw">RAW</option><option value="midi">MIDI</option></select></div>
+ </div>
 >>>>>>> main
  <div id="touchCalibrateContainer" class="f" style="margin-top:10px;display:none;"><button type="button" id="touchCalibrateBtn" class="btn" style="width:100%;">Calibrer touch</button><div class="hint" id="touchCalibrateMsg"></div></div>
  <div class="plist"><h4>{{t.pins.configured}}</h4><div id="pinsList" class="list"></div><button id="saveAllBtn" class="btn-p">{{t.pins.saveAll}}</button><div id="saveAllMsg" class="hint"></div></div>

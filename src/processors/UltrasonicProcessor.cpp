@@ -136,6 +136,9 @@ void UltrasonicProcessor::process(
         state.last_note = newNote;
         state.last_value = stable_midi_value;
         state.last_time = millis();
+        state.last_raw_value_u32 = filtered_value;
+        state.last_midi_value_u8 = stable_midi_value;
+        state.last_telemetry_ts = state.last_time;
 
         MidiOutputCoordinator::sendOsc(osc_queue, config, stable_midi_value, filtered_value);
         return;
@@ -168,6 +171,9 @@ void UltrasonicProcessor::process(
 
     state.last_value = midi_value;
     state.last_time = millis();
+    state.last_raw_value_u32 = raw_value_for_handler;
+    state.last_midi_value_u8 = midi_value;
+    state.last_telemetry_ts = state.last_time;
 }
 
 // Wrapper pour ProcessorRegistry
