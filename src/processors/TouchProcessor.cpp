@@ -316,6 +316,9 @@ static void processNoteVelocity(
             }
             state.last_note = note;
             state.last_value = velocity;
+            state.last_raw_value_u32 = touch_value;     // RAW brute 32 bits
+            state.last_midi_value_u8 = velocity;       // data1 OSC en mode MIDI
+            state.last_telemetry_ts = millis();
         state.last_aftertouch = velocity;
             state.last_time = millis();
             MidiOutputCoordinator::sendOsc(osc_queue, config, velocity, touch_value);
@@ -333,6 +336,10 @@ static void processNoteVelocity(
             state.last_note = 255;
             state.last_value = 0;
             state.last_aftertouch = 0;
+            state.last_raw_value_u32 = touch_value; // RAW brute 32 bits
+            state.last_midi_value_u8 = 0;            // data1 OSC = 0 (note off)
+            state.last_telemetry_ts = millis();
+            state.last_time = state.last_telemetry_ts;
             MidiOutputCoordinator::sendOsc(osc_queue, config, 0, touch_value);
         } else if (note_is_on && is_touched && velocity > 0) {
         // Key Pressure : mapping [touch_threshold .. touch_threshold+aftertouch_range] → 0-127 (touch_smoothed)
@@ -359,6 +366,9 @@ static void processNoteVelocity(
             }
             state.last_aftertouch = at_velocity;
             state.last_value = at_velocity;
+            state.last_raw_value_u32 = touch_value;      // RAW brute 32 bits (utile pour le mode RAW)
+            state.last_midi_value_u8 = at_velocity;    // data1 OSC en mode MIDI
+            state.last_telemetry_ts = millis();
             state.last_time = millis();
             MidiOutputCoordinator::sendOsc(osc_queue, config, at_velocity, touch_smoothed);
         }
@@ -437,6 +447,9 @@ static void processNoteSweep(
         
         state.last_note = newNote;
         state.last_value = stable_midi_value;
+        state.last_raw_value_u32 = touch_value;      // Note sweep conserve la notion "RAW 32 bits"
+        state.last_midi_value_u8 = stable_midi_value; // data1 OSC en mode MIDI
+        state.last_telemetry_ts = millis();
         state.last_time = millis();
         MidiOutputCoordinator::sendOsc(osc_queue, config, stable_midi_value, mapped_value);
 }
@@ -516,6 +529,9 @@ static void processContinuous(
     MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, midi_value, raw_value_for_handler);
     state.last_value = midi_value;
     state.last_time = millis();
+    state.last_raw_value_u32 = touch_value;
+    state.last_midi_value_u8 = midi_value;
+    state.last_telemetry_ts = state.last_time;
 }
 
 // ===== FONCTION PRINCIPALE =====

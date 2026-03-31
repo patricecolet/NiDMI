@@ -61,6 +61,17 @@ void JoystickProcessor::process(
     
     int8_t xNorm = mapAxisValue(xFiltered, xMin, xZeroMin, xZeroMax, xMax, invertX);
     int8_t yNorm = mapAxisValue(yFiltered, yMin, yZeroMin, yZeroMax, yMax, invertY);
+
+    // Déclencher le monitoring SVG pour l’axe Y (2e pin analogique)
+    state.aux_gpio = yGpio;
+
+    auto normToMidiValue = [&](int8_t normalizedValue) -> uint8_t {
+        // Même mapping que sendOscForAxis() (format MIDI OSC: data1)
+        if (normalizedValue <= 0) {
+            return (uint8_t)map((long)normalizedValue, -127, 0, 0, 64);
+        }
+        return (uint8_t)map((long)normalizedValue, 0, 127, 64, 127);
+    };
     
     int8_t lastXNorm = (lastXNormPtr && *lastXNormPtr != 255) ? (int8_t)(*lastXNormPtr - 127) : 128;
     int8_t lastYNorm = (lastYNormPtr && *lastYNormPtr != 255) ? (int8_t)(*lastYNormPtr - 127) : 128;
@@ -69,12 +80,22 @@ void JoystickProcessor::process(
         sendMidiForAxis(midi_sender, config, 'x', xNorm);
         sendOscForAxis(osc_queue, config, 'x', xNorm, xFiltered);
         *lastXNormPtr = (uint8_t)(xNorm + 127);
+
+        // Monitoring SVG : RAW par pin + fonctionnel MIDI (data1 OSC)
+        state.last_raw_value_u32 = xFiltered;
+        state.last_midi_value_u8 = normToMidiValue(xNorm);
+        state.last_telemetry_ts = millis();
     }
     
     if (yNorm != lastYNorm && lastYNormPtr) {
         sendMidiForAxis(midi_sender, config, 'y', yNorm);
         sendOscForAxis(osc_queue, config, 'y', yNorm, yFiltered);
         *lastYNormPtr = (uint8_t)(yNorm + 127);
+
+        // Monitoring SVG : RAW par pin (axe Y) + data1 OSC (MIDI)
+        state.last_raw_value_aux_u32 = yFiltered;
+        state.last_midi_value_aux_u8 = normToMidiValue(yNorm);
+        state.last_telemetry_ts_aux = millis();
     }
     
     state.last_value = xFiltered;

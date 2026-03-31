@@ -3,6 +3,11 @@
  * @brief Gestion visuelle des pins (SVG board + grisage)
  */
 
+// Références SVG pour le monitoring en temps réel
+// (utilisées par `web/js/websocket.js` sur les messages PIN_TELEMETRY)
+const valueTextByLabel = {};
+const ledByLabel = {};
+
 /**
  * Met à jour le grisage visuel des pins utilisées
  */
@@ -120,7 +125,7 @@ function drawBoard() {
   const W = isS3 ? 32 : 44;
   const COL = isS3 ? { c1: 20, c2: 54, c3: 88, c4: 238, c5: 272, c6: 306 } : { c1: 20, c2: 68, c4: 238, c5: 286 };
 
-  const mk = (x, y, w, h, fill, stroke, label, clk = true) => {
+  const mk = (x, y, w, h, fill, stroke, label, clk = true, valOutside = 'left') => {
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     r.setAttribute('x', x);
@@ -139,6 +144,38 @@ function drawBoard() {
       t.setAttribute('class', 'svg-t');
       t.textContent = label;
       g.appendChild(t);
+    }
+
+    if (label) {
+      // Valeur RAW/MIDI : à gauche des pastilles gauche, à droite des pastilles droite (hors MCU)
+      const tVal = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      const midY = y + h / 2 + 1;
+      if (valOutside === 'right') {
+        tVal.setAttribute('x', x + w + 5);
+        tVal.setAttribute('y', midY);
+        tVal.setAttribute('text-anchor', 'start');
+      } else {
+        tVal.setAttribute('x', x - 5);
+        tVal.setAttribute('y', midY);
+        tVal.setAttribute('text-anchor', 'end');
+      }
+      tVal.setAttribute('class', 'svg-val');
+      tVal.textContent = '';
+      tVal.style.visibility = 'hidden';
+      tVal.style.pointerEvents = 'none';
+      g.appendChild(tVal);
+      valueTextByLabel[label] = tVal;
+
+      // LED d’activité (binaire, decay côté front)
+      const led = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      led.setAttribute('cx', x + w / 2);
+      led.setAttribute('cy', y + 6);
+      led.setAttribute('r', isS3 ? 2.3 : 2.2);
+      led.setAttribute('class', 'svg-led');
+      led.style.visibility = 'hidden';
+      led.style.pointerEvents = 'none';
+      g.appendChild(led);
+      ledByLabel[label] = led;
     }
     if (clk && label) {
       g.style.cursor = 'pointer';
@@ -216,32 +253,32 @@ function drawBoard() {
       const y = 30 + row * RH;
       const f = document.createDocumentFragment();
       if (busLbl) {
-        f.appendChild(mk(COL.c1, y - 10, W, H, getPinColor(busLbl), '#9ca3af', busLbl));
+        f.appendChild(mk(COL.c1, y - 10, W, H, getPinColor(busLbl), '#9ca3af', busLbl, true, 'left'));
       } else {
-        f.appendChild(mk(COL.c1, y - 10, W, H, '#9ca3af', '#9ca3af', '', false));
+        f.appendChild(mk(COL.c1, y - 10, W, H, '#9ca3af', '#9ca3af', '', false, 'left'));
       }
       if (adcLbl) {
-        f.appendChild(mk(COL.c2, y - 10, W, H, FC.ANALOG, '#9ca3af', adcLbl));
+        f.appendChild(mk(COL.c2, y - 10, W, H, FC.ANALOG, '#9ca3af', adcLbl, true, 'left'));
       } else {
-        f.appendChild(mk(COL.c2, y - 10, W, H, '#9ca3af', '#9ca3af', '', false));
+        f.appendChild(mk(COL.c2, y - 10, W, H, '#9ca3af', '#9ca3af', '', false, 'left'));
       }
-      f.appendChild(mk(COL.c3, y - 10, W, H, FC.DIGITAL, '#9ca3af', dLbl));
+      f.appendChild(mk(COL.c3, y - 10, W, H, FC.DIGITAL, '#9ca3af', dLbl, true, 'left'));
       L.appendChild(f);
     };
 
     const right3 = (row, dLbl, adcLbl, busLbl) => {
       const y = 30 + row * RH;
       const f = document.createDocumentFragment();
-      f.appendChild(mk(COL.c4, y - 10, W, H, FC.DIGITAL, '#9ca3af', dLbl));
+      f.appendChild(mk(COL.c4, y - 10, W, H, FC.DIGITAL, '#9ca3af', dLbl, true, 'right'));
       if (adcLbl) {
-        f.appendChild(mk(COL.c5, y - 10, W, H, FC.ANALOG, '#9ca3af', adcLbl));
+        f.appendChild(mk(COL.c5, y - 10, W, H, FC.ANALOG, '#9ca3af', adcLbl, true, 'right'));
       } else {
-        f.appendChild(mk(COL.c5, y - 10, W, H, '#9ca3af', '#9ca3af', '', false));
+        f.appendChild(mk(COL.c5, y - 10, W, H, '#9ca3af', '#9ca3af', '', false, 'right'));
       }
       if (busLbl) {
-        f.appendChild(mk(COL.c6, y - 10, W, H, getPinColor(busLbl), '#9ca3af', busLbl));
+        f.appendChild(mk(COL.c6, y - 10, W, H, getPinColor(busLbl), '#9ca3af', busLbl, true, 'right'));
       } else {
-        f.appendChild(mk(COL.c6, y - 10, W, H, '#9ca3af', '#9ca3af', '', false));
+        f.appendChild(mk(COL.c6, y - 10, W, H, '#9ca3af', '#9ca3af', '', false, 'right'));
       }
       R.appendChild(f);
     };
@@ -271,11 +308,11 @@ function drawBoard() {
       left3(leftRow++, busLbl, adcLbl, p.label);
     });
 
-    R.appendChild(mk(COL.c4, 30 + rightRow * RH - 10, W, H, FC.POWER, '#9ca3af', '5V', false));
+    R.appendChild(mk(COL.c4, 30 + rightRow * RH - 10, W, H, FC.POWER, '#9ca3af', '5V', false, 'right'));
     rightRow++;
-    R.appendChild(mk(COL.c4, 30 + rightRow * RH - 10, W, H, FC.GND, '#9ca3af', 'GND', false));
+    R.appendChild(mk(COL.c4, 30 + rightRow * RH - 10, W, H, FC.GND, '#9ca3af', 'GND', false, 'right'));
     rightRow++;
-    R.appendChild(mk(COL.c4, 30 + rightRow * RH - 10, W, H, FC.POWER, '#9ca3af', '3V3', false));
+    R.appendChild(mk(COL.c4, 30 + rightRow * RH - 10, W, H, FC.POWER, '#9ca3af', '3V3', false, 'right'));
     rightRow++;
 
     dPins.filter(p => {
@@ -297,11 +334,11 @@ function drawBoard() {
       const y = 30 + row * RH;
       const f = document.createDocumentFragment();
       if (tl) {
-        f.appendChild(mk(COL.c1, y - 10, W, H, tc, '#9ca3af', tl));
+        f.appendChild(mk(COL.c1, y - 10, W, H, tc, '#9ca3af', tl, true, 'left'));
       } else {
-        f.appendChild(mk(COL.c1, y - 10, W, H, '#9ca3af', '#9ca3af', '', false));
+        f.appendChild(mk(COL.c1, y - 10, W, H, '#9ca3af', '#9ca3af', '', false, 'left'));
       }
-      f.appendChild(mk(COL.c2, y - 10, W, H, FC.DIGITAL, '#9ca3af', dl));
+      f.appendChild(mk(COL.c2, y - 10, W, H, FC.DIGITAL, '#9ca3af', dl, true, 'left'));
       L.appendChild(f);
     };
 
@@ -385,18 +422,18 @@ function drawBoard() {
       left(leftRow++, p.label, p.color, p.dLabel);
     });
 
-    R.appendChild(mk(COL.c4, 30 + rightRow * RH - 10, W, H, FC.POWER, '#9ca3af', '5V', false));
+    R.appendChild(mk(COL.c4, 30 + rightRow * RH - 10, W, H, FC.POWER, '#9ca3af', '5V', false, 'right'));
     rightRow++;
-    R.appendChild(mk(COL.c4, 30 + rightRow * RH - 10, W, H, FC.GND, '#9ca3af', 'GND', false));
+    R.appendChild(mk(COL.c4, 30 + rightRow * RH - 10, W, H, FC.GND, '#9ca3af', 'GND', false, 'right'));
     rightRow++;
-    R.appendChild(mk(COL.c4, 30 + rightRow * RH - 10, W, H, FC.POWER, '#9ca3af', '3V3', false));
+    R.appendChild(mk(COL.c4, 30 + rightRow * RH - 10, W, H, FC.POWER, '#9ca3af', '3V3', false, 'right'));
     rightRow++;
 
     const right = (row, dl, tl, tc) => {
       const y = 30 + row * RH;
       const f = document.createDocumentFragment();
-      f.appendChild(mk(COL.c4, y - 10, W, H, FC.DIGITAL, '#9ca3af', dl));
-      f.appendChild(mk(COL.c5, y - 10, W, H, tc, '#9ca3af', tl));
+      f.appendChild(mk(COL.c4, y - 10, W, H, FC.DIGITAL, '#9ca3af', dl, true, 'right'));
+      f.appendChild(mk(COL.c5, y - 10, W, H, tc, '#9ca3af', tl, true, 'right'));
       return f;
     };
 

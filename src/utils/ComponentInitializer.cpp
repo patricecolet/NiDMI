@@ -254,6 +254,16 @@ void ComponentInitializer::initializeState(ComponentState& state) {
     state.toggle_state = false; // État toggle initialisé à false (note off)
     state.prev_stable_state = false; // État stable précédent (released par défaut)
     state.pulse_pending = false; // Pas de pulse en attente
+
+    // Télémétrie monitoring SVG
+    state.last_raw_value_u32 = 0;
+    state.last_midi_value_u8 = 0;
+    state.last_telemetry_ts = 0;
+
+    state.aux_gpio = 255;
+    state.last_raw_value_aux_u32 = 0;
+    state.last_midi_value_aux_u8 = 0;
+    state.last_telemetry_ts_aux = 0;
     
     // Initialiser les champs de debouncing simple
     state.last_button_state = false;

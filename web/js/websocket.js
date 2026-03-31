@@ -1,3 +1,72 @@
+// --- Monitoring SVG : select unique off | raw | midi (runtime-only, non NVS) ---
+const telemetryByLabel = {};
+const ledDecayTimersByLabel = {};
+let telemetryMode = 'off';
+
+function getTelemetryModeFromUI() {
+  const el = document.getElementById('telemetryMode');
+  if (!el) return telemetryMode;
+  telemetryMode = el.value;
+  return telemetryMode;
+}
+
+function isTelemetryMonitoringOn() {
+  const m = getTelemetryModeFromUI();
+  return m === 'raw' || m === 'midi';
+}
+
+function updateValueTextForLabel(label) {
+  if (typeof valueTextByLabel === 'undefined' || !valueTextByLabel) { console.warn('[DBG VAL] valueTextByLabel undefined'); return; }
+  const payload = telemetryByLabel[label];
+  if (!payload) { console.warn('[DBG VAL] pas de payload pour', label); return; }
+
+  const tVal = valueTextByLabel[label];
+  if (!tVal) { console.warn('[DBG VAL] pas de tVal pour label="' + label + '"'); return; }
+
+  const mode = getTelemetryModeFromUI();
+  if (mode === 'off') {
+    tVal.style.visibility = 'hidden';
+    return;
+  }
+
+  if (!payload.show_value) {
+    console.log('[DBG VAL] show_value=false pour', label);
+    tVal.style.visibility = 'hidden';
+    return;
+  }
+
+  const v = (mode === 'midi') ? payload.midi : payload.raw;
+  tVal.textContent = String(v);
+  tVal.style.visibility = 'visible';
+  console.log('[DBG VAL] affiché label="' + label + '" mode=' + mode + ' v=' + v);
+}
+
+function updateAllValuesForMode() {
+  Object.keys(telemetryByLabel).forEach(updateValueTextForLabel);
+}
+
+function clearTelemetryVisuals() {
+  Object.keys(telemetryByLabel).forEach(k => delete telemetryByLabel[k]);
+  if (typeof valueTextByLabel !== 'undefined' && valueTextByLabel) {
+    Object.keys(valueTextByLabel).forEach(lbl => {
+      const el = valueTextByLabel[lbl];
+      if (!el) return;
+      el.textContent = '';
+      el.style.visibility = 'hidden';
+    });
+  }
+  if (typeof ledByLabel !== 'undefined' && ledByLabel) {
+    Object.keys(ledByLabel).forEach(lbl => {
+      if (ledDecayTimersByLabel[lbl]) {
+        clearTimeout(ledDecayTimersByLabel[lbl]);
+        delete ledDecayTimersByLabel[lbl];
+      }
+      const led = ledByLabel[lbl];
+      if (led) led.style.visibility = 'hidden';
+    });
+  }
+}
+
 function applyPinReplacementLogic(pin){
  if(typeof pin !== 'string' || !pin) return;
  if(typeof pcfg === 'undefined' || !pcfg) return;
@@ -116,6 +185,8 @@ function initWebSocket(){
   websocket = new WebSocket(wsUrl);
   websocket.onopen = function(){
    console.log('WebSocket connected');
+   // OFF par défaut à chaque connexion, côté serveur aussi
+   websocket.send('PIN_MONITORING:0');
   };
   websocket.onmessage = function(event){
   if(!event || !event.data) return;
@@ -129,6 +200,59 @@ function initWebSocket(){
     msgEl.style.color = '#10b981';
    }
    return;
+  }
+
+  if (message.startsWith('PIN_MONITORING_STATE:')) {
+    const modeEl = document.getElementById('telemetryMode');
+    if (message.endsWith(':0')) {
+      if (modeEl) modeEl.value = 'off';
+      telemetryMode = 'off';
+      clearTelemetryVisuals();
+    }
+    return;
+  }
+
+  // Monitoring SVG : télémétrie temps réel
+  if (message.startsWith('PIN_TELEMETRY:')) {
+    const _monOn = isTelemetryMonitoringOn();
+    console.log('[DBG TELEM] reçu: ' + message.substring(0, 120) + ' | on:' + _monOn + ' | mode:' + telemetryMode);
+    if (!_monOn) return;
+    const prefix = 'PIN_TELEMETRY:';
+    const rest = message.substring(prefix.length);
+    const sep = rest.indexOf(':');
+    if (sep === -1) { console.warn('[DBG TELEM] séparateur absent'); return; }
+
+    const pinLabel = rest.substring(0, sep);
+    const jsonStr = rest.substring(sep + 1);
+    const _hasVal = typeof valueTextByLabel !== 'undefined' && !!valueTextByLabel[pinLabel];
+    const _hasLed = typeof ledByLabel !== 'undefined' && !!ledByLabel[pinLabel];
+    const _knownLabels = typeof valueTextByLabel !== 'undefined' ? Object.keys(valueTextByLabel) : [];
+    console.log('[DBG TELEM] label="' + pinLabel + '" hasValEl:' + _hasVal + ' hasLedEl:' + _hasLed + ' knownLabels:' + JSON.stringify(_knownLabels));
+
+    try {
+      const payload = JSON.parse(jsonStr);
+      telemetryByLabel[pinLabel] = payload;
+
+      // Valeur numérique (si show_value=true)
+      updateValueTextForLabel(pinLabel);
+
+      // LED d’activité (binaire + decay côté front)
+      if (typeof ledByLabel !== 'undefined' && ledByLabel) {
+        const led = ledByLabel[pinLabel];
+        if (led && payload && payload.active) {
+          led.style.visibility = 'visible';
+          if (ledDecayTimersByLabel[pinLabel]) {
+            clearTimeout(ledDecayTimersByLabel[pinLabel]);
+          }
+          ledDecayTimersByLabel[pinLabel] = setTimeout(() => {
+            if (led) led.style.visibility = 'hidden';
+          }, 300);
+        }
+      }
+    } catch (e) {
+      console.error('[PIN_TELEMETRY] JSON parse error:', e);
+    }
+    return;
   }
 
   if(message.startsWith('PIN_CONFIG:')){
@@ -171,6 +295,25 @@ function initWebSocket(){
     }
    }
   };
+
+  // Off / RAW / MIDI : une seule commande PIN_MONITORING (0 = off, 1 = actif)
+  const modeEl = document.getElementById('telemetryMode');
+  if (modeEl && !modeEl._listenerAttached) {
+    modeEl._listenerAttached = true;
+    modeEl.addEventListener('change', () => {
+      telemetryMode = modeEl.value;
+      const on = telemetryMode === 'raw' || telemetryMode === 'midi';
+      console.log('[DBG SELECT] mode changé:', telemetryMode, '| on:', on, '| ws.readyState:', websocket ? websocket.readyState : 'null');
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        websocket.send(`PIN_MONITORING:${on ? '1' : '0'}`);
+        console.log('[DBG SELECT] PIN_MONITORING:' + (on ? '1' : '0') + ' envoyé');
+      } else {
+        console.warn('[DBG SELECT] WebSocket non disponible, état:', websocket ? websocket.readyState : 'null');
+      }
+      if (!on) clearTelemetryVisuals();
+      else updateAllValuesForMode();
+    });
+  }
   websocket.onerror = function(error){
    console.error('[initWebSocket] Erreur WebSocket:', error);
   };
