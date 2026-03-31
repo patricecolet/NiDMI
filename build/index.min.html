@@ -64,14 +64,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div class="p" id="panel-connection">
  <div class="f"><h3>Serveur</h3><form id="mdns"><div class="f"><label for="mdnsName">Nom du serveur</label><input type="text" id="mdnsName" placeholder="nidmi" required><div class="hint"><small>Ce nom sera utilisé pour l'AP Wi‑Fi et http://nom.local</small></div></div><button type="submit" class="btn">Enregistrer</button><div class="hint" id="mdnsMsg"></div></form></div>
  <div class="f"><h3>OSC</h3><form id="osc"><div class="f"><label for="oscTarget">Destination</label><select id="oscTarget"><option value="ip">IP spécifique</option><option value="ap">Broadcast AP (192.168.4.255)</option><option value="sta" id="oscStaOption">Broadcast STA</option></select></div><div class="f" id="oscIpRow"><label for="oscIp">Adresse IP</label><input type="text" id="oscIp" placeholder="192.168.1.100" pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"></div><div class="f"><label for="oscPort">Port</label><input type="number" id="oscPort" value="8000" min="1024" max="65535" required></div><div class="f"><label><input type="checkbox" id="oscBroadcast"> Mode broadcast</label><div class="hint">Diffusion vers tous les appareils du réseau</div></div><button type="submit" class="btn">Enregistrer</button><div class="hint" id="oscMsg"></div></form></div>
+<div class="f"><h3>OSC sortie</h3><div class="r switch"><input type="checkbox" id="oscEnabled2"><label for="oscEnabled2">Activer (tous)</label></div></div>
+<div class="f"><h3>Interfaces MIDI</h3><div class="r switch"><input type="checkbox" id="rtpMidiEnabled"><label for="rtpMidiEnabled">RTP-MIDI</label></div><div class="r switch"><input type="checkbox" id="usbMidiEnabled"><label for="usbMidiEnabled">USB-MIDI</label></div><div class="r"><label>Statut USB-MIDI:</label><span id="usbMidiStatus">-</span></div></div>
 <div class="f"><h3>Wi‑Fi Station</h3><form id="sta"><div class="f"><label for="ssid">SSID</label><input type="text" id="ssid" placeholder="Nom du réseau" required></div><div class="f"><label for="pass">Mot de passe</label><input type="password" id="pass" placeholder="Mot de passe"></div><button type="submit" class="btn">Connecter</button><div class="hint" id="staMsg"></div></form></div>
-<div class="f" id="systemSettingsSection" style="display:none"><h3>Paramètres système</h3><form id="system"><div class="f"><label><input type="checkbox" id="touchEnabled"> Activer le support Touch (ESP32-S3)</label><div class="hint">Active ou désactive l'utilisation des pins touch. Nécessite un rechargement des composants.</div></div><button type="submit" class="btn">Enregistrer</button><div class="hint" id="systemMsg"></div></form><div style="margin-top:30px;padding-top:20px;border-top:2px solid #ef4444"><h4 style="color:#ef4444;margin-bottom:10px">Zone de danger</h4><p style="color:#6b7280;font-size:14px;margin-bottom:15px">⚠️ Attention : Cela supprimera toutes les configurations (pins, OSC, WiFi, etc.) et réinitialisera complètement le système.</p><button type="button" id="clearNvsBtn" class="btn" style="background:#ef4444">Effacer toute la NVS</button><div class="hint" id="clearNvsMsg"></div></div></div>
+<div class="f" id="systemSettingsSection" style="display:none"><h3>Paramètres système</h3><form id="system"><div class="f"><label><input type="checkbox" id="touchEnabled"> Activer le support Touch (ESP32-S3)</label><div class="hint">Active ou désactive l'utilisation des pins touch. Nécessite un rechargement des composants.</div></div><button type="submit" class="btn">Enregistrer</button><div class="hint" id="systemMsg"></div></form><div style="margin-top:30px;padding-top:20px;border-top:2px solid #ef4444"><h4 style="color:#ef4444;margin-bottom:10px">Zone de danger</h4><p style="color:#6b7280;font-size:14px;margin-bottom:15px">⚠️ Attention : Cela supprimera toutes les configurations (pins, OSC, WiFi, etc.) et réinitialisera complètement le système.</p><button type="button" id="clearNvsBtn" class="btn" style="background:#ef4444">Effacer toute la NVS</button><button type="button" id="resetDeviceBtn" class="btn" style="background:#6b7280;margin-top:10px;">Reset appareil</button><div class="hint" id="clearNvsMsg"></div></div></div>
 </div>
  <div class="p" id="panel-pins">
  <div class="pl">
  <div class="lp">
  <h3 id="boardName">ESP32‑C3</h3>
  <div class="l"><span class="s digital"></span> Digital <span class="s analog"></span> Analog <span class="s i2c"></span> I2C <span class="s uart"></span> UART <span class="s spi"></span> SPI <span class="s power"></span> Power <span class="s gnd"></span> GND</div>
+<<<<<<< HEAD
  
  <svg class="b" viewBox="50 -20 260 260">
  <rect x="114" y="20" width="122" height="188" rx="10" fill="#ffffff" stroke="#9ca3af"/>
@@ -82,6 +85,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <g id="pinsLeft"></g><g id="pinsRight"></g>
  </svg>
 
+=======
+ <svg class="b" viewBox="50 -20 260 260"><rect x="114" y="20" width="122" height="188" rx="10" fill="#ffffff" stroke="#9ca3af"/><text x="174" y="114" text-anchor="middle" font-size="12" fill="#6b7280">MCU</text><rect x="144" y="2" width="60" height="60" rx="6" fill="#e5e7eb" stroke="#9ca3af"/><g id="pinsLeft"></g><g id="pinsRight"></g></svg>
+>>>>>>> main
  <div id="touchCalibrateContainer" class="f" style="margin-top:10px;display:none;"><button type="button" id="touchCalibrateBtn" class="btn" style="width:100%;">Calibrer touch</button><div class="hint" id="touchCalibrateMsg"></div></div>
  <div class="plist"><h4>Pins configurées</h4><div id="pinsList" class="list"></div><button id="saveAllBtn" class="btn-p">Enregistrer tout</button><div id="saveAllMsg" class="hint"></div></div>
  </div>
@@ -91,6 +97,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div class="r"><label>Pin:</label><span id="selPin">-</span></div>
  <div class="r"><label>Famille:</label><select id="familySelect"></select></div>
  <div class="r"><label>Composant:</label><select id="funcSelect"></select></div>
+<<<<<<< HEAD
  <div id="componentFormCard" class="subcard" style="display:none;"></div>
  <h4>MIDI</h4>
  <div id="rtpMidiSection"></div>
@@ -110,6 +117,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <h4>OSC</h4>
  <div class="r switch"><input type="checkbox" id="oscEnabled2"><label for="oscEnabled2">Activer</label><label>Addr:</label><input type="text" id="oscAddress" placeholder="/ctl"></div>
  <div class="r"><label>Format:</label><select id="oscFormat"><option value="float">Float (0-1)</option><option value="midi">MIDI (3 int)</option><option value="raw">Raw</option></select></div>
+=======
+<div id="componentFormCard" class="subcard" style="display:none;"></div>
+<h4>MIDI</h4>
+<div id="rtpMidiSection"></div>
+<h4>Interfaces MIDI</h4>
+<div class="r switch"><input type="checkbox" id="debugMidiEnabled"><label for="debugMidiEnabled">Debug MIDI</label></div>
+<h4>OSC</h4>
+<div class="r"><label>Addr:</label><input type="text" id="oscAddress" placeholder="/ctl"></div>
+<div class="r"><label>Format:</label><select id="oscFormat"><option value="float">Float (0-1)</option><option value="midi">MIDI (3 int)</option><option value="raw">Raw</option></select></div>
+>>>>>>> main
  <h4>Debug</h4>
  <div class="r switch"><input type="checkbox" id="dbgEnabled"><label for="dbgEnabled">Activer</label><label>Hdr:</label><input type="text" id="dbgHeader" placeholder="[DBG]"></div>
  </div>

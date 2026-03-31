@@ -201,4 +201,104 @@ inline MidiMessageDef createNoteWithKeyPressureMessage() {
     return msg;
 }
 
+// Chaînes statiques pour les displayName avec axes
+namespace {
+    constexpr const char* CC_DISPLAY_NAME_X = "Control Change (Axe X)";
+    constexpr const char* CC_DISPLAY_NAME_Y = "Control Change (Axe Y)";
+    constexpr const char* CC_DISPLAY_NAME_Z = "Control Change (Axe Z)";
+    constexpr const char* PB_DISPLAY_NAME_X = "Pitch Bend (Axe X)";
+    constexpr const char* PB_DISPLAY_NAME_Y = "Pitch Bend (Axe Y)";
+    constexpr const char* PB_DISPLAY_NAME_Z = "Pitch Bend (Axe Z)";
+    constexpr const char* AT_DISPLAY_NAME_X = "Aftertouch (Axe X)";
+    constexpr const char* AT_DISPLAY_NAME_Y = "Aftertouch (Axe Y)";
+    constexpr const char* AT_DISPLAY_NAME_Z = "Aftertouch (Axe Z)";
+    constexpr const char* NS_DISPLAY_NAME_X = "Note (balayage) (Axe X)";
+    constexpr const char* NS_DISPLAY_NAME_Y = "Note (balayage) (Axe Y)";
+    constexpr const char* NS_DISPLAY_NAME_Z = "Note (balayage) (Axe Z)";
+}
+
+/**
+ * @brief Helper pour comparer un axe avec "x"
+ */
+inline bool isAxisX(const char* axis) {
+    return axis && axis[0] == 'x' && axis[1] == '\0';
+}
+
+/**
+ * @brief Helper pour comparer un axe avec "z"
+ */
+inline bool isAxisZ(const char* axis) {
+    return axis && axis[0] == 'z' && axis[1] == '\0';
+}
+
+/**
+ * @brief Crée un message Control Change pour un axe (joystick ou IMU)
+ * @param axis Axe ("x", "y" ou "z")
+ * @param includeRange Si true, ajoute le paramètre midiCcRange
+ * @param dependsOnRole JSON array des rôles qui affichent le range (ex: "[\"joystick\"]")
+ */
+inline MidiMessageDef createCcMessageForAxis(const char* axis, bool includeRange = false, const char* dependsOnRole = nullptr) {
+    MidiMessageDef msg = createCcMessage(includeRange, dependsOnRole);
+    msg.axis = axis;
+    if (isAxisX(axis)) {
+        msg.displayName = CC_DISPLAY_NAME_X;
+    } else if (isAxisZ(axis)) {
+        msg.displayName = CC_DISPLAY_NAME_Z;
+    } else {
+        msg.displayName = CC_DISPLAY_NAME_Y;
+    }
+    return msg;
+}
+
+/**
+ * @brief Crée un message Pitch Bend pour un axe (joystick ou IMU)
+ * @param axis Axe ("x", "y" ou "z")
+ */
+inline MidiMessageDef createPitchBendMessageForAxis(const char* axis) {
+    MidiMessageDef msg = createPitchBendMessage();
+    msg.axis = axis;
+    if (isAxisX(axis)) {
+        msg.displayName = PB_DISPLAY_NAME_X;
+    } else if (isAxisZ(axis)) {
+        msg.displayName = PB_DISPLAY_NAME_Z;
+    } else {
+        msg.displayName = PB_DISPLAY_NAME_Y;
+    }
+    return msg;
+}
+
+/**
+ * @brief Crée un message Aftertouch pour un axe (joystick ou IMU)
+ * @param axis Axe ("x", "y" ou "z")
+ */
+inline MidiMessageDef createAftertouchMessageForAxis(const char* axis) {
+    MidiMessageDef msg = createAftertouchMessage();
+    msg.axis = axis;
+    if (isAxisX(axis)) {
+        msg.displayName = AT_DISPLAY_NAME_X;
+    } else if (isAxisZ(axis)) {
+        msg.displayName = AT_DISPLAY_NAME_Z;
+    } else {
+        msg.displayName = AT_DISPLAY_NAME_Y;
+    }
+    return msg;
+}
+
+/**
+ * @brief Crée un message Note Sweep pour un axe (joystick ou IMU)
+ * @param axis Axe ("x", "y" ou "z")
+ */
+inline MidiMessageDef createNoteSweepMessageForAxis(const char* axis) {
+    MidiMessageDef msg = createNoteSweepMessage();
+    msg.axis = axis;
+    if (isAxisX(axis)) {
+        msg.displayName = NS_DISPLAY_NAME_X;
+    } else if (isAxisZ(axis)) {
+        msg.displayName = NS_DISPLAY_NAME_Z;
+    } else {
+        msg.displayName = NS_DISPLAY_NAME_Y;
+    }
+    return msg;
+}
+
 } // namespace Components

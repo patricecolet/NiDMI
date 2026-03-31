@@ -46,11 +46,8 @@ void UltrasonicProcessor::process(
     // Lecture distance brute (mm)
     uint16_t raw_distance = readDistanceMM(config.gpio, state.last_value);
 
-    // Mettre à jour alpha du filtre selon filter_intensity (1-10)
-    uint8_t intensity = config.filter_intensity;
-    if (intensity == 0) {
-        intensity = 5; // défaut
-    }
+    // Mettre à jour alpha du filtre (défaut 5, pas de config spécifique encore)
+    uint8_t intensity = 5; // Défaut
     filter.setAlphaFromIntensity(intensity);
 
     // FILTRAGE d'abord (comme le potentiomètre)
@@ -61,10 +58,10 @@ void UltrasonicProcessor::process(
         filtered_raw_value = filter.process(raw_distance);
     }
 
-    // Mapping min/max en mm (on réutilise potMin/potMax pour stocker les distances)
+    // Mapping min/max en mm (on réutilise customInt1/customInt2 pour stocker les distances)
     uint16_t mapped_value;
-    uint16_t dist_min = config.potMin;
-    uint16_t dist_max = config.potMax;
+    uint16_t dist_min = config.customInt1;
+    uint16_t dist_max = config.customInt2;
 
     // Si non configuré (0,0) → 0–4000 mm
     if (dist_min == 0 && dist_max == 0) {

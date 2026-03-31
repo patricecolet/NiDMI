@@ -1,6 +1,7 @@
 #include "ButtonProcessor.h"
 #include "ProcessorRegistry.h"
 #include "../components/ComponentTypes.h"  // Définitions communes
+#include "../components/basic/ButtonDef.h"
 #include "../midi/handlers/MidiOutputCoordinator.h"
 
 void ButtonProcessor::process(
@@ -11,9 +12,12 @@ void ButtonProcessor::process(
 ) {
     // Lecture digitale avec anti-rebond
     // Déterminer le mode pull configuré
-    String pullMode = String(config.btnPullMode);
-    if (pullMode.length() == 0) {
-        pullMode = "pullup"; // Défaut
+    String pullMode = "pullup"; // Défaut
+    if (config.specificConfig.button) {
+        pullMode = String(config.specificConfig.button->btnPullMode);
+        if (pullMode.length() == 0) {
+            pullMode = "pullup"; // Défaut
+        }
     }
     
     bool raw_state = digitalRead(config.gpio);
@@ -93,15 +97,21 @@ void ButtonProcessor::process(
     };
     
     // Déterminer le mode (défaut: press_release)
-    String btnMode = String(config.btnMode);
-    if (btnMode.length() == 0) {
-        btnMode = "press_release";
+    String btnMode = "press_release"; // Défaut
+    if (config.specificConfig.button) {
+        btnMode = String(config.specificConfig.button->btnMode);
+        if (btnMode.length() == 0) {
+            btnMode = "press_release";
+        }
     }
     
     // Déterminer le timing pour mode pulse (défaut: release)
-    String btnPulseTiming = String(config.btnPulseTiming);
-    if (btnPulseTiming.length() == 0) {
-        btnPulseTiming = "release";
+    String btnPulseTiming = "release"; // Défaut
+    if (config.specificConfig.button) {
+        btnPulseTiming = String(config.specificConfig.button->btnPulseTiming);
+        if (btnPulseTiming.length() == 0) {
+            btnPulseTiming = "release";
+        }
     }
     
     // Implémenter les 3 modes

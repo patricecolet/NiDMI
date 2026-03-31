@@ -301,7 +301,7 @@ const GpioManager = {
     
     const excludeSet = Array.isArray(excludeGpios) ? new Set(excludeGpios.map(g => parseInt(g)).filter(g => !isNaN(g))) : new Set();
     
-    return caps.pins.filter(pin => {
+    let result = caps.pins.filter(pin => {
       if(!pin || pin.gpio === undefined) return false;
       const gpio = parseInt(pin.gpio);
       if(isNaN(gpio)) return false;
@@ -323,5 +323,19 @@ const GpioManager = {
           return false;
       }
     });
+    
+    /* Pour PIN_ANALOG : privilégier les labels A0, A1, A2... (alias analogiques) au lieu de D0, D1, D2 */
+    if(pinType === 0 && result.length > 0) {
+      const analogLabels = result.filter(p => p.label && String(p.label).match(/^A\d+/));
+      if(analogLabels.length > 0) {
+        result = analogLabels.sort((a, b) => {
+          const na = parseInt(String(a.label).replace(/^A/, ''), 10) || 0;
+          const nb = parseInt(String(b.label).replace(/^A/, ''), 10) || 0;
+          return na - nb;
+        });
+      }
+    }
+    
+    return result;
   }
 };

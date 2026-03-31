@@ -52,7 +52,7 @@ void setup() {
     // Redémarrer l'ESP32
     Serial.println("[Clear NVS] Redémarrage dans 3 secondes...");
     delay(3000);
-    ESP.restart();
+    //ESP.restart();
 }
 
 void loop() {

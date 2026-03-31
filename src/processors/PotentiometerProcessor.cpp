@@ -1,6 +1,7 @@
 #include "PotentiometerProcessor.h"
 #include "ProcessorRegistry.h"
 #include "../components/ComponentTypes.h"  // Définitions communes
+#include "../components/basic/PotentiometerDef.h"
 #include "../midi/handlers/MidiOutputCoordinator.h"
 
 void PotentiometerProcessor::process(
@@ -24,8 +25,22 @@ void PotentiometerProcessor::process(
     uint16_t raw_value = analogRead(config.gpio);
     
     // Mettre à jour alpha du filtre selon filter_intensity (1-10)
-    uint8_t intensity = config.filter_intensity;
-    if (intensity == 0) intensity = 5; // Valeur par défaut si non configuré
+    uint8_t intensity = 5; // Valeur par défaut
+    uint16_t analog_min = 0;
+    uint16_t analog_max = 4095;
+    
+    if (config.specificConfig.potentiometer) {
+        intensity = config.specificConfig.potentiometer->filter_intensity;
+        if (intensity == 0) intensity = 5; // Valeur par défaut si non configuré
+        analog_min = config.specificConfig.potentiometer->potMin;
+        analog_max = config.specificConfig.potentiometer->potMax;
+        // Si les seuils ne sont pas configurés (0,0), utiliser les valeurs par défaut
+        if (analog_min == 0 && analog_max == 0) {
+            analog_min = 0;
+            analog_max = 4095;
+        }
+    }
+    
     filter.setAlphaFromIntensity(intensity);
     
     // FILTRAGE D'ABORD : filtrer la valeur brute avant normalisation
@@ -41,14 +56,6 @@ void PotentiometerProcessor::process(
     // où la plage MIDI (0-127) va s'étendre (pour Control Change, etc.)
     // Résultat : valeur normalisée dans 0-4095 selon potMin/potMax
     uint16_t mapped_value;  // Valeur normalisée selon potMin/potMax (0-4095) pour CC
-    uint16_t analog_min = config.potMin;
-    uint16_t analog_max = config.potMax;
-    
-    // Si les seuils ne sont pas configurés (0,0), utiliser les valeurs par défaut
-    if (analog_min == 0 && analog_max == 0) {
-        analog_min = 0;
-        analog_max = 4095;
-    }
     
     // Normaliser la valeur filtrée selon potMin/potMax (pour Control Change, OSC, etc.)
     // - valeurs < potMin → 0 (sera 0 MIDI après hystérésis)

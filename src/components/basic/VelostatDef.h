@@ -19,6 +19,17 @@
 namespace Components {
 
 /**
+ * @brief Configuration spécifique au velostat
+ */
+struct VelostatConfig {
+    uint8_t filter_intensity;      // Intensité du filtrage (1-10)
+    uint16_t velocityThreshold;    // Seuil pour Note On (0-4095)
+    uint8_t aftertouchThreshold;   // Sensibilité aftertouch (1-127)
+    
+    VelostatConfig() : filter_intensity(5), velocityThreshold(50), aftertouchThreshold(4) {}
+};
+
+/**
  * @brief Définition complète du Velostat
  */
 struct Velostat {
@@ -75,6 +86,10 @@ struct Velostat {
                 1, 10, "5", "1=rapide, 10=stable", 60
             ))
             .addMidiMessage(createNoteWithKeyPressureMessage())
+            .addMidiMessage(createCcMessage(true, "[\"velostat\"]"))
+            .addMidiMessage(createPitchBendMessage())
+            .addMidiMessage(createAftertouchMessage())
+            .addMidiMessage(createNoteSweepMessage())
             .build();
     }
 };

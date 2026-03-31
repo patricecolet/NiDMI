@@ -28,4 +28,11 @@ void setupSystemAPI(AsyncWebServer& server) {
         
         request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Settings updated, components reloaded\"}");
     });
+
+    /* API - Reset logiciel (comme appuyer sur le bouton reset) */
+    server.on("/api/system/reboot", HTTP_POST, [](AsyncWebServerRequest *request){
+        request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Reboot scheduled\"}");
+        // Reboot différé côté loop (pour laisser partir la réponse HTTP)
+        nidmi_requestReboot();
+    });
 }

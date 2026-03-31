@@ -1,6 +1,7 @@
 #include "VelostatProcessor.h"
 #include "ProcessorRegistry.h"
 #include "../components/ComponentTypes.h"
+#include "../components/basic/VelostatDef.h"
 #include "../midi/handlers/MidiOutputCoordinator.h"
 #include "../utils/PinMapper.h"
 
@@ -24,18 +25,21 @@ void VelostatProcessor::process(
     uint16_t sensor_value = analogRead(config.gpio);
     
     // Mettre à jour alpha du filtre selon filter_intensity (1-10)
-    uint8_t intensity = config.filter_intensity;
-    if (intensity == 0) intensity = 5; // Valeur par défaut si non configuré
+    uint8_t intensity = 5; // Valeur par défaut
+    uint16_t velocity_threshold = 50;
+    uint8_t aftertouch_threshold = 4;
+    
+    if (config.specificConfig.velostat) {
+        intensity = config.specificConfig.velostat->filter_intensity;
+        if (intensity == 0) intensity = 5; // Valeur par défaut si non configuré
+        velocity_threshold = config.specificConfig.velostat->velocityThreshold;
+        aftertouch_threshold = config.specificConfig.velostat->aftertouchThreshold;
+    }
+    
     filter.setAlphaFromIntensity(intensity);
     
     // Filtrer la valeur brute
     uint16_t filtered_value = filter.process(sensor_value);
-    
-    // Lire les seuils depuis les champs personnalisés
-    // velocityThreshold stocké dans customInt1 (0-4095)
-    // aftertouchThreshold stocké dans customInt2 (1-127)
-    uint16_t velocity_threshold = (config.customInt1 > 0) ? config.customInt1 : 50;
-    uint8_t aftertouch_threshold = (config.customInt2 > 0) ? config.customInt2 : 4;
     
     // Mapper la valeur filtrée vers la vélocité (1-127)
     // Mapping depuis [velocityThreshold, 4095] vers [1, 127]

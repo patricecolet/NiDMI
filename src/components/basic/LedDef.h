@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Arduino.h>
 #include "../ComponentDefinition.h"
 #include "../ComponentBuilder.h"
 #include "../FormFieldHelpers.h"
@@ -17,6 +18,18 @@
  */
 
 namespace Components {
+
+/**
+ * @brief Configuration spécifique à la LED
+ */
+struct LedConfig {
+    char ledMode[16];  // Mode LED: "onoff", "pwm"
+    
+    LedConfig() {
+        strncpy(ledMode, "onoff", sizeof(ledMode) - 1);
+        ledMode[sizeof(ledMode) - 1] = '\0';
+    }
+};
 
 /**
  * @brief Définition complète de la LED

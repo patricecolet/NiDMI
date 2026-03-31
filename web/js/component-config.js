@@ -45,11 +45,21 @@ function readAdditionalPins(def, c) {
       if (!isNaN(value)) {
         c.additionalPins[additionalPin.id] = value;
         console.log('[readAdditionalPins] additionalPin lu depuis le formulaire:', additionalPin.id, '=', value);
+      } else {
+        console.warn('[readAdditionalPins] Valeur invalide pour additionalPin:', additionalPin.id, 'value:', field.value);
       }
     } else if (cur && pcfg && pcfg[cur] && pcfg[cur].additionalPins && pcfg[cur].additionalPins[additionalPin.id] !== undefined) {
       /* Si le champ est vide mais qu'il y a une valeur dans pcfg, utiliser celle-ci */
       c.additionalPins[additionalPin.id] = pcfg[cur].additionalPins[additionalPin.id];
       console.log('[readAdditionalPins] additionalPin lu depuis pcfg (champ vide):', additionalPin.id, '=', c.additionalPins[additionalPin.id]);
+    } else if (!additionalPin.optional) {
+      /* Pin requise mais valeur absente - utiliser la valeur par défaut si disponible */
+      if (additionalPin.defaultValue !== undefined && additionalPin.defaultValue !== 255) {
+        c.additionalPins[additionalPin.id] = additionalPin.defaultValue;
+        console.log('[readAdditionalPins] additionalPin requise, utilisation defaultValue:', additionalPin.id, '=', additionalPin.defaultValue);
+      } else {
+        console.error('[readAdditionalPins] ERREUR: Pin requise absente et pas de defaultValue:', additionalPin.id);
+      }
     }
   });
 
@@ -90,10 +100,15 @@ function applyAdditionalPins(def, c, setV) {
  */
 function readCfg(roleOverride = null) {
   const c = {};
-  /* Utiliser le roleOverride si fourni, sinon lire depuis le select */
+  /* Utiliser le roleOverride si fourni, sinon lire depuis le select, sinon depuis pcfg */
   c.role = roleOverride || $('#funcSelect')?.value || '';
-
-  console.log('[readCfg] Début, role:', c.role, 'roleOverride:', roleOverride);
+  /* Fallback : si funcSelect est vide mais qu'on a un composant dans pcfg, l'utiliser */
+  if (!c.role && typeof cur !== 'undefined' && cur && typeof pcfg !== 'undefined' && pcfg[cur] && pcfg[cur].role) {
+    const existingRole = pcfg[cur].role;
+    if (typeof isBusRole !== 'function' || !isBusRole(existingRole)) {
+      c.role = existingRole;
+    }
+  }
 
   /* Lire les champs depuis les formFields du composant actuel */
   let migratedRole = null;
@@ -102,8 +117,6 @@ function readCfg(roleOverride = null) {
   if (c.role) {
     migratedRole = migrateRoleValue(c.role);
     def = getComponentDef(migratedRole);
-    const hasAdditionalPinsFlag = hasAdditionalPins(def);
-    console.log('[readCfg] migratedRole:', migratedRole, 'def trouvée:', !!def, 'hasAdditionalPins:', hasAdditionalPinsFlag);
 
     if (def && def.formFields && Array.isArray(def.formFields)) {
       def.formFields.forEach(field => {
@@ -124,12 +137,24 @@ function readCfg(roleOverride = null) {
         }
       });
     }
+    /* Log des valeurs critiques LIS3DH */
+    if (migratedRole === 'lis3dh') {
+      console.log('[readCfg] LIS3DH DOM: range=' + c.range + ' dataRate=' + c.dataRate + ' filter=' + c.filterIntensity + ' cs=' + c.csGpio +
+        ' | #range existe=' + !!$('#range') + ' #dataRate existe=' + !!$('#dataRate') + ' #filterIntensity existe=' + !!$('#filterIntensity'));
+    }
   }
 
   /* Lire les champs MIDI */
   if (migratedRole && def && typeof MidiConfig !== 'undefined' && MidiConfig.readConfig) {
     const midiConfig = MidiConfig.readConfig(def);
     Object.assign(c, midiConfig);
+  }
+
+  /* Auto-déterminer busInterface depuis le contexte (pin I2C ou SPI) */
+  if (typeof cur !== 'undefined' && cur === 'SPI') {
+    c.busInterface = '1';
+  } else if (typeof cur !== 'undefined' && cur === 'I2C') {
+    c.busInterface = '0';
   }
 
   /* Lire les champs OSC et Debug */
@@ -154,6 +179,8 @@ function readCfg(roleOverride = null) {
  */
 function applyCfg(c) {
   if (!c) return;
+  /* Les rôles de bus (I2C, SPI, UART) n'ont pas de formulaire de composant */
+  if (c.role && typeof isBusRole === 'function' && isBusRole(c.role)) return;
 
   const setV = (id, v) => {
     /* Gérer les IDs avec ou sans # */
@@ -226,6 +253,9 @@ function applyConfigValues(c, def, setV, setC) {
           setV(field.id + 'Max', c[field.id + 'Max']);
         } else {
           setV(field.id, c[field.id]);
+          if (field.id === 'csGpio') {
+            console.log('[applyConfigValues] csGpio appliqué:', c[field.id], 'dans config:', c);
+          }
         }
       }
     });
@@ -237,9 +267,25 @@ function applyConfigValues(c, def, setV, setC) {
   }
 
   /* Appliquer les champs OSC et Debug */
-  setC('oscEnabled2', c.oscEnabled);
   setV('oscAddress', c.oscAddress);
   setV('oscFormat', c.oscFormat);
+
+  // IMPORTANT: on retire tout "grisage" potentiel du champ d'adresse OSC.
+  // Même si oscEnabled2 est off, on laisse l'édition de l'adresse possible côté UI.
+  const oscAddressEl = $('#oscAddress');
+  if (oscAddressEl) {
+    oscAddressEl.disabled = false;
+    oscAddressEl.style.opacity = '';
+    oscAddressEl.style.filter = '';
+    oscAddressEl.style.pointerEvents = '';
+  }
+  const oscFormatEl = $('#oscFormat');
+  if (oscFormatEl) {
+    oscFormatEl.disabled = false;
+    oscFormatEl.style.opacity = '';
+    oscFormatEl.style.pointerEvents = '';
+  }
+
   setC('dbgEnabled', c.dbgEnabled);
   setV('dbgHeader', c.dbgHeader);
 }

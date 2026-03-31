@@ -152,8 +152,8 @@ const FormGenerator = {
           if(field.maxLength > 0) input.maxLength = field.maxLength;
           if(field.pattern) input.pattern = field.pattern;
           if(field.width > 0) input.style.width = field.width + 'px';
-          if(field.defaultValue && !currentCfg[field.id]) input.value = field.defaultValue;
-          else if(currentCfg[field.id]) input.value = currentCfg[field.id];
+          if(currentCfg[field.id] !== undefined && currentCfg[field.id] !== null) input.value = currentCfg[field.id];
+          else if(field.defaultValue) input.value = field.defaultValue;
           break;
           
         case 1: /* NUMBER */
@@ -165,8 +165,8 @@ const FormGenerator = {
           if(field.step) input.step = field.step;
           if(field.placeholder) input.placeholder = field.placeholder;
           if(field.width > 0) input.style.width = field.width + 'px';
-          if(field.defaultValue && !currentCfg[field.id]) input.value = field.defaultValue;
-          else if(currentCfg[field.id] !== undefined) input.value = currentCfg[field.id];
+          if(currentCfg[field.id] !== undefined && currentCfg[field.id] !== null) input.value = currentCfg[field.id];
+          else if(field.defaultValue) input.value = field.defaultValue;
           break;
           
         case 2: /* SELECT */
@@ -245,12 +245,15 @@ const FormGenerator = {
                 });
               }
             }
-          } else {
+            } else {
             /* Pas d'options définies - c'est normal pour certains champs SELECT */
             console.warn('[FormGenerator.generateFormFields] Pas d\'options définies pour field SELECT:', field.id);
           }
-          if(field.defaultValue && !currentCfg[field.id]) input.value = field.defaultValue;
-          else if(currentCfg[field.id]) input.value = currentCfg[field.id];
+          if(currentCfg[field.id] !== undefined && currentCfg[field.id] !== null) {
+            input.value = currentCfg[field.id];
+          } else if(field.defaultValue) {
+            input.value = field.defaultValue;
+          }
           break;
           
         case 3: /* CHECKBOX */
@@ -424,8 +427,9 @@ const FormGenerator = {
         select.appendChild(optNone);
       }
       
-      /* RESTRICTIONS DÉSACTIVÉES - Toutes les pins sont disponibles dans les selects */
-      const pinType = additionalPin.pinType !== undefined ? additionalPin.pinType : 1; /* Défaut: PIN_DIGITAL */
+      /* Déterminer le type de pin : utiliser additionalPin.pinType si défini, sinon utiliser le pinType du composant parent */
+      let pinType = additionalPin.pinType !== undefined ? additionalPin.pinType : (def.pinType !== undefined ? def.pinType : 0); /* Défaut: PIN_ANALOG */
+      console.log('[FormGenerator.generateAdditionalPins] additionalPin.id:', additionalPin.id, 'additionalPin.pinType:', additionalPin.pinType, 'def.pinType:', def.pinType, 'pinType utilisé:', pinType);
       if(typeof GpioManager === 'undefined' || !GpioManager.getPinsByType) {
         console.warn('[FormGenerator.generateAdditionalPins] GpioManager.getPinsByType non disponible');
         return;

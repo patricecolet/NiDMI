@@ -13,7 +13,7 @@
  * Capteur tactile capacitif ESP32-S3 sur pin analogique.
  * Compatible uniquement avec ESP32-S3 (pas ESP32-C3).
  * 
- * La valeur tactile (0-4095, plus bas = touché) est mappée vers des messages MIDI
+ * La valeur tactile (0-4095) MONTE quand on touche et est mappée vers des messages MIDI
  * (CC, Pitch Bend, Aftertouch, Note + Key Pressure, Note simple).
  *
  * Famille: BASIC
@@ -44,7 +44,11 @@ struct Touch {
     static constexpr uint8_t DEFAULT_FILTER_INTENSITY = 5;
     static constexpr const char* DEFAULT_SEUILS_RAW = "0,0";  // ON,OFF raw depuis baseline (0,0=auto)
     static constexpr uint32_t DEFAULT_AFTERTOUCH_RANGE = 20000;  // Plage raw pour aftertouch 0-127
+<<<<<<< HEAD
     
+=======
+
+>>>>>>> main
     /**
      * @brief Validation : vérifie que le GPIO a une capacité Touch et que c'est un ESP32-S3
      */
@@ -67,15 +71,16 @@ struct Touch {
             .setType(TYPE, PIN_TYPE)
             .setCapabilities(SUPPORTS_MIDI, SUPPORTS_OSC)
             .setImplemented(IMPLEMENTED)
-            .addFormField(makeNumberFieldWithHint(
-                "potMin",
-                "Seuil touch (0-4095)",
-                0, 4095, "50", "Seuil pour Note On (plus bas = touché)", 60
+            .addFormField(makeTextField(
+                "s",
+                "Seuils ON,OFF (raw)",
+                "0,0", "0,0", 16, 80,
+                "Depuis baseline: déclenchement,relâchement (0,0=auto)"
             ))
             .addFormField(makeNumberFieldWithHint(
-                "aftertouchThreshold",
-                "Seuil aftertouch",
-                1, 127, "4", "Sensibilité aftertouch (1-127)", 60
+                "aftertouchRange",
+                "Plage aftertouch (raw)",
+                0, 500000, "20000", "Valeurs brutes au-dessus de la baseline pour modulation 0-127 (0=auto 20%)", 80
             ))
             .addFormField(makeNumberFieldWithHint(
                 "filterIntensity",

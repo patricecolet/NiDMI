@@ -1,5 +1,4 @@
-## Ce document décrit des optimisations S3 en partie implémentées, en partie à venir.
-## État : certaines optimisations encore à faire
+
 - Option : rendre la taille de pas configurable (fine vs “économe en messages”).
 
 **Bénéfice** :

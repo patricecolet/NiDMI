@@ -1,6 +1,7 @@
 #include "ComponentManager.h"
 #include <Arduino.h> // For Serial.printf
 #include <Preferences.h>
+#include <esp_task_wdt.h>
 #include "../server/ServerCore.h"
 #include "../osc/OSCQueue.h"
 #include "../midi/MidiMessageType.h"
@@ -10,6 +11,7 @@
 #include "../processors/ProcessorRegistry.h"
 #include "../processors/Processors.h"  // Centralise tous les processeurs pour l'enregistrement automatique
 #include "../components/ComponentRegistry.h"  // Pour trouver les définitions de composants
+#include "../components/basic/ButtonDef.h"    // Pour ButtonConfig (btnMode)
 #include "../components/ValidationRegistry.h"  // Pour la validation centralisée
 #include "../utils/PinMapper.h"
 #include "../osc/OSCCalibrationHandler.h"
@@ -62,7 +64,8 @@ void ComponentManager::begin(MidiSender* sender) {
     // Démarrer la tâche FreeRTOS pour les multiplexeurs
     mux_manager.begin();
     
-    // Créer la tâche MIDI sur Core 0
+    // Tâche MIDI sur Core 0 (avec MuxTask). loop()/serveur = Core 1 → éviter de charger Core 1 pour que le serveur ne plante pas avec 7+ pins touch.
+    const BaseType_t midiTaskCore = 0;
     BaseType_t result = xTaskCreatePinnedToCore(
         midiTask,
         "MidiTask",
@@ -70,12 +73,12 @@ void ComponentManager::begin(MidiSender* sender) {
         this,
         4,                 // Priorité légèrement inférieure à MuxTask
         &midiTaskHandle,
-        0                  // Core 0 (PRO_CPU)
+        midiTaskCore
     );
     
     if (result == pdPASS) {
         midiTaskStarted = true;
-        Serial.println("[ComponentManager] FreeRTOS MIDI task started on Core 0");
+        Serial.printf("[ComponentManager] FreeRTOS MIDI task started on Core %d\n", (int)midiTaskCore);
     } else {
         Serial.println("[ComponentManager] ERROR: Failed to create FreeRTOS MIDI task");
     }
@@ -106,14 +109,6 @@ void ComponentManager::update() {
         return;
     }
     
-    // Diagnostic WiFi (toutes les 30 secondes)
-    static unsigned long lastDiagnostic = 0;
-    if (millis() - lastDiagnostic > 30000) {
-        if (WiFi.status() == WL_CONNECTED) {
-            Serial.printf("[WiFi] Signal: %d dBm\n", WiFi.RSSI());
-        }
-        lastDiagnostic = millis();
-    }
     
     // Log périodique du nombre de composants
     static unsigned long lastComponentLog = 0;
@@ -150,11 +145,26 @@ void ComponentManager::update() {
 }
 
 void ComponentManager::reloadConfigs() {
-    // Serial.println("[ComponentManager] Reloading configs...");
+    bool wdt = pauseRealtimeTasks();
     clearAll();
     loadMuxConfigFromNVS();
     ConfigLoader::loadFromNVS(*this);
-    // Serial.println("[ComponentManager] Configs reloaded");
+    resumeRealtimeTasks(wdt);
+}
+
+bool ComponentManager::pauseRealtimeTasks() {
+    _nvsWriteInProgress = true;
+    bool removed = (esp_task_wdt_delete(xTaskGetCurrentTaskHandle()) == ESP_OK);
+    vTaskDelay(pdMS_TO_TICKS(20));
+    return removed;
+}
+
+void ComponentManager::resumeRealtimeTasks(bool restoreWdt) {
+    _nvsWriteInProgress = false;
+    if (restoreWdt) {
+        esp_task_wdt_add(xTaskGetCurrentTaskHandle());
+        esp_task_wdt_reset();
+    }
 }
 
 
@@ -228,9 +238,10 @@ bool ComponentManager::removeComponent(uint8_t gpio) {
         else if (config.msg_type == MidiMessageType::NOTE || 
                  config.msg_type == MidiMessageType::NOTE_VELOCITY) {
             // Vérifier le mode du bouton
-            String btnMode = String(config.btnMode);
-            if (btnMode.length() == 0) {
-                btnMode = "press_release"; // Défaut
+            String btnMode = "press_release"; // Défaut
+            if (config.specificConfig.button) {
+                btnMode = String(config.specificConfig.button->btnMode);
+                if (btnMode.length() == 0) btnMode = "press_release";
             }
             
             uint8_t note = config.midi_param; // midi_param contient la note pour NOTE
@@ -247,9 +258,10 @@ bool ComponentManager::removeComponent(uint8_t gpio) {
         // 3. CONTROL_CHANGE : remettre à zéro si actif
         else if (config.msg_type == MidiMessageType::CONTROL_CHANGE) {
             // Vérifier le mode du bouton (pour les boutons en CC)
-            String btnMode = String(config.btnMode);
-            if (btnMode.length() == 0) {
-                btnMode = "press_release"; // Défaut
+            String btnMode = "press_release"; // Défaut
+            if (config.specificConfig.button) {
+                btnMode = String(config.specificConfig.button->btnMode);
+                if (btnMode.length() == 0) btnMode = "press_release";
             }
             
             // Si mode toggle et état actif, envoyer CC=0
@@ -294,9 +306,10 @@ void ComponentManager::clearAll() {
             // NOTE ou NOTE_VELOCITY : éteindre si actif
             else if (config.msg_type == MidiMessageType::NOTE || 
                      config.msg_type == MidiMessageType::NOTE_VELOCITY) {
-                String btnMode = String(config.btnMode);
-                if (btnMode.length() == 0) {
-                    btnMode = "press_release";
+                String btnMode = "press_release";
+                if (config.specificConfig.button) {
+                    btnMode = String(config.specificConfig.button->btnMode);
+                    if (btnMode.length() == 0) btnMode = "press_release";
                 }
                 
                 uint8_t note = config.midi_param;
@@ -309,9 +322,10 @@ void ComponentManager::clearAll() {
             }
             // CONTROL_CHANGE : remettre à zéro si actif
             else if (config.msg_type == MidiMessageType::CONTROL_CHANGE) {
-                String btnMode = String(config.btnMode);
-                if (btnMode.length() == 0) {
-                    btnMode = "press_release";
+                String btnMode = "press_release";
+                if (config.specificConfig.button) {
+                    btnMode = String(config.specificConfig.button->btnMode);
+                    if (btnMode.length() == 0) btnMode = "press_release";
                 }
                 
                 if (btnMode == "toggle" && state.toggle_state) {
@@ -508,52 +522,77 @@ void ComponentManager::midiTaskLoop() {
     TickType_t xLastWakeTime = xTaskGetTickCount();
     
     for(;;) {
-        if (!midi_sender) {
-            vTaskDelay(pdMS_TO_TICKS(100)); // Attendre si pas de sender
+        if (_nvsWriteInProgress || !midi_sender) {
+            vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
         
         // Envoyer les mises à jour MIDI des multiplexeurs
         mux_manager.sendMidiUpdates(midi_sender);
         
-        // Traiter les composants directs (potentiomètres, boutons, etc.)
-        for (uint8_t i = 0; i < component_count; i++) {
-            // Vérifier que le composant est valide avant de le traiter
-            const ComponentConfig& config = configs[i];
-            /* Vérifier GPIO valide : 0-48 pour pins normales OU 200-247 pour MUX */
-            bool is_mux_gpio = isMuxGpio(config.gpio);
-            if (config.gpio >= 255 || (!is_mux_gpio && config.gpio > 48)) {
-                // GPIO invalide, ignorer ce composant
-                continue;
+        // Traiter les composants directs (potentiomètres, boutons, touch, etc.)
+        // Round-robin: on ne traite qu'un sous-ensemble par cycle pour éviter de bloquer le CPU
+        static uint8_t next_component_index = 0;
+        const uint8_t MAX_COMPONENTS_PER_CYCLE = 4;
+        
+        uint8_t total = component_count;
+        if (total > 0) {
+            if (next_component_index >= total) {
+                next_component_index = 0;
             }
             
-            // Utiliser le registre de processeurs (extensible pour des centaines de composants)
-            // Logique générique : si le GPIO a un ADC ou Touch, utiliser un filtre analogique
-            // (indépendamment de la définition du composant - basé sur les capacités matérielles)
-            const ComponentDefinition* def = ComponentRegistry::findByType(config.type);
-            AnalogFilter* filter_ptr = nullptr;
+            uint8_t processed = 0;
+            uint8_t index = next_component_index;
             
-            if (PinMapper::hasAdc(config.gpio)) {
-                // GPIO avec ADC : utiliser un filtre analogique
-                filter_ptr = &filters[i];
-            } else if (PinMapper::hasTouch(config.gpio)) {
-                // GPIO avec Touch : utiliser aussi un filtre analogique (touchRead() retourne une valeur analogique)
-                filter_ptr = &filters[i];
-            } else if (def && def->pinType == PinType::PIN_ANALOG) {
-                // Si la définition indique PIN_ANALOG mais le GPIO n'a ni ADC ni Touch, ignorer
-                continue;
-            }
-            
-            // Appeler le processeur enregistré pour ce type de composant
-            if (!ProcessorRegistry::process(config.type, configs[i], states[i], filter_ptr, midi_sender, osc_queue)) {
-                // Processeur non enregistré (ne devrait pas arriver si tous les processeurs sont chargés)
-                static unsigned long last_warning = 0;
-                if (millis() - last_warning > 5000) {  // Limiter les warnings
-                    Serial.printf("[ComponentManager] WARNING: No processor registered for component type %d (GPIO:%d)\n", 
-                                 static_cast<int>(config.type), configs[i].gpio);
-                    last_warning = millis();
+            while (processed < MAX_COMPONENTS_PER_CYCLE && processed < total) {
+                if (index >= total) {
+                    index = 0;
                 }
+                
+                // Vérifier que le composant est valide avant de le traiter
+                const ComponentConfig& config = configs[index];
+                /* Vérifier GPIO valide : 0-48 pour pins normales OU 200-247 pour MUX */
+                bool is_mux_gpio = isMuxGpio(config.gpio);
+                if (config.gpio < 255 && (is_mux_gpio || config.gpio <= 48)) {
+                    // Utiliser le registre de processeurs (extensible pour des centaines de composants)
+                    // Logique générique : si le GPIO a un ADC ou Touch, utiliser un filtre analogique
+                    // (indépendamment de la définition du composant - basé sur les capacités matérielles)
+                    const ComponentDefinition* def = ComponentRegistry::findByType(config.type);
+                    AnalogFilter* filter_ptr = nullptr;
+                    
+                    // Les composants IMU (I2C) ont besoin d'un filtre même sans ADC
+                    if (config.type == ComponentType::IMU) {
+                        filter_ptr = &filters[index];
+                    } else if (PinMapper::hasAdc(config.gpio)) {
+                        // GPIO avec ADC : utiliser un filtre analogique
+                        filter_ptr = &filters[index];
+                    } else if (PinMapper::hasTouch(config.gpio)) {
+                        // GPIO avec Touch : utiliser aussi un filtre analogique (touchRead() retourne une valeur analogique)
+                        filter_ptr = &filters[index];
+                    } else if (def && def->pinType == PinType::PIN_ANALOG) {
+                        // Si la définition indique PIN_ANALOG mais le GPIO n'a ni ADC ni Touch, ignorer
+                        filter_ptr = nullptr;
+                    }
+                    
+                    // Appeler le processeur enregistré pour ce type de composant
+                    if (filter_ptr || !def || def->pinType != PinType::PIN_ANALOG) {
+                        if (!ProcessorRegistry::process(config.type, configs[index], states[index], filter_ptr, midi_sender, osc_queue)) {
+                            // Processeur non enregistré (ne devrait pas arriver si tous les processeurs sont chargés)
+                            static unsigned long last_warning = 0;
+                            if (millis() - last_warning > 5000) {  // Limiter les warnings
+                                Serial.printf("[ComponentManager] WARNING: No processor registered for component type %d (GPIO:%d)\n", 
+                                             static_cast<int>(config.type), configs[index].gpio);
+                                last_warning = millis();
+                            }
+                        }
+                    }
+                }
+                
+                index++;
+                processed++;
             }
+            
+            next_component_index = index;
         }
         
         // Attendre jusqu'à la prochaine période (10ms)

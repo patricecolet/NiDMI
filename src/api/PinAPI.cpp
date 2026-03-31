@@ -1,5 +1,6 @@
 #include "APICommon.h"
 #include "../utils/PinMapper.h"
+#include "../utils/JSONParser.h"
 #include "../managers/ComponentManager.h"
 #include "../server/ServerCallbacks.h" /* Pour nidmi_requestReloadPins */
 #include "../hardware/MuxConstants.h"
@@ -11,6 +12,32 @@
 
 /* Forward declarations */
 String getDefaultConfig(String pin);
+
+/* Limite NVS : une valeur ne doit pas dépasser ~1984 octets (ESP-IDF). Garder marge pour éviter corruption. */
+static const size_t NVS_MAX_PIN_CONFIG_SIZE = 1900U;
+
+/* Sentinelle pour indiquer au request handler que le body était trop gros (413) */
+static const void* PINAPI_PAYLOAD_TOO_LARGE = (const void*)1;
+
+/** Extrait la valeur d'une clé JSON "\"key\":\"value\"" depuis un buffer (évite String complète = moins de pile) */
+static bool extractJsonQuoted(const char* json, size_t jsonLen, const char* key, char* out, size_t outLen) {
+    if (!json || !key || !out || outLen == 0) return false;
+    size_t keyLen = strlen(key);
+    /* Chercher "\"key\":\"" */
+    char pattern[32];
+    snprintf(pattern, sizeof(pattern), "\"%s\":\"", key);
+    size_t patternLen = strlen(pattern);
+    const char* p = strstr(json, pattern);
+    if (!p || (size_t)(p - json) + patternLen > jsonLen) return false;
+    p += patternLen;
+    const char* end = (const char*)memchr(p, '"', jsonLen - (size_t)(p - json));
+    if (!end) return false;
+    size_t valLen = (size_t)(end - p);
+    if (valLen >= outLen) valLen = outLen - 1;
+    memcpy(out, p, valLen);
+    out[valLen] = '\0';
+    return true;
+}
 
 void setupPinAPI(AsyncWebServer& server) {
     /* API - Capacités des pins (dynamique selon MCU) */
@@ -97,10 +124,28 @@ void setupPinAPI(AsyncWebServer& server) {
             String key = "pin_" + pinLabel;
             String configStr = preferences.getString(key.c_str(), "");
             if (!configStr.isEmpty()) {
-                /* Ignorer les pins qui ont additionalPins (seront ajoutées depuis MuxManager) */
+                /* Ignorer les MUX qui ont additionalPins (seront ajoutés depuis MuxManager) */
+                /* Les autres composants avec additionalPins (joystick, etc.) sont inclus normalement */
                 if(configStr.indexOf("\"additionalPins\"") >= 0) {
-                    continue;
+                    /* Vérifier si c'est un MUX (rôle commence par "hc4" pour hc4067/hc4051) */
+                    bool isMux = (configStr.indexOf("\"role\":\"hc4") >= 0);
+                    if(isMux) {
+                        continue;
+                    }
                 }
+                if (!first) json += ",";
+                json += configStr;  // Le config est déjà un JSON complet avec pinLabel
+                first = false;
+            }
+        }
+        
+        /* Charger les pins de bus (I2C, SPI, UART) depuis NVS */
+        const char* busLabels[] = {"I2C", "SPI", "TX", "RX"};
+        for (int i = 0; i < 4; i++) {
+            const char* busLabel = busLabels[i];
+            String key = "pin_" + String(busLabel);
+            String configStr = preferences.getString(key.c_str(), "");
+            if (!configStr.isEmpty()) {
                 if (!first) json += ",";
                 json += configStr;  // Le config est déjà un JSON complet avec pinLabel
                 first = false;
@@ -209,8 +254,25 @@ void setupPinAPI(AsyncWebServer& server) {
         request->send(200, "application/json", json);
     });
 
-    /* API - Configuration d'une pin (format paramètres URL pour saveAll) */
-    server.on("/api/pins/set", HTTP_POST, [](AsyncWebServerRequest *request){
+    /* API - Configuration d'une pin (format paramètres URL ou JSON direct) */
+    /* Body handler pour recevoir le JSON brut envoyé par le LIS3DH */
+    server.on("/api/pins/set", HTTP_POST,
+    /* Request handler (fin de requête) */
+    [](AsyncWebServerRequest *request){
+        /* Body trop gros (refusé par le body handler pour ne pas corrompre la NVS) */
+        if (request->_tempObject == PINAPI_PAYLOAD_TOO_LARGE) {
+            request->_tempObject = nullptr;
+            request->send(413, "application/json", "{\"status\":\"error\",\"message\":\"Config trop grande pour NVS (max 1900 octets)\"}");
+            return;
+        }
+        /* Si le body JSON a déjà été traité par le body handler, ne rien faire */
+        if (request->_tempObject) {
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
+            free(request->_tempObject);
+            request->_tempObject = nullptr;
+            return;
+        }
+        
         if(!request->hasParam("pinLabel", true) || !request->hasParam("role", true)){
             request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"pinLabel and role required\"}");
             return;
@@ -240,14 +302,27 @@ void setupPinAPI(AsyncWebServer& server) {
         json += "\"role\":\"" + role + "\"";
         
         auto addParam = [&](const char* name) {
+            String keyCheck = String("\"") + name + "\":";
+            if(json.indexOf(keyCheck) >= 0) return;
             if(request->hasParam(name, true)) {
                 String val = request->getParam(name, true)->value();
                 if(val == "true" || val == "false") {
                     json += ",\"" + String(name) + "\":" + val;
+                } else if(val.indexOf(',') >= 0) {
+                    /* Valeur avec virgule (ex. "0,0" ou "2000,500") → toujours chaîne JSON échappée */
+                    String escaped = val;
+                    escaped.replace("\\", "\\\\");
+                    escaped.replace("\"", "\\\"");
+                    json += ",\"" + String(name) + "\":\"" + escaped + "\"";
                 } else if(val.length() > 0 && (val[0] >= '0' && val[0] <= '9')) {
                     json += ",\"" + String(name) + "\":" + val;
+                } else if(val.length() > 1 && val[0] == '-' && (val[1] >= '0' && val[1] <= '9')) {
+                    json += ",\"" + String(name) + "\":" + val;
                 } else {
-                    json += ",\"" + String(name) + "\":\"" + val + "\"";
+                    String escaped = val;
+                    escaped.replace("\\", "\\\\");
+                    escaped.replace("\"", "\\\"");
+                    json += ",\"" + String(name) + "\":\"" + escaped + "\"";
                 }
             }
         };
@@ -257,6 +332,11 @@ void setupPinAPI(AsyncWebServer& server) {
         addParam("rtpEnabled"); // Ancien format pour compatibilité
         addParam("midiMessageType"); // Nouveau format
         addParam("rtpType"); // Ancien format pour compatibilité
+        
+        /* Pour composants avec axes (joystick, IMU), sauvegarder les types MIDI par axe */
+        addParam("midiMessageTypeX");
+        addParam("midiMessageTypeY");
+        addParam("midiMessageTypeZ");
         
         /* Lire dynamiquement les paramètres MIDI depuis def->midiMessages[].params[] */
         if(def && def->midiMessageCount > 0 && def->midiMessages) {
@@ -287,9 +367,45 @@ void setupPinAPI(AsyncWebServer& server) {
                                 /* Pour autres types (NUMBER, INFO, etc.) */
                                 addParam(param.id);
                             }
+                            
+                            /* Si le message a un axe, sauvegarder aussi les params préfixés (X_midiCc, Y_midiCc, etc.) */
+                            if(msg.axis && strlen(msg.axis) > 0) {
+                                char axisUpper = (msg.axis[0] >= 'a' && msg.axis[0] <= 'z') ? (msg.axis[0] - 32) : msg.axis[0];
+                                if(param.type == FieldType::RANGE) {
+                                    String prefixedMinId = String(axisUpper) + "_" + String(param.id) + "Min";
+                                    String prefixedMaxId = String(axisUpper) + "_" + String(param.id) + "Max";
+                                    addParam(prefixedMinId.c_str());
+                                    addParam(prefixedMaxId.c_str());
+                                } else {
+                                    String prefixedId = String(axisUpper) + "_" + String(param.id);
+                                    addParam(prefixedId.c_str());
+                                }
+                            }
                         }
                     }
                 }
+            }
+        }
+        
+        
+        /* Joystick : garantir X_midiCc et Y_midiCc dans le JSON (fallback sur midiCc si absents de la requête) */
+        if(role == "joystick") {
+            int xCc = 7, yCc = 7;
+            if(request->hasParam("X_midiCc", true)) {
+                xCc = request->getParam("X_midiCc", true)->value().toInt();
+            } else if(request->hasParam("midiCc", true)) {
+                xCc = request->getParam("midiCc", true)->value().toInt();
+            }
+            if(request->hasParam("Y_midiCc", true)) {
+                yCc = request->getParam("Y_midiCc", true)->value().toInt();
+            } else if(request->hasParam("midiCc", true)) {
+                yCc = request->getParam("midiCc", true)->value().toInt();
+            }
+            if(!request->hasParam("X_midiCc", true)) {
+                json += ",\"X_midiCc\":" + String(xCc);
+            }
+            if(!request->hasParam("Y_midiCc", true)) {
+                json += ",\"Y_midiCc\":" + String(yCc);
             }
         }
         
@@ -318,6 +434,13 @@ void setupPinAPI(AsyncWebServer& server) {
                         }
                     } else {
                         /* Pour autres types (TEXT, NUMBER, SELECT, INFO) */
+                        if(strcmp(field.id, "csGpio") == 0) {
+                            Serial.printf("[PinAPI] csGpio trouvé dans formFields, hasParam: %d\n", request->hasParam(field.id, true));
+                            if(request->hasParam(field.id, true)) {
+                                String val = request->getParam(field.id, true)->value();
+                                Serial.printf("[PinAPI] csGpio valeur: %s\n", val.c_str());
+                            }
+                        }
                         addParam(field.id);
                     }
                 }
@@ -376,15 +499,22 @@ void setupPinAPI(AsyncWebServer& server) {
         
         json += "}";
         
-        /* Sauvegarder en NVS */
+        if (json.length() > NVS_MAX_PIN_CONFIG_SIZE) {
+            Serial.printf("[PinAPI] JSON trop gros pour NVS: %u > %u (pin=%s)\n",
+                (unsigned)json.length(), (unsigned)NVS_MAX_PIN_CONFIG_SIZE, pinLabel.c_str());
+            request->send(413, "application/json", "{\"status\":\"error\",\"message\":\"Config trop grande pour NVS (max 1900 octets)\"}");
+            return;
+        }
+        
         Preferences preferences;
         preferences.begin("nidmi", false);
         String key = "pin_" + pinLabel;
-        preferences.putString(key.c_str(), json);
-        
-        /* Note: complexId supprimé - plus besoin de sauvegarder pinLabel/role avec ID explicite */
-        
+        size_t written = preferences.putString(key.c_str(), json);
         preferences.end();
+
+        if (written == 0) {
+            Serial.printf("[PinAPI] ERREUR NVS pour %s\n", pinLabel.c_str());
+        }
         
         /* Si additionalPins présent, utiliser le handler générique pour ce type de composant */
         if(hasAdditionalPins && def) {
@@ -520,6 +650,47 @@ void setupPinAPI(AsyncWebServer& server) {
         nidmi_requestReloadPins();
         
         request->send(200, "application/json", "{\"status\":\"ok\"}");
+    },
+    /* Upload handler (non utilisé) */
+    NULL,
+    /* Body handler : reçoit le JSON brut (LIS3DH, MPR121). Réduire la pile : pas de String(json) complète. */
+    [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total){
+        if (total == 0 || total > 4096) return; /* Taille invalide ou trop grosse pour NVS */
+        if (index == 0) {
+            request->_tempObject = malloc(total + 1);
+            if (!request->_tempObject) return;
+        }
+        if (!request->_tempObject) return;
+        memcpy((uint8_t*)request->_tempObject + index, data, len);
+        if (index + len != total) return;
+        ((char*)request->_tempObject)[total] = '\0';
+        const char* buf = (const char*)request->_tempObject;
+        char pinLabelBuf[16];
+        char roleBuf[32];
+        if (!extractJsonQuoted(buf, total, "pinLabel", pinLabelBuf, sizeof(pinLabelBuf)) ||
+            !extractJsonQuoted(buf, total, "role", roleBuf, sizeof(roleBuf)) ||
+            pinLabelBuf[0] == '\0' || roleBuf[0] == '\0') {
+            Serial.printf("[PinAPI] JSON body invalide (pinLabel ou role manquant, len=%u)\n", (unsigned)total);
+            free(request->_tempObject);
+            request->_tempObject = nullptr;
+            return;
+        }
+        if (total > NVS_MAX_PIN_CONFIG_SIZE) {
+            Serial.printf("[PinAPI] JSON body trop gros pour NVS: %u > %u (pin=%s)\n",
+                (unsigned)total, (unsigned)NVS_MAX_PIN_CONFIG_SIZE, pinLabelBuf);
+            free(request->_tempObject);
+            request->_tempObject = (void*)PINAPI_PAYLOAD_TOO_LARGE;
+            return;
+        }
+        String pinLabel = String(pinLabelBuf);
+        String key = String("pin_") + pinLabel;
+        Preferences preferences;
+        preferences.begin("nidmi", false);
+        preferences.putString(key.c_str(), buf); /* Écrire directement depuis le buffer, pas de String(json) */
+        preferences.end();
+        g_configCache.setConfigClean(pinLabel, buf, total);
+        nidmi_requestReloadPins();
+        Serial.printf("[PinAPI] JSON body %s role=%s len=%u\n", pinLabelBuf, roleBuf, (unsigned)total);
     });
 
     /* API - Suppression d'une pin (unifié pour simples et complexes) */

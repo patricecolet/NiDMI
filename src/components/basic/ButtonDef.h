@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Arduino.h>
 #include "../ComponentDefinition.h"
 #include "../ComponentBuilder.h"
 #include "../FormFieldHelpers.h"
@@ -16,6 +17,24 @@
  */
 
 namespace Components {
+
+/**
+ * @brief Configuration spécifique au bouton
+ */
+struct ButtonConfig {
+    char btnMode[16];         // Mode bouton: "pulse", "press_release", "toggle"
+    char btnPulseTiming[16];  // Timing pour mode pulse: "press" ou "release"
+    char btnPullMode[16];     // Mode pull bouton: "pullup", "pulldown", "none"
+    
+    ButtonConfig() {
+        strncpy(btnMode, "press_release", sizeof(btnMode) - 1);
+        btnMode[sizeof(btnMode) - 1] = '\0';
+        strncpy(btnPulseTiming, "release", sizeof(btnPulseTiming) - 1);
+        btnPulseTiming[sizeof(btnPulseTiming) - 1] = '\0';
+        strncpy(btnPullMode, "pullup", sizeof(btnPullMode) - 1);
+        btnPullMode[sizeof(btnPullMode) - 1] = '\0';
+    }
+};
 
 /**
  * @brief Définition complète du Bouton

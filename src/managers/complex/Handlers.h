@@ -27,6 +27,9 @@
 // === FAMILLE MULTIPLEXER ===
 #include "multiplexer/MuxHandler.h"
 
+// === FAMILLE BASIC ===
+#include "joystick/JoystickHandler.h"
+
 // Pour ajouter un nouveau handler :
 // 1. Ajouter #include "[famille]/MyHandler.h" ci-dessus
 // 2. Créer MyHandlerRegister.cpp avec l'enregistrement automatique

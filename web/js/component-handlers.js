@@ -117,8 +117,10 @@ function initDefaultComponent(lbl, pinType, pin) {
   
   setTimeout(() => {
     if (familySel.value && sel.options.length > 0) {
-      const firstComponentId = sel.value;
+      /* Utiliser le premier composant de la liste (surtout pour bus I2C/SPI où sel.value peut être vide) */
+      const firstComponentId = sel.options[0]?.value || sel.value;
       if (firstComponentId) {
+        sel.value = firstComponentId;
         showRoleCards(firstComponentId, {});
         updateRtpForRole(firstComponentId);
         if (typeof MidiConfig !== 'undefined' && MidiConfig.updateVisibility) {
@@ -176,7 +178,23 @@ function setupMenuHandlers(lbl, pinType, pin) {
 
   sel.onchange = updateConfig;
 
-  /* Générer la liste d'inputs dynamiquement */
+  /* Délégation : tout input/select dans le formulaire déclenche updateConfig (champs créés dynamiquement) */
+  const formCard = $('#componentFormCard');
+  if (formCard && !formCard._updateConfigDelegationAttached) {
+    formCard._updateConfigDelegationAttached = true;
+    formCard.addEventListener('change', function(e) {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) {
+        if (typeof updateConfig === 'function') updateConfig();
+      }
+    });
+    formCard.addEventListener('input', function(e) {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) {
+        if (typeof updateConfig === 'function') updateConfig();
+      }
+    });
+  }
+
+  /* Générer la liste d'inputs dynamiquement (pour les champs déjà présents au chargement) */
   const inputs = getAllFieldIds();
   inputs.forEach(id => {
     const el = $(id);
@@ -194,9 +212,12 @@ function updateConfig() {
   const lbl = $('#selPin')?.textContent || '';
   let selectedRole = $('#funcSelect')?.value || '';
   
+  console.log('[updateConfig] selectedRole depuis funcSelect:', selectedRole, 'cur:', cur);
+  
   /* Si selectedRole est vide mais qu'on a une config dans pcfg, récupérer le rôle depuis pcfg */
   if (!selectedRole && cur && pcfg && pcfg[cur] && pcfg[cur].role) {
     selectedRole = pcfg[cur].role;
+    console.log('[updateConfig] selectedRole depuis pcfg:', selectedRole);
   }
   
   /* Si on n'a toujours pas de selectedRole, sortir tôt */
@@ -210,35 +231,44 @@ function updateConfig() {
   const roleChanged = previousRole !== currentRole;
   
   /* Si le rôle n'a pas changé, lire les valeurs actuelles du formulaire */
-  /* Attendre un peu pour s'assurer que les champs additionalPins sont créés */
   if (!roleChanged && cur && typeof readCfg === 'function') {
-    /* Utiliser setTimeout pour s'assurer que les champs sont dans le DOM */
+    /* Mise à jour immédiate de pcfg pour que les réglages restent en mémoire (filtre, type MIDI, etc.) */
+    const updatedCfg = readCfg(selectedRole);
+    if (updatedCfg && updatedCfg.role) {
+      pcfg[cur] = updatedCfg;
+      console.log('[updateConfig] Config mise à jour depuis formulaire (rôle inchangé), pcfg[cur]:', pcfg[cur]);
+      console.log('[updateConfig] additionalPins sauvegardés:', updatedCfg.additionalPins);
+    }
+    /* Liste et visuels en différé pour laisser le temps aux champs dynamiques (additionalPins) */
     setTimeout(() => {
-      const updatedCfg = readCfg(selectedRole);
-      if (updatedCfg && updatedCfg.role) {
-        /* Mettre à jour pcfg avec les nouvelles valeurs du formulaire */
-        pcfg[cur] = updatedCfg;
-        console.log('[updateConfig] Config mise à jour depuis formulaire (rôle inchangé), pcfg[cur]:', pcfg[cur]);
-        console.log('[updateConfig] additionalPins sauvegardés:', updatedCfg.additionalPins);
-        /* Note: complexId supprimé */
-      }
-      /* Mettre à jour la liste et les visuels après avoir sauvegardé les modifications */
-      updatePinsList();
-      updateBusVisuals();
-    }, 10);  /* Délai court pour s'assurer que les champs sont dans le DOM */
-    
-    /* Mettre à jour la visibilité des paramètres MIDI */
+      if (typeof updatePinsList === 'function') updatePinsList();
+      if (typeof updateBusVisuals === 'function') updateBusVisuals();
+    }, 10);
+
     updateRtpForRole(selectedRole);
     if (typeof MidiConfig !== 'undefined' && MidiConfig.updateVisibility) {
       MidiConfig.updateVisibility();
     }
-    return; /* Sortir tôt si on ne régénère pas le formulaire */
+    return;
   }
   
   /* Régénérer le formulaire seulement si le rôle a changé */
   if (roleChanged) {
-    /* Utiliser la config mise à jour (ou celle de pcfg) pour régénérer le formulaire */
-    const currentCfg = (cur && pcfg && pcfg[cur]) ? pcfg[cur] : (pcfg && pcfg[lbl] ? pcfg[lbl] : {});
+    /* Lire la config actuelle depuis le formulaire AVANT de régénérer pour préserver les valeurs */
+    let currentCfg = {};
+    if (cur && typeof readCfg === 'function') {
+      const existingCfg = readCfg();
+      if (existingCfg && existingCfg.role) {
+        currentCfg = existingCfg;
+        console.log('[updateConfig] Config lue depuis formulaire avant régénération:', currentCfg);
+      }
+    }
+    /* Si aucune config n'a été lue, utiliser celle de pcfg */
+    if (!currentCfg.role && cur && pcfg && pcfg[cur]) {
+      currentCfg = pcfg[cur];
+    } else if (!currentCfg.role && pcfg && pcfg[lbl]) {
+      currentCfg = pcfg[lbl];
+    }
     showRoleCards(selectedRole, currentCfg);
     /* Après avoir régénéré le formulaire, lire les valeurs si elles existent déjà */
     setTimeout(() => {
@@ -313,15 +343,27 @@ function updFunc(lbl) {
     return;
   }
 
-  const pin = caps?.pins?.find(p => p?.label === lbl) || null;
-
+  /* Résoudre le pin : pour les bus, créer un objet virtuel depuis caps.bus */
+  let pin = null;
   let pinType = null;
+
   if (lbl?.startsWith('A')) {
-    pinType = 0;
+    pin = caps?.pins?.find(p => p?.label === lbl) || null;
+    pinType = 0; // ANALOG
   } else if (lbl?.startsWith('D')) {
-    pinType = 1;
+    pin = caps?.pins?.find(p => p?.label === lbl) || null;
+    pinType = 1; // DIGITAL
+  } else if (lbl === 'I2C') {
+    pin = caps?.bus?.i2c ? { label: 'I2C', gpio: caps.bus.i2c.sda, bus: 'i2c' } : null;
+    pinType = 4; // PIN_I2C
+  } else if (lbl === 'SPI') {
+    pin = caps?.bus?.spi ? { label: 'SPI', gpio: caps.bus.spi.mosi, bus: 'spi' } : null;
+    pinType = 5; // PIN_SPI
+  } else if (lbl === 'TX' || lbl === 'RX') {
+    pin = caps?.pins?.find(p => p?.label === lbl) || null;
+    pinType = 1; // UART → digital pour l'instant
   } else {
-    return; /* Bus purs non implémentés */
+    return;
   }
 
   console.log('[updFunc] pinType calculé:', pinType);
@@ -331,6 +373,11 @@ function updFunc(lbl) {
 
   /* Si une valeur était déjà sélectionnée, essayer de la restaurer APRÈS que les menus soient remplis */
   let currentRole = pcfg[lbl]?.role;
+
+  /* Les rôles de bus (I2C, SPI, UART) ne sont pas des composants → traiter comme "pas de config" */
+  if (currentRole && typeof isBusRole === 'function' && isBusRole(currentRole)) {
+    currentRole = null;
+  }
 
   /* Vérifier si cette pin est utilisée par un composant complexe sauvegardé */
   if (!currentRole && pin && pin.gpio !== undefined && typeof pcfg !== 'undefined' && pcfg) {
