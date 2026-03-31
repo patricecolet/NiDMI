@@ -694,6 +694,9 @@ async function saveAll(){
 }
 /* Sinon, c'est normal - composant simple sans additionalPins */
 
+ /* Champ Mapping Script */
+ if(c.mappingScript) p.set('mappingScript', c.mappingScript);
+
  /* Champs OSC et Debug (communs à tous) */
  if(c.oscEnabled) p.set('oscEnabled','true');
  if(c.oscAddress) p.set('oscAddress',c.oscAddress);

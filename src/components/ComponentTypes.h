@@ -69,7 +69,8 @@ struct ComponentConfig {
     uint8_t midiCcRangeMax; // Plage MIDI max (0-127, défaut: 127) pour CC/autres messages
     uint8_t midiCcOnOffMin; // Valeur CC pour état OFF (0-127, défaut: 0) - pour boutons
     uint8_t midiCcOnOffMax; // Valeur CC pour état ON (0-127, défaut: 127) - pour boutons
-    
+    char mappingScript[128]; // Script de mapping personnalisé (max 127 + \0)
+    char name[64];          // Nom personnalisé du composant (ex: "pot_volume", "btn_start")
     // Union pour les configurations spécifiques par type de composant
     // Permet d'économiser de la mémoire en ne stockant que la config nécessaire
     union {
@@ -95,6 +96,7 @@ struct ComponentConfig {
         customField2[0] = '\0';
         customInt1 = 0;
         customInt2 = 0;
+        mappingScript[0] = '\0';
     }
     
     ~ComponentConfig() {

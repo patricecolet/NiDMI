@@ -4,6 +4,7 @@
 #include "../midi/handlers/MidiOutputCoordinator.h"
 #include "../utils/PinMapper.h"
 #include "../config/SystemConfig.h"
+#include "../mapping/MappingEngine.h"
 
 // Inclure sdkconfig.h pour vérifier CONFIG_SOC_TOUCH_SENSOR_SUPPORTED
 #ifdef ESP32
@@ -656,6 +657,14 @@ void TouchProcessor::process(
         processNoteSweep(config, state, touch_raw, touch_threshold, baseline, midi_sender, osc_queue);
     } else {
         processContinuous(config, state, touch_raw, touch_threshold, midi_sender, osc_queue);
+    }
+    
+    // Update FluxRegistry and execute local mapping script if present
+    if (config.name && config.name[0] != '\0') {
+        FluxRegistry::update(config.name, (float)state.last_value);
+        if (config.mappingScript[0] != '\0') {
+            MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
+        }
     }
 }
 

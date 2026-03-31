@@ -3,6 +3,7 @@
 #include "../components/ComponentTypes.h"  // Définitions communes
 #include "../components/basic/PotentiometerDef.h"
 #include "../midi/handlers/MidiOutputCoordinator.h"
+#include "../mapping/MappingEngine.h"
 
 void PotentiometerProcessor::process(
     const ComponentConfig& config,
@@ -173,6 +174,14 @@ void PotentiometerProcessor::process(
     // Mettre à jour last_value UNE SEULE FOIS après l'envoi (comme le MUX)
     state.last_value = midi_value;
     state.last_time = millis();
+    
+    // Update FluxRegistry and execute local mapping script if present
+    if (config.name && config.name[0] != '\0') {
+        FluxRegistry::update(config.name, (float)midi_value);
+        if (config.mappingScript[0] != '\0') {
+            MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
+        }
+    }
 }
 
 // Wrapper pour normaliser la signature (filter par pointeur au lieu de référence)

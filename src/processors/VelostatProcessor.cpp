@@ -4,6 +4,7 @@
 #include "../components/basic/VelostatDef.h"
 #include "../midi/handlers/MidiOutputCoordinator.h"
 #include "../utils/PinMapper.h"
+#include "../mapping/MappingEngine.h"
 
 void VelostatProcessor::process(
     const ComponentConfig& config,
@@ -101,6 +102,14 @@ void VelostatProcessor::process(
             
             // Envoyer aussi en OSC si configuré
             MidiOutputCoordinator::sendOsc(osc_queue, config, velocity, filtered_value);
+        }
+    }
+    
+    // Update FluxRegistry and execute local mapping script if present
+    if (config.name && config.name[0] != '\0') {
+        FluxRegistry::update(config.name, (float)state.last_value);
+        if (config.mappingScript[0] != '\0') {
+            MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
         }
     }
 }

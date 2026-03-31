@@ -235,7 +235,7 @@ sync_files() {
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
-    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,midi,midi/handlers,network,osc,processors,server,ui,utils}
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,mapping,midi,midi/handlers,network,osc,processors,server,ui,utils}
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -292,6 +292,11 @@ sync_files() {
     if [ -d "$REPO_DIR/src/midi/handlers" ]; then
         cp -f $REPO_DIR/src/midi/handlers/*.cpp $ARDUINO_LIB_DIR/src/midi/handlers/ 2>/dev/null || true
         cp -f $REPO_DIR/src/midi/handlers/*.h $ARDUINO_LIB_DIR/src/midi/handlers/ 2>/dev/null || true
+    fi
+    # Copier le moteur de mapping
+    if [ -d "$REPO_DIR/src/mapping" ]; then
+        cp -f $REPO_DIR/src/mapping/*.cpp $ARDUINO_LIB_DIR/src/mapping/ 2>/dev/null || true
+        cp -f $REPO_DIR/src/mapping/*.h $ARDUINO_LIB_DIR/src/mapping/ 2>/dev/null || true
     fi
     cp -f $REPO_DIR/src/network/*.cpp $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true
     cp -f $REPO_DIR/src/network/*.h $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true

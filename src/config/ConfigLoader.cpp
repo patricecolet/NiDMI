@@ -284,6 +284,17 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                         Serial.printf("[ConfigLoader] OSC address empty for %s, using default: '%s'\n", 
                                       pinLabelCStr, config->osc_address);
                     }
+
+                    // Mapping script: stocke la chaîne user-defined dans le ComponentConfig
+                    {
+                        String script = JSONParser::extractStr(pinConfig, "mappingScript", "");
+                        if (script.length() > 0) {
+                            strncpy(config->mappingScript, script.c_str(), sizeof(config->mappingScript) - 1);
+                            config->mappingScript[sizeof(config->mappingScript) - 1] = '\0';
+                        } else {
+                            config->mappingScript[0] = '\0';
+                        }
+                    }
                     
                     // Charger les configurations spécifiques selon le type de composant
                     // La config spécifique doit déjà être allouée par ComponentInitializer

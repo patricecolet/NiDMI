@@ -100,6 +100,7 @@ function applyAdditionalPins(def, c, setV) {
  */
 function readCfg(roleOverride = null) {
   const c = {};
+  c.mappingScript = $('#mappingPin')?.value || '';
   /* Lire le nom personnalisé depuis l'input avant tout écrasement */
   const nameInput = document.getElementById('ComponentName');
   if (nameInput && nameInput.value) {
@@ -189,6 +190,12 @@ function applyCfg(c) {
   /* Les rôles de bus (I2C, SPI, UART) n'ont pas de formulaire de composant */
   if (c.role && typeof isBusRole === 'function' && isBusRole(c.role)) return;
 
+  if (c && typeof c.mappingScript === 'string') {
+    $('#mappingPin').value = c.mappingScript;
+  } else {
+    $('#mappingPin').value = '';
+  }
+  
   const setV = (id, v) => {
     /* Gérer les IDs avec ou sans # */
     const idStr = typeof id === 'string' ? (id[0] === '#' ? id : '#' + id) : id;

@@ -1,6 +1,9 @@
 #pragma once
 #include <Arduino.h>
 
+// Forward declaration
+class MidiSender;
+
 // 1. Le Registre : Stocke les valeurs de chaque composant par nom
 class FluxRegistry {
 public:
@@ -20,5 +23,5 @@ public:
 class MappingEngine {
 public:
     // Utilisation de const char* pour être plus léger que String
-    static void execute(const char* script, float inputVal);
+    static void execute(const char* script, float inputVal, MidiSender* midi_sender = nullptr);
 };

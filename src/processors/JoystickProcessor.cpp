@@ -8,6 +8,7 @@
 #include "../utils/AxisUtils.h"
 #include "../managers/complex/joystick/JoystickHandler.h"
 #include "../managers/complex/ComplexHandlerRegistry.h"
+#include "../mapping/MappingEngine.h"
 
 void JoystickProcessor::process(
     const ComponentConfig& config,
@@ -79,6 +80,14 @@ void JoystickProcessor::process(
     
     state.last_value = xFiltered;
     state.last_time = millis();
+    
+    // Update FluxRegistry and execute local mapping script if present
+    if (config.name && config.name[0] != '\0') {
+        FluxRegistry::update(config.name, (float)state.last_value);
+        if (config.mappingScript[0] != '\0') {
+            MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
+        }
+    }
 }
 
 int8_t JoystickProcessor::mapAxisValue(
