@@ -147,6 +147,14 @@ void ImuProcessor::process(
     int8_t lastXNorm = (lastXNormPtr && *lastXNormPtr != 255) ? (int8_t)(*lastXNormPtr - 127) : 128;
     int8_t lastYNorm = (lastYNormPtr && *lastYNormPtr != 255) ? (int8_t)(*lastYNormPtr - 127) : 128;
     int8_t lastZNorm = (lastZNormPtr && *lastZNormPtr != 255) ? (int8_t)(*lastZNormPtr - 127) : 128;
+
+    auto normToMidiValue = [&](int8_t normalizedValue) -> uint8_t {
+        // Même mapping que sendOscForAxis() (OSC MIDI: data1)
+        if (normalizedValue <= 0) {
+            return (uint8_t)map((long)normalizedValue, -127, 0, 0, 64);
+        }
+        return (uint8_t)map((long)normalizedValue, 0, 127, 64, 127);
+    };
     
     // Log périodique pour debug
     static unsigned long lastDebugLog = 0;
@@ -162,18 +170,30 @@ void ImuProcessor::process(
         sendMidiForAxis(midi_sender, config, 'x', xNorm);
         sendOscForAxis(osc_queue, config, 'x', xNorm, accel.x);  // RAW = valeur brute non filtrée
         *lastXNormPtr = (uint8_t)(xNorm + 127);
+
+        state.last_raw_value_u32 = (uint16_t)(xFiltered + 32768);
+        state.last_midi_value_u8 = normToMidiValue(xNorm);
+        state.last_telemetry_ts = millis();
     }
     
     if (yNorm != lastYNorm && lastYNormPtr) {
         sendMidiForAxis(midi_sender, config, 'y', yNorm);
         sendOscForAxis(osc_queue, config, 'y', yNorm, accel.y);  // RAW = valeur brute non filtrée
         *lastYNormPtr = (uint8_t)(yNorm + 127);
+
+        state.last_raw_value_u32 = (uint16_t)(yFiltered + 32768);
+        state.last_midi_value_u8 = normToMidiValue(yNorm);
+        state.last_telemetry_ts = millis();
     }
     
     if (zNorm != lastZNorm && lastZNormPtr) {
         sendMidiForAxis(midi_sender, config, 'z', zNorm);
         sendOscForAxis(osc_queue, config, 'z', zNorm, accel.z);  // RAW = valeur brute non filtrée
         *lastZNormPtr = (uint8_t)(zNorm + 127);
+
+        state.last_raw_value_u32 = (uint16_t)(zFiltered + 32768);
+        state.last_midi_value_u8 = normToMidiValue(zNorm);
+        state.last_telemetry_ts = millis();
     }
     
     state.last_value = (uint16_t)(xFiltered + 32768); // Stocker X pour compatibilité

@@ -112,6 +112,20 @@ struct ComponentState {
     uint32_t last_time;     // Dernière mise à jour
     uint8_t debounce_state; // État anti-rebond
     uint8_t last_note;      // Dernière note jouée (pour NOTE_SWEEP)
+
+    // --- Télémétrie pour monitoring SVG (RAW vs MIDI) ---
+    // RAW = valeur "brute" à afficher en mode RAW (touch 32 bits, MPR121 mask 0..4095, etc.)
+    uint32_t last_raw_value_u32;
+    // MIDI = valeur "fonctionnelle" (data1 OSC en mode MIDI, selon OscMidiHandler ou conventions directes)
+    uint8_t last_midi_value_u8;
+    // Timestamp de la dernière mise à jour pertinente de télémétrie (pour LED activity flash)
+    uint32_t last_telemetry_ts;
+
+    // --- Cas multi-axes (joystick) : seconde axe (Y) ---
+    uint8_t aux_gpio;                 // GPIO de l'axe Y (ou 255 si non applicable)
+    uint32_t last_raw_value_aux_u32;
+    uint8_t last_midi_value_aux_u8;
+    uint32_t last_telemetry_ts_aux;
     
     // Champs pour debouncing simple et fiable
     bool last_button_state; // État précédent du bouton (avant debounce)

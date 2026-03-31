@@ -611,7 +611,16 @@ const MidiConfig = {
                   const elMin = $('#' + param.id + 'Min');
                   const elMax = $('#' + param.id + 'Max');
                   if(elMin) {
-                    const minValue = elMin.value || (param.defaultMin ? String(param.defaultMin) : (param.min ? String(param.min) : '0'));
+                    let minValue = elMin.value;
+                    if (!minValue) {
+                        if (param.defaultMin !== undefined && param.defaultMin !== null) {
+                            minValue = String(param.defaultMin);
+                        } else if (param.min !== undefined && param.min !== null) {
+                            minValue = String(param.min);
+                        } else {
+                            minValue = '0';
+                        }
+                    }
                     config[param.id + 'Min'] = minValue;
                   } else if(param.defaultMin) {
                     config[param.id + 'Min'] = String(param.defaultMin);
@@ -619,7 +628,16 @@ const MidiConfig = {
                     config[param.id + 'Min'] = String(param.min || '0');
                   }
                   if(elMax) {
-                    const maxValue = elMax.value || (param.defaultMax ? String(param.defaultMax) : (param.max ? String(param.max) : '127'));
+                    let maxValue = elMax.value;
+                    if (!maxValue) {
+                        if (param.defaultMax !== undefined && param.defaultMax !== null) {
+                            maxValue = String(param.defaultMax);
+                        } else if (param.max !== undefined && param.max !== null) {
+                            maxValue = String(param.max);
+                        } else {
+                            maxValue = '127';
+                        }
+                    }
                     config[param.id + 'Max'] = maxValue;
                   } else if(param.defaultMax) {
                     config[param.id + 'Max'] = String(param.defaultMax);
