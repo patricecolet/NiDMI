@@ -37,8 +37,39 @@ String JSONParser::extractStr(const String& src, const char* key, const String& 
     int p = src.indexOf(pat);
     if (p < 0) return def;
     p += pat.length();
-    
-    int end = src.indexOf('"', p);
-    if (end < 0) return def;
-    return src.substring(p, end);
+
+    // Parse JSON string with escape support (\", \\, \n, \r, \t).
+    String out;
+    out.reserve(64);
+    bool escaped = false;
+
+    for (int i = p; i < (int)src.length(); i++) {
+        char c = src[i];
+
+        if (escaped) {
+            switch (c) {
+                case '"': out += '"'; break;
+                case '\\': out += '\\'; break;
+                case 'n': out += '\n'; break;
+                case 'r': out += '\r'; break;
+                case 't': out += '\t'; break;
+                default: out += c; break;
+            }
+            escaped = false;
+            continue;
+        }
+
+        if (c == '\\') {
+            escaped = true;
+            continue;
+        }
+
+        if (c == '"') {
+            return out;
+        }
+
+        out += c;
+    }
+
+    return def;
 }

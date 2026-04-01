@@ -21,9 +21,6 @@
 #include "../Globals.h"
 #include "../components/motion/Lis3dhDef.h"
 
-// Déclaré dans WebAPI.cpp (runtime-only, jamais persistant NVS)
-extern volatile bool g_pinMonitoringEnabled;
-
 ComponentManager::ComponentManager()
     : component_count(0), midi_sender(nullptr), midiTaskHandle(nullptr), midiTaskStarted(false) {
     // Initialiser les filtres
@@ -593,109 +590,6 @@ void ComponentManager::midiTaskLoop() {
                         }
                     }
 
-                    // --- Télémétrie WebSocket pour le monitoring SVG ---
-                    // LED d’activité = flash bref quand une valeur pertinente change.
-                    // Le front éteint via un decay côté navigateur.
-                    if (!g_pinMonitoringEnabled) {
-                        // Monitoring désactivé: ne rien émettre.
-                        index++;
-                        processed++;
-                        continue;
-                    }
-                    const ComponentConfig& cfg = configs[index];
-                    ComponentState& st = states[index];
-
-                    auto shouldShowValue = [&](ComponentType t) -> bool {
-                        switch (t) {
-                            case ComponentType::MPR121:
-                            case ComponentType::TOUCH:
-                            case ComponentType::BUTTON:
-                            case ComponentType::POTENTIOMETER:
-                            case ComponentType::VELOSTAT:
-                            case ComponentType::ULTRASONIC:
-                            case ComponentType::JOYSTICK:
-                                return true;
-                            default:
-                                return false; // LED activity only
-                        }
-                    };
-
-                    auto sendTelemetry = [&](const String& pinLabel, uint32_t raw, uint8_t midi, uint32_t ts, bool show_value) {
-                        String json = "{";
-                        json += "\"raw\":" + String(raw) + ",";
-                        json += "\"midi\":" + String(midi) + ",";
-                        json += "\"active\":1,";
-                        json += "\"ts\":" + String(ts) + ",";
-                        json += "\"show_value\":" + String(show_value ? "true" : "false");
-                        json += "}";
-                        String msg = "PIN_TELEMETRY:" + pinLabel + ":" + json;
-                        serverCore.websocket().textAll(msg);
-                    };
-
-                    auto sendToPhysicalLabels2 = [&](const char* l1, const char* l2, uint32_t raw, uint8_t midi, uint32_t ts, bool show_value) {
-                        uint8_t g1 = PinMapper::labelToGpio(l1);
-                        uint8_t g2 = PinMapper::labelToGpio(l2);
-                        if (g1 != 255) sendTelemetry(String(l1), raw, midi, ts, show_value);
-                        if (g2 != 255) sendTelemetry(String(l2), raw, midi, ts, show_value);
-                    };
-
-                    auto sendMainIfUpdated = [&]() {
-                        if (st.last_telemetry_ts == 0) return;
-                        if (st.last_telemetry_ts == last_telemetry_sent_ts[index]) return;
-
-                        uint32_t raw = st.last_raw_value_u32;
-                        uint8_t midi = st.last_midi_value_u8;
-                        uint32_t ts = st.last_telemetry_ts;
-                        bool show_value = shouldShowValue(cfg.type);
-
-                        if (cfg.type == ComponentType::MPR121) {
-                            // MPR121 est sur le bus I2C: afficher sur SDA + SCL
-                            sendToPhysicalLabels2("SDA", "SCL", raw, midi, ts, show_value);
-                        } else if (cfg.type == ComponentType::IMU && cfg.specificConfig.imu) {
-                            // IMU: activité LED seulement, bus dépend de bus_interface
-                            bool use_spi = (cfg.specificConfig.imu->bus_interface == 1);
-                            if (use_spi) {
-                                // SPI: afficher sur MOSI/MISO/SCK
-                                uint8_t mosi = PinMapper::labelToGpio("MOSI");
-                                uint8_t miso = PinMapper::labelToGpio("MISO");
-                                uint8_t sck  = PinMapper::labelToGpio("SCK");
-                                if (mosi != 255) sendTelemetry("MOSI", raw, midi, ts, false);
-                                if (miso != 255) sendTelemetry("MISO", raw, midi, ts, false);
-                                if (sck  != 255) sendTelemetry("SCK", raw, midi, ts, false);
-                            } else {
-                                // I2C: afficher sur SDA + SCL
-                                sendToPhysicalLabels2("SDA", "SCL", raw, midi, ts, false);
-                            }
-                        } else if (cfg.type == ComponentType::JOYSTICK) {
-                            // Joystick: afficher la valeur sur l’axe X (main gpio)
-                            String pinLabel = PinMapper::gpioToLabel(cfg.gpio);
-                            if (pinLabel.length() > 0) sendTelemetry(pinLabel, raw, midi, ts, true);
-                        } else {
-                            // Cas standard: valeur sur le rectangle correspondant à gpio principal
-                            String pinLabel = PinMapper::gpioToLabel(cfg.gpio);
-                            if (pinLabel.length() > 0) sendTelemetry(pinLabel, raw, midi, ts, show_value);
-                        }
-
-                        last_telemetry_sent_ts[index] = st.last_telemetry_ts;
-                    };
-
-                    auto sendAuxIfUpdated = [&]() {
-                        if (st.aux_gpio == 255) return;
-                        if (st.last_telemetry_ts_aux == 0) return;
-                        if (st.last_telemetry_ts_aux == last_telemetry_sent_ts_aux[index]) return;
-
-                        uint32_t raw = st.last_raw_value_aux_u32;
-                        uint8_t midi = st.last_midi_value_aux_u8;
-                        uint32_t ts = st.last_telemetry_ts_aux;
-
-                        String pinLabel = PinMapper::gpioToLabel(st.aux_gpio);
-                        if (pinLabel.length() > 0) sendTelemetry(pinLabel, raw, midi, ts, true);
-
-                        last_telemetry_sent_ts_aux[index] = st.last_telemetry_ts_aux;
-                    };
-
-                    sendMainIfUpdated();
-                    sendAuxIfUpdated();
                 }
                 
                 index++;

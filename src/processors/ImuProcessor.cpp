@@ -199,12 +199,13 @@ void ImuProcessor::process(
     state.last_value = (uint16_t)(xFiltered + 32768); // Stocker X pour compatibilité
     state.last_time = millis();
     
-    // Update FluxRegistry and execute local mapping script if present
+    // Update FluxRegistry only when the component has a declared name.
     if (config.name && config.name[0] != '\0') {
         FluxRegistry::update(config.name, (float)state.last_value);
-        if (config.midiMode == MidiMode::SCRIPT && config.mappingScript[0] != '\0') {
-            MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
-        }
+    }
+    // Script mode must run even without a component name.
+    if (config.midiMode == MidiMode::SCRIPT && config.mappingScript[0] != '\0') {
+        MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
     }
 }
 
