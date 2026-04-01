@@ -611,40 +611,297 @@ ESP32: NVS["pin_GPIO0"] contient les champs sauvegardés
 - **Framework** : ESP32 Arduino, NiDMI v2.1+
 - **Authors** : Hardware Team, Firmware Team
 
-## À faire
-- Ajouter un check box pour choisir entre new et old pin mapping
+## Rapport (1 Avril 2026) - Modifs importantes + problèmes rencontrés
 
-Problem Resolved: Double MIDI Output Conflict Eliminated
-The issue was that both the RTP-MIDI config section (circled part in your screenshot) AND the mapping script were being sent to the backend simultaneously, causing double MIDI output.
+Cette section résume les modifications réellement faites pendant l'intégration du mode MIDI (RTP vs Script), les bugs rencontrés, et les corrections appliquées.
 
-Solution Implemented: MIDI Output Mode Toggle
-I added a radio button toggle in the UI that lets you choose between two mutually exclusive MIDI methods:
+## 1) Ajout du choix de mode MIDI (RTP ou Mapping Script)
 
-1. UI Changes (web/index.html + ui_index.cpp for embedded UI)
-Two container sections now toggle visibility:
+### Objectif
+Permettre à l'utilisateur de choisir explicitement une seule logique de sortie MIDI par composant:
+- soit configuration RTP-MIDI classique,
+- soit script local Mapping.
 
-RTP-MIDI Config Container - Shows the circled section (Type, Note, Channel, Velocity)
-Mapping Script Container - Shows the textarea for the mapping script
-2. JavaScript Logic (component-config.js)
-New functions:
+### Fichiers
+- `web/index.html`
+- `src/ui/ui_index.cpp`
+- `web/js/component-config.js`
 
-initMidiModeToggle() - Initializes radio button listeners on page load
-applyMidiMode(mode) - Toggles UI visibility based on selected mode
+### Code ajouté (UI)
+```html
+<div class="r switch">
+    <input type="radio" id="midiModeRtp" name="midiMode" value="rtp" checked>
+    <label for="midiModeRtp">RTP-MIDI Config</label>
+</div>
+<div class="r switch">
+    <input type="radio" id="midiModeScript" name="midiMode" value="script">
+    <label for="midiModeScript">Mapping Script</label>
+</div>
 
-Modified readCfg() function:
+<div id="rtpMidiConfigContainer" style="display: block;">...</div>
+<div id="mappingScriptContainer" style="display: none;">...</div>
+```
 
-Reads which mode is selected (rtpRadio.checked vs scriptRadio.checked)
-If RTP mode: Reads RTP config fields, clears mapping script
-If Mapping mode: Reads mapping script, skips RTP config reading
-Modified applyConfigValues() function:
+### Code ajouté (JS)
+```javascript
+function initMidiModeToggle() {
+    const rtpRadio = $('#midiModeRtp');
+    const scriptRadio = $('#midiModeScript');
+    if (!rtpRadio || !scriptRadio) return;
 
-If RTP mode: Applies RTP config to UI, clears mapping textarea
-If Mapping mode: Applies mapping script to textarea, skips RTP config apply
-3. Backend Integration (No processor changes needed!)
-The existing processor bypass logic already works perfectly:
+    rtpRadio.addEventListener('change', () => applyMidiMode('rtp'));
+    scriptRadio.addEventListener('change', () => applyMidiMode('script'));
+}
 
-How It Works Now
-User configures a button on GPIO D0
-Chooses mode via radio button:
-✅ RTP-MIDI Config (default): Type/Note/Channel/Velocity sent to button
-✅ Mapping Script: Custom script like r("button"):noteOn(60,1,100) sent instead
+function applyMidiMode(mode) {
+    const rtpContainer = $('#rtpMidiConfigContainer');
+    const scriptContainer = $('#mappingScriptContainer');
+    if (!rtpContainer || !scriptContainer) return;
+
+    if (mode === 'script') {
+        rtpContainer.style.display = 'none';
+        scriptContainer.style.display = 'block';
+    } else {
+        rtpContainer.style.display = 'block';
+        scriptContainer.style.display = 'none';
+    }
+}
+```
+
+### Explication simple
+Le mode est maintenant explicite en UI. On ne mélange plus visuellement les deux logiques.
+
+---
+
+## 2) Sauvegarde correcte de `midiMode` + `mappingScript`
+
+### Objectif
+Faire passer correctement le mode choisi et le script jusqu'au backend/NVS.
+
+### Fichiers
+- `web/js/component-config.js`
+- `web/js/api.js`
+- `src/api/PinAPI.cpp`
+
+### Code clé côté lecture formulaire
+```javascript
+function readCfg(roleOverride = null) {
+    const c = {};
+    const scriptRadio = $('#midiModeScript');
+    let midiMode = 'rtp';
+    if (scriptRadio && scriptRadio.checked) midiMode = 'script';
+    c.midiMode = midiMode;
+
+    if (midiMode === 'script') {
+        c.mappingScript = $('#mappingPin')?.value || '';
+    } else {
+        c.mappingScript = '';
+    }
+    // ...
+}
+```
+
+### Code clé côté envoi backend
+```javascript
+if (c.mappingScript) p.set('mappingScript', c.mappingScript);
+if (c.midiMode) p.set('midiMode', c.midiMode);
+```
+
+### Code clé backend
+```cpp
+addParam("mappingScript");
+addParam("midiMode");
+```
+
+### Explication simple
+Le frontend lit le mode/récupère le script, puis les envoie. Le backend accepte et stocke les deux champs.
+
+---
+
+## 3) Problème rencontré #1 - Re-save cassait la config (2e save KO)
+
+### Symptôme
+- Premier save OK.
+- Reconfiguration + save: plus de note, impression que la config ne s'applique plus correctement.
+
+### Cause
+Dans la lecture MIDI, on fusionnait toute l'ancienne config (`...existingCfg`) avec la config courante, ce qui pouvait réinjecter des valeurs périmées (notamment `midiMode`).
+
+### Fichier corrigé
+- `web/js/midi-config.js`
+
+### Correctif appliqué
+Suppression du merge global de l'ancienne config dans `MidiConfig.readConfig()`.
+
+Avant:
+```javascript
+const existingCfg = (typeof cur !== 'undefined' && pcfg[cur]) ? pcfg[cur] : {};
+const config = {
+    ...existingCfg,
+    midiMessageType: $('#rtpMsgType')?.value || '',
+    // ...
+};
+```
+
+Après:
+```javascript
+const config = {
+    midiMessageType: $('#rtpMsgType')?.value || '',
+    rtpType: $('#rtpMsgType')?.value || '',
+    rtpMidiEnabled: !!$('#rtpMidiEnabled')?.checked,
+    rtpEnabled: !!$('#rtpMidiEnabled')?.checked || !!$('#rtpEnabled2')?.checked,
+    usbMidiEnabled: !!$('#usbMidiEnabled')?.checked,
+    debugMidiEnabled: !!$('#debugMidiEnabled')?.checked
+};
+```
+
+Et garde-fou ajouté dans `web/js/component-config.js`:
+```javascript
+Object.assign(c, midiConfig);
+c.midiMode = midiMode; // conserver le mode choisi dans l'UI
+```
+
+### Explication simple
+On empêche les données anciennes d'écraser le choix actuel utilisateur.
+
+---
+
+## 4) Problème rencontré #2 - Script `noteOn(...)` non reçu dans Pure Data
+
+### Symptôme
+Le script `r("button"):noteOn(60,1,100)` ne donnait rien côté PD, alors que le RTP classique fonctionnait.
+
+### Cause A
+Le script n'était exécuté que si `config.name` était non vide, car l'appel à `MappingEngine::execute()` était dans un bloc conditionné par le nom.
+
+### Fichiers corrigés
+- `src/processors/ButtonProcessor.cpp`
+- `src/processors/PotentiometerProcessor.cpp`
+- `src/processors/VelostatProcessor.cpp`
+- `src/processors/TouchProcessor.cpp`
+- `src/processors/JoystickProcessor.cpp`
+- `src/processors/ImuProcessor.cpp`
+
+### Correctif appliqué (pattern)
+Avant:
+```cpp
+if (config.name && config.name[0] != '\0') {
+        FluxRegistry::update(config.name, (float)state.last_value);
+        if (config.midiMode == MidiMode::SCRIPT && config.mappingScript[0] != '\0') {
+                MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
+        }
+}
+```
+
+Après:
+```cpp
+if (config.name && config.name[0] != '\0') {
+        FluxRegistry::update(config.name, (float)state.last_value);
+}
+if (config.midiMode == MidiMode::SCRIPT && config.mappingScript[0] != '\0') {
+        MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
+}
+```
+
+### Explication simple
+Le registre Flux reste lié au nom (normal), mais l'exécution du script ne dépend plus du nom.
+
+---
+
+## 5) Problème rencontré #3 - Script tronqué au chargement NVS (guillemets échappés)
+
+### Symptôme
+Après sauvegarde, le script semblait présent mais ne s'exécutait pas correctement.
+
+### Cause
+`JSONParser::extractStr()` ne gérait pas les caractères échappés (`\"`, `\\`) et coupait la chaîne au premier `"` rencontré.
+
+Exemple impacté:
+```json
+"mappingScript":"r(\"button\"):noteOn(60,1,100)"
+```
+
+### Fichier corrigé
+- `src/utils/JSONParser.cpp`
+
+### Correctif appliqué
+Remplacement de l'extraction naïve par un parseur de chaîne avec support des échappements.
+
+Avant:
+```cpp
+int end = src.indexOf('"', p);
+if (end < 0) return def;
+return src.substring(p, end);
+```
+
+Après:
+```cpp
+String out;
+bool escaped = false;
+for (int i = p; i < (int)src.length(); i++) {
+        char c = src[i];
+        if (escaped) {
+                switch (c) {
+                        case '"': out += '"'; break;
+                        case '\\': out += '\\'; break;
+                        case 'n': out += '\n'; break;
+                        case 'r': out += '\r'; break;
+                        case 't': out += '\t'; break;
+                        default: out += c; break;
+                }
+                escaped = false;
+                continue;
+        }
+        if (c == '\\') { escaped = true; continue; }
+        if (c == '"') { return out; }
+        out += c;
+}
+return def;
+```
+
+### Explication simple
+Le script est maintenant relu intégralement depuis NVS, même avec des guillemets internes.
+
+---
+
+## 6) Chemin runtime réel qui envoie les notes (RTP et Script)
+
+### RTP-MIDI classique
+1. Processeur -> `MidiOutputCoordinator::sendMidiAndOsc(...)`
+2. `MidiMessageHandlerFactory::getHandler(...)`
+3. `NoteHandler::send(...)`
+4. `MidiRouter::sendNoteOn(...)`
+5. `serverCore.rtpMidi().sendNoteOn(...)`
+
+### Mode Script
+1. Processeur détecte `midiMode == SCRIPT`
+2. Appelle `MappingEngine::execute(mappingScript, value, midi_sender)`
+3. `MappingEngine` parse `noteOn(...)` / `noteOff(...)` / `ctl.out(...)`
+4. Appelle `MidiSender` (donc `MidiRouter`)
+5. Même sortie RTP finale (`serverCore.rtpMidi().sendNoteOn/Off`)
+
+### Explication simple
+Le mode Script n'a pas sa propre stack RTP: il réutilise la même sortie MIDI que le mode RTP standard.
+
+---
+
+## 7) Nettoyage complémentaire réalisé
+
+En parallèle de la section mapping, le monitoring de pins a été retiré (frontend + backend) pour simplifier le comportement runtime pendant les tests mapping.
+
+Fichiers concernés:
+- `src/ui/WebAPI.cpp`
+- `src/managers/ComponentManager.cpp`
+- `web/js/websocket.js`
+- `web/index.html`
+- `src/ui/ui_index.cpp`
+
+---
+
+## Conclusion (état final)
+
+- Le choix de mode MIDI est opérationnel.
+- Le re-save n'écrase plus l'état courant.
+- Les scripts mapping s'exécutent même sans nom de composant.
+- Le chargement NVS du script gère correctement les caractères échappés.
+- Le script `r("button"):noteOn(60,1,100)` fonctionne désormais correctement côté Pure Data.
