@@ -30,6 +30,12 @@ enum class ComponentType : uint8_t {
     // Facilement extensible pour de nouveaux types
 };
 
+// Mode MIDI pour un composant (RTP config vs Mapping script)
+enum class MidiMode : uint8_t {
+    RTP = 0,    // Utilise la configuration RTP-MIDI classique
+    SCRIPT = 1  // Utilise le script de mapping local
+};
+
 // Types de pins supportés par un composant
 enum class PinType : uint8_t {
     PIN_ANALOG = 0,          // Pin analogique uniquement (ADC)
@@ -71,6 +77,7 @@ struct ComponentConfig {
     uint8_t midiCcOnOffMax; // Valeur CC pour état ON (0-127, défaut: 127) - pour boutons
     char mappingScript[128]; // Script de mapping personnalisé (max 127 + \0)
     char name[64];          // Nom personnalisé du composant (ex: "pot_volume", "btn_start")
+    MidiMode midiMode;      // Mode MIDI: RTP config ou mapping script
     // Union pour les configurations spécifiques par type de composant
     // Permet d'économiser de la mémoire en ne stockant que la config nécessaire
     union {
@@ -97,6 +104,7 @@ struct ComponentConfig {
         customInt1 = 0;
         customInt2 = 0;
         mappingScript[0] = '\0';
+        midiMode = MidiMode::RTP;  // Défaut: mode RTP classique
     }
     
     ~ComponentConfig() {

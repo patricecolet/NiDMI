@@ -202,7 +202,7 @@ void ImuProcessor::process(
     // Update FluxRegistry and execute local mapping script if present
     if (config.name && config.name[0] != '\0') {
         FluxRegistry::update(config.name, (float)state.last_value);
-        if (config.mappingScript[0] != '\0') {
+        if (config.midiMode == MidiMode::SCRIPT && config.mappingScript[0] != '\0') {
             MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
         }
     }

@@ -334,6 +334,8 @@ void setupPinAPI(AsyncWebServer& server) {
         addParam("rtpType"); // Ancien format pour compatibilité
         /* Champs personnalisés de mapping script */
         addParam("mappingScript");
+        /* Mode MIDI: RTP vs Mapping Script */
+        addParam("midiMode");
         /* Pour composants avec axes (joystick, IMU), sauvegarder les types MIDI par axe */
         addParam("midiMessageTypeX");
         addParam("midiMessageTypeY");

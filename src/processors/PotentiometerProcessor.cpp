@@ -172,7 +172,9 @@ void PotentiometerProcessor::process(
     uint16_t raw_value_for_handler = (config.msg_type == MidiMessageType::PITCH_BEND) 
                                     ? filtered_raw_value  // Pitchbend : valeur brute filtrée
                                     : filtered_value;     // Autres : valeur normalisée
-    MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, midi_value, raw_value_for_handler);
+    if (config.midiMode != MidiMode::SCRIPT) {
+        MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, midi_value, raw_value_for_handler);
+    }
     
     // Mettre à jour last_value UNE SEULE FOIS après l'envoi (comme le MUX)
     state.last_value = midi_value;
@@ -181,7 +183,7 @@ void PotentiometerProcessor::process(
     // Update FluxRegistry and execute local mapping script if present
     if (config.name && config.name[0] != '\0') {
         FluxRegistry::update(config.name, (float)midi_value);
-        if (config.mappingScript[0] != '\0') {
+        if (config.midiMode == MidiMode::SCRIPT && config.mappingScript[0] != '\0') {
             MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
         }
     }

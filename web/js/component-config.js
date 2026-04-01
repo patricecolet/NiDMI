@@ -100,7 +100,23 @@ function applyAdditionalPins(def, c, setV) {
  */
 function readCfg(roleOverride = null) {
   const c = {};
-  c.mappingScript = $('#mappingPin')?.value || '';
+  
+  /* Determine which MIDI mode is active */
+  const rtpRadio = $('#midiModeRtp');
+  const scriptRadio = $('#midiModeScript');
+  let midiMode = 'rtp';
+  if (scriptRadio && scriptRadio.checked) {
+    midiMode = 'script';
+  }
+  c.midiMode = midiMode;
+  
+  /* Only read mapping script if script mode is active */
+  if (midiMode === 'script') {
+    c.mappingScript = $('#mappingPin')?.value || '';
+  } else {
+    c.mappingScript = ''; /* Clear mapping script if RTP mode is active */
+  }
+  
   /* Lire le nom personnalisé depuis l'input avant tout écrasement */
   const nameInput = document.getElementById('ComponentName');
   if (nameInput && nameInput.value) {
@@ -153,10 +169,13 @@ function readCfg(roleOverride = null) {
   }
 
   /* Lire les champs MIDI */
-  if (migratedRole && def && typeof MidiConfig !== 'undefined' && MidiConfig.readConfig) {
+  if (midiMode === 'rtp' && migratedRole && def && typeof MidiConfig !== 'undefined' && MidiConfig.readConfig) {
     const midiConfig = MidiConfig.readConfig(def);
     Object.assign(c, midiConfig);
+    // Défensif: garder le mode décidé par les radios UI.
+    c.midiMode = midiMode;
   }
+  /* If script mode, don't read RTP config */
 
   /* Auto-déterminer busInterface depuis le contexte (pin I2C ou SPI) */
   if (typeof cur !== 'undefined' && cur === 'SPI') {
@@ -190,10 +209,29 @@ function applyCfg(c) {
   /* Les rôles de bus (I2C, SPI, UART) n'ont pas de formulaire de composant */
   if (c.role && typeof isBusRole === 'function' && isBusRole(c.role)) return;
 
-  if (c && typeof c.mappingScript === 'string') {
+  const mappingIsEmpty = !c || !c.mappingScript || c.mappingScript.trim() === '';
+  if (c && typeof c.mappingScript === 'string' && c.mappingScript.trim() !== '') {
     $('#mappingPin').value = c.mappingScript;
+  } else if (mappingIsEmpty && c && c.role) {
+    const role = migrateRoleValue(c.role);
+    const defaultScripts = {
+      'button': 'r("' + (c.name || 'button') + '"):noteOn(60,1,100)',
+      'potentiometer': 'r("' + (c.name || 'pot') + '"):*(127):ctl.out(7,1)',
+      'velostat': 'r("' + (c.name || 'velostat') + '"):*(127):ctl.out(7,1)',
+      'touch': 'r("' + (c.name || 'touch') + '"):*(127):ctl.out(7,1)',
+      'joystick': 'r("' + (c.name || 'joy_x') + '"):*(127):ctl.out(7,1)',
+      'lis3dh': 'r("' + (c.name || 'imu') + '"):*(127):ctl.out(7,1)'
+    };
+    $('#mappingPin').value = defaultScripts[role] || '';
   } else {
     $('#mappingPin').value = '';
+  }
+  
+  // Apply MIDI mode radio buttons and containers
+  if (c.midiMode === 'script') {
+    applyMidiMode('script');
+  } else {
+    applyMidiMode('rtp');
   }
   
   const setV = (id, v) => {
@@ -296,9 +334,10 @@ function applyConfigValues(c, def, setV, setC) {
   }
 
   /* Appliquer les champs MIDI */
-  if (def && typeof MidiConfig !== 'undefined' && MidiConfig.applyConfig) {
+  if (def && c.midiMode !== 'script' && typeof MidiConfig !== 'undefined' && MidiConfig.applyConfig) {
     MidiConfig.applyConfig(c, def);
   }
+  /* If script mode, don't apply RTP config */
 
   /* Appliquer les champs OSC et Debug */
   setV('oscAddress', c.oscAddress);
@@ -322,4 +361,54 @@ function applyConfigValues(c, def, setV, setC) {
 
   setC('dbgEnabled', c.dbgEnabled);
   setV('dbgHeader', c.dbgHeader);
+  
+  /* Appliquer le mode MIDI (RTP vs Mapping Script) */
+  const midiMode = c.midiMode || 'rtp';
+  applyMidiMode(midiMode);
+  
+  /* Appliquer la valeur du mapping script */
+  setV('mappingPin', c.mappingScript);
+}
+
+/**
+ * Initialize MIDI mode toggle on page load
+ */
+function initMidiModeToggle() {
+  const rtpRadio = $('#midiModeRtp');
+  const scriptRadio = $('#midiModeScript');
+  
+  if (!rtpRadio || !scriptRadio) return;
+  
+  rtpRadio.addEventListener('change', () => {
+    applyMidiMode('rtp');
+  });
+  
+  scriptRadio.addEventListener('change', () => {
+    applyMidiMode('script');
+  });
+}
+
+/**
+ * Apply MIDI mode visibility and clear unused fields
+ * @param {string} mode - 'rtp' or 'script'
+ */
+function applyMidiMode(mode) {
+  const rtpContainer = $('#rtpMidiConfigContainer');
+  const scriptContainer = $('#mappingScriptContainer');
+  const rtpRadio = $('#midiModeRtp');
+  const scriptRadio = $('#midiModeScript');
+  
+  if (!rtpContainer || !scriptContainer) return;
+  
+  if (mode === 'script') {
+    rtpContainer.style.display = 'none';
+    scriptContainer.style.display = 'block';
+    if (scriptRadio) scriptRadio.checked = true;
+    if (rtpRadio) rtpRadio.checked = false;
+  } else {
+    rtpContainer.style.display = 'block';
+    scriptContainer.style.display = 'none';
+    if (rtpRadio) rtpRadio.checked = true;
+    if (scriptRadio) scriptRadio.checked = false;
+  }
 }

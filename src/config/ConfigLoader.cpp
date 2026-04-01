@@ -295,6 +295,16 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                             config->mappingScript[0] = '\0';
                         }
                     }
+
+                    // MIDI mode: RTP vs Mapping
+                    {
+                        String midiModeStr = JSONParser::extractStr(pinConfig, "midiMode", "rtp");
+                        if (midiModeStr == "script") {
+                            config->midiMode = MidiMode::SCRIPT;
+                        } else {
+                            config->midiMode = MidiMode::RTP;
+                        }
+                    }
                     
                     // Charger les configurations spécifiques selon le type de composant
                     // La config spécifique doit déjà être allouée par ComponentInitializer

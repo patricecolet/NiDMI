@@ -89,12 +89,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div class="r"><label>Composant:</label><select id="funcSelect"></select></div>
  <div class="r"><label for="ComponentName">Nom du Composant:</label><input type="text" id="ComponentName"></div>
 <div id="componentFormCard" class="subcard" style="display:none;"></div>
-<h4>Mapping</h4>
-<div id="MappingSection"></div>
-<textarea id="mappingPin" rows="3" placeholder="Script (ex: r(&quot;vol&quot;):*(127):ctl.out(7,1))"></textarea>
+<h4>MIDI Output</h4>
+<div class="r switch">
+ <input type="radio" id="midiModeRtp" name="midiMode" value="rtp" checked>
+ <label for="midiModeRtp">RTP-MIDI Config</label>
 </div>
-<div id="rtpMidiSection"></div>
-<h4>Interfaces MIDI</h4>
+<div class="r switch">
+ <input type="radio" id="midiModeScript" name="midiMode" value="script">
+ <label for="midiModeScript">Mapping Script</label>
+</div>
+
+<div id="rtpMidiConfigContainer" style="display: block;">
+ <div id="rtpMidiSection"></div>
+ <h4 style="margin-top: 15px;">Interfaces MIDI</h4>
+</div>
+
+<div id="mappingScriptContainer" style="display: none;">
+ <h4>Mapping</h4>
+ <div id="MappingSection"></div>
+ <textarea id="mappingPin" rows="3" placeholder="Script (ex: r(&quot;vol&quot;):*(127):ctl.out(7,1))"></textarea>
+</div>
+</div>
+<h4 style="display: none;">Interfaces MIDI</h4>
 <div class="r switch"><input type="checkbox" id="debugMidiEnabled"><label for="debugMidiEnabled">Debug MIDI</label></div>
 <h4>OSC</h4>
 <div class="r"><label>Addr:</label><input type="text" id="oscAddress" placeholder="/ctl"></div>

@@ -610,3 +610,41 @@ ESP32: NVS["pin_GPIO0"] contient les champs sauvegardés
 - **Implementation Status** : ✅ Complete & Tested
 - **Framework** : ESP32 Arduino, NiDMI v2.1+
 - **Authors** : Hardware Team, Firmware Team
+
+## À faire
+- Ajouter un check box pour choisir entre new et old pin mapping
+
+Problem Resolved: Double MIDI Output Conflict Eliminated
+The issue was that both the RTP-MIDI config section (circled part in your screenshot) AND the mapping script were being sent to the backend simultaneously, causing double MIDI output.
+
+Solution Implemented: MIDI Output Mode Toggle
+I added a radio button toggle in the UI that lets you choose between two mutually exclusive MIDI methods:
+
+1. UI Changes (web/index.html + ui_index.cpp for embedded UI)
+Two container sections now toggle visibility:
+
+RTP-MIDI Config Container - Shows the circled section (Type, Note, Channel, Velocity)
+Mapping Script Container - Shows the textarea for the mapping script
+2. JavaScript Logic (component-config.js)
+New functions:
+
+initMidiModeToggle() - Initializes radio button listeners on page load
+applyMidiMode(mode) - Toggles UI visibility based on selected mode
+
+Modified readCfg() function:
+
+Reads which mode is selected (rtpRadio.checked vs scriptRadio.checked)
+If RTP mode: Reads RTP config fields, clears mapping script
+If Mapping mode: Reads mapping script, skips RTP config reading
+Modified applyConfigValues() function:
+
+If RTP mode: Applies RTP config to UI, clears mapping textarea
+If Mapping mode: Applies mapping script to textarea, skips RTP config apply
+3. Backend Integration (No processor changes needed!)
+The existing processor bypass logic already works perfectly:
+
+How It Works Now
+User configures a button on GPIO D0
+Chooses mode via radio button:
+✅ RTP-MIDI Config (default): Type/Note/Channel/Velocity sent to button
+✅ Mapping Script: Custom script like r("button"):noteOn(60,1,100) sent instead

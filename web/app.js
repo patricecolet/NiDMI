@@ -14,6 +14,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
  loadMidiInterfaces();
  /* Initialiser les formulaires */
  initForms();
+ /* Initialiser le toggle du mode MIDI (RTP vs Mapping) */
+ if (typeof initMidiModeToggle === 'function') {
+   initMidiModeToggle();
+ }
  
  const compNameInput = document.getElementById('ComponentName');
  if (compNameInput) {

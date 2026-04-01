@@ -696,6 +696,8 @@ async function saveAll(){
 
  /* Champ Mapping Script */
  if(c.mappingScript) p.set('mappingScript', c.mappingScript);
+ /* Mode MIDI (RTP vs Mapping) */
+ if(c.midiMode) p.set('midiMode', c.midiMode);
 
  /* Champs OSC et Debug (communs à tous) */
  if(c.oscEnabled) p.set('oscEnabled','true');

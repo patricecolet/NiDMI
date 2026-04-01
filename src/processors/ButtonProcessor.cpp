@@ -68,37 +68,35 @@ void ButtonProcessor::process(
         return;
     }
     
-    // Fonction helper pour envoyer Note On (utilise le coordinateur)
+    // Fonction helper pour envoyer Note On (utilise le coordinateur si mode RTP)
     uint32_t raw_for_event = 0; // RAW digital monitoring : 1=press, 0=release (valeur physique stable au moment du handler)
     auto sendNoteOn = [&]() {
         uint8_t value = 127; // Défaut pour Note
         if (config.msg_type == MidiMessageType::CONTROL_CHANGE) {
-            // Pour Control Change, utiliser la valeur configurée pour ON
-            // Note: midiCcOnOffMin contient la valeur "ON" (car le RANGE est inversé : 127→0)
             value = config.midiCcOnOffMin;
         }
-        MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, value);
+        if (config.midiMode != MidiMode::SCRIPT) {
+            MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, value);
+        }
         state.last_raw_value_u32 = raw_for_event;
         state.last_midi_value_u8 = value;
         state.last_telemetry_ts = millis();
     };
     
-    // Fonction helper pour envoyer Note Off (utilise le coordinateur)
+    // Fonction helper pour envoyer Note Off (utilise le coordinateur si mode RTP)
     auto sendNoteOff = [&]() {
-        // Pour certains types (PROGRAM_CHANGE, CLOCK, TAP_TEMPO), pas de "off"
         if (config.msg_type == MidiMessageType::PROGRAM_CHANGE ||
             config.msg_type == MidiMessageType::CLOCK ||
             config.msg_type == MidiMessageType::TAP_TEMPO) {
-            return; // Pas de "off" pour ces types
+            return;
         }
-        // Pour Control Change, utiliser la valeur configurée pour OFF
-        uint8_t value = 0; // Défaut pour Note Off
+        uint8_t value = 0;
         if (config.msg_type == MidiMessageType::CONTROL_CHANGE) {
-            // Note: midiCcOnOffMax contient la valeur "OFF" (car le RANGE est inversé : 127→0)
             value = config.midiCcOnOffMax;
         }
-        // Pour les autres types, envoyer avec value=0 (le handler gère Note Off vs CC=0)
-        MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, value);
+        if (config.midiMode != MidiMode::SCRIPT) {
+            MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, value);
+        }
         state.last_raw_value_u32 = raw_for_event;
         state.last_midi_value_u8 = value;
         state.last_telemetry_ts = millis();
@@ -172,10 +170,10 @@ void ButtonProcessor::process(
         // Pour toggle, on ne fait rien au Rising
     }
     
-    // Update FluxRegistry and execute local mapping script if present
+    // Update FluxRegistry and execute local mapping script if in script mode
     if (config.name && config.name[0] != '\0') {
         FluxRegistry::update(config.name, (float)state.last_value);
-        if (config.mappingScript[0] != '\0') {
+        if (config.midiMode == MidiMode::SCRIPT && config.mappingScript[0] != '\0') {
             MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
         }
     }

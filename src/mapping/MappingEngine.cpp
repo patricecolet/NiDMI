@@ -63,6 +63,7 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
     int start = 0;
     int end = s.indexOf(':');
 
+    Serial.printf("[MappingEngine] execute script='%s' input=%.2f\n", script, inputVal);
     while (start < (int)s.length()) {
         int actualEnd = (end == -1) ? s.length() : end;
         String seg = s.substring(start, actualEnd);

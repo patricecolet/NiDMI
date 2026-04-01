@@ -552,15 +552,10 @@ const MidiConfig = {
    * @returns {Object} Configuration MIDI
    */
   readConfig(def) {
-    // 1. RÉCUPÉRER L'EXISTANT : On prend ce qu'il y a déjà dans la mémoire
-    // cur est la pin actuelle (ex: "D0")
-    const existingCfg = (typeof cur !== 'undefined' && pcfg[cur]) ? pcfg[cur] : {};
-
-    // 2. PRÉPARER LA BASE : On garde le NOM et le MAPPING s'ils existent
+    // Ne retourner ici QUE les champs MIDI lus depuis le formulaire.
+    // Le reste de la config (role, midiMode, mappingScript, formFields, etc.)
+    // est géré par readCfg() et ne doit pas être réécrasé avec un état ancien.
     const config = {
-      ...existingCfg, // <--- C'EST CETTE LIGNE QUI SAUVE TON NOM !
-      
-      // On écrase ensuite avec les nouvelles valeurs du formulaire
       midiMessageType: $('#rtpMsgType')?.value || '',
       rtpType: $('#rtpMsgType')?.value || '',
       rtpMidiEnabled: !!$('#rtpMidiEnabled')?.checked,

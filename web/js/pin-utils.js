@@ -227,6 +227,18 @@ function stat(cfg, pinLabel) {
   /* Obtenir la définition du composant depuis le backend */
   const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(migratedRole) : null;
   
+  /* Si mode script, afficher seulement la note de script (ou 'Script' si non détectée) */
+  if (cfg.midiMode === 'script' && cfg.mappingScript && cfg.mappingScript.trim() !== '') {
+    const match = cfg.mappingScript.match(/noteOn\s*\(\s*(\d{1,3})\s*,/i);
+    if (match && match[1]) {
+      const scriptNote = Number(match[1]);
+      if (!isNaN(scriptNote)) {
+        return 'Note ' + scriptNote;
+      }
+    }
+    return 'Script';
+  }
+
   /* Utiliser la fonction générique pour générer le texte de statut */
   if (def && typeof getComponentStatusText === 'function') {
     return getComponentStatusText(def, cfg, pinLabel);

@@ -63,7 +63,7 @@ void VelostatProcessor::process(
     
     if (filtered_value > velocity_threshold && !note_is_on) {
         // Note On
-        if (midi_sender) {
+        if (config.midiMode != MidiMode::SCRIPT && midi_sender) {
             midi_sender->sendNoteOn(channel, note, velocity);
         }
         state.last_note = note;
@@ -78,7 +78,7 @@ void VelostatProcessor::process(
         MidiOutputCoordinator::sendOsc(osc_queue, config, velocity, filtered_value);
     } else if (filtered_value <= velocity_threshold && note_is_on) {
         // Note Off
-        if (midi_sender) {
+        if (config.midiMode != MidiMode::SCRIPT && midi_sender) {
             midi_sender->sendNoteOff(channel, note, 0);
         }
         state.last_note = 255;
@@ -100,7 +100,7 @@ void VelostatProcessor::process(
                            (velocity - state.last_aftertouch) : 
                            (state.last_aftertouch - velocity);
         if (velocity_diff > aftertouch_threshold) {
-            if (midi_sender) {
+            if (config.midiMode != MidiMode::SCRIPT && midi_sender) {
                 midi_sender->sendKeyPressure(channel, note, velocity);
             }
             state.last_aftertouch = velocity;
@@ -117,7 +117,7 @@ void VelostatProcessor::process(
     // Update FluxRegistry and execute local mapping script if present
     if (config.name && config.name[0] != '\0') {
         FluxRegistry::update(config.name, (float)state.last_value);
-        if (config.mappingScript[0] != '\0') {
+        if (config.midiMode == MidiMode::SCRIPT && config.mappingScript[0] != '\0') {
             MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
         }
     }
