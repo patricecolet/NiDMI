@@ -12,9 +12,10 @@ bool ComponentRegistry::initialized_ = false;
 namespace {
 void registerBuiltinDefinitions(std::vector<ComponentDefinition>& defs) {
     auto addIfMissing = [&](ComponentDefinition&& def) {
-        if (def.id == nullptr) return;
+        if (def.id == nullptr) { def.cleanup(); return; }
         for (const auto& existing : defs) {
             if (existing.id && strcmp(existing.id, def.id) == 0) {
+                def.cleanup();
                 return;
             }
         }
