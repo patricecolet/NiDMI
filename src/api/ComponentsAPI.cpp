@@ -27,9 +27,6 @@ void setupComponentsAPI(AsyncWebServer& server) {
      */
     server.on("/api/components/definitions", HTTP_GET, [](AsyncWebServerRequest* request) {
 #ifdef NIDMI_COMPONENT_DEFS_PAGINATION
-        // Mode pagination activé
-        // Limit par défaut à 5 : avec buffer 12KB, 5 composants = ~9-10KB (marge confortable)
-        // Cela permet de tester la pagination même avec peu de composants
         int page = 0, limit = 5;
         if (request->hasParam("page")) {
             page = request->getParam("page")->value().toInt();
@@ -38,31 +35,53 @@ void setupComponentsAPI(AsyncWebServer& server) {
         if (request->hasParam("limit")) {
             limit = request->getParam("limit")->value().toInt();
             if (limit < 1) limit = 1;
-            if (limit > 15) limit = 15; // Max 15 par page pour éviter les buffers trop grands (avec buffer 12KB)
+            if (limit > 15) limit = 15;
         }
         
-        static char jsonBuffer[24576];  // Buffer 12KB par page (augmenté pour éviter la troncature)
-        int written = ComponentRegistry::toJsonArrayPage(jsonBuffer, sizeof(jsonBuffer), page, limit);
+        /* Buffer heap (pas static) : évite toute corruption si deux requêtes se chevauchent
+         * et permet de détecter un OOM au lieu d'envoyer un body vide silencieusement. */
+        const size_t bufSize = 16384;
+        char* jsonBuffer = (char*)malloc(bufSize);
+        if (!jsonBuffer) {
+            Serial.println("[ComponentsAPI] ERROR: malloc pagination buffer failed");
+            request->send(503, "application/json", "{\"error\":\"Out of memory\"}");
+            return;
+        }
         
-        if (written > 0 && written < (int)sizeof(jsonBuffer)) {
-            // Ajouter les métadonnées de pagination dans les headers
+        int written = ComponentRegistry::toJsonArrayPage(jsonBuffer, bufSize, page, limit);
+        
+        if (written > 0 && written < (int)bufSize) {
             int totalCount = static_cast<int>(ComponentRegistry::count());
             int totalPages = (totalCount + limit - 1) / limit;
             
+            /* Copier dans String et libérer le buffer heap immédiatement
+             * (beginResponse copierait aussi, mais ici on détecte un OOM String) */
+            String body;
+            if (!body.reserve(written + 1)) {
+                free(jsonBuffer);
+                Serial.printf("[ComponentsAPI] ERROR: String reserve OOM (%d bytes)\n", written);
+                request->send(503, "application/json", "{\"error\":\"Out of memory\"}");
+                return;
+            }
+            body = jsonBuffer;
+            free(jsonBuffer);
+            jsonBuffer = nullptr;
+            
             #ifdef ARDUINO
-            Serial.printf("[ComponentsAPI] Pagination: page=%d, limit=%d, totalCount=%d, totalPages=%d\n", 
-                         page, limit, totalCount, totalPages);
+            Serial.printf("[ComponentsAPI] page=%d/%d, count=%d, %u bytes\n",
+                         page, totalPages - 1, totalCount, body.length());
             #endif
             
-            AsyncWebServerResponse* response = request->beginResponse(200, "application/json", jsonBuffer);
+            AsyncWebServerResponse* response = request->beginResponse(200, "application/json", body);
             response->addHeader("X-Total-Count", String(totalCount));
             response->addHeader("X-Total-Pages", String(totalPages));
             response->addHeader("X-Current-Page", String(page));
             response->addHeader("X-Per-Page", String(limit));
             request->send(response);
         } else {
-            Serial.printf("[ComponentsAPI] WARNING: Pagination serialization failed (written=%d, size=%zu)\n", 
-                         written, sizeof(jsonBuffer));
+            free(jsonBuffer);
+            Serial.printf("[ComponentsAPI] WARNING: Pagination serialization failed (written=%d, bufSize=%zu)\n",
+                         written, bufSize);
             request->send(500, "application/json", "{\"error\":\"Serialization failed\"}");
         }
 #else

@@ -5,21 +5,21 @@
 let isS3 = false;  /* Détecté depuis caps.board */
 let touchEnabled = false; /* État courant du support touch */
 
-/* Vérifier si c'est un ESP32-S3 */
-async function checkBoardType() {
+/* Détecte le type de board à partir de la globale `caps` (déjà chargée par loadCaps()).
+ * Évite un double fetch /api/pins/caps qui pouvait échouer (body vide) sous charge. */
+function checkBoardType() {
   try {
-    const r = await fetch('/api/pins/caps');
-    if (!r.ok) return;
-    const caps = await r.json();
-    isS3 = caps.board && caps.board.toLowerCase().includes('s3');
+    if (typeof caps === 'undefined' || !caps || !caps.board) {
+      console.warn('[checkBoardType] caps non disponible, skip');
+      return;
+    }
+    isS3 = caps.board.toLowerCase().includes('s3');
     
-    /* Afficher/masquer la section système selon le type de board */
     const systemSection = $('#systemSettingsSection');
     if (systemSection) {
       systemSection.style.display = isS3 ? 'block' : 'none';
     }
     
-    /* Charger la config seulement si c'est un S3 */
     if (isS3) {
       loadSystemConfig();
     }
