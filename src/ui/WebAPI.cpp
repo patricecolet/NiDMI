@@ -170,7 +170,17 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
     } else if (type == WS_EVT_DISCONNECT) {
         Serial.println("WebSocket client disconnected");
     } else if (type == WS_EVT_DATA) {
-        String message = String((char*)data);
+        AwsFrameInfo *info = (AwsFrameInfo*)arg;
+        if (!info || info->opcode != WS_TEXT) return;
+        // Frame texte complète (1er fragment) — ne pas exiger info->len==len (certaines stacks divergent)
+        if (!(info->final && info->index == 0)) return;
+        if (!data || len == 0) return;
+
+        String message;
+        message.reserve(len);
+        for (size_t i = 0; i < len; i++) {
+            message += (char)data[i];
+        }
 
         // Activation/désactivation runtime-only du monitoring SVG
         // Format attendu: PIN_MONITORING:1 ou PIN_MONITORING:0

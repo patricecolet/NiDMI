@@ -9,6 +9,79 @@ std::vector<ComponentDefinition>* ComponentRegistry::definitions_ptr = nullptr;
 std::vector<ComponentDefinition>* ComponentRegistry::pending_definitions_ptr = nullptr;
 bool ComponentRegistry::initialized_ = false;
 
+namespace {
+void registerBuiltinDefinitions(std::vector<ComponentDefinition>& defs) {
+    auto addIfMissing = [&](ComponentDefinition&& def) {
+        if (def.id == nullptr) return;
+        for (const auto& existing : defs) {
+            if (existing.id && strcmp(existing.id, def.id) == 0) {
+                return;
+            }
+        }
+        defs.push_back(std::move(def));
+    };
+
+    // BASIC
+    addIfMissing(Components::Potentiometer::createDefinition());
+    addIfMissing(Components::Button::createDefinition());
+    addIfMissing(Components::Led::createDefinition());
+    addIfMissing(Components::Velostat::createDefinition());
+    addIfMissing(Components::Touch::createDefinition());
+    addIfMissing(Components::Joystick::createDefinition());
+    addIfMissing(Components::Ultrasonic::createDefinition());
+
+    // MULTIPLEXER
+    addIfMissing(Components::HC4067::createDefinition());
+    addIfMissing(Components::HC4051::createDefinition());
+
+    // DISTANCE
+    addIfMissing(Components::IrDistanceSharp::createDefinition());
+    addIfMissing(Components::LidarTof::createDefinition());
+    addIfMissing(Components::InductiveProximity::createDefinition());
+
+    // ENVIRONMENT
+    addIfMissing(Components::EnvironmentGeneric::createDefinition());
+    addIfMissing(Components::LightSensorGrove::createDefinition());
+    addIfMissing(Components::TempHumDht::createDefinition());
+    addIfMissing(Components::TempHumI2c::createDefinition());
+    addIfMissing(Components::BarometerDps310::createDefinition());
+    addIfMissing(Components::SoilMoistureCapacitive::createDefinition());
+    addIfMissing(Components::UvSensorGrove::createDefinition());
+
+    // MOTION
+    addIfMissing(Components::MotionGeneric::createDefinition());
+    addIfMissing(Components::PirMotion::createDefinition());
+    addIfMissing(Components::Imu6Axis::createDefinition());
+    addIfMissing(Components::Lis3dh::createDefinition());
+    addIfMissing(Components::GestureIr::createDefinition());
+    addIfMissing(Components::RadarDoppler::createDefinition());
+
+    // COLOR
+    addIfMissing(Components::ColorGeneric::createDefinition());
+
+    // INTERFACE
+    addIfMissing(Components::Fsr::createDefinition());
+    addIfMissing(Components::Mpr121::createDefinition());
+    addIfMissing(Components::RotaryAngleGrove::createDefinition());
+    addIfMissing(Components::ThumbJoystickGrove::createDefinition());
+
+    // ACTUATOR
+    addIfMissing(Components::ActuatorGeneric::createDefinition());
+    addIfMissing(Components::RelayGrove::createDefinition());
+    addIfMissing(Components::BuzzerGrove::createDefinition());
+    addIfMissing(Components::VibrationMotorGrove::createDefinition());
+    addIfMissing(Components::SolenoidGrove::createDefinition());
+
+    // DISPLAY
+    addIfMissing(Components::DisplayGeneric::createDefinition());
+    addIfMissing(Components::BargraphLedGrove::createDefinition());
+    addIfMissing(Components::OledI2cGrove::createDefinition());
+    addIfMissing(Components::Lcd16x2I2cGrove::createDefinition());
+    addIfMissing(Components::FourDigitDisplayGrove::createDefinition());
+    addIfMissing(Components::LedMatrixGrove::createDefinition());
+}
+} // namespace
+
 bool ComponentRegistry::registerDefinition(ComponentDefinition&& def) {
     // Créer le vecteur temporaire si nécessaire
     // Note: Ce vecteur est créé au premier enregistrement, même avant init()
@@ -56,7 +129,7 @@ void ComponentRegistry::init() {
         }
         // Réserver l'espace dans le vector pour éviter les réallocations
         // qui peuvent créer des copies temporaires
-        definitions_ptr->reserve(6);  // Augmenté à 6 pour permettre l'ajout futur
+        definitions_ptr->reserve(48);  // Marge confortable pour toutes les familles
     }
     
     // Initialiser le ValidationRegistry d'abord
@@ -94,6 +167,10 @@ void ComponentRegistry::init() {
         pending_definitions_ptr = nullptr;
     }
     
+    // Garantit un registre complet même si l'éditeur de liens ignore
+    // certains TU contenant les auto-register statiques.
+    registerBuiltinDefinitions(*definitions_ptr);
+
     // === FAMILLES FUTURES ===
     // ENCODER : encodeurs rotatifs
     // DISPLAY : écrans OLED, LCD

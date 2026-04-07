@@ -130,8 +130,8 @@ void nidmi_begin() {
 
     touchDiag("AVANT WiFi/serveur");
 
-    // Démarre AP + mode APSTA d'abord
-    serverCore.begin(apSsid, apPass, host);
+    // Démarre l’AP : AP seul si aucun STA en NVS (évite soucis d’association client en APSTA « vide »)
+    serverCore.begin(apSsid, apPass, host, g_staSsid.length() == 0);
 
     touchDiag("APRES WiFi/serveur");
 

@@ -12,9 +12,15 @@ ServerCore serverCore;
 ServerCore::ServerCore()
     : server(80), ws("/ws") {}
 
-void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostname) {
-    // Optimisation WiFi pour XIAO_ESP32C3
-    WiFi.mode(WIFI_MODE_APSTA);
+void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostname, bool apOnlyMode) {
+    /* Sans STA enregistré : AP seul (WIFI_AP). APSTA avec interface STA inactive peut provoquer
+     * échecs ou boucles « mot de passe » / reconnexion sur téléphones (notamment ESP32-C3/S3). */
+    if (apOnlyMode) {
+        WiFi.mode(WIFI_MODE_AP);
+        Serial.println("[ServerCore] WiFi: mode AP uniquement");
+    } else {
+        WiFi.mode(WIFI_MODE_APSTA);
+    }
     
     // Augmenter la puissance WiFi pour XIAO_ESP32C3
     WiFi.setTxPower(WIFI_POWER_19_5dBm); // Puissance maximale
@@ -25,7 +31,8 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
     IPAddress apSubnet = IPAddress(255, 255, 255, 0);
     WiFi.softAPConfig(apIp, apGateway, apSubnet);
     
-    WiFi.softAP(apSsid, apPass);
+    /* Canal 1 : meilleure compatibilité avec les clients 2,4 GHz */
+    WiFi.softAP(apSsid, apPass, 1);
     
     /* Attendre que l'AP soit prêt avant de continuer */
     delay(100);
