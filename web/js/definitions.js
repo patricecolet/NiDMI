@@ -79,28 +79,6 @@ const ComponentDefinitions = {
    */
   _cache: [],
   _loadingPromise: null,
-  _delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  },
-  async _fetchTextWithRetry(url, retries = 4, baseDelayMs = 400) {
-    for (let attempt = 0; attempt < retries; attempt++) {
-      try {
-        const r = await fetch(url);
-        if (!r.ok) return { ok: false, response: r, text: '' };
-        const text = await r.text();
-        if (text && text.trim()) return { ok: true, response: r, text };
-        // Réponse vide: possible reboot/instabilité réseau, retenter.
-      } catch (err) {
-        // AbortError survient quand la connexion coupe pendant un reboot ESP.
-        if (!(err && err.name === 'AbortError')) {
-          if (attempt === retries - 1) throw err;
-        }
-      }
-      const waitMs = baseDelayMs * (attempt + 1);
-      await this._delay(waitMs);
-    }
-    return { ok: false, response: null, text: '' };
-  },
 
   /**
    * Charge les définitions de composants depuis l'API backend
@@ -114,13 +92,21 @@ const ComponentDefinitions = {
     this._loadingPromise = (async () => {
     try {
       /* Faire une première requête normale (sans paramètres de pagination) */
-      const firstResult = await this._fetchTextWithRetry('/api/components/definitions', 5, 500);
-      if(!firstResult.ok || !firstResult.response) {
-        console.warn('[ComponentDefinitions.load] Erreur chargement définitions: réponse indisponible après retries');
+      let r = await fetch('/api/components/definitions');
+      if(!r.ok) {
+        console.warn('[ComponentDefinitions.load] Erreur chargement définitions:', r.status);
         return [];
       }
-      const r = firstResult.response;
-      const firstText = firstResult.text;
+      let firstText = await r.text();
+      if (!firstText || !firstText.trim()) {
+        console.warn('[ComponentDefinitions.load] Réponse vide sur requête initiale, retry...');
+        r = await fetch('/api/components/definitions?_retry=1');
+        if (!r.ok) {
+          console.warn('[ComponentDefinitions.load] Retry échoué:', r.status);
+          return [];
+        }
+        firstText = await r.text();
+      }
 
       /* Vérifier si la pagination est activée (présence du header X-Total-Pages) */
       const totalPagesHeader = r.headers.get('X-Total-Pages');
@@ -133,43 +119,56 @@ const ComponentDefinitions = {
       
       /* Si les headers de pagination sont présents, la pagination est activée */
       if (totalPagesHeader !== null && totalCountHeader !== null) {
-        const totalPages = parseInt(totalPagesHeader);
         const totalCount = parseInt(totalCountHeader);
+        const perPage = parseInt(r.headers.get('X-Per-Page')) || 5;
+        const totalPages = Math.ceil(totalCount / perPage);
         
         if (totalCount > 0) {
-          /* Mode pagination activé : charger toutes les pages (même s'il n'y en a qu'une) */
-          console.log('[ComponentDefinitions.load] Pagination détectée, chargement de toutes les pages...', 
-                     `(totalPages: ${totalPages}, totalCount: ${totalCount})`);
-          this._cache = [];
+          console.log('[ComponentDefinitions.load] Pagination détectée',
+                     `(totalCount: ${totalCount}, perPage: ${perPage}, pages: ${totalPages})`);
           
-          /* Charger toutes les pages */
-          /* Utiliser limit=1 pour maximiser la robustesse sur C3/S3 quand le serveur est sous contrainte */
-          for (let page = 0; ; page++) {
-            const pageResult = await this._fetchTextWithRetry(`/api/components/definitions?page=${page}&limit=1`, 4, 400);
-            if (!pageResult.ok || !pageResult.response) {
-              console.warn(`[ComponentDefinitions.load] Erreur page ${page}: réponse indisponible après retries`);
-              break;
-            }
-            const pageText = pageResult.text;
-            const pageData = parseDefinitionsJson(pageText);
-            if (!Array.isArray(pageData)) {
-              console.warn(`[ComponentDefinitions.load] Page ${page} invalide (pas un tableau)`);
-              break;
+          /* Réutiliser le body de la première requête comme page 0
+           * (évite un fetch supplémentaire et la pression mémoire sur l'ESP32) */
+          const page0 = parseDefinitionsJson(firstText);
+          this._cache = Array.isArray(page0) ? page0 : [];
+          console.log(`[ComponentDefinitions.load] Page 0 (initiale): ${this._cache.length} composants`);
+          
+          /* Charger les pages restantes (à partir de 1) avec le même limit que le backend */
+          for (let page = 1; page < totalPages; page++) {
+            /* Délai entre requêtes pour laisser l'ESP32 libérer ses buffers */
+            await new Promise(resolve => setTimeout(resolve, 80));
+            
+            let pageData = null;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              try {
+                const pageR = await fetch(`/api/components/definitions?page=${page}&limit=${perPage}`);
+                if (!pageR.ok) {
+                  console.warn(`[ComponentDefinitions.load] Page ${page} HTTP ${pageR.status}`);
+                  break;
+                }
+                const pageText = await pageR.text();
+                if (pageText && pageText.trim()) {
+                  pageData = parseDefinitionsJson(pageText);
+                  break;
+                }
+                console.warn(`[ComponentDefinitions.load] Page ${page} vide (tentative ${attempt}/3)`);
+              } catch (e) {
+                console.warn(`[ComponentDefinitions.load] Page ${page} erreur réseau (tentative ${attempt}/3):`, e);
+              }
+              await new Promise(resolve => setTimeout(resolve, 200 * attempt));
             }
             
-            if (pageData.length === 0) {
-              console.log(`[ComponentDefinitions.load] Page ${page} vide, arrêt`);
-              break; /* Page vide, arrêter */
+            if (!Array.isArray(pageData) || pageData.length === 0) {
+              console.warn(`[ComponentDefinitions.load] Page ${page} irrécupérable, arrêt pagination`);
+              break;
             }
             
             this._cache.push(...pageData);
-            console.log(`[ComponentDefinitions.load] Page ${page} chargée: ${pageData.length} composants`);
-            // Laisse un peu d'air à l'ESP entre deux pages.
-            await this._delay(60);
+            console.log(`[ComponentDefinitions.load] Page ${page}: ${pageData.length} composants`);
           }
           
-          console.log(`[ComponentDefinitions.load] Composants chargés (pagination): ${this._cache.length}/${totalCount}`);
-          console.log('[ComponentDefinitions.load] IDs des composants (pagination):', this._cache.map(d => d.id).join(', '));
+          console.log(`[ComponentDefinitions.load] Total chargé: ${this._cache.length}/${totalCount}`);
+          console.log('[ComponentDefinitions.load] IDs:', this._cache.map(d => d.id).join(', '));
           return this._cache;
         }
       }
