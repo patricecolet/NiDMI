@@ -7,6 +7,7 @@
 #   sync     - Synchroniser les fichiers seulement
 #   compile  - Synchroniser + compiler
 #   upload   - Synchroniser + compiler + uploader
+#   flash    - Uploader seulement (sans sync ni compile ; dernier binaire arduino-cli)
 #   all      - Tout faire (sync + compile + upload + test)
 #   clean    - Nettoyer le cache seulement
 #   help     - Afficher cette aide
@@ -224,6 +225,7 @@ show_help() {
     echo "  compile  - Synchroniser + compiler"
     echo "  build    - Synchroniser + compiler + stocker le binaire"
     echo "  upload   - Synchroniser + compiler + uploader"
+    echo "  flash    - Uploader sans recompiler (binaire déjà compilé pour ce sketch + board)"
     echo "  monitor  - Ouvrir le moniteur série"
     echo "  all      - Tout faire (sync + compile + upload + test)"
     echo "  clean    - Nettoyer le cache seulement"
@@ -262,6 +264,7 @@ show_help() {
     echo "  ./scripts/nidmi.sh compile --board s3 --split-fs       # S3 avec seqfs 512KB + mapfs 1MB"
     echo "  ./scripts/nidmi.sh compile --board s3      # Compiler pour ESP32-S3"
     echo "  ./scripts/nidmi.sh upload --board s3       # Uploader sur ESP32-S3"
+    echo "  ./scripts/nidmi.sh flash --board c3        # Reflash rapide (même build qu’après compile)"
     echo "  ./scripts/nidmi.sh upload --port /dev/ttyUSB0  # Uploader en forçant le port"
     echo "  ./scripts/nidmi.sh build                   # Build (S3 par défaut)"
     echo "  ./scripts/nidmi.sh upload nidmi_osc        # Upload sketch OSC"
@@ -750,6 +753,20 @@ main() {
                    echo "   2. Ouvrir la console du navigateur (F12)"
                    echo "   3. Tester le clic sur SDA"
                    echo "   4. Vérifier les logs dans la console"
+                   ;;
+               "flash")
+                   echo "⚡ NiDMI - Upload seul (sans sync ni compilation)"
+                   echo "=================================================="
+                   echo "   Utilise le dernier binaire arduino-cli pour ce sketch et ce FQBN."
+                   echo "   Faire au moins un compile ou upload une fois avant, avec les mêmes options (--board, --split-fs, etc.)."
+                   if [ ! -f "$SKETCH_PATH" ]; then
+                       echo "   ❌ Sketch introuvable: $SKETCH_PATH"
+                       echo "   📝 Lance d’abord: ./scripts/nidmi.sh sync"
+                       exit 1
+                   fi
+                   upload_sketch
+                   echo ""
+                   echo "✅ Flash terminé (firmware inchangé depuis la dernière compilation)."
                    ;;
                "monitor")
                    echo "🚀 NiDMI - Moniteur série"

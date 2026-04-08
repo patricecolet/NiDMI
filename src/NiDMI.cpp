@@ -131,7 +131,9 @@ void nidmi_begin() {
     touchDiag("AVANT WiFi/serveur");
 
     // Démarre l’AP : AP seul si aucun STA en NVS (évite soucis d’association client en APSTA « vide »)
+    Serial.printf("[MEM] avant WiFi: %d\n", (int)ESP.getFreeHeap());
     serverCore.begin(apSsid, apPass, host, g_staSsid.length() == 0);
+    Serial.printf("[MEM] apres WiFi+serveur: %d\n", (int)ESP.getFreeHeap());
 
     touchDiag("APRES WiFi/serveur");
 
@@ -154,17 +156,21 @@ void nidmi_begin() {
 
     // Initialiser MidiRouter (qui initialisera USB MIDI si activé et supporté)
     g_midiRouter.begin();
+    Serial.printf("[MEM] apres MidiRouter: %d\n", (int)ESP.getFreeHeap());
     
     // Initialiser RTP-MIDI
     serverCore.rtpMidi().begin(serverName.c_str());
+    Serial.printf("[MEM] apres RTP-MIDI: %d\n", (int)ESP.getFreeHeap());
     
     // Initialiser Bluetooth MIDI
     serverCore.bluetooth().begin(serverName.c_str());
+    Serial.printf("[MEM] apres Bluetooth: %d\n", (int)ESP.getFreeHeap());
     
     touchDiag("AVANT ComponentManager.begin");
 
     // Initialiser ComponentManager
     g_componentManager.begin(&g_midiRouter);
+    Serial.printf("[MEM] apres ComponentManager: %d\n", (int)ESP.getFreeHeap());
 
     touchDiag("APRES ComponentManager.begin (MuxTask+MidiTask demarres)");
     

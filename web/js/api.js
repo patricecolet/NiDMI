@@ -332,8 +332,29 @@ function getComponentsForPinType(pinType, implementedOnly = true) {
 }
 
 async function loadCaps(){
- const r=await fetch('/api/pins/caps');
- caps=await r.json();
+ for (let attempt = 1; attempt <= 3; attempt++) {
+  try {
+   const r = await fetch('/api/pins/caps');
+   if (!r.ok) {
+    console.warn(`[loadCaps] HTTP ${r.status} (tentative ${attempt}/3)`);
+   } else {
+    const text = await r.text();
+    if (text && text.trim()) {
+     caps = JSON.parse(text);
+     return caps;
+    }
+    console.warn(`[loadCaps] Réponse vide (tentative ${attempt}/3)`);
+   }
+  } catch (e) {
+   console.warn(`[loadCaps] Erreur (tentative ${attempt}/3):`, e);
+  }
+  await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+ }
+ /* Fallback pour éviter de casser l'initialisation UI */
+ if (typeof caps === 'undefined' || !caps) {
+  caps = { board: '', pins: [], bus: {} };
+ }
+ return caps;
 }
 
 /* Variable pour stocker les GPIOs utilisés (cache) */

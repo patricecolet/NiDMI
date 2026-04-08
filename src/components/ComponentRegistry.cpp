@@ -269,15 +269,6 @@ int ComponentRegistry::toJsonArrayPage(char* buffer, size_t bufferSize, int page
     int endIdx = startIdx + limit;
     int totalCount = static_cast<int>(definitions_ptr->size());
     
-    #ifdef ARDUINO
-    Serial.printf("[toJsonArrayPage] DEBUT: page=%d, limit=%d, totalCount=%d, startIdx=%d, endIdx=%d\n", 
-                 page, limit, totalCount, startIdx, endIdx);
-    // Afficher tous les IDs disponibles dans l'ordre
-    for (int j = 0; j < totalCount; j++) {
-        Serial.printf("[toJsonArrayPage] Composant %d: id=%s\n", j, (*definitions_ptr)[j].id ? (*definitions_ptr)[j].id : "NULL");
-    }
-    #endif
-    
     if (startIdx >= totalCount) {
         // Page vide
         buffer[written++] = ']';
@@ -296,16 +287,8 @@ int ComponentRegistry::toJsonArrayPage(char* buffer, size_t bufferSize, int page
         // Calculer l'espace restant AVANT d'écrire la virgule
         size_t remaining = bufferSize - written - 1; // -1 pour le ']' final
         
-        #ifdef ARDUINO
-        Serial.printf("[toJsonArrayPage] i=%d/%d, id=%s, remaining=%zu, written=%d\n", 
-                     i, endIdx-1, def.id ? def.id : "NULL", remaining, written);
-        #endif
-        
         // Vérifier si on a assez de place pour au moins un objet minimal
         if (remaining < 50) {
-            #ifdef ARDUINO
-            Serial.printf("[toJsonArrayPage] ARRÊT: remaining=%zu < 50 (id=%s)\n", remaining, def.id ? def.id : "NULL");
-            #endif
             break; // Pas assez de place même pour un objet minimal
         }
         
@@ -321,21 +304,11 @@ int ComponentRegistry::toJsonArrayPage(char* buffer, size_t bufferSize, int page
         // Écrire la définition en JSON
         int defLen = def.toJson(buffer + written, remaining);
         
-        #ifdef ARDUINO
-        Serial.printf("[toJsonArrayPage] id=%s, defLen=%d, remaining=%zu, condition=%s\n", 
-                     def.id ? def.id : "NULL", defLen, remaining, 
-                     (defLen <= 0 || defLen >= (int)remaining) ? "ARRÊT" : "OK");
-        #endif
-        
         if (defLen <= 0 || defLen >= (int)remaining) {
             // Pas assez de place pour cet objet → annuler la virgule si on l'a écrite
             if (wroteComma && written > 1) {
                 written--; // Retirer la virgule orpheline
             }
-            #ifdef ARDUINO
-            Serial.printf("[toJsonArrayPage] ARRÊT: id=%s, defLen=%d, remaining=%zu\n", 
-                         def.id ? def.id : "NULL", defLen, remaining);
-            #endif
             break; // Arrêter proprement, JSON reste valide
         }
         
