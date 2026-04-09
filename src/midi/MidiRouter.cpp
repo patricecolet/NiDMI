@@ -12,9 +12,15 @@ MidiRouter::MidiRouter()
 MidiRouter::~MidiRouter() {}
 
 void MidiRouter::begin() {
-    // Initialiser USB MIDI si supporté et activé
-    if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
+    // S3 + USB-OTG : cdc_on_boot=0 (nidmi.sh) pour que begin() puisse enregistrer CDC+MIDI.
+    // Si MIDI est désactivé : beginCdc() démarre CDC + USB.begin() sans interface MIDI.
+    if (!serverCore.usbMidi().isSupported()) {
+        return;
+    }
+    if (usbMidiEnabled) {
         serverCore.usbMidi().begin();
+    } else {
+        serverCore.usbMidi().beginCdc();
     }
 }
 

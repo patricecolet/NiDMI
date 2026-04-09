@@ -376,8 +376,8 @@ static void processNoteVelocity(
 }
 
 // Traitement NOTE_SWEEP
-// Tout en 32 bits : touch_value et touch_threshold dans la même échelle (lecture brute).
-// Capteur "valeur MONTE quand on touche" : au-dessus du seuil = touché.
+// touch_value = signal lissé (EMA) pour limiter le bruit ; Schmitt sur le brut tactile
+// évite les oscillations note on/off au voisinage du seuil.
 static void processNoteSweep(
     const ComponentConfig& config,
     ComponentState& state,
@@ -387,6 +387,13 @@ static void processNoteSweep(
     MidiSender* midi_sender,
     OSCQueue& osc_queue
 ) {
+    uint8_t gi = config.gpio;
+    if (gi > 48) {
+        gi = 48;
+    }
+    static bool touch_sweep_latched[49];
+    static uint32_t touch_sweep_last_transition[49];
+
     // Auto-off
     if (config.rtpNoteSweepAutoOffDelay > 0 &&
         state.last_note != 255 &&
@@ -398,60 +405,88 @@ static void processNoteSweep(
             }
             state.last_note = 255;
             state.note_on_time = 0;
+            touch_sweep_last_transition[gi] = millis();
         }
     }
 
-    // Valeur monte quand on touche : au-dessus du seuil = contact, mapper [seuil .. max] -> 0..4095
+    // Schmitt : bande morte autour du seuil (évite rebonds quand la mesure oscille)
+    uint32_t margin = baseline / 10;
+    if (margin < 15) {
+        margin = 15;
+    }
+    if (baseline > 80 && margin > baseline / 4) {
+        margin = baseline / 4;
+    }
+    uint32_t thr_hi = touch_threshold + margin;
+    uint32_t thr_lo = (touch_threshold > margin) ? touch_threshold - margin : 0;
+
+    if (touch_value <= thr_lo) {
+        touch_sweep_latched[gi] = false;
+    } else if (touch_value >= thr_hi) {
+        touch_sweep_latched[gi] = true;
+    }
+
     uint16_t mapped_value;
-    if (touch_value <= touch_threshold) {
+    if (!touch_sweep_latched[gi]) {
         mapped_value = 0;
     } else {
         uint32_t touch_max = touch_threshold + (baseline * 20) / 100;
-        if (touch_max <= touch_threshold) touch_max = touch_threshold + 1;
+        if (touch_max <= thr_hi) {
+            touch_max = thr_hi + 1;
+        }
         if (touch_value >= touch_max) {
             mapped_value = 4095;
         } else {
-            mapped_value = (uint16_t)map((long)touch_value, (long)touch_threshold, (long)touch_max, 0, 4095);
-            if (mapped_value > 4095) mapped_value = 4095;
+            mapped_value = (uint16_t)map((long)touch_value, (long)thr_hi, (long)touch_max, 0, 4095);
+            if (mapped_value > 4095) {
+                mapped_value = 4095;
+            }
         }
     }
 
-    // Hystérésis
-        if (!state.hysteresis.update(mapped_value)) {
+    if (!state.hysteresis.update(mapped_value)) {
         return;
+    }
+
+    uint8_t stable_midi_value = state.hysteresis.getValue();
+    uint8_t noteMin = config.rtpNoteMin;
+    uint8_t noteMax = config.rtpNoteMax;
+    uint8_t newNote = (stable_midi_value == 0) ? 255 : (uint8_t)map(stable_midi_value, 1, 127, noteMin, noteMax);
+
+    if (newNote == state.last_note) {
+        return;
+    }
+
+    constexpr uint32_t kMinNoteTransitionMs = 28;
+    uint32_t now = millis();
+    if (newNote != state.last_note &&
+        (now - touch_sweep_last_transition[gi]) < kMinNoteTransitionMs) {
+        return;
+    }
+
+    if (state.last_note != 255) {
+        if (midi_sender) {
+            midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
         }
-        
-        uint8_t stable_midi_value = state.hysteresis.getValue();
-        uint8_t noteMin = config.rtpNoteMin;
-        uint8_t noteMax = config.rtpNoteMax;
-    uint8_t newNote = (stable_midi_value == 0) ? 255 : map(stable_midi_value, 1, 127, noteMin, noteMax);
-    
-        if (newNote == state.last_note) {
-            return;
+    }
+
+    if (newNote != 255) {
+        if (midi_sender) {
+            midi_sender->sendNoteOn(config.midi_channel, newNote, config.rtpNoteVelFix);
         }
-        
-        if (state.last_note != 255) {
-            if (midi_sender) {
-                midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
-            }
-        }
-        
-        if (newNote != 255) {
-            if (midi_sender) {
-                midi_sender->sendNoteOn(config.midi_channel, newNote, config.rtpNoteVelFix);
-            }
-            state.note_on_time = (config.rtpNoteSweepAutoOffDelay > 0) ? millis() : 0;
-        } else {
-            state.note_on_time = 0;
-        }
-        
-        state.last_note = newNote;
-        state.last_value = stable_midi_value;
-        state.last_raw_value_u32 = touch_value;      // Note sweep conserve la notion "RAW 32 bits"
-        state.last_midi_value_u8 = stable_midi_value; // data1 OSC en mode MIDI
-        state.last_telemetry_ts = millis();
-        state.last_time = millis();
-        MidiOutputCoordinator::sendOsc(osc_queue, config, stable_midi_value, mapped_value);
+        state.note_on_time = (config.rtpNoteSweepAutoOffDelay > 0) ? millis() : 0;
+    } else {
+        state.note_on_time = 0;
+    }
+
+    touch_sweep_last_transition[gi] = now;
+    state.last_note = newNote;
+    state.last_value = stable_midi_value;
+    state.last_raw_value_u32 = touch_value;
+    state.last_midi_value_u8 = stable_midi_value;
+    state.last_telemetry_ts = millis();
+    state.last_time = millis();
+    MidiOutputCoordinator::sendOsc(osc_queue, config, stable_midi_value, mapped_value);
 }
 
 // Traitement messages continus (CC, Pitch Bend, Aftertouch)
@@ -669,7 +704,7 @@ void TouchProcessor::process(
                           note_on_threshold, note_off_threshold, velocity_threshold, aftertouch_range,
                           midi_sender, osc_queue);
     } else if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
-        processNoteSweep(config, state, touch_raw, touch_threshold, baseline, midi_sender, osc_queue);
+        processNoteSweep(config, state, touch_smoothed, touch_threshold, baseline, midi_sender, osc_queue);
     } else {
         processContinuous(config, state, touch_raw, touch_threshold, midi_sender, osc_queue);
     }

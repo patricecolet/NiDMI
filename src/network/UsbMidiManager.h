@@ -32,7 +32,8 @@ public:
     ~UsbMidiManager();
     
     // Initialisation
-    bool begin();
+    bool begin();        // CDC + MIDI + USB.begin()  (quand USB-MIDI est activé)
+    bool beginCdc();     // CDC seul + USB.begin()    (toujours appelé sur S3 si MIDI désactivé)
     void stop();
     void update();
     

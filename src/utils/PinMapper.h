@@ -92,6 +92,13 @@ public:
     // Mapping label → GPIO (résout les aliases automatiquement)
     static uint8_t labelToGpio(const String& label);
     static uint8_t labelToGpio(const char* label);
+
+    /**
+     * CS LIS3DH (NVS / formulaire) : les valeurs viennent du sélecteur « Dx » calibré sur XIAO C3
+     * (ex. D7 → GPIO 20). Sur XIAO S3 le même pad D7 est GPIO 44. Sans translation, CS=20 sur S3
+     * pointe vers USB (ou une broche inexistante), d’où « capteur non détecté » avec un câblage pourtant correct.
+     */
+    static uint8_t resolveImuCsGpioFromNvs(uint8_t stored_gpio);
     
     // Mapping GPIO → label (retourne le label principal)
     static String gpioToLabel(uint8_t gpio);

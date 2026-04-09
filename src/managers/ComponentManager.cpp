@@ -145,8 +145,10 @@ void ComponentManager::update() {
     osc_manager.update();
     
     // Les multiplexeurs sont maintenant lus par la tâche FreeRTOS sur Core 0
-    // Seulement envoyer les batches OSC (rapide, synchrone)
-    mux_manager.sendOscBatches(osc_queue);
+    // Seulement envoyer les batches OSC si la sortie OSC globale est activée (NVS osc_out_all)
+    if (osc_output_all_enabled_) {
+        mux_manager.sendOscBatches(osc_queue);
+    }
     
     // Traiter OSC en priorité (avec queue FreeRTOS)
     osc_queue.update();
@@ -167,6 +169,12 @@ void ComponentManager::update() {
 }
 
 void ComponentManager::reloadConfigs() {
+    {
+        Preferences prefs;
+        prefs.begin("nidmi", true);
+        osc_output_all_enabled_ = prefs.getBool("osc_out_all", true);
+        prefs.end();
+    }
     bool wdt = pauseRealtimeTasks();
     clearAll();
     loadMuxConfigFromNVS();

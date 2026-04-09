@@ -48,6 +48,9 @@ struct JoystickConfig {
     uint8_t yMidiParam;        // Paramètre MIDI axe Y (CC#, note#, etc.)
     uint8_t xMidiChannel;      // Canal MIDI axe X (1-16)
     uint8_t yMidiChannel;      // Canal MIDI axe Y (1-16)
+
+    uint8_t xNoteSweepMin, xNoteSweepMax;
+    uint8_t yNoteSweepMin, yNoteSweepMax;
     
     JoystickConfig() 
         : filter_intensity(5)
@@ -56,7 +59,9 @@ struct JoystickConfig {
         , invertX(false), invertY(false)
         , xMsgType(MidiMessageType::CONTROL_CHANGE), yMsgType(MidiMessageType::CONTROL_CHANGE)
         , xMidiParam(1), yMidiParam(2)
-        , xMidiChannel(1), yMidiChannel(1) {}
+        , xMidiChannel(1), yMidiChannel(1)
+        , xNoteSweepMin(48), xNoteSweepMax(72)
+        , yNoteSweepMin(48), yNoteSweepMax(72) {}
 };
 
 /**

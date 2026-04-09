@@ -16,6 +16,9 @@ static uint8_t lis3dh_bus = 255;
 static uint8_t lis3dh_range = 255;
 static uint8_t lis3dh_data_rate = 255;
 static bool lis3dh_initialized = false;
+/** Après échec d'init, ne pas retenter avant cette date (évite spam SPI / Serial à chaque frame). */
+static unsigned long lis3dh_init_cooldown_until = 0;
+static constexpr unsigned long kLis3dhInitRetryMs = 8000;
 
 void ImuProcessor::process(
     const ComponentConfig& config,
@@ -36,6 +39,17 @@ void ImuProcessor::process(
     uint8_t cur_data_rate = config.specificConfig.imu ? config.specificConfig.imu->data_rate : 255;
     bool config_changed = (lis3dh_gpio != config.gpio) || (lis3dh_cs != cur_cs) || (lis3dh_bus != cur_bus)
                        || (lis3dh_range != cur_range) || (lis3dh_data_rate != cur_data_rate);
+    if (config_changed) {
+        lis3dh_init_cooldown_until = 0;
+    }
+    // Échec précédent : driver NULL mais config déjà mémorisée → attendre le cooldown avant de retenter
+    if (lis3dh_initialized && !lis3dh_driver && !config_changed) {
+        if (millis() < lis3dh_init_cooldown_until) {
+            return;
+        }
+        lis3dh_initialized = false;
+    }
+
     if (!lis3dh_initialized || config_changed) {
         if (!config.specificConfig.imu) {
             static unsigned long lastLog = 0;
@@ -57,21 +71,34 @@ void ImuProcessor::process(
             uint8_t sck  = PinMapper::labelToGpio("SCK");
             uint8_t miso = PinMapper::labelToGpio("MISO");
             uint8_t mosi = PinMapper::labelToGpio("MOSI");
-            uint8_t cs   = imuConfig->cs_gpio;
+            // NVS = GPIO « XIAO C3 » pour le pad Dx ; sur S3 le même pad a un autre numéro (ex. D7 : 20 → 44)
+            uint8_t cs   = PinMapper::resolveImuCsGpioFromNvs(imuConfig->cs_gpio);
             lis3dh_driver = new Lis3dhDriver();
             if (!lis3dh_driver->beginSPI(sck, miso, mosi, cs)) {
-                Serial.printf("[ImuProcessor] Échec initialisation LIS3DH SPI CS=%d\n", cs);
                 delete lis3dh_driver;
                 lis3dh_driver = nullptr;
+                lis3dh_gpio = config.gpio;
+                lis3dh_cs = imuConfig->cs_gpio;
+                lis3dh_bus = imuConfig->bus_interface;
+                lis3dh_range = imuConfig->range;
+                lis3dh_data_rate = imuConfig->data_rate;
+                lis3dh_initialized = true;
+                lis3dh_init_cooldown_until = millis() + kLis3dhInitRetryMs;
                 return;
             }
         } else {
             uint8_t i2c_address = imuConfig->i2c_address == 24 ? Lis3dhDriver::ADDRESS_LOW : Lis3dhDriver::ADDRESS_HIGH;
             lis3dh_driver = new Lis3dhDriver(i2c_address);
             if (!lis3dh_driver->begin()) {
-                Serial.printf("[ImuProcessor] Échec initialisation LIS3DH I2C\n");
                 delete lis3dh_driver;
                 lis3dh_driver = nullptr;
+                lis3dh_gpio = config.gpio;
+                lis3dh_cs = imuConfig->cs_gpio;
+                lis3dh_bus = imuConfig->bus_interface;
+                lis3dh_range = imuConfig->range;
+                lis3dh_data_rate = imuConfig->data_rate;
+                lis3dh_initialized = true;
+                lis3dh_init_cooldown_until = millis() + kLis3dhInitRetryMs;
                 return;
             }
         }
@@ -93,8 +120,10 @@ void ImuProcessor::process(
         lis3dh_range = imuConfig->range;
         lis3dh_data_rate = imuConfig->data_rate;
         lis3dh_initialized = true;
-        Serial.printf("[ImuProcessor] LIS3DH %s initialisé (GPIO %d, CS=%d, range=%d, dataRate=%d, filter=%d)\n", 
-            use_spi ? "SPI" : "I2C", config.gpio, imuConfig->cs_gpio, 
+        lis3dh_init_cooldown_until = 0;
+        Serial.printf("[ImuProcessor] LIS3DH %s initialisé (GPIO %d, CS=%d, range=%d, dataRate=%d, filter=%d)\n",
+            use_spi ? "SPI" : "I2C", config.gpio,
+            use_spi ? (int)PinMapper::resolveImuCsGpioFromNvs(imuConfig->cs_gpio) : (int)imuConfig->cs_gpio,
             imuConfig->range, imuConfig->data_rate, imuConfig->filter_intensity);
     }
     
@@ -166,7 +195,7 @@ void ImuProcessor::process(
     
     // Envoyer MIDI/OSC si les valeurs ont changé
     if (xNorm != lastXNorm && lastXNormPtr) {
-        sendMidiForAxis(midi_sender, config, 'x', xNorm);
+        sendMidiForAxis(midi_sender, config, 'x', xNorm, static_cast<int32_t>(xFiltered));
         sendOscForAxis(osc_queue, config, 'x', xNorm, accel.x);  // RAW = valeur brute non filtrée
         *lastXNormPtr = (uint8_t)(xNorm + 127);
 
@@ -176,7 +205,7 @@ void ImuProcessor::process(
     }
     
     if (yNorm != lastYNorm && lastYNormPtr) {
-        sendMidiForAxis(midi_sender, config, 'y', yNorm);
+        sendMidiForAxis(midi_sender, config, 'y', yNorm, static_cast<int32_t>(yFiltered));
         sendOscForAxis(osc_queue, config, 'y', yNorm, accel.y);  // RAW = valeur brute non filtrée
         *lastYNormPtr = (uint8_t)(yNorm + 127);
 
@@ -186,7 +215,7 @@ void ImuProcessor::process(
     }
     
     if (zNorm != lastZNorm && lastZNormPtr) {
-        sendMidiForAxis(midi_sender, config, 'z', zNorm);
+        sendMidiForAxis(midi_sender, config, 'z', zNorm, static_cast<int32_t>(zFiltered));
         sendOscForAxis(osc_queue, config, 'z', zNorm, accel.z);  // RAW = valeur brute non filtrée
         *lastZNormPtr = (uint8_t)(zNorm + 127);
 
@@ -220,7 +249,8 @@ void ImuProcessor::sendMidiForAxis(
     MidiSender* midi_sender,
     const ComponentConfig& config,
     char axis,
-    int8_t normalizedValue
+    int8_t normalizedValue,
+    int32_t rawAxisValue
 ) {
     if (!midi_sender) return;
     
@@ -271,9 +301,38 @@ void ImuProcessor::sendMidiForAxis(
         case MidiMessageType::AFTERTOUCH:
             midi_sender->sendAftertouch(channel, midiValue);
             break;
-        case MidiMessageType::NOTE_SWEEP:
-            midi_sender->sendNoteOn(channel, midiValue, 100);
+        case MidiMessageType::NOTE_SWEEP: {
+            uint8_t nmin = config.rtpNoteMin;
+            uint8_t nmax = config.rtpNoteMax;
+            int32_t axisMin = 0;
+            int32_t axisMax = 1;
+            bool inv = false;
+            if (config.specificConfig.imu) {
+                Components::ImuConfig* ic = config.specificConfig.imu;
+                if (axis == 'x') {
+                    nmin = ic->xNoteSweepMin;
+                    nmax = ic->xNoteSweepMax;
+                    axisMin = ic->xMin;
+                    axisMax = ic->xMax;
+                    inv = ic->invertX;
+                } else if (axis == 'y') {
+                    nmin = ic->yNoteSweepMin;
+                    nmax = ic->yNoteSweepMax;
+                    axisMin = ic->yMin;
+                    axisMax = ic->yMax;
+                    inv = ic->invertY;
+                } else if (axis == 'z') {
+                    nmin = ic->zNoteSweepMin;
+                    nmax = ic->zNoteSweepMax;
+                    axisMin = ic->zMin;
+                    axisMax = ic->zMax;
+                    inv = ic->invertZ;
+                }
+            }
+            uint8_t note = mapNoteSweepFromFullAxisTravel(rawAxisValue, axisMin, axisMax, nmin, nmax, inv);
+            midi_sender->sendNoteOn(channel, note, config.rtpNoteVelFix);
             break;
+        }
         default:
             midi_sender->sendControlChange(channel, param, midiValue);
             break;

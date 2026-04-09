@@ -17,9 +17,41 @@
 #include "../midi/MidiMessageType.h"
 #include <Preferences.h>
 
+/** Balayage : UI envoie midiNoteSweepMin/Max ; par axe X_midiNoteSweepMin, etc. */
+static void loadNoteSweepRangeFromJson(const String& pinConfig, const char* axisPrefix,
+                                       uint8_t& outMin, uint8_t& outMax) {
+    int mn = -999;
+    int mx = -999;
+    if (axisPrefix && axisPrefix[0]) {
+        char kmin[40], kmax[40];
+        snprintf(kmin, sizeof(kmin), "%s_midiNoteSweepMin", axisPrefix);
+        snprintf(kmax, sizeof(kmax), "%s_midiNoteSweepMax", axisPrefix);
+        mn = JSONParser::extractInt(pinConfig, kmin, -999);
+        mx = JSONParser::extractInt(pinConfig, kmax, -999);
+    }
+    if (mn < 0 || mn > 127) {
+        mn = JSONParser::extractInt(pinConfig, "midiNoteSweepMin",
+            JSONParser::extractInt(pinConfig, "midiNoteMin",
+            JSONParser::extractInt(pinConfig, "rtpNoteMin", 48)));
+    }
+    if (mx < 0 || mx > 127) {
+        mx = JSONParser::extractInt(pinConfig, "midiNoteSweepMax",
+            JSONParser::extractInt(pinConfig, "midiNoteMax",
+            JSONParser::extractInt(pinConfig, "rtpNoteMax", 72)));
+    }
+    outMin = (uint8_t)constrain(mn, 0, 127);
+    outMax = (uint8_t)constrain(mx, 0, 127);
+    if (outMin > outMax) {
+        uint8_t t = outMin;
+        outMin = outMax;
+        outMax = t;
+    }
+}
+
 void ConfigLoader::loadFromNVS(ComponentManager& manager) {
     Preferences preferences;
     preferences.begin("nidmi", true);
+    const bool oscOutAll = preferences.getBool("osc_out_all", true);
     
     // Serial.println("[ConfigLoader] Loading configs from NVS...");
     
@@ -250,8 +282,8 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             if (index != 255) {
                 ComponentConfig* config = manager.getConfigMutable(index);
                 if (config) {
-                    // Lire oscEnabled, oscFormat et oscAddress depuis la config
-                    bool oscEnabled = JSONParser::extractBool(pinConfig, "oscEnabled", false);
+                    // Lire oscEnabled, oscFormat et oscAddress depuis la config (× master NVS osc_out_all)
+                    bool oscEnabled = oscOutAll && JSONParser::extractBool(pinConfig, "oscEnabled", false);
                     String oscFormat = JSONParser::extractStr(pinConfig, "oscFormat", "float");
                     String oscAddress = JSONParser::extractStr(pinConfig, "oscAddress", "");
                     
@@ -460,6 +492,9 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                                     JSONParser::extractInt(pinConfig, "midiChannel", channel));
                                 joyConfig->yMidiChannel = JSONParser::extractInt(pinConfig, "Y_midiChannel",
                                     JSONParser::extractInt(pinConfig, "midiChannel", channel));
+
+                                loadNoteSweepRangeFromJson(pinConfig, "X", joyConfig->xNoteSweepMin, joyConfig->xNoteSweepMax);
+                                loadNoteSweepRangeFromJson(pinConfig, "Y", joyConfig->yNoteSweepMin, joyConfig->yNoteSweepMax);
                                     
                                 // Aussi mettre à jour le msg_type principal pour le X
                                 config->msg_type = joyConfig->xMsgType;
@@ -589,6 +624,10 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                                     JSONParser::extractInt(pinConfig, "midiChannel", channel));
                                 imuConfig->zMidiChannel = JSONParser::extractInt(pinConfig, "Z_midiChannel",
                                     JSONParser::extractInt(pinConfig, "midiChannel", channel));
+
+                                loadNoteSweepRangeFromJson(pinConfig, "X", imuConfig->xNoteSweepMin, imuConfig->xNoteSweepMax);
+                                loadNoteSweepRangeFromJson(pinConfig, "Y", imuConfig->yNoteSweepMin, imuConfig->yNoteSweepMax);
+                                loadNoteSweepRangeFromJson(pinConfig, "Z", imuConfig->zNoteSweepMin, imuConfig->zNoteSweepMax);
                                     
                                 // Mettre à jour le msg_type principal pour le X
                                 config->msg_type = imuConfig->xMsgType;
@@ -655,32 +694,20 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                     config->midiCcOnOffMin = (midiCcOnOffMin >= 0 && midiCcOnOffMin <= 127) ? midiCcOnOffMin : 0;
                     config->midiCcOnOffMax = (midiCcOnOffMax >= 0 && midiCcOnOffMax <= 127) ? midiCcOnOffMax : 127;
                     
-                    // Lire les paramètres pour NOTE_SWEEP (balayage)
-                    if (msg_type == MidiMessageType::NOTE_SWEEP) {
-                        // Lire avec nouveaux noms puis anciens pour compatibilité
-                        config->rtpNoteMin = JSONParser::extractInt(pinConfig, "midiNoteMin", 48);
-                        if (config->rtpNoteMin == 48) {
-                            config->rtpNoteMin = JSONParser::extractInt(pinConfig, "rtpNoteMin", 48); // Compatibilité
-                        }
-                        config->rtpNoteMax = JSONParser::extractInt(pinConfig, "midiNoteMax", 72);
-                        if (config->rtpNoteMax == 72) {
-                            config->rtpNoteMax = JSONParser::extractInt(pinConfig, "rtpNoteMax", 72); // Compatibilité
-                        }
-                        config->rtpNoteVelFix = JSONParser::extractInt(pinConfig, "midiNoteVelocityFix", 100);
-                        if (config->rtpNoteVelFix == 100) {
-                            config->rtpNoteVelFix = JSONParser::extractInt(pinConfig, "rtpNoteVelFix", 100); // Compatibilité
-                        }
-                        config->rtpNoteSweepAutoOffDelay = JSONParser::extractInt(pinConfig, "midiNoteSweepAutoOffDelay", 0);
-                        if (config->rtpNoteSweepAutoOffDelay == 0) {
-                            config->rtpNoteSweepAutoOffDelay = JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 0); // Compatibilité
-                        }
-                        // S'assurer que min <= max
-                        if (config->rtpNoteMin > config->rtpNoteMax) {
-                            uint8_t temp = config->rtpNoteMin;
-                            config->rtpNoteMin = config->rtpNoteMax;
-                            config->rtpNoteMax = temp;
-                        }
+                    // Balayage NOTE_SWEEP : clés midiNoteSweepMin/Max (formulaire), pas seulement midiNoteMin
+                    {
+                        int vel = JSONParser::extractInt(pinConfig, "midiNoteVelocityFix",
+                            JSONParser::extractInt(pinConfig, "rtpNoteVelFix", 100));
+                        if (vel < 1) vel = 1;
+                        if (vel > 127) vel = 127;
+                        config->rtpNoteVelFix = (uint8_t)vel;
+                        int off = JSONParser::extractInt(pinConfig, "midiNoteSweepAutoOffDelay",
+                            JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 0));
+                        if (off < 0) off = 0;
+                        if (off > 65535) off = 65535;
+                        config->rtpNoteSweepAutoOffDelay = (uint16_t)off;
                     }
+                    loadNoteSweepRangeFromJson(pinConfig, nullptr, config->rtpNoteMin, config->rtpNoteMax);
                     
                     // Note: filter_intensity est maintenant chargé dans les configs spécifiques ci-dessus
                     
@@ -812,8 +839,8 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             }
         }
         
-        // Extraire flags OSC et Debug
-        bool oscEnabled = JSONParser::extractBool(pinConfig, "oscEnabled", false);
+        // Extraire flags OSC et Debug (OSC effectif = master NVS osc_out_all × pin)
+        bool oscEnabled = oscOutAll && JSONParser::extractBool(pinConfig, "oscEnabled", false);
         bool dbgEnabled = JSONParser::extractBool(pinConfig, "dbgEnabled", false);
         String oscAddress = JSONParser::extractStr(pinConfig, "oscAddress", "");
         String oscFormat = JSONParser::extractStr(pinConfig, "oscFormat", "");
@@ -918,6 +945,23 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             imuConfig->xMidiChannel = JSONParser::extractInt(pinConfig, "X_midiChannel", JSONParser::extractInt(pinConfig, "midiChannel", channel));
             imuConfig->yMidiChannel = JSONParser::extractInt(pinConfig, "Y_midiChannel", JSONParser::extractInt(pinConfig, "midiChannel", channel));
             imuConfig->zMidiChannel = JSONParser::extractInt(pinConfig, "Z_midiChannel", JSONParser::extractInt(pinConfig, "midiChannel", channel));
+
+            loadNoteSweepRangeFromJson(pinConfig, "X", imuConfig->xNoteSweepMin, imuConfig->xNoteSweepMax);
+            loadNoteSweepRangeFromJson(pinConfig, "Y", imuConfig->yNoteSweepMin, imuConfig->yNoteSweepMax);
+            loadNoteSweepRangeFromJson(pinConfig, "Z", imuConfig->zNoteSweepMin, imuConfig->zNoteSweepMax);
+            {
+                int vel = JSONParser::extractInt(pinConfig, "midiNoteVelocityFix",
+                    JSONParser::extractInt(pinConfig, "rtpNoteVelFix", 100));
+                if (vel < 1) vel = 1;
+                if (vel > 127) vel = 127;
+                configPtr->rtpNoteVelFix = (uint8_t)vel;
+                int off = JSONParser::extractInt(pinConfig, "midiNoteSweepAutoOffDelay",
+                    JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 0));
+                if (off < 0) off = 0;
+                if (off > 65535) off = 65535;
+                configPtr->rtpNoteSweepAutoOffDelay = (uint16_t)off;
+            }
+            loadNoteSweepRangeFromJson(pinConfig, nullptr, configPtr->rtpNoteMin, configPtr->rtpNoteMax);
 
             configPtr->msg_type = imuConfig->xMsgType;
             Serial.printf("[ConfigLoader] IMU MIDI (bus): X=%d(ch%d,p%d) Y=%d(ch%d,p%d) Z=%d(ch%d,p%d)\n",

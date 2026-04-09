@@ -63,16 +63,16 @@ private:
     
     /**
      * @brief Envoie un message MIDI pour un axe
-     * @param midi_sender Sender MIDI
-     * @param config Configuration du composant
-     * @param axis Axe ('x', 'y' ou 'z')
-     * @param normalizedValue Valeur normalisée (-127..127)
+     * @param normalizedValue Valeur normalisée (-127..127), CC / pitch / aftertouch
+     * @param rawAxisValue Valeur filtrée brute (même domaine que les seuils min/max) : pour NOTE_SWEEP,
+     *        balayage linéaire sur toute la course [min..max] → [noteMin..noteMax]
      */
     static void sendMidiForAxis(
         MidiSender* midi_sender,
         const ComponentConfig& config,
         char axis,
-        int8_t normalizedValue
+        int8_t normalizedValue,
+        int32_t rawAxisValue
     );
     
     /**

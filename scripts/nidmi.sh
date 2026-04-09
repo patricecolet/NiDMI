@@ -95,6 +95,14 @@ esac
 
 BOARD_TYPE="s3"  # Par défaut: S3
 BOARD="esp32:esp32:XIAO_ESP32S3"
+# Forcer USB-OTG (TinyUSB) via build properties (plus fiable que les options FQBN)
+# build.usb_mode=0     → USB-OTG : MIDI USB + CDC pilotés par le firmware (UsbMidiManager)
+# build.cdc_on_boot=0  → obligatoire pour MIDI USB : avec cdc_on_boot=1, TinyUSB est déjà
+#                        lancé au boot et ajouter USBMIDI après coup ferait crasher la pile.
+S3_USB_PROPS=(
+    --build-property "build.usb_mode=0"
+    --build-property "build.cdc_on_boot=0"
+)
 DEFAULT_SKETCH="nidmi_basic"
 NVS_RESET_SKETCH="nidmi_clear_nvs"
 CLEAR_NVS=false
@@ -227,6 +235,7 @@ show_help() {
     echo "  upload   - Synchroniser + compiler + uploader"
     echo "  flash    - Uploader sans recompiler (binaire déjà compilé pour ce sketch + board)"
     echo "  monitor  - Ouvrir le moniteur série"
+    echo "  erase-nvs - Effacer la région NVS via esptool (0x9000, 20 Ko ; voir doc si partition Arduino différente)"
     echo "  all      - Tout faire (sync + compile + upload + test)"
     echo "  clean    - Nettoyer le cache seulement"
     echo "  help     - Afficher cette aide"
@@ -269,6 +278,8 @@ show_help() {
     echo "  ./scripts/nidmi.sh build                   # Build (S3 par défaut)"
     echo "  ./scripts/nidmi.sh upload nidmi_osc        # Upload sketch OSC"
     echo "  ./scripts/nidmi.sh upload --clear-nvs      # Upload sketch reset NVS"
+    echo "  ./scripts/nidmi.sh upload --clear-nvs --split-fs   # Idem, même partition que split-fs"
+    echo "  ./scripts/nidmi.sh erase-nvs --port /dev/cu.usbmodem1101   # NVS via esptool (PC)"
     echo "  ./scripts/nidmi.sh monitor                 # Ouvrir le moniteur série"
     echo "  ./scripts/nidmi.sh all                     # Tout faire + test"
     echo "  ./scripts/nidmi.sh clean                   # Nettoyer le cache"
@@ -466,6 +477,104 @@ setup_split_fs_partition() {
     return 0
 }
 
+# Détecte si un port est le port JTAG hardware du S3 (nom contient la MAC, ex. usbmodem1020BA76E641)
+# Retourne 0 (vrai) si c'est JTAG, 1 sinon
+nidmi_port_is_jtag() {
+    local p="$1"
+    # Le port JTAG ESP32-S3 a toujours un suffixe hexadécimal long (≥10 chars hex, en majuscules)
+    if echo "$p" | grep -qE 'usbmodem[0-9A-Fa-f]{10,}$'; then
+        return 0
+    fi
+    return 1
+}
+
+# Sélection du port pour l'UPLOAD : préfère le port JTAG (stable même en boot loop)
+nidmi_pick_upload_port() {
+    if [ -n "$PORT_OVERRIDE" ]; then PORT="$PORT_OVERRIDE"; return 0; fi
+    if [ -n "$NIDMI_PORT" ]; then PORT="$NIDMI_PORT"; return 0; fi
+    local all_ports
+    case "$PLATFORM" in
+        mac)
+            all_ports=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null)
+            ;;
+        wsl|linux)
+            all_ports=$(ls /dev/ttyUSB* /dev/ttyACM* /dev/ttyS* 2>/dev/null)
+            ;;
+    esac
+    # Priorité 1 : port JTAG (stable même en boot loop)
+    for p in $all_ports; do
+        if nidmi_port_is_jtag "$p"; then PORT="$p"; break; fi
+    done
+    # Priorité 2 : premier port disponible
+    if [ -z "$PORT" ]; then PORT=$(echo "$all_ports" | head -1); fi
+    if [ -z "$PORT" ]; then
+        echo "   ❌ Aucun port USB trouvé"
+        echo "   📝 Ports (cu.*): $(ls /dev/cu.* 2>/dev/null | tr '\n' ' ')"
+        echo "   📝 Utilisez --port ou NIDMI_PORT"
+        return 1
+    fi
+    if nidmi_port_is_jtag "$PORT"; then
+        echo "   ℹ️  Port JTAG hardware sélectionné (stable) : $PORT"
+        echo "      (si le firmware est en boot loop, c'est normal — upload possible quand même)"
+    fi
+    return 0
+}
+
+# Sélection du port pour le MONITEUR : préfère le port CDC (là où Serial.println écrit)
+nidmi_pick_monitor_port() {
+    if [ -n "$PORT_OVERRIDE" ]; then PORT="$PORT_OVERRIDE"; return 0; fi
+    if [ -n "$NIDMI_PORT" ]; then PORT="$NIDMI_PORT"; return 0; fi
+    local all_ports
+    case "$PLATFORM" in
+        mac)
+            all_ports=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null)
+            ;;
+        wsl|linux)
+            all_ports=$(ls /dev/ttyUSB* /dev/ttyACM* /dev/ttyS* 2>/dev/null)
+            ;;
+    esac
+    # Priorité 1 : port CDC (nom court, PAS le JTAG avec MAC longue)
+    for p in $all_ports; do
+        if ! nidmi_port_is_jtag "$p"; then PORT="$p"; break; fi
+    done
+    # Priorité 2 : premier disponible (cas où seul le JTAG est présent)
+    if [ -z "$PORT" ]; then
+        PORT=$(echo "$all_ports" | head -1)
+        if [ -n "$PORT" ]; then
+            echo "   ⚠️  Seul le port JTAG est visible ($PORT)."
+            echo "      Serial.println() sort sur le port CDC USB-OTG (cu.usbmodemXXX)."
+            echo "      Si le firmware est en boot loop, uploadez d'abord le firmware fixé."
+        fi
+    fi
+    if [ -z "$PORT" ]; then
+        echo "   ❌ Aucun port USB trouvé"
+        echo "   📝 Ports (cu.*): $(ls /dev/cu.* 2>/dev/null | tr '\n' ' ')"
+        echo "   📝 Utilisez --port ou NIDMI_PORT"
+        return 1
+    fi
+    return 0
+}
+
+# Port série générique (upload) — conservé pour erase-nvs et compatibilité
+nidmi_pick_serial_port() {
+    nidmi_pick_upload_port
+}
+
+# Après upload de nidmi_clear_nvs
+nidmi_clear_nvs_upload_hint() {
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Sketch nidmi_clear_nvs téléversé"
+    echo "  • L’ESP redémarre et exécute nvs_flash_erase() (~1,5 s après boot)."
+    echo "  • Si le moniteur USB reste vide : les logs peuvent être sur UART ;"
+    echo "    l’effacement NVS s’exécute quand même dans setup()."
+    echo "  • Ensuite : ./scripts/nidmi.sh upload  avec les mêmes options que d’habitude"
+    echo "    (--board, --split-fs, --no-large-app, --port, etc.), sans --clear-nvs."
+    echo "  • SSID toujours faux ?  ./scripts/nidmi.sh erase-nvs [--board …] [--port …]"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+}
+
 # Fonction de compilation
 compile_sketch() {
     echo "🔨 Compilation du sketch..."
@@ -505,6 +614,9 @@ compile_sketch() {
         
         # Build properties (flags + partition C3 si --large-app)
         BUILD_PROPS=()
+        if [[ "$BOARD" == *"XIAO_ESP32S3"* ]]; then
+            BUILD_PROPS+=("${S3_USB_PROPS[@]}")
+        fi
         if [ ${#EXTRA_FLAGS_ARRAY[@]} -gt 0 ]; then
             BUILD_PROPS+=(--build-property "compiler.cpp.extra_flags=${EXTRA_FLAGS_ARRAY[*]}")
         fi
@@ -519,11 +631,7 @@ compile_sketch() {
             BUILD_PROPS+=(--build-property "upload.maximum_size=4063232")
         fi
         
-        if [ ${#BUILD_PROPS[@]} -gt 0 ]; then
-            arduino-cli compile --fqbn $BOARD "${BUILD_PROPS[@]}" $SKETCH_PATH
-        else
-            arduino-cli compile --fqbn $BOARD $SKETCH_PATH
-        fi
+        arduino-cli compile --fqbn $BOARD "${BUILD_PROPS[@]}" $SKETCH_PATH
         echo "   ✅ Compilation réussie"
     else
         echo "   ⚠️  arduino-cli non trouvé"
@@ -574,6 +682,9 @@ build_binary() {
         fi
         
         BUILD_PROPS=()
+        if [[ "$BOARD" == *"XIAO_ESP32S3"* ]]; then
+            BUILD_PROPS+=("${S3_USB_PROPS[@]}")
+        fi
         if [ ${#EXTRA_FLAGS_ARRAY[@]} -gt 0 ]; then
             BUILD_PROPS+=(--build-property "compiler.cpp.extra_flags=${EXTRA_FLAGS_ARRAY[*]}")
         fi
@@ -588,11 +699,7 @@ build_binary() {
             BUILD_PROPS+=(--build-property "upload.maximum_size=4063232")
         fi
         
-        if [ ${#BUILD_PROPS[@]} -gt 0 ]; then
-            arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "${BUILD_PROPS[@]}" "$SKETCH_PATH"
-        else
-            arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "$SKETCH_PATH"
-        fi
+        arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "${BUILD_PROPS[@]}" "$SKETCH_PATH"
         echo "   ✅ Binaire compilé et stocké dans bin/"
         echo "   📁 Fichiers créés:"
         ls -la "$REPO_DIR/bin/" 2>/dev/null || echo "   📁 Aucun fichier trouvé"
@@ -607,30 +714,10 @@ build_binary() {
 # Fonction de moniteur série
 monitor_serial() {
     echo "📺 Ouverture du moniteur série..."
+    echo "   ℹ️  Serial.println() sort sur le port CDC USB-OTG (cu.usbmodemXXX court)."
+    echo "      Le port JTAG hardware (cu.usbmodemXXXXXXXXXX long) ne montre pas les logs."
     
-    # Déterminer le port série (priorité: --port, NIDMI_PORT, auto-détection)
-    if [ -n "$PORT_OVERRIDE" ]; then
-        PORT="$PORT_OVERRIDE"
-    elif [ -n "$NIDMI_PORT" ]; then
-        PORT="$NIDMI_PORT"
-    else
-        case "$PLATFORM" in
-            mac)
-                PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
-                ;;
-            wsl|linux)
-                PORT=$(ls /dev/ttyUSB* /dev/ttyACM* /dev/ttyS* 2>/dev/null | head -1)
-                ;;
-            *)
-                PORT=""
-                ;;
-        esac
-    fi
-    if [ -z "$PORT" ]; then
-        echo "   ❌ Aucun port série trouvé"
-        echo "   📝 Ports disponibles (tty*/cu*):"
-        ls /dev/ttyUSB* /dev/ttyACM* /dev/ttyS* /dev/cu.* 2>/dev/null | head -5 || echo "   📝 Aucun port trouvé"
-        echo "   📝 Vérifiez que l'ESP32 est connecté et/ou utilisez --port ou NIDMI_PORT"
+    if ! nidmi_pick_monitor_port; then
         exit 1
     fi
     
@@ -668,29 +755,7 @@ upload_sketch() {
     echo "📤 Upload vers l'ESP32..."
     
     if command -v arduino-cli &> /dev/null; then
-        # Déterminer le port série (priorité: --port, NIDMI_PORT, auto-détection)
-        if [ -n "$PORT_OVERRIDE" ]; then
-            PORT="$PORT_OVERRIDE"
-        elif [ -n "$NIDMI_PORT" ]; then
-            PORT="$NIDMI_PORT"
-        else
-            case "$PLATFORM" in
-                mac)
-                    PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
-                    ;;
-                wsl|linux)
-                    PORT=$(ls /dev/ttyUSB* /dev/ttyACM* /dev/ttyS* 2>/dev/null | head -1)
-                    ;;
-                *)
-                    PORT=""
-                    ;;
-            esac
-        fi
-        if [ -z "$PORT" ]; then
-            echo "   ❌ Aucun port série trouvé"
-            echo "   📝 Ports disponibles (tty*/cu*):"
-            ls /dev/ttyUSB* /dev/ttyACM* /dev/ttyS* /dev/cu.* 2>/dev/null | head -5 || echo "   📝 Aucun port trouvé"
-            echo "   📝 Vérifiez que l'ESP32 est connecté et/ou utilisez --port ou NIDMI_PORT"
+        if ! nidmi_pick_upload_port; then
             exit 1
         fi
         
@@ -707,6 +772,15 @@ upload_sketch() {
 main() {
     if [ "$CLEAR_NVS" = true ]; then
         set_sketch "$NVS_RESET_SKETCH"
+        echo ""
+        if [ "$SPLIT_FS" = true ]; then
+            echo "⚠️  --split-fs actif : pour reflasher nidmi_basic, garde aussi --split-fs (même table de partitions / même zone NVS)."
+        else
+            echo "ℹ️  Sans --split-fs, nidmi_clear_nvs et nidmi_basic utilisent le même profil de partition (défaut Arduino sur S3 ;"
+            echo "   sur C3, --large-app du script s’applique aux deux sauf si tu passes --no-large-app)."
+        fi
+        echo "   Si le SSID ne redevient pas « nidmi » : ./scripts/nidmi.sh erase-nvs --port … , autre port USB, ou bootloader."
+        echo ""
     fi
     case "${1:-help}" in
         "sync")
@@ -745,6 +819,9 @@ main() {
                    clean_cache
                    compile_sketch
                    upload_sketch
+                   if [ "$CLEAR_NVS" = true ]; then
+                       nidmi_clear_nvs_upload_hint
+                   fi
                    echo ""
                    echo "🎉 Processus terminé !"
                    echo ""
@@ -773,6 +850,30 @@ main() {
                    echo "============================="
                    monitor_serial
                    ;;
+               "erase-nvs")
+                   echo "🔥 NiDMI - Effacement NVS (esptool erase_region)"
+                   echo "   Région 0x9000, taille 0x5000 (20 Ko) — OK pour les CSV NiDMI split-fs et souvent pour le défaut XIAO."
+                   echo "   Si ta partition « nvs » fait 24 Ko (0x6000) dans l’IDE, allonge manuellement la commande esptool."
+                   echo ""
+                   if ! nidmi_pick_serial_port; then
+                       exit 1
+                   fi
+                   CHIP="esp32s3"
+                   if [[ "$BOARD_TYPE" == "c3" ]]; then
+                       CHIP="esp32c3"
+                   fi
+                   echo "   📡 Port: $PORT  Chip: $CHIP"
+                   if python3 -m esptool version >/dev/null 2>&1; then
+                       python3 -m esptool --chip "$CHIP" --port "$PORT" erase_region 0x9000 0x5000
+                   elif command -v esptool.py &>/dev/null; then
+                       esptool.py --chip "$CHIP" --port "$PORT" erase_region 0x9000 0x5000
+                   else
+                       echo "   ❌ esptool introuvable : pip install esptool"
+                       exit 1
+                   fi
+                   echo ""
+                   echo "✅ Région NVS effacée. Reflashez le firmware : ./scripts/nidmi.sh upload …"
+                   ;;
         "all")
             echo "🚀 NiDMI - TOUT FAIRE (Sync + Compile + Upload + Test)"
             echo "========================================================="
@@ -780,6 +881,9 @@ main() {
             clean_cache
             compile_sketch
             upload_sketch
+            if [ "$CLEAR_NVS" = true ]; then
+                nidmi_clear_nvs_upload_hint
+            fi
             echo ""
             echo "🎉 Processus terminé !"
             echo ""

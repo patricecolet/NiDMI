@@ -58,3 +58,37 @@ inline int8_t mapAxisValueGeneric(int32_t value, const AxisRangeConfig& cfg) {
     return cfg.invert ? static_cast<int8_t>(-out) : out;
 }
 
+/**
+ * Balayage de notes : une seule course physique [axisMin..axisMax] → [noteMin..noteMax].
+ * (La normalisation -127..127 coupe la course en deux demi-axes ; ici toute la course utile compte.)
+ */
+inline uint8_t mapNoteSweepFromFullAxisTravel(
+    int32_t rawFiltered,
+    int32_t axisMin,
+    int32_t axisMax,
+    uint8_t noteMin,
+    uint8_t noteMax,
+    bool invert
+) {
+    if (axisMin > axisMax) {
+        int32_t t = axisMin;
+        axisMin = axisMax;
+        axisMax = t;
+    }
+    int32_t v = rawFiltered;
+    if (v < axisMin) {
+        v = axisMin;
+    }
+    if (v > axisMax) {
+        v = axisMax;
+    }
+    if (axisMin == axisMax) {
+        int mid = ((int)noteMin + (int)noteMax) / 2;
+        return static_cast<uint8_t>(constrain(mid, 0, 127));
+    }
+    long nLo = invert ? (long)noteMax : (long)noteMin;
+    long nHi = invert ? (long)noteMin : (long)noteMax;
+    long noteL = map(v, axisMin, axisMax, nLo, nHi);
+    return static_cast<uint8_t>(constrain(noteL, 0L, 127L));
+}
+

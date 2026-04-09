@@ -77,7 +77,7 @@ void JoystickProcessor::process(
     int8_t lastYNorm = (lastYNormPtr && *lastYNormPtr != 255) ? (int8_t)(*lastYNormPtr - 127) : 128;
     
     if (xNorm != lastXNorm && lastXNormPtr) {
-        sendMidiForAxis(midi_sender, config, 'x', xNorm);
+        sendMidiForAxis(midi_sender, config, 'x', xNorm, static_cast<int32_t>(xFiltered));
         sendOscForAxis(osc_queue, config, 'x', xNorm, xFiltered);
         *lastXNormPtr = (uint8_t)(xNorm + 127);
 
@@ -88,7 +88,7 @@ void JoystickProcessor::process(
     }
     
     if (yNorm != lastYNorm && lastYNormPtr) {
-        sendMidiForAxis(midi_sender, config, 'y', yNorm);
+        sendMidiForAxis(midi_sender, config, 'y', yNorm, static_cast<int32_t>(yFiltered));
         sendOscForAxis(osc_queue, config, 'y', yNorm, yFiltered);
         *lastYNormPtr = (uint8_t)(yNorm + 127);
 
@@ -123,7 +123,8 @@ void JoystickProcessor::sendMidiForAxis(
     MidiSender* midi_sender,
     const ComponentConfig& config,
     char axis,
-    int8_t normalizedValue
+    int8_t normalizedValue,
+    int32_t rawAxisValue
 ) {
     if (!midi_sender) return;
     
@@ -170,9 +171,32 @@ void JoystickProcessor::sendMidiForAxis(
         case MidiMessageType::AFTERTOUCH:
             midi_sender->sendAftertouch(channel, midiValue);
             break;
-        case MidiMessageType::NOTE_SWEEP:
-            midi_sender->sendNoteOn(channel, midiValue, 100);
+        case MidiMessageType::NOTE_SWEEP: {
+            uint8_t nmin = config.rtpNoteMin;
+            uint8_t nmax = config.rtpNoteMax;
+            int32_t axisMin = 0;
+            int32_t axisMax = 4095;
+            bool inv = false;
+            if (config.specificConfig.joystick) {
+                Components::JoystickConfig* jc = config.specificConfig.joystick;
+                if (axis == 'x') {
+                    nmin = jc->xNoteSweepMin;
+                    nmax = jc->xNoteSweepMax;
+                    axisMin = static_cast<int32_t>(jc->joyXMin);
+                    axisMax = static_cast<int32_t>(jc->joyXMax);
+                    inv = jc->invertX;
+                } else {
+                    nmin = jc->yNoteSweepMin;
+                    nmax = jc->yNoteSweepMax;
+                    axisMin = static_cast<int32_t>(jc->joyYMin);
+                    axisMax = static_cast<int32_t>(jc->joyYMax);
+                    inv = jc->invertY;
+                }
+            }
+            uint8_t note = mapNoteSweepFromFullAxisTravel(rawAxisValue, axisMin, axisMax, nmin, nmax, inv);
+            midi_sender->sendNoteOn(channel, note, config.rtpNoteVelFix);
             break;
+        }
         default:
             midi_sender->sendControlChange(channel, param, midiValue);
             break;

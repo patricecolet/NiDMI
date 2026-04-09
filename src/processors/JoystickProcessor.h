@@ -60,17 +60,14 @@ private:
     );
     
     /**
-     * @brief Envoie un message MIDI pour un axe
-     * @param midi_sender Sender MIDI
-     * @param config Configuration du composant
-     * @param axis Axe ('x' ou 'y')
-     * @param normalizedValue Valeur normalisée (-127..127)
+     * @param rawAxisValue ADC filtré (0..4095) : pour NOTE_SWEEP, balayage sur toute la course joyXMin..joyXMax
      */
     static void sendMidiForAxis(
         MidiSender* midi_sender,
         const ComponentConfig& config,
         char axis,
-        int8_t normalizedValue
+        int8_t normalizedValue,
+        int32_t rawAxisValue
     );
     
     /**

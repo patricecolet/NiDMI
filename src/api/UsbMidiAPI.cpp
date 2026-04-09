@@ -22,19 +22,25 @@ void setupUsbMidiAPI(AsyncWebServer& server) {
             // Activer/désactiver USB MIDI dans le routeur
             g_midiRouter.enableUsbMidi(isEnabled);
             
-            // Si activation et supporté, initialiser USB MIDI
-            if(isEnabled && serverCore.usbMidi().isSupported()){
-                serverCore.usbMidi().begin();
-            } else if(!isEnabled) {
+            if(!isEnabled) {
                 serverCore.usbMidi().stop();
             }
+            // Ne pas appeler begin() ici après une activation : si le boot a fait beginCdc()
+            // seul (USB-MIDI désactivé en NVS), USB.begin() a déjà été appelé sans interface
+            // MIDI ; ajouter USBMIDI après coup ne met pas à jour le descripteur composite.
+            // Un redémarrage charge la NVS et MidiRouter::begin() appelle begin() une fois
+            // avec CDC + MIDI depuis le premier USB.begin().
             
-            request->send(200, "application/json", "{\"status\":\"ok\"}");
+            const bool willReboot = serverCore.usbMidi().isSupported();
+            String body = "{\"status\":\"ok\",\"reboot\":";
+            body += willReboot ? "true" : "false";
+            body += "}";
+            request->send(200, "application/json", body);
             
-            // Sur certains hôtes, la désactivation ne "dé-universe" pas correctement sans reboot.
-            // On force donc un reboot différé (après l'envoi HTTP).
-            if(!isEnabled) {
-                Serial.println("[USB-MIDI] Désactivation: reboot différé demandé");
+            if(willReboot) {
+                Serial.println(isEnabled
+                    ? "[USB-MIDI] Activation: reboot différé (composite CDC+MIDI au prochain boot)"
+                    : "[USB-MIDI] Désactivation: reboot différé demandé");
                 nidmi_requestReboot();
             }
         } else {
@@ -50,7 +56,7 @@ void setupUsbMidiAPI(AsyncWebServer& server) {
         
         Preferences preferences;
         preferences.begin("nidmi", true);
-        bool savedEnabled = preferences.getBool("usbmidi_enabled", false); // Par défaut false
+        bool savedEnabled = preferences.getBool("usbmidi_enabled", true);
         preferences.end();
         
         String json = "{";
