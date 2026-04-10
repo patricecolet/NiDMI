@@ -3,18 +3,8 @@
 #ifdef NIDMI_USB_MIDI_SUPPORTED
 #include <Preferences.h>
 #include <esp_arduino_version.h>
-#include <sdkconfig.h>
-#if CONFIG_TINYUSB_CDC_ENABLED
-#include <USBCDC.h>
-// Instance locale uniquement en mode USB-OTG ET cdc_on_boot=0.
-// En HWCDC (ARDUINO_USB_MODE=1) : TinyUSB inactif, USBCDC n'a rien à faire.
-// En cdc_on_boot=1             : le framework crée déjà USBSerial/Serial.
-#if !ARDUINO_USB_MODE && !ARDUINO_USB_CDC_ON_BOOT
-static USBCDC nidmiUsbMidiCdc;
-#endif
-#endif
 
-// Même logique que nidmi_begin() : nom mDNS / SSID AP stocké en NVS sous "mdns_name"
+// Même clé et règles que nidmi_begin() : mdns_name (SSID AP, mDNS, RTP, BT, nom USB MIDI).
 static String nidmiUsbMidiHostNameFromNvs() {
     Preferences prefs;
     String name = "nidmi";
@@ -29,7 +19,7 @@ static String nidmiUsbMidiHostNameFromNvs() {
     if (name.length() == 0) {
         name = "nidmi";
     }
-    // SSID + limite du constructeur USBMIDI(const char*) sur core Arduino-ESP32 >= 3.3.1
+    // Limite constructeur USBMIDI(const char*) sur Arduino-ESP32 >= 3.3.1
     const size_t kMaxUsbMidiName = 32;
     if (name.length() > kMaxUsbMidiName) {
         name = name.substring(0, kMaxUsbMidiName);
@@ -95,41 +85,20 @@ bool UsbMidiManager::begin() {
     }
     
 #ifdef NIDMI_USB_MIDI_SUPPORTED
+    // Vérifier que USB-OTG est activé
     if (!isUsbOtgEnabled()) {
-        Serial.println("[USB-MIDI] ERREUR: USB-OTG non active!");
+        Serial.println("[USB-MIDI] ERREUR: USB-OTG non activé!");
+        Serial.println("[USB-MIDI] Vérifiez que le fichier ci.json contient CONFIG_SOC_USB_OTG_SUPPORTED=y");
+        Serial.println("[USB-MIDI] Ou dans Arduino IDE: Outils > USB Type > USB-OTG (TinyUSB)");
         available = false;
         return false;
     }
-
-#if ARDUINO_USB_MODE
-    // Mode HWCDC (Hardware CDC+JTAG) : TinyUSB n'est pas actif.
-    // USBMIDI et USB.begin() ne doivent JAMAIS être appelés ici → crash garanti.
-    // La console série est disponible sur le port JTAG (nom long).
-    Serial.println("[USB-MIDI] Mode HWCDC: USB-MIDI impossible (TinyUSB inactif).");
-    Serial.println("[USB-MIDI] Pour MIDI USB: compiler avec USBMode=USB-OTG dans nidmi.sh.");
-    usbInitialized = true;
-    isStarted = false;
-    available = false;
-    return false;
-#elif ARDUINO_USB_CDC_ON_BOOT
-    // USB-OTG + cdc_on_boot=1 : TinyUSB déjà démarré par le framework AVANT setup().
-    // Appeler new USBMIDI() ici crashe le stack USB → port disparaît.
-    // La console série (USB CDC) est déjà active sur le port court.
-    Serial.println("[USB-MIDI] cdc_on_boot=1: USB-MIDI impossible (TinyUSB deja lance).");
-    Serial.println("[USB-MIDI] Pour MIDI USB: desactiver CDCOnBoot dans nidmi.sh.");
-    usbInitialized = true;
-    isStarted = false;
-    available = false;
-    return false;
-#else
-    // USB-OTG + cdc_on_boot=0 : on contrôle l'init USB → CDC + MIDI possible.
+    
     const String hostName = nidmiUsbMidiHostNameFromNvs();
 
+    // Ne pas ré-initialiser complètement à chaque activation.
+    // On crée l'objet une fois, puis on réutilise l'initialisation USB déjà faite.
     if (!usbMidi) {
-#if CONFIG_TINYUSB_CDC_ENABLED
-        // Enregistrer CDC avant MIDI (ordre des interfaces TinyUSB).
-        nidmiUsbMidiCdc.begin();
-#endif
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 3, 1)
         usbMidi = new USBMIDI(hostName.c_str());
 #else
@@ -142,52 +111,16 @@ bool UsbMidiManager::begin() {
         usbMidi->begin();
         USB.begin();
         usbInitialized = true;
-#if CONFIG_TINYUSB_CDC_ENABLED
-        Serial.println("[USB-MIDI] CDC + MIDI USB demarre (cdc_on_boot=0).");
-#endif
     }
 
     isStarted = true;
     available = true;
-    Serial.printf("[USB-MIDI] Demarre, nom USB/MIDI: %s\n", hostName.c_str());
-    return true;
-#endif // ARDUINO_USB_MODE / ARDUINO_USB_CDC_ON_BOOT
 
+    Serial.printf("[USB-MIDI] Initialise (USB-OTG), nom USB/MIDI: %s\n", hostName.c_str());
+    return true;
 #else
+    Serial.println("[USB-MIDI] Non supporté sur ce MCU (ESP32-S3 requis)");
     available = false;
-    return false;
-#endif // NIDMI_USB_MIDI_SUPPORTED
-}
-
-bool UsbMidiManager::beginCdc() {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
-    if (usbInitialized) {
-        return true;
-    }
-#if ARDUINO_USB_MODE
-    // Mode HWCDC : Serial est le port JTAG matériel. Rien à initialiser.
-    usbInitialized = true;
-    return true;
-#elif ARDUINO_USB_CDC_ON_BOOT
-    // USB-OTG + cdc_on_boot=1 : Serial (USB CDC) déjà actif par le framework. Rien à faire.
-    usbInitialized = true;
-    return true;
-#else
-    // USB-OTG + cdc_on_boot=0 : démarrer CDC manuellement (sans MIDI).
-    if (!isUsbOtgEnabled()) {
-        return false;
-    }
-    const String hostName = nidmiUsbMidiHostNameFromNvs();
-#if CONFIG_TINYUSB_CDC_ENABLED
-    nidmiUsbMidiCdc.begin();
-#endif
-    USB.productName(hostName.c_str());
-    USB.begin();
-    usbInitialized = true;
-    Serial.println("[USB-CDC] CDC USB demarre (cdc_on_boot=0, MIDI desactive).");
-    return true;
-#endif
-#else
     return false;
 #endif
 }

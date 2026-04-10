@@ -109,9 +109,8 @@ void nidmi_begin() {
         g_staGwStr = preferences.getString("sta_gw", "");
         g_staSnStr = preferences.getString("sta_sn", "");
         touchEnabled = preferences.getBool("touch_enabled", false);
-        // Par défaut true : le descripteur USB doit inclure le MIDI dès le premier USB.begin()
-        // (sinon beginCdc() seul empêche d’ajouter le MIDI sans redémarrage complet).
-        usbMidiEnabled = preferences.getBool("usbmidi_enabled", true);
+        // Persisté via /api/usbmidi/enable (NVS) : USB-MIDI désactivé par défaut
+        usbMidiEnabled = preferences.getBool("usbmidi_enabled", false);
         preferences.end();
     } else {
         Serial.println("[NiDMI] ERREUR: ouverture NVS en lecture échouée - NVS peut être corrompue");
@@ -166,11 +165,8 @@ void nidmi_begin() {
     
     // Appliquer l'état sauvegardé des interfaces MIDI au MidiRouter
     g_midiRouter.enableUsbMidi(usbMidiEnabled);
-    Serial.printf("[NiDMI] USB-MIDI: %s (S3: CDC + MIDI via UsbMidiManager apres MidiRouter::begin)\n",
-                  usbMidiEnabled ? "active" : "desactive");
 
-    // Initialiser MidiRouter : sur S3, démarre CDC série USB (+ MIDI si activé).
-    // Si USB-MIDI est désactivé, beginCdc() est appelé pour garantir le port série visible.
+    // Initialiser MidiRouter (qui initialisera USB MIDI si activé et supporté)
     g_midiRouter.begin();
     Serial.printf("[MEM] apres MidiRouter: %d\n", (int)ESP.getFreeHeap());
     
