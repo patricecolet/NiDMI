@@ -201,6 +201,61 @@ function readCfg(roleOverride = null) {
 }
 
 /**
+ * Build default mapping script for a role and component name.
+ * @param {string} role - Normalized role id
+ * @param {string} componentName - User component name
+ * @returns {string} default script or empty string
+ */
+function buildDefaultMappingScriptForRole(role, componentName) {
+  const name = componentName || role || '';
+  const defaultScripts = {
+    'button': 'r("' + name + '"):*(127):note.out(60,1)',
+    'potentiometer': 'r("' + name + '"):*(127):ctl.out(7,1)',
+    'velostat': 'r("' + name + '"):*(127):ctl.out(7,1)',
+    'touch': 'r("' + name + '"):*(127):ctl.out(7,1)',
+    'joystick': 'r("' + name + '"):*(127):ctl.out(7,1)',
+    'lis3dh': 'r("' + name + '"):*(127):ctl.out(7,1)'
+  };
+  return defaultScripts[role] || '';
+}
+
+/**
+ * Check whether a script still matches the role default structure.
+ * If true, we can safely update the name in r("...") automatically.
+ * @param {string} role - Normalized role id
+ * @param {string} script - Current script
+ * @returns {boolean}
+ */
+function isRoleDefaultMappingScript(role, script) {
+  if (!script || typeof script !== 'string') return false;
+  const patterns = {
+    'button': /^r\(".*"\)\s*:\s*\*\(127\)\s*:\s*note\.out\(60,1\)$/,
+    'potentiometer': /^r\(".*"\)\s*:\s*\*\(127\)\s*:\s*ctl\.out\(7,1\)$/,
+    'velostat': /^r\(".*"\)\s*:\s*\*\(127\)\s*:\s*ctl\.out\(7,1\)$/,
+    'touch': /^r\(".*"\)\s*:\s*\*\(127\)\s*:\s*ctl\.out\(7,1\)$/,
+    'joystick': /^r\(".*"\)\s*:\s*\*\(127\)\s*:\s*ctl\.out\(7,1\)$/,
+    'lis3dh': /^r\(".*"\)\s*:\s*\*\(127\)\s*:\s*ctl\.out\(7,1\)$/
+  };
+  const re = patterns[role];
+  return !!(re && re.test(script.trim()));
+}
+
+/**
+ * Keep default mapping script in sync with component name.
+ * Only updates when script is empty or still in default format.
+ * @param {string} role - Normalized role id
+ * @param {string} componentName - User component name
+ */
+function syncDefaultMappingScriptWithName(role, componentName) {
+  const mappingEl = $('#mappingPin');
+  if (!mappingEl) return;
+  const current = (mappingEl.value || '').trim();
+  if (!current || isRoleDefaultMappingScript(role, current)) {
+    mappingEl.value = buildDefaultMappingScriptForRole(role, componentName || role);
+  }
+}
+
+/**
  * Applique une configuration dans le formulaire (simples et complexes)
  * @param {Object} c - Configuration depuis pcfg (peut contenir additionalPins)
  */
@@ -214,21 +269,15 @@ function applyCfg(c) {
     $('#mappingPin').value = c.mappingScript;
   } else if (mappingIsEmpty && c && c.role) {
     const role = migrateRoleValue(c.role);
-    const defaultScripts = {
-      'button': 'r("' + (c.name || 'button') + '"):noteOn(60,1,100)',
-      'potentiometer': 'r("' + (c.name || 'pot') + '"):*(127):ctl.out(7,1)',
-      'velostat': 'r("' + (c.name || 'velostat') + '"):*(127):ctl.out(7,1)',
-      'touch': 'r("' + (c.name || 'touch') + '"):*(127):ctl.out(7,1)',
-      'joystick': 'r("' + (c.name || 'joy_x') + '"):*(127):ctl.out(7,1)',
-      'lis3dh': 'r("' + (c.name || 'imu') + '"):*(127):ctl.out(7,1)'
-    };
-    $('#mappingPin').value = defaultScripts[role] || '';
+    $('#mappingPin').value = buildDefaultMappingScriptForRole(role, c.name || role);
   } else {
     $('#mappingPin').value = '';
   }
   
   // Apply MIDI mode radio buttons and containers
-  if (c.midiMode === 'script') {
+  // Migration fallback: old configs may not have midiMode but do have mappingScript.
+  const inferredScriptMode = !c.midiMode && !!(c.mappingScript && c.mappingScript.trim() !== '');
+  if (c.midiMode === 'script' || inferredScriptMode) {
     applyMidiMode('script');
   } else {
     applyMidiMode('rtp');
@@ -301,9 +350,13 @@ function applyConfigValues(c, def, setV, setC) {
 
     // 3. Capture immédiate de la saisie pour éviter de perdre le nom au Save
     nameInput.oninput = (e) => { 
-      if(pcfg[cur]) pcfg[cur].name = e.target.value; 
+      if(pcfg[cur]) pcfg[cur].name = e.target.value;
+      syncDefaultMappingScriptWithName(migratedRole, e.target.value);
       if(typeof updatePinsList === 'function') updatePinsList();
     };
+
+    // Keep default script synced when loading a pin if user already typed a custom name.
+    syncDefaultMappingScriptWithName(migratedRole, nameInput.value);
   }
   const migratedRole = migrateRoleValue(c.role);
   

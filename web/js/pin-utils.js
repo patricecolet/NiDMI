@@ -229,8 +229,8 @@ function stat(cfg, pinLabel) {
   
   /* Si mode script, afficher seulement la note de script (ou 'Script' si non détectée) */
   if (cfg.midiMode === 'script' && cfg.mappingScript && cfg.mappingScript.trim() !== '') {
-    const match = cfg.mappingScript.match(/noteOn\s*\(\s*(\d{1,3})\s*,/i);
-    if (match && match[1]) {
+    const match = cfg.mappingScript.match(/note\.(?:on|off)\s*\(\s*(\d{1,3})\s*,/i);
+    if (match) {
       const scriptNote = Number(match[1]);
       if (!isNaN(scriptNote)) {
         return 'Note ' + scriptNote;

@@ -26,6 +26,14 @@ float FluxRegistry::get(const char* name) {
     }
     return 0.0f;
 }
+
+bool FluxRegistry::has(const char* name) {
+    if (!name || name[0] == '\0') return false;
+    for (int i = 0; i < count; i++) {
+        if (strcmp(entries[i].name, name) == 0) return true;
+    }
+    return false;
+}
 // Helper pour envoyer CC via MIDI
 static void sendMidiControlChange(uint8_t cc, uint8_t value, uint8_t chan, MidiSender* sender) {
     if (sender) {
@@ -73,7 +81,12 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
             int closeIdx = seg.indexOf("\")");
             if (closeIdx != -1) {
                 String target = seg.substring(3, closeIdx);
-                current = FluxRegistry::get(target.c_str());
+                if (FluxRegistry::has(target.c_str())) {
+                    current = FluxRegistry::get(target.c_str());
+                } else {
+                    // Fallback: keep current input value if named source does not exist.
+                    Serial.printf("[MappingEngine] WARNING: source '%s' not found, fallback to input %.2f\n", target.c_str(), current);
+                }
             }
         } 
         else if (seg.startsWith("*(")) { 
@@ -118,40 +131,46 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
                 sendMidiControlChange((uint8_t)cc, midiValue, (uint8_t)chan, midi_sender);
             }
         }
-        else if (seg.startsWith("noteOn(")) {
-            // Format: noteOn(note,channel,velocity)
+        else if (seg.startsWith("note.on(")) {
             int comma1 = seg.indexOf(',');
-            int comma2 = seg.indexOf(',', comma1 + 1);
             int closeIdx = seg.indexOf(')');
-            if (comma1 != -1 && comma2 != -1 && closeIdx != -1) {
-                int note = seg.substring(7, comma1).toInt();
-                int chan = seg.substring(comma1 + 1, comma2).toInt();
-                int vel = seg.substring(comma2 + 1, closeIdx).toInt();
-                
-                // Clamp values to MIDI range
+            if (comma1 != -1 && closeIdx != -1) {
+                int note = seg.substring(8, comma1).toInt();
+                int chan = seg.substring(comma1 + 1, closeIdx).toInt();
                 note = constrain(note, 0, 127);
                 chan = constrain(chan, 1, 16);
-                vel = constrain(vel, 0, 127);
-                
-                sendMidiNoteOn((uint8_t)note, (uint8_t)chan, (uint8_t)vel, midi_sender);
+                uint8_t vel = (uint8_t)constrain((int)current, 0, 127);
+                sendMidiNoteOn((uint8_t)note, (uint8_t)chan, vel, midi_sender);
             }
         }
-        else if (seg.startsWith("noteOff(")) {
-            // Format: noteOff(note,channel,velocity)
+        // note.off(note, chan) — sends note off with velocity 127
+        else if (seg.startsWith("note.off(")) {
             int comma1 = seg.indexOf(',');
-            int comma2 = seg.indexOf(',', comma1 + 1);
             int closeIdx = seg.indexOf(')');
-            if (comma1 != -1 && comma2 != -1 && closeIdx != -1) {
-                int note = seg.substring(8, comma1).toInt();
-                int chan = seg.substring(comma1 + 1, comma2).toInt();
-                int vel = seg.substring(comma2 + 1, closeIdx).toInt();
-                
-                // Clamp values to MIDI range
+            if (comma1 != -1 && closeIdx != -1) {
+                int note = seg.substring(9, comma1).toInt();
+                int chan = seg.substring(comma1 + 1, closeIdx).toInt();
                 note = constrain(note, 0, 127);
                 chan = constrain(chan, 1, 16);
-                vel = constrain(vel, 0, 127);
-                
-                sendMidiNoteOff((uint8_t)note, (uint8_t)chan, (uint8_t)vel, midi_sender);
+                uint8_t vel = 127;  // Fixed velocity for note off
+                sendMidiNoteOff((uint8_t)note, (uint8_t)chan, vel, midi_sender);
+            }
+        }
+        // note.out(note, chan) — sends note.on when pressed (>0), note.off with vel 0 when released (<=0)
+        else if (seg.startsWith("note.out(")) {
+            int comma1 = seg.indexOf(',');
+            int closeIdx = seg.indexOf(')');
+            if (comma1 != -1 && closeIdx != -1) {
+                int note = seg.substring(9, comma1).toInt();
+                int chan = seg.substring(comma1 + 1, closeIdx).toInt();
+                note = constrain(note, 0, 127);
+                chan = constrain(chan, 1, 16);
+                if (current > 0) {
+                    uint8_t vel = (uint8_t)constrain((int)current, 1, 127);  // At least 1 for note on
+                    sendMidiNoteOn((uint8_t)note, (uint8_t)chan, vel, midi_sender);
+                } else {
+                    sendMidiNoteOff((uint8_t)note, (uint8_t)chan, 0, midi_sender);
+                }
             }
         }
 

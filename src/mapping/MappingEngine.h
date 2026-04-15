@@ -17,6 +17,7 @@ public:
 
     static void update(const char* name, float val);
     static float get(const char* name);
+    static bool has(const char* name);
 };
 
 // 2. Le Moteur : Découpe et exécute le script segment par segment

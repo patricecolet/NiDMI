@@ -286,24 +286,35 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                     }
 
                     // Mapping script: stocke la chaîne user-defined dans le ComponentConfig
+                    bool hasMappingScript = false;
                     {
                         String script = JSONParser::extractStr(pinConfig, "mappingScript", "");
                         if (script.length() > 0) {
                             strncpy(config->mappingScript, script.c_str(), sizeof(config->mappingScript) - 1);
                             config->mappingScript[sizeof(config->mappingScript) - 1] = '\0';
+                            hasMappingScript = true;
                         } else {
                             config->mappingScript[0] = '\0';
                         }
                     }
 
                     // MIDI mode: RTP vs Mapping
+                    // Compat legacy: si midiMode absent mais mappingScript présent, activer SCRIPT.
                     {
-                        String midiModeStr = JSONParser::extractStr(pinConfig, "midiMode", "rtp");
+                        String midiModeStr = JSONParser::extractStr(pinConfig, "midiMode", "");
                         if (midiModeStr == "script") {
                             config->midiMode = MidiMode::SCRIPT;
-                        } else {
+                        } else if (midiModeStr == "rtp") {
                             config->midiMode = MidiMode::RTP;
+                        } else {
+                            config->midiMode = hasMappingScript ? MidiMode::SCRIPT : MidiMode::RTP;
                         }
+
+                        Serial.printf("[ConfigLoader] pin=%s midiModeRaw='%s' midiMode=%s mappingScript='%s'\n",
+                                      pinLabelCStr,
+                                      midiModeStr.c_str(),
+                                      (config->midiMode == MidiMode::SCRIPT) ? "SCRIPT" : "RTP",
+                                      config->mappingScript);
                     }
                     
                     // Charger les configurations spécifiques selon le type de composant

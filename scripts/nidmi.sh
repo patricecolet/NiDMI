@@ -369,27 +369,33 @@ clean_cache() {
     echo "   ✅ Cache Arduino nettoyé"
 }
 
-# Copie la partition C3 sans SPIFFS dans le package Arduino (pour --large-app)
-setup_c3_large_app_partition() {
+# Copie un CSV de partitions dans le package ESP32 Arduino (Arduino15)
+install_partition_csv() {
+    local SRC="$1"
+    local DST_NAME="$2"
     local PKG_BASE=""
+    local DST_DIR=""
+
     if [ -d "$HOME/Library/Arduino15/packages/esp32/hardware/esp32" ]; then
         PKG_BASE="$HOME/Library/Arduino15/packages/esp32/hardware/esp32"
     elif [ -d "$HOME/.arduino15/packages/esp32/hardware/esp32" ]; then
         PKG_BASE="$HOME/.arduino15/packages/esp32/hardware/esp32"
     fi
-    local SRC="$REPO_DIR/tools/nidmi_c3_no_spiffs.csv"
-    local DST_DIR=""
+
     if [ -n "$PKG_BASE" ]; then
         DST_DIR=$(ls -d "$PKG_BASE"/[0-9]*.[0-9]*.[0-9]*/tools/partitions 2>/dev/null | tail -1)
     fi
+
     if [ -z "$PKG_BASE" ] || [ -z "$DST_DIR" ]; then
-        echo "   ⚠️  Package ESP32 non trouvé (Arduino15), --large-app ignoré"
+        echo "   ⚠️  Package ESP32 non trouvé (Arduino15), installation partition ignorée"
         return 1
     fi
+
     if [ ! -f "$SRC" ]; then
         echo "   ⚠️  Fichier partition manquant: $SRC, installation ignorée"
         return 1
     fi
+
     cp "$SRC" "$DST_DIR/$DST_NAME"
     echo "   📦 Partition installée: $DST_DIR/$DST_NAME"
     return 0

@@ -905,3 +905,80 @@ Fichiers concernés:
 - Les scripts mapping s'exécutent même sans nom de composant.
 - Le chargement NVS du script gère correctement les caractères échappés.
 - Le script `r("button"):noteOn(60,1,100)` fonctionne désormais correctement côté Pure Data.
+
+---
+
+## Modifications récentes importantes
+
+- Ajout de l'opérateur `note.out(note,chan)` dans `src/mapping/MappingEngine.cpp` (lignes ~159-168).
+  - Envoi un `note.on` lorsque le bouton est pressé.
+  - Envoi un `note.off` avec vélocité 0 lorsque le bouton est relâché.
+- Modification de `note.off` dans `src/mapping/MappingEngine.cpp` (lignes ~146-151) pour accepter et envoyer une vélocité configurable.
+- Correction de `src/processors/ButtonProcessor.cpp` pour détecter et exécuter les scripts contenant `note.out` et `note.off` sur les deux états du bouton (lignes 164-181).
+- Mise à jour du frontend dans `web/js/component-config.js` pour définir `note.out(60,1)` comme script par défaut des boutons (lignes 212 et 232).
+- Mise à jour des placeholders d'aide dans `web/index.html` (ligne 106) et `src/ui/ui_index.cpp` (ligne 107) pour documenter `note.out` dans l'interface utilisateur.
+- Intégration finale testée via le pipeline de génération et d'upload avec `./scripts/nidmi.sh upload`.
+
+### Extraits de code ajoutés
+
+**`src/mapping/MappingEngine.cpp`**
+```cpp
+// note.off(note, chan) — sends note off with velocity 127
+else if (seg.startsWith("note.off(")) {
+    int comma1 = seg.indexOf(',');
+    int closeIdx = seg.indexOf(')');
+    if (comma1 != -1 && closeIdx != -1) {
+        int note = seg.substring(9, comma1).toInt();
+        int chan = seg.substring(comma1 + 1, closeIdx).toInt();
+        note = constrain(note, 0, 127);
+        chan = constrain(chan, 1, 16);
+        uint8_t vel = 127;  // Fixed velocity for note off
+        sendMidiNoteOff((uint8_t)note, (uint8_t)chan, vel, midi_sender);
+    }
+}
+// note.out(note, chan) — sends note.on when pressed (>0), note.off with vel 0 when released (<=0)
+else if (seg.startsWith("note.out(")) {
+    int comma1 = seg.indexOf(',');
+    int closeIdx = seg.indexOf(')');
+    if (comma1 != -1 && closeIdx != -1) {
+        int note = seg.substring(9, comma1).toInt();
+        int chan = seg.substring(comma1 + 1, closeIdx).toInt();
+        note = constrain(note, 0, 127);
+        chan = constrain(chan, 1, 16);
+        if (current > 0) {
+            uint8_t vel = (uint8_t)constrain((int)current, 1, 127);
+            sendMidiNoteOn((uint8_t)note, (uint8_t)chan, vel, midi_sender);
+        } else {
+            sendMidiNoteOff((uint8_t)note, (uint8_t)chan, 0, midi_sender);
+        }
+    }
+}
+```
+
+**`src/processors/ButtonProcessor.cpp`**
+```cpp
+const bool hasNoteOn = strstr(config.mappingScript, "note.on(") != nullptr;
+const bool hasNoteOff = strstr(config.mappingScript, "note.off(") != nullptr;
+const bool hasNoteOut = strstr(config.mappingScript, "note.out(") != nullptr;
+float scriptInput = currentStableState ? 1.0f : 0.0f;
+
+if (falling) {
+    shouldExecute = hasNoteOn || hasNoteOff || hasNoteOut;
+    if ((hasNoteOff || hasNoteOut) && !hasNoteOn) {
+        scriptInput = 1.0f;
+    }
+} else {
+    shouldExecute = hasNoteOff || hasNoteOut;
+}
+```
+
+**`web/js/component-config.js`**
+```js
+'button': 'r("' + name + '"):*(127):note.out(60,1)',
+```
+
+**`web/index.html`**
+```html
+<textarea id="mappingPin" rows="3" placeholder="Script (ex: r(&quot;vol&quot;):*(127):ctl.out(7,1) or r(&quot;btn&quot;):*(127):note.out(60,1))"></textarea>
+```
+ 
