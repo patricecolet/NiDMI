@@ -1,5 +1,7 @@
 #include "MappingEngine.h"
+#include "../Globals.h"
 #include "../midi/MidiSender.h"
+#include "../server/ServerCore.h"
 
 // INITIALISATION DES STATICS (Obligatoire dans le .cpp)
 FluxRegistry::Entry FluxRegistry::entries[32];
@@ -154,6 +156,22 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
                 chan = constrain(chan, 1, 16);
                 uint8_t vel = 127;  // Fixed velocity for note off
                 sendMidiNoteOff((uint8_t)note, (uint8_t)chan, vel, midi_sender);
+            }
+        }
+        else if (seg.startsWith("seq.out(")) {
+            int closeIdx = seg.indexOf(')');
+            if (closeIdx != -1) {
+                String source = "seq";
+                int firstQuote = seg.indexOf('"');
+                if (firstQuote != -1 && firstQuote < closeIdx) {
+                    int secondQuote = seg.indexOf('"', firstQuote + 1);
+                    if (secondQuote != -1 && secondQuote < closeIdx) {
+                        source = seg.substring(firstQuote + 1, secondQuote);
+                    }
+                }
+                String json = "{\"type\":\"seq_event\",\"source\":\"" + source + "\",\"value\":" + String(current > 0 ? 1 : 0) + "}";
+                serverCore.websocket().textAll(json);
+                Serial.printf("[MappingEngine] Sent seq event source='%s' value=%d\n", source.c_str(), current > 0 ? 1 : 0);
             }
         }
         // note.out(note, chan) — sends note.on when pressed (>0), note.off with vel 0 when released (<=0)

@@ -104,6 +104,7 @@ struct ComponentConfig {
         customInt1 = 0;
         customInt2 = 0;
         mappingScript[0] = '\0';
+        name[0] = '\0';
         midiMode = MidiMode::RTP;  // Défaut: mode RTP classique
     }
     

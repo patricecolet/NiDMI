@@ -298,6 +298,17 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                         }
                     }
 
+                    // Nom personnalisé du composant
+                    {
+                        String componentName = JSONParser::extractStr(pinConfig, "name", "");
+                        if (componentName.length() > 0) {
+                            strncpy(config->name, componentName.c_str(), sizeof(config->name) - 1);
+                            config->name[sizeof(config->name) - 1] = '\0';
+                        } else {
+                            config->name[0] = '\0';
+                        }
+                    }
+
                     // MIDI mode: RTP vs Mapping
                     // Compat legacy: si midiMode absent mais mappingScript présent, activer SCRIPT.
                     {
@@ -879,6 +890,17 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
         }
         if (oscFormat == "raw") configPtr->flags |= 0x08;
         else if (oscFormat == "midi") configPtr->flags |= 0x04;
+
+        // Nom personnalisé du composant
+        {
+            String componentName = JSONParser::extractStr(pinConfig, "name", "");
+            if (componentName.length() > 0) {
+                strncpy(configPtr->name, componentName.c_str(), sizeof(configPtr->name) - 1);
+                configPtr->name[sizeof(configPtr->name) - 1] = '\0';
+            } else {
+                configPtr->name[0] = '\0';
+            }
+        }
 
         // Charger la configuration spécifique selon le type de composant
         if (configPtr->type == ComponentType::IMU && configPtr->specificConfig.imu) {

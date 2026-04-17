@@ -163,6 +163,8 @@ void ButtonProcessor::process(
             const bool hasNoteOn = strstr(config.mappingScript, "note.on(") != nullptr;
             const bool hasNoteOff = strstr(config.mappingScript, "note.off(") != nullptr;
             const bool hasNoteOut = strstr(config.mappingScript, "note.out(") != nullptr;
+            const bool hasSeqOut = strstr(config.mappingScript, "seq.out(") != nullptr;
+            const bool hasCtlOut = strstr(config.mappingScript, "ctl.out(") != nullptr;
             float scriptInput = currentStableState ? 1.0f : 0.0f;
 
             auto buildEdgeScript = [&](bool onPress) -> String {
@@ -195,14 +197,14 @@ void ButtonProcessor::process(
 
             bool shouldExecute = false;
             if (falling) {
-                // Push behavior: a script with note.on, note.off, or note.out should fire on press.
-                shouldExecute = hasNoteOn || hasNoteOff || hasNoteOut;
-                if ((hasNoteOff || hasNoteOut) && !hasNoteOn) {
+                // Press: execute any output-capable script, including seq.out and ctl.out.
+                shouldExecute = hasNoteOn || hasNoteOff || hasNoteOut || hasSeqOut || hasCtlOut;
+                if ((hasNoteOff || hasNoteOut || hasSeqOut || hasCtlOut) && !hasNoteOn) {
                     scriptInput = 1.0f;
                 }
             } else {
-                // Release: execute note.off or note.out if script has them.
-                shouldExecute = hasNoteOff || hasNoteOut;
+                // Release: execute note.off, note.out, seq.out, or ctl.out scripts.
+                shouldExecute = hasNoteOff || hasNoteOut || hasSeqOut || hasCtlOut;
             }
 
             if (shouldExecute) {
