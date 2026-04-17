@@ -14,7 +14,6 @@
 set -e  # Arrêter en cas d'erreur
 
 # Variables
-<<<<<<< HEAD
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Détection de la plateforme (macOS, WSL, Linux)
@@ -93,11 +92,6 @@ case "$PLATFORM" in
         ;;
 esac
 
-=======
-REPO_DIR="/Users/patricecolet/repo/NiDMI"
-ARDUINO_LIB_DIR="/Users/patricecolet/Documents/Arduino/libraries/NiDMI"
-ARDUINO_CACHE_DIR="/Users/patricecolet/Library/Caches/arduino/sketches"
->>>>>>> main
 BOARD_TYPE="s3"  # Par défaut: S3
 BOARD="esp32:esp32:XIAO_ESP32S3"
 DEFAULT_SKETCH="nidmi_basic"
@@ -116,21 +110,13 @@ LIGHT_MODE=false
 # Pagination par défaut : NiDMI nécessite la pagination pour éviter la troncature du JSON des définitions
 PAGINATION_MODE=true
 
-<<<<<<< HEAD
-# Parser les arguments pour --lang, --board, --port, --light, --pagination
-=======
 # Partition C3 sans SPIFFS (app ~4 Mo). Par défaut activée pour C3 uniquement (évite 97% flash).
 LARGE_APP=false
 NO_LARGE_APP=false
 # Partition split-fs (2x LittleFS dédiés: seqfs + mapfs)
 SPLIT_FS=false
 
-<<<<<<< HEAD
-# Parser les arguments pour --lang, --board, --light, --pagination, --no-pagination, --large-app, --no-large-app, --port
->>>>>>> main
-=======
 # Parser les arguments pour --lang, --board, --light, --pagination, --no-pagination, --large-app, --no-large-app, --split-fs, --port
->>>>>>> main
 ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -278,12 +264,8 @@ show_help() {
     echo "  ./scripts/nidmi.sh compile --board c3 --split-fs       # C3 avec seqfs 128KB + mapfs 128KB"
     echo "  ./scripts/nidmi.sh compile --board s3 --split-fs       # S3 avec seqfs 512KB + mapfs 1MB"
     echo "  ./scripts/nidmi.sh compile --board s3      # Compiler pour ESP32-S3"
-<<<<<<< HEAD
     echo "  ./scripts/nidmi.sh upload --board s3       # Uploader sur ESP32-S3"
     echo "  ./scripts/nidmi.sh upload --port /dev/ttyUSB0  # Uploader en forçant le port"
-=======
-    echo "  ./scripts/nidmi.sh upload --board s3      # Uploader sur ESP32-S3"
->>>>>>> main
     echo "  ./scripts/nidmi.sh build                   # Build (S3 par défaut)"
     echo "  ./scripts/nidmi.sh upload nidmi_osc        # Upload sketch OSC"
     echo "  ./scripts/nidmi.sh upload --clear-nvs      # Upload sketch reset NVS"
@@ -323,7 +305,7 @@ sync_files() {
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
-    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,midi,midi/handlers,network,osc,processors,server,ui,utils}
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,midi,midi/handlers,network,osc,processors,server,storage,ui,utils}
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -389,6 +371,8 @@ sync_files() {
     cp -f $REPO_DIR/src/processors/*.h $ARDUINO_LIB_DIR/src/processors/ 2>/dev/null || true
     cp -f $REPO_DIR/src/server/*.cpp $ARDUINO_LIB_DIR/src/server/ 2>/dev/null || true
     cp -f $REPO_DIR/src/server/*.h $ARDUINO_LIB_DIR/src/server/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/storage/*.cpp $ARDUINO_LIB_DIR/src/storage/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/storage/*.h $ARDUINO_LIB_DIR/src/storage/ 2>/dev/null || true
     cp -f $REPO_DIR/src/ui/*.cpp $ARDUINO_LIB_DIR/src/ui/ 2>/dev/null || true
     cp -f $REPO_DIR/src/ui/*.h $ARDUINO_LIB_DIR/src/ui/ 2>/dev/null || true
     cp -f $REPO_DIR/src/utils/*.cpp $ARDUINO_LIB_DIR/src/utils/ 2>/dev/null || true
@@ -412,7 +396,6 @@ clean_cache() {
     fi
     
     # Nettoyer les bibliothèques staging (copies temporaires Arduino)
-<<<<<<< HEAD
     case "$PLATFORM" in
         mac)
             ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
@@ -427,9 +410,6 @@ clean_cache() {
             ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
             ;;
     esac
-=======
-    ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
->>>>>>> main
     if [ -d "$ARDUINO_STAGING_DIR" ]; then
         rm -rf "$ARDUINO_STAGING_DIR"/* 2>/dev/null || true
         echo "   ✅ Bibliothèques staging nettoyées: $ARDUINO_STAGING_DIR"
@@ -452,7 +432,20 @@ clean_cache() {
 
 # Copie un CSV de partition custom dans le package Arduino
 install_partition_csv() {
-    local PKG_BASE="${HOME}/Library/Arduino15/packages/esp32/hardware/esp32"
+    local PKG_BASE
+    case "$PLATFORM" in
+        mac)
+            PKG_BASE="${HOME}/Library/Arduino15/packages/esp32/hardware/esp32"
+            ;;
+        wsl|linux)
+            PKG_BASE="${HOME}/.arduino15/packages/esp32/hardware/esp32"
+            ;;
+        *)
+            echo "   ⚠️  Plateforme non reconnue: $PLATFORM"
+            return 1
+            ;;
+    esac
+    
     local SRC="$1"
     local DST_NAME="$2"
     local DST_DIR
@@ -630,7 +623,6 @@ build_binary() {
 monitor_serial() {
     echo "📺 Ouverture du moniteur série..."
     
-<<<<<<< HEAD
     # Déterminer le port série (priorité: --port, NIDMI_PORT, auto-détection)
     if [ -n "$PORT_OVERRIDE" ]; then
         PORT="$PORT_OVERRIDE"
@@ -648,14 +640,6 @@ monitor_serial() {
                 PORT=""
                 ;;
         esac
-=======
-    # Utiliser le port forcé si fourni, sinon auto-détection
-    if [ -n "$SERIAL_PORT" ]; then
-        PORT="$SERIAL_PORT"
-    else
-        # Trouver le port série
-        PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
->>>>>>> main
     fi
     if [ -z "$PORT" ]; then
         echo "   ❌ Aucun port série trouvé"
@@ -699,7 +683,6 @@ upload_sketch() {
     echo "📤 Upload vers l'ESP32..."
     
     if command -v arduino-cli &> /dev/null; then
-<<<<<<< HEAD
         # Déterminer le port série (priorité: --port, NIDMI_PORT, auto-détection)
         if [ -n "$PORT_OVERRIDE" ]; then
             PORT="$PORT_OVERRIDE"
@@ -717,13 +700,6 @@ upload_sketch() {
                     PORT=""
                     ;;
             esac
-=======
-        # Utiliser le port forcé si fourni, sinon auto-détection (plusieurs patterns possibles)
-        if [ -n "$SERIAL_PORT" ]; then
-            PORT="$SERIAL_PORT"
-        else
-            PORT=$(ls /dev/cu.usbserial-* /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* 2>/dev/null | head -1)
->>>>>>> main
         fi
         if [ -z "$PORT" ]; then
             echo "   ❌ Aucun port série trouvé"

@@ -5,6 +5,10 @@
 #include "midi/MidiRouter.h"
 #include "Globals.h"
 #include <Preferences.h>
+#include "storage/SequencerFileStore.h"
+#include "processors/TouchProcessor.h"
+#include "processors/SequencerProcessor.h"
+#include "api/LittleFS.h"
 #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV) || defined(ARDUINO_ESP32S3)
 #include <esp32-hal-tinyusb.h>
 #endif
@@ -76,6 +80,52 @@ void nidmi_begin() {
     delay(50);
 
     touchDiag("AVANT tout (juste apres Serial)");
+
+    // Mount LittleFS - utiliser LittleFS.begin() qui gère automatiquement le montage
+    Serial.println("[NiDMI] Initializing LittleFS...");
+    if (!LittleFS.begin()) {
+        Serial.println("[NiDMI] ❌ LittleFS.begin() failed!");
+    } else {
+        Serial.println("[NiDMI] ✅ LittleFS initialized successfully");
+    }
+
+    // Mount LittleFS partitions (for split-fs configuration)
+    // This must be done before any file operations
+#ifdef CONFIG_LITTLEFS_FOR_IDF_SPIFFS_COMPAT
+    // Monter la partition seqfs si elle existe
+    esp_vfs_littlefs_conf_t conf_seqfs = {
+        .base_path = "/seqfs",
+        .partition_label = "seqfs",
+        .format_if_mount_failed = false,
+        .dont_mount = false,
+    };
+    
+    esp_err_t ret = esp_vfs_littlefs_register(&conf_seqfs);
+    if (ret == ESP_ERR_NOT_FOUND) {
+        Serial.println("[NiDMI] ⚠️  seqfs partition not found (using single LittleFS)");
+    } else if (ret != ESP_OK) {
+        Serial.printf("[NiDMI] ⚠️  Failed to mount seqfs: %s\n", esp_err_to_name(ret));
+    } else {
+        Serial.println("[NiDMI] ✅ seqfs partition mounted");
+    }
+    
+    // Monter la partition mapfs si elle existe
+    esp_vfs_littlefs_conf_t conf_mapfs = {
+        .base_path = "/mapfs",
+        .partition_label = "mapfs",
+        .format_if_mount_failed = false,
+        .dont_mount = false,
+    };
+    
+    ret = esp_vfs_littlefs_register(&conf_mapfs);
+    if (ret == ESP_ERR_NOT_FOUND) {
+        Serial.println("[NiDMI] ⚠️  mapfs partition not found");
+    } else if (ret != ESP_OK) {
+        Serial.printf("[NiDMI] ⚠️  Failed to mount mapfs: %s\n", esp_err_to_name(ret));
+    } else {
+        Serial.println("[NiDMI] ✅ mapfs partition mounted");
+    }
+#endif
 
     // Détecter et afficher le MCU
     PinMapper::detectMcu();

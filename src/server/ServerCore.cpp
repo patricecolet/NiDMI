@@ -1,6 +1,11 @@
 #include "ServerCore.h"
 #include <ESPmDNS.h>
 #include <Preferences.h>
+
+// Augmenter la limite interne d'AsyncWebServer pour les gros uploads
+#define ASYNCWEBSERVER_REGEX 1
+#define HTTP_MAX_DATA_WAIT 30000
+
 // setupWebAPI est déclaré plus bas et défini dans WebAPI.cpp
 
 // Déclaration de la fonction setupHttp définie dans WebAPI.cpp
@@ -117,9 +122,10 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
     
     // Configuration des endpoints HTTP
     setupWebAPI(server, ws);
+    
     server.begin();
-    // Serial.println("[ServerCore] HTTP server started on / (Async)");
-    // Serial.println("[ServerCore] ServerCore initialization complete!");
+    Serial.println("[ServerCore] HTTP server started");
+    Serial.println("[ServerCore] ⚠️  Upload timeout: 300s (5 minutes)");
 }
 
 void ServerCore::connectSta(const char* staSsid, const char* staPass) {

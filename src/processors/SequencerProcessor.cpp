@@ -1,3 +1,8 @@
+#include <Arduino.h>
+#include <cstdint>
+#include <cstddef>
+#include "../storage/SequencerFileStore.h"
+
 #define MAX_STEPS 32
 #define MAX_NOTES 4
 
@@ -45,4 +50,22 @@ void parseNidmid(uint8_t* data, size_t len) {
     }
 
     Serial.printf("Loaded %d steps\n", stepCount);
+}
+
+bool reloadSequencerFromStorage() {
+    auto& store = SequencerFileStore::getInstance();
+    SequencerReadResult result = store.read();
+    
+    if (result.status != SequencerStoreResult::SUCCESS) {
+        Serial.printf("[SequencerProcessor] Error: Could not read sequence from storage (status:%d)\n", (int)result.status);
+        return false;
+    }
+    
+    if (!result.checksumValid) {
+        Serial.println("[SequencerProcessor] Error: Sequence checksum invalid");
+        return false;
+    }
+    
+    parseNidmid(result.data.data(), result.data.size());
+    return true;
 }

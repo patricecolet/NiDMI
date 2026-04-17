@@ -202,14 +202,7 @@ function drawBoard() {
         cur = effectiveLabel;
         $('#selPin').textContent = effectiveLabel;
         handlePinClick(label);
-<<<<<<< HEAD
-        showPinEditor(label);
-        updFunc(label);
-        /* SIMPLIFICATION : Appliquer la config si elle existe, peu importe le type */
-        /* (updFunc() gère déjà les bus et affiche un message) */
-=======
         updFunc(effectiveLabel);
->>>>>>> main
         if (pcfg[cur]) {
           applyCfg(pcfg[cur]);
         }

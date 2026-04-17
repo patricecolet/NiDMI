@@ -7,3 +7,11 @@ CONFIG_SOC_USB_OTG_SUPPORTED=y
 
 # Activation Touch Sensor pour ESP32-S3 (requis pour touchRead())
 CONFIG_SOC_TOUCH_SENSOR_SUPPORTED=y
+
+# Augmenter la taille du buffer TCP pour les uploads
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=65536
+CONFIG_LWIP_TCP_RCV_BUF_DEFAULT=65536
+
+# Augmenter la pile d'AsyncWebServer pour les gros uploads
+CONFIG_ARDUINO_EVENT_RUN_CORE=1
+CONFIG_ARDUINO_RUNNING_CORE=1

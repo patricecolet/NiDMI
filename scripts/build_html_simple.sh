@@ -180,6 +180,14 @@ TEMP_JS=$(mktemp)
         echo ""
         cat web/js/pins-global.js
     fi
+    if [ -f "web/js/nidmid-upload.js" ]; then
+        echo ""
+        cat web/js/nidmid-upload.js
+    fi
+    if [ -f "web/js/nidmid-display.js" ]; then
+        echo ""
+        cat web/js/nidmid-display.js
+    fi
     if [ -f "web/app.js" ]; then
         echo ""
         cat web/app.js

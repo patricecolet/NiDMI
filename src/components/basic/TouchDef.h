@@ -44,11 +44,6 @@ struct Touch {
     static constexpr uint8_t DEFAULT_FILTER_INTENSITY = 5;
     static constexpr const char* DEFAULT_SEUILS_RAW = "0,0";  // ON,OFF raw depuis baseline (0,0=auto)
     static constexpr uint32_t DEFAULT_AFTERTOUCH_RANGE = 20000;  // Plage raw pour aftertouch 0-127
-<<<<<<< HEAD
-    
-=======
-
->>>>>>> main
     /**
      * @brief Validation : vérifie que le GPIO a une capacité Touch et que c'est un ESP32-S3
      */

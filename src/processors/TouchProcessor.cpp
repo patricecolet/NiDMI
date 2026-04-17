@@ -25,15 +25,6 @@
 // Macro pour activer/désactiver les logs de debug
 // 1 = debug détaillé (spam), 0 = silencieux sauf WARN/ERROR
 #define DEBUG_TOUCH 0
-<<<<<<< HEAD
-#define DEBUG_TOUCH_RAW 1 
-
-#if DEBUG_TOUCH_RAW
-  #define TOUCH_RAW_LOG(...)  Serial.printf(__VA_ARGS__)
-#else
-  #define TOUCH_RAW_LOG(...)
-#endif
-=======
 #define DEBUG_TOUCH_RAW 0
 #if DEBUG_TOUCH_RAW
   #define TOUCH_RAW_LOG(...)  Serial.printf(__VA_ARGS__)
@@ -41,7 +32,6 @@
   #define TOUCH_RAW_LOG(...)
 #endif
 
->>>>>>> main
 #if DEBUG_TOUCH
     #define TOUCH_LOG(...) Serial.printf(__VA_ARGS__)
     #define TOUCH_LOG_ONCE(...) do { static bool _logged = false; if (!_logged) { Serial.printf(__VA_ARGS__); _logged = true; } } while(0)
@@ -58,29 +48,14 @@
 
 // ===== FONCTIONS UTILITAIRES STATIQUES =====
 
-<<<<<<< HEAD
-// Lecture tactile avec échantillonnage pour stabilité (domaine brut 32 bits)
-=======
 // Lecture tactile avec limitation de fréquence par GPIO (domaine brut 32 bits).
 // Un cache par GPIO évite de spammer touchRead() trop souvent,
 // ce qui peut bloquer la FSM touch et déclencher le task watchdog.
->>>>>>> main
 static uint32_t readTouchValue(uint8_t gpio) {
 #if !TOUCH_AVAILABLE
     (void)gpio;
     return 0;
 #else
-<<<<<<< HEAD
-    // Lecture tactile avec échantillonnage et moyenne simple, sans logs spammy
-    const int TOUCH_SAMPLE_COUNT = 5;
-    uint32_t sample_sum = 0;
-
-    for (int i = 0; i < TOUCH_SAMPLE_COUNT; i++) {
-        sample_sum += touchRead(gpio);
-        delayMicroseconds(200); // petite pause pour la stabilité de l'échantillonnage
-    }
-    return sample_sum / TOUCH_SAMPLE_COUNT;
-=======
     static uint32_t last_value[49]   = {0};
     static uint32_t last_read_ms[49] = {0};
     static uint32_t last_log_ms[49]  = {0};
@@ -103,7 +78,6 @@ static uint32_t readTouchValue(uint8_t gpio) {
     }
 
     return raw;
->>>>>>> main
 #endif
 }
 
@@ -121,10 +95,6 @@ namespace {
 
     // Lissage flottant pour chaque GPIO (même EMA que AnalogFilter, en pleine résolution)
     static float smoothed_touch_f[49]          = {0.0f};
-<<<<<<< HEAD
-=======
-
->>>>>>> main
     void resetBaselineInternal(uint8_t idx) {
         if (idx >= 49) return;
         baseline_value[idx]         = 0;
@@ -161,10 +131,7 @@ static bool establishBaseline(uint8_t gpio, uint32_t touch_value_in, uint32_t& b
 
     uint32_t elapsed = millis() - baseline_start_time[idx];
     if (elapsed < BASELINE_STABILIZATION_TIME_MS) {
-<<<<<<< HEAD
-=======
         // On attend que le signal se stabilise avant de commencer à accumuler la baseline
->>>>>>> main
         if (millis() - baseline_wait_last_log[idx] > 500) {
             TOUCH_INFO("[TouchProcessor] GPIO%d: Attente stabilisation pour baseline (%lums/%lums)\n",
                        gpio,
@@ -390,11 +357,7 @@ static void processNoteVelocity(
 
         const uint32_t MIN_KEYPRESSURE_INTERVAL_MS = 20;
         uint32_t time_since_last = millis() - state.last_time;
-<<<<<<< HEAD
-        if (time_since_last >= MIN_KEYPRESSURE_INTERVAL_MS || at_velocity != state.last_aftertouch) {
-=======
         if (time_since_last >= MIN_KEYPRESSURE_INTERVAL_MS && at_velocity != state.last_aftertouch) {
->>>>>>> main
             TOUCH_LOG("[TouchProcessor] GPIO%d: Key Pressure at_vel=%d (smoothed %lu in [%lu..%lu])\n",
                      config.gpio, at_velocity, (unsigned long)touch_smoothed, (unsigned long)at_min, (unsigned long)at_max);
             if (midi_sender) {
@@ -665,11 +628,6 @@ void TouchProcessor::process(
     
     TOUCH_LOG("[TouchProcessor] GPIO%d: raw=%lu, smoothed=%lu, alpha=%.3f\n",
              config.gpio, (unsigned long)touch_raw, (unsigned long)touch_smoothed, a);
-<<<<<<< HEAD
-    
-=======
-
->>>>>>> main
     // Établir baseline (on passe touch_raw pour éviter une 2e lecture)
     uint32_t baseline;
     if (!establishBaseline(config.gpio, touch_raw, baseline)) {

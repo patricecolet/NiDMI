@@ -1,12 +1,14 @@
 #include "../server/ServerCore.h"
 #include "ui_index.h"
 #include "ui_bundle.h"
+#include "ui_sequencer.h"
 #include "../utils/PinMapper.h"
 #include "../api/APICommon.h"
 #include "../api/NetworkAPI.h"
 #include "../api/RTPAPI.h"
 #include "../api/UsbMidiAPI.h"
 #include "api/SequencerAPI.h"
+#include "../storage/SequencerFileStore.h"
 #include "../Globals.h"
 #include "../server/ServerCallbacks.h"
 #include "../components/ComponentRegistry.h"
@@ -22,6 +24,7 @@ void setupOSC_API(AsyncWebServer& server);
 void setupCacheAPI(AsyncWebServer& server);
 void setupComponentsAPI(AsyncWebServer& server);
 void setupSystemAPI(AsyncWebServer& server);
+void setupSequencerPlaybackAPI(AsyncWebServer& server);
 
 
 Preferences preferences;
@@ -269,12 +272,34 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
         request->send(response);
     });
 
+    // Séquenceur page - Utiliser streaming par chunks depuis PROGMEM
+    server.on("/sequencer", HTTP_GET, [](AsyncWebServerRequest *request){
+        size_t htmlLen = strlen_P(SEQUENCER_HTML);
+        AsyncWebServerResponse *response = request->beginResponse("text/html; charset=utf-8", htmlLen, 
+            [htmlLen](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+                size_t toWrite = (htmlLen - index < maxLen) ? (htmlLen - index) : maxLen;
+                if (toWrite > 0) {
+                    memcpy_P(buffer, SEQUENCER_HTML + index, toWrite);
+                }
+                return toWrite;
+            });
+        response->addHeader("Connection", "close");
+        request->send(response);
+    });
+
     // WebSocket
     ws.onEvent(onWsEvent);
     server.addHandler(&ws);
     
     // Initialiser le registre des composants
     ComponentRegistry::init();
+    
+    // Initialiser le magasin séquenceur (LittleFS)
+    if (!SequencerFileStore::getInstance().begin()) {
+        Serial.println("[WebAPI] ⚠️  Failed to initialize SequencerFileStore");
+    } else {
+        Serial.println("[WebAPI] ✅ SequencerFileStore initialized");
+    }
     
     // Configurer les autres APIs
     setupNetworkAPI(server);
@@ -286,4 +311,5 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     setupComponentsAPI(server);
     setupSystemAPI(server);
     setupSequencerAPI(server);
+    setupSequencerPlaybackAPI(server);
 }
