@@ -27,42 +27,45 @@ void setupComponentsAPI(AsyncWebServer& server) {
      */
     server.on("/api/components/definitions", HTTP_GET, [](AsyncWebServerRequest* request) {
 #ifdef NIDMI_COMPONENT_DEFS_PAGINATION
-        // Mode pagination activé
-        // Limit par défaut à 5 : avec buffer 12KB, 5 composants = ~9-10KB (marge confortable)
-        // Cela permet de tester la pagination même avec peu de composants
+        Serial.printf("[API] REQ definitions heap=%d\n", (int)ESP.getFreeHeap());
         int page = 0, limit = 5;
         if (request->hasParam("page")) {
             page = request->getParam("page")->value().toInt();
             if (page < 0) page = 0;
         }
-        if (request->hasParam("limit")) {
-            limit = request->getParam("limit")->value().toInt();
-            if (limit < 1) limit = 1;
-            if (limit > 15) limit = 15; // Max 15 par page pour éviter les buffers trop grands (avec buffer 12KB)
-        }
-        
-        static char jsonBuffer[24576];  // Buffer 12KB par page (augmenté pour éviter la troncature)
+        /* Ignore le paramètre limit du client : on force 1 composant par page.
+         * Raison : sur C3 avec ~29 KB heap libre, une copie String de 8 KB échoue
+         * silencieusement quand le heap est fragmenté → JSON vide → boucle infinie.
+         * Avec limit=1, le JSON max est ~5 KB (un seul composant) et on utilise
+         * beginResponse_P (lecture directe depuis le buffer statique, zéro copie heap).
+         * LWIP tourne dans une seule tâche (tcpip_thread) → buffer statique sans race. */
+        (void)limit;
+        limit = 1;
+
+        const int totalCount = static_cast<int>(ComponentRegistry::count());
+        int totalPages = totalCount; // 1 composant par page
+
+        /* Buffer statique 10 KB : après optimisation JSON (clés courtes + options inline)
+         * lis3dh (le composant le plus lourd) tient en ~7-8 KB.
+         * beginResponse_P lit depuis ce buffer SANS copie heap → 0 allocation par requête. */
+        static char jsonBuffer[10240];
         int written = ComponentRegistry::toJsonArrayPage(jsonBuffer, sizeof(jsonBuffer), page, limit);
-        
-        if (written > 0 && written < (int)sizeof(jsonBuffer)) {
-            // Ajouter les métadonnées de pagination dans les headers
-            int totalCount = static_cast<int>(ComponentRegistry::count());
-            int totalPages = (totalCount + limit - 1) / limit;
-            
-            #ifdef ARDUINO
-            Serial.printf("[ComponentsAPI] Pagination: page=%d, limit=%d, totalCount=%d, totalPages=%d\n", 
-                         page, limit, totalCount, totalPages);
-            #endif
-            
-            AsyncWebServerResponse* response = request->beginResponse(200, "application/json", jsonBuffer);
+
+        if (written > 2 && written < (int)sizeof(jsonBuffer) - 2) {
+            Serial.printf("[API] page=%d/%d written=%d heap=%d\n",
+                page, totalPages-1, written, (int)ESP.getFreeHeap());
+            /* beginResponse_P lit depuis le buffer statique sans copie heap */
+            AsyncWebServerResponse* response = request->beginResponse_P(
+                200, "application/json",
+                (const uint8_t*)jsonBuffer, (size_t)written);
             response->addHeader("X-Total-Count", String(totalCount));
             response->addHeader("X-Total-Pages", String(totalPages));
             response->addHeader("X-Current-Page", String(page));
             response->addHeader("X-Per-Page", String(limit));
             request->send(response);
         } else {
-            Serial.printf("[ComponentsAPI] WARNING: Pagination serialization failed (written=%d, size=%zu)\n", 
-                         written, sizeof(jsonBuffer));
+            Serial.printf("[API] ERREUR page=%d written=%d heap=%d\n",
+                page, written, (int)ESP.getFreeHeap());
             request->send(500, "application/json", "{\"error\":\"Serialization failed\"}");
         }
 #else

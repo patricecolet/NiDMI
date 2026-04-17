@@ -329,49 +329,61 @@ struct ComponentDefinition {
      * @param bufferSize Taille du buffer
      * @return Nombre de caractères écrits, 0 si buffer insuffisant
      */
+    /**
+     * Sérialise en JSON compact avec clés courtes pour réduire la taille des pages.
+     * Table de correspondance (compact → complet) utilisée par normalizeDef() dans definitions.js :
+     *   dn=displayName  cid=cardId     fn=familyName   pt=pinType    apt=altPinType
+     *   impl=implemented  midi=supportsMidi  osc=supportsOsc  apc=additionalPinCount
+     *   stt=statusTextTemplate  svm=statusValueMappings  ap=additionalPins
+     *   mm=midiMessages  st=statusTemplate(msg)  p=params  ph=placeholder  dv=defaultValue
+     *   dmin=defaultMin  dmax=defaultMax  sep=separator  hc=hintClass  dep=dependsOnRole
+     *   ff=formFields  ml=maxLength  hp=hintPosition  don=dependsOn  sw=showWhen
+     *   wc=wrapperClass  ic=inputClass  w=width  req=required  lb=labelBefore  la=labelAfter
+     *   o=options (array inline, sans échappement JSON)
+     */
     int toJson(char* buffer, size_t bufferSize) const {
         if (!buffer || bufferSize < 100) return 0;
         int written = 0;
         int r;
 
-        /* Macro locale pour snprintf sécurisé : retourne 0 du toJson si tronqué */
         #define W(...) do { r = safeSnprintf(buffer + written, bufferSize - (size_t)written, __VA_ARGS__); if (r < 0) return 0; written += r; } while(0)
-        /* Macro pour appendJsonString sécurisé */
         #define WS(str) do { r = appendJsonString(buffer + written, bufferSize - (size_t)written, (str)); if (r < 0) return 0; written += r; } while(0)
+        /* WR : écrit une chaîne RAW (déjà du JSON valide, ex: tableau d'options) */
+        #define WR(str) do { r = safeSnprintf(buffer + written, bufferSize - (size_t)written, "%s", (str)); if (r < 0) return 0; written += r; } while(0)
 
         W("{\"id\":\"");   WS(id ? id : "");
-        W("\",\"displayName\":\"");   WS(displayName ? displayName : "");
-        W("\",\"cardId\":\"");   WS(cardId ? cardId : "");
-        W("\",\"family\":%d,\"familyName\":\"", static_cast<int>(family));
+        W("\",\"dn\":\""); WS(displayName ? displayName : "");
+        W("\",\"cid\":\""); WS(cardId ? cardId : "");
+        W("\",\"family\":%d,\"fn\":\"", static_cast<int>(family));
         WS(familyName ? familyName : "");
-        W("\",\"pinType\":%d", static_cast<int>(pinType));
+        W("\",\"pt\":%d", static_cast<int>(pinType));
         if (altPinType >= 0) {
-            W(",\"altPinType\":%d", (int)altPinType);
+            W(",\"apt\":%d", (int)altPinType);
         }
-        W(",\"implemented\":%s,\"supportsMidi\":%s,\"supportsOsc\":%s,\"additionalPinCount\":%d",
+        W(",\"impl\":%s,\"midi\":%s,\"osc\":%s,\"apc\":%d",
             implemented ? "true" : "false",
             supportsMidi ? "true" : "false",
             supportsOsc ? "true" : "false",
             additionalPinCount);
 
         if (statusTextTemplate) {
-            W(",\"statusTextTemplate\":\"");  WS(statusTextTemplate);  W("\"");
+            W(",\"stt\":\"");  WS(statusTextTemplate);  W("\"");
         }
 
 #ifndef NIDMI_COMPONENT_DEFS_LIGHT
         if (statusValueMappings) {
-            W(",\"statusValueMappings\":\"");  WS(statusValueMappings);  W("\"");
+            W(",\"svm\":\"");  WS(statusValueMappings);  W("\"");
         }
 #endif
 
         /* Pins additionnelles */
         if (additionalPinCount > 0 && additionalPins) {
-            W(",\"additionalPins\":[");
+            W(",\"ap\":[");
             for (uint8_t i = 0; i < additionalPinCount && i < additionalPinsCapacity; i++) {
                 if (i > 0) W(",");
                 W("{\"id\":\"");  WS(additionalPins[i].id ? additionalPins[i].id : "");
-                W("\",\"displayName\":\"");  WS(additionalPins[i].displayName ? additionalPins[i].displayName : "");
-                W("\",\"pinType\":%d,\"optional\":%s}",
+                W("\",\"dn\":\"");  WS(additionalPins[i].displayName ? additionalPins[i].displayName : "");
+                W("\",\"pt\":%d,\"optional\":%s}",
                     static_cast<int>(additionalPins[i].pinType),
                     additionalPins[i].optional ? "true" : "false");
             }
@@ -380,27 +392,25 @@ struct ComponentDefinition {
 
         /* Messages MIDI */
         if (midiMessageCount > 0 && midiMessages) {
-            W(",\"midiMessages\":[");
+            W(",\"mm\":[");
             for (uint8_t i = 0; i < midiMessageCount && i < midiMessagesCapacity; i++) {
                 if (i > 0) W(",");
                 W("{\"id\":\"");  WS(midiMessages[i].id ? midiMessages[i].id : "");
-                W("\",\"displayName\":\"");  WS(midiMessages[i].displayName ? midiMessages[i].displayName : "");
+                W("\",\"dn\":\"");  WS(midiMessages[i].displayName ? midiMessages[i].displayName : "");
                 W("\"");
                 if (midiMessages[i].axis) {
                     W(",\"axis\":\"");  WS(midiMessages[i].axis);  W("\"");
                 }
                 if (midiMessages[i].statusTemplate) {
-                    W(",\"statusTemplate\":\"");  WS(midiMessages[i].statusTemplate);  W("\"");
+                    W(",\"st\":\"");  WS(midiMessages[i].statusTemplate);  W("\"");
                 }
-                /* Paramètres MIDI */
                 if (midiMessages[i].paramCount > 0 && midiMessages[i].params) {
-                    W(",\"params\":[");
+                    W(",\"p\":[");
                     for (uint8_t j = 0; j < midiMessages[i].paramCount && j < midiMessages[i].paramsCapacity; j++) {
                         if (j > 0) W(",");
                         const MidiParamDef& param = midiMessages[i].params[j];
                         W("{\"id\":\"");  WS(param.id ? param.id : "");
                         W("\",\"type\":%d", static_cast<int>(param.type));
-
                         if (param.label) {
                             W(",\"label\":\"");  WS(param.label);  W("\"");
                         }
@@ -408,27 +418,27 @@ struct ComponentDefinition {
                             W(",\"min\":%d,\"max\":%d", param.min, param.max);
                         }
                         if (param.placeholder) {
-                            W(",\"placeholder\":\"");  WS(param.placeholder);  W("\"");
+                            W(",\"ph\":\"");  WS(param.placeholder);  W("\"");
                         }
                         if (param.defaultValue) {
-                            W(",\"defaultValue\":\"");  WS(param.defaultValue);  W("\"");
+                            W(",\"dv\":\"");  WS(param.defaultValue);  W("\"");
                         }
                         if (param.type == FieldType::RANGE) {
-                            if (param.defaultMin) { W(",\"defaultMin\":\"");  WS(param.defaultMin);  W("\""); }
-                            if (param.defaultMax) { W(",\"defaultMax\":\"");  WS(param.defaultMax);  W("\""); }
-                            if (param.separator)  { W(",\"separator\":\"");   WS(param.separator);   W("\""); }
+                            if (param.defaultMin) { W(",\"dmin\":\"");  WS(param.defaultMin);  W("\""); }
+                            if (param.defaultMax) { W(",\"dmax\":\"");  WS(param.defaultMax);  W("\""); }
+                            if (param.separator)  { W(",\"sep\":\"");   WS(param.separator);   W("\""); }
                         }
 #ifndef NIDMI_COMPONENT_DEFS_LIGHT
                         if (param.type == FieldType::INFO && param.hint) {
                             W(",\"hint\":\"");  WS(param.hint);  W("\"");
-                            if (param.hintClass) { W(",\"hintClass\":\"");  WS(param.hintClass);  W("\""); }
+                            if (param.hintClass) { W(",\"hc\":\"");  WS(param.hintClass);  W("\""); }
                         }
 #endif
                         if (param.dependsOnRole) {
-                            W(",\"dependsOnRole\":\"");  WS(param.dependsOnRole);  W("\"");
+                            W(",\"dep\":\"");  WS(param.dependsOnRole);  W("\"");
                         }
                         if (param.width > 0) {
-                            W(",\"width\":%d", param.width);
+                            W(",\"w\":%d", param.width);
                         }
                         W("}");
                     }
@@ -441,47 +451,48 @@ struct ComponentDefinition {
 
         /* Champs de formulaire */
         if (formFieldCount > 0 && formFields) {
-            W(",\"formFields\":[");
+            W(",\"ff\":[");
             for (uint8_t i = 0; i < formFieldCount && i < formFieldsCapacity; i++) {
                 if (i > 0) W(",");
                 const FormFieldDef& field = formFields[i];
                 W("{\"id\":\"");  WS(field.id ? field.id : "");
                 W("\",\"type\":%d", static_cast<int>(field.type));
 
-                if (field.label)       { W(",\"label\":\"");       WS(field.label);       W("\""); }
-                if (field.required)      W(",\"required\":true");
-                if (field.placeholder) { W(",\"placeholder\":\""); WS(field.placeholder); W("\""); }
-                if (field.maxLength > 0) W(",\"maxLength\":%d", field.maxLength);
-                if (field.pattern)     { W(",\"pattern\":\"");     WS(field.pattern);     W("\""); }
+                if (field.label)       { W(",\"label\":\"");  WS(field.label);  W("\""); }
+                if (field.required)      W(",\"req\":true");
+                if (field.placeholder) { W(",\"ph\":\"");  WS(field.placeholder);  W("\""); }
+                if (field.maxLength > 0) W(",\"ml\":%d", field.maxLength);
+                if (field.pattern)     { W(",\"pattern\":\"");  WS(field.pattern);  W("\""); }
 
                 if (field.type == FieldType::NUMBER || field.type == FieldType::RANGE) {
                     W(",\"min\":%d,\"max\":%d", field.min, field.max);
                     if (field.step != 1) W(",\"step\":%d", field.step);
                 }
+                /* options écrit inline (raw JSON array) : évite le double échappement des " */
                 if (field.type == FieldType::SELECT && field.options) {
-                    W(",\"options\":\"");  WS(field.options);  W("\"");
+                    W(",\"o\":");  WR(field.options);
                 }
                 if (field.type == FieldType::RANGE && field.separator) {
-                    W(",\"separator\":\"");  WS(field.separator);  W("\"");
+                    W(",\"sep\":\"");  WS(field.separator);  W("\"");
                 }
-                if (field.defaultValue) { W(",\"defaultValue\":\"");  WS(field.defaultValue);  W("\""); }
+                if (field.defaultValue) { W(",\"dv\":\"");  WS(field.defaultValue);  W("\""); }
 
 #ifndef NIDMI_COMPONENT_DEFS_LIGHT
                 if (field.hintPosition != HintPosition::NONE && field.hint) {
-                    W(",\"hintPosition\":%d,\"hint\":\"", static_cast<int>(field.hintPosition));
+                    W(",\"hp\":%d,\"hint\":\"", static_cast<int>(field.hintPosition));
                     WS(field.hint);  W("\"");
-                    if (field.hintClass) { W(",\"hintClass\":\"");  WS(field.hintClass);  W("\""); }
+                    if (field.hintClass) { W(",\"hc\":\"");  WS(field.hintClass);  W("\""); }
                 }
 #endif
                 if (field.dependsOn) {
-                    W(",\"dependsOn\":\"");  WS(field.dependsOn);  W("\"");
-                    if (field.showWhen) { W(",\"showWhen\":\"");  WS(field.showWhen);  W("\""); }
+                    W(",\"don\":\"");  WS(field.dependsOn);  W("\"");
+                    if (field.showWhen) { W(",\"sw\":\"");  WS(field.showWhen);  W("\""); }
                 }
-                if (field.wrapperClass) { W(",\"wrapperClass\":\"");  WS(field.wrapperClass);  W("\""); }
-                if (field.inputClass)   { W(",\"inputClass\":\"");    WS(field.inputClass);    W("\""); }
-                if (field.width > 0)      W(",\"width\":%d", field.width);
-                if (field.labelBefore)  { W(",\"labelBefore\":\"");   WS(field.labelBefore);   W("\""); }
-                if (field.labelAfter)   { W(",\"labelAfter\":\"");    WS(field.labelAfter);    W("\""); }
+                if (field.wrapperClass) { W(",\"wc\":\"");  WS(field.wrapperClass);  W("\""); }
+                if (field.inputClass)   { W(",\"ic\":\"");  WS(field.inputClass);    W("\""); }
+                if (field.width > 0)      W(",\"w\":%d", field.width);
+                if (field.labelBefore)  { W(",\"lb\":\"");  WS(field.labelBefore);  W("\""); }
+                if (field.labelAfter)   { W(",\"la\":\"");  WS(field.labelAfter);   W("\""); }
 
                 W("}");
             }
@@ -492,6 +503,7 @@ struct ComponentDefinition {
 
         #undef W
         #undef WS
+        #undef WR
         return written;
     }
 };

@@ -35,8 +35,8 @@ private:
 public:
     ServerCore();
     
-    // Initialisation
-    void begin(const char* apSsid, const char* apPass, const char* hostname);
+    // Initialisation (apOnlyMode: true si aucun STA en NVS — WIFI_AP pur évite boucles d’auth sur certains ESP32)
+    void begin(const char* apSsid, const char* apPass, const char* hostname, bool apOnlyMode = false);
     void connectSta(const char* staSsid, const char* staPass);
     void setStaticStaIp(IPAddress ip, IPAddress gateway, IPAddress subnet);
     void reconfigureMdns(const char* hostname);

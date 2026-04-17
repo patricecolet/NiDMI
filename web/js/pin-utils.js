@@ -27,26 +27,57 @@ function pType(lbl) {
   if (lbl === 'MOSI' || lbl === 'MISO' || lbl === 'SCK' || lbl === 'SPI') return 'spi';
   return 'digital';
 }
+/**
+ * Checks for duplicate names in the current configuration
+ * @returns {string|null} The duplicate name found, or null if all are unique
+ */
+function findDuplicateComponentName() {
+  const namesSeen = new Set();
+  const roleCounters = {};
 
+  if (typeof pcfg === 'undefined' || !pcfg) return null;
+
+  for (const lbl of Object.keys(pcfg)) {
+    const cfg = pcfg[lbl];
+    if (!cfg || !cfg.role || lbl.startsWith('M')) continue;
+
+    // We must calculate the name exactly like updatePinsList does
+    roleCounters[cfg.role] = (roleCounters[cfg.role] || 0) + 1;
+    const currentCount = roleCounters[cfg.role];
+    
+    // Get the name (Custom Name or Generated Default)
+    const finalName = getRoleDisplayLabel(cfg.role, currentCount, cfg.name);
+
+    if (namesSeen.has(finalName)) {
+      return finalName; // Found a duplicate!
+    }
+    namesSeen.add(finalName);
+  }
+  return null;
+}
 /**
  * Obtient le label d'affichage d'un rôle
  * @param {string} role - Rôle du composant
  * @returns {string} Label d'affichage
  */
-function getRoleDisplayLabel(role) {
-  if (!role) return '';
-  
-  /* Migrer les anciens formats si nécessaire */
-  const migratedRole = typeof migrateRole === 'function' ? migrateRole(role) : role;
-  
-  /* Utiliser les définitions du backend */
-  if (typeof getComponentDefinition === 'function') {
-    const def = getComponentDefinition(migratedRole);
-    if (def) return def.displayName;
+function getRoleDisplayLabel(role, count, customName) {
+  // PRIORITÉ 1 : Si un nom personnalisé existe, on l'utilise direct
+  if (customName && customName.trim() !== '') {
+    return customName;
   }
   
-  /* Fallback: retourner le rôle tel quel */
-  return role;
+  // PRIORITÉ 2 : Sinon, on génère le nom par défaut
+  if (!role) return '';
+  const migratedRole = typeof migrateRole === 'function' ? migrateRole(role) : role;
+  let displayName = migratedRole;
+  
+  if (typeof getComponentDefinition === 'function') {
+    const def = getComponentDefinition(migratedRole);
+    if (def && def.displayName) displayName = def.displayName;
+  }
+  
+  // Ajoute le numéro (ex: Bouton 1) seulement s'il n'y a pas de nom custom
+  return count > 0 ? `${displayName} ${count}` : displayName;
 }
 
 /**
@@ -196,6 +227,18 @@ function stat(cfg, pinLabel) {
   /* Obtenir la définition du composant depuis le backend */
   const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(migratedRole) : null;
   
+  /* Si mode script, afficher seulement la note de script (ou 'Script' si non détectée) */
+  if (cfg.midiMode === 'script' && cfg.mappingScript && cfg.mappingScript.trim() !== '') {
+    const match = cfg.mappingScript.match(/note\.(?:on|off)\s*\(\s*(\d{1,3})\s*,/i);
+    if (match) {
+      const scriptNote = Number(match[1]);
+      if (!isNaN(scriptNote)) {
+        return 'Note ' + scriptNote;
+      }
+    }
+    return 'Script';
+  }
+
   /* Utiliser la fonction générique pour générer le texte de statut */
   if (def && typeof getComponentStatusText === 'function') {
     return getComponentStatusText(def, cfg, pinLabel);

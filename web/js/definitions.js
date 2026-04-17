@@ -72,6 +72,72 @@ function parseDefinitionsJson(text) {
   }
 }
 
+/**
+ * Normalise un objet de définition compacte (clés courtes envoyées par le firmware)
+ * vers le format complet attendu par le reste du frontend.
+ * Table : dn→displayName  cid→cardId  fn→familyName  pt→pinType  apt→altPinType
+ *         impl→implemented  midi→supportsMidi  osc→supportsOsc  apc→additionalPinCount
+ *         stt→statusTextTemplate  svm→statusValueMappings  ap→additionalPins
+ *         mm→midiMessages  st→statusTemplate  p→params  ph→placeholder  dv→defaultValue
+ *         dmin→defaultMin  dmax→defaultMax  sep→separator  hc→hintClass  dep→dependsOnRole
+ *         ff→formFields  ml→maxLength  hp→hintPosition  don→dependsOn  sw→showWhen
+ *         wc→wrapperClass  ic→inputClass  w→width  req→required  lb→labelBefore  la→labelAfter
+ *         o→options (déjà un tableau, pas de JSON.parse nécessaire)
+ */
+function normalizeDef(d) {
+  if (!d) return d;
+  /* paramètres MIDI */
+  const normParam = p => !p ? p : {
+    id: p.id, type: p.type, label: p.label,
+    min: p.min, max: p.max,
+    placeholder: p.ph, defaultValue: p.dv,
+    defaultMin: p.dmin, defaultMax: p.dmax, separator: p.sep,
+    hint: p.hint, hintClass: p.hc,
+    dependsOnRole: p.dep, width: p.w
+  };
+  /* messages MIDI */
+  const normMsg = m => !m ? m : {
+    id: m.id, displayName: m.dn, axis: m.axis,
+    statusTemplate: m.st,
+    params: m.p ? m.p.map(normParam) : []
+  };
+  /* form fields */
+  const normField = f => !f ? f : {
+    id: f.id, type: f.type, label: f.label,
+    required: f.req, placeholder: f.ph,
+    maxLength: f.ml, pattern: f.pattern,
+    min: f.min, max: f.max, step: f.step,
+    options: f.o,           /* o est déjà un tableau inline */
+    separator: f.sep, defaultValue: f.dv,
+    hintPosition: f.hp, hint: f.hint, hintClass: f.hc,
+    dependsOn: f.don, showWhen: f.sw,
+    wrapperClass: f.wc, inputClass: f.ic, width: f.w,
+    labelBefore: f.lb, labelAfter: f.la
+  };
+  /* additionalPins */
+  const normPin = p => !p ? p : {
+    id: p.id, displayName: p.dn, pinType: p.pt, optional: p.optional
+  };
+  return {
+    id: d.id,
+    displayName: d.dn,
+    cardId: d.cid,
+    family: d.family,
+    familyName: d.fn,
+    pinType: d.pt,
+    altPinType: d.apt,
+    implemented: d.impl,
+    supportsMidi: d.midi,
+    supportsOsc: d.osc,
+    additionalPinCount: d.apc,
+    statusTextTemplate: d.stt,
+    statusValueMappings: d.svm,
+    additionalPins: d.ap ? d.ap.map(normPin) : [],
+    midiMessages: d.mm ? d.mm.map(normMsg) : [],
+    formFields: d.ff ? d.ff.map(normField) : []
+  };
+}
+
 const ComponentDefinitions = {
   /**
    * Cache interne des définitions de composants
@@ -91,21 +157,28 @@ const ComponentDefinitions = {
     }
     this._loadingPromise = (async () => {
     try {
-      /* Faire une première requête normale (sans paramètres de pagination) */
-      let r = await fetch('/api/components/definitions');
-      if(!r.ok) {
-        console.warn('[ComponentDefinitions.load] Erreur chargement définitions:', r.status);
-        return [];
-      }
-      let firstText = await r.text();
-      if (!firstText || !firstText.trim()) {
-        console.warn('[ComponentDefinitions.load] Réponse vide sur requête initiale, retry...');
-        r = await fetch('/api/components/definitions?_retry=1');
-        if (!r.ok) {
-          console.warn('[ComponentDefinitions.load] Retry échoué:', r.status);
-          return [];
+      /* limit=1 : le serveur force 1 composant/page (beginResponse_P, zéro copie heap).
+       * 41 pages × 70ms ≈ 3s — acceptable et fiable même avec 29 KB heap libre. */
+      const firstLimit = 1;
+      let r = null;
+      let firstText = '';
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          r = await fetch(`/api/components/definitions?page=0&limit=${firstLimit}`);
+          if (r.ok) {
+            firstText = await r.text();
+            if (firstText && firstText.trim()) break;
+            console.warn(`[ComponentDefinitions.load] Page 0 vide (tentative ${attempt}/3)`);
+          } else {
+            console.warn(`[ComponentDefinitions.load] Erreur chargement définitions (tentative ${attempt}/3):`, r.status);
+          }
+        } catch (e) {
+          console.warn(`[ComponentDefinitions.load] Erreur réseau page 0 (tentative ${attempt}/3):`, e);
         }
-        firstText = await r.text();
+        await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+      }
+      if (!r || !r.ok || !firstText || !firstText.trim()) {
+        return [];
       }
 
       /* Vérifier si la pagination est activée (présence du header X-Total-Pages) */
@@ -119,54 +192,81 @@ const ComponentDefinitions = {
       
       /* Si les headers de pagination sont présents, la pagination est activée */
       if (totalPagesHeader !== null && totalCountHeader !== null) {
-        const totalPages = parseInt(totalPagesHeader);
         const totalCount = parseInt(totalCountHeader);
+        const perPage = parseInt(r.headers.get('X-Per-Page')) || 5;
+        const totalPages = Math.ceil(totalCount / perPage);
         
         if (totalCount > 0) {
-          /* Mode pagination activé : charger toutes les pages (même s'il n'y en a qu'une) */
-          console.log('[ComponentDefinitions.load] Pagination détectée, chargement de toutes les pages...', 
-                     `(totalPages: ${totalPages}, totalCount: ${totalCount})`);
-          this._cache = [];
+          console.log('[ComponentDefinitions.load] Pagination détectée',
+                     `(totalCount: ${totalCount}, perPage: ${perPage}, pages: ${totalPages})`);
           
-          /* Charger toutes les pages */
-          /* Utiliser limit=5 pour correspondre au default du backend (buffer 12KB = ~5 composants par page) */
-          for (let page = 0; ; page++) {
-            let pageR = await fetch(`/api/components/definitions?page=${page}&limit=3`);
-            if (!pageR.ok) {
-              console.warn(`[ComponentDefinitions.load] Erreur page ${page}:`, pageR.status);
-              break;
-            }
-            let pageText = await pageR.text();
-            if (!pageText || !pageText.trim()) {
-              console.warn(`[ComponentDefinitions.load] Page ${page} vide, retry...`);
-              pageR = await fetch(`/api/components/definitions?page=${page}&limit=3&_retry=1`);
-              if (!pageR.ok) {
-                console.warn(`[ComponentDefinitions.load] Retry page ${page} échoué:`, pageR.status);
-                break;
+          /* Réutiliser le body de la première requête comme page 0
+           * (évite un fetch supplémentaire et la pression mémoire sur l'ESP32) */
+          const page0 = parseDefinitionsJson(firstText);
+          const pageMap = new Map();
+          pageMap.set(0, Array.isArray(page0) ? page0 : []);
+          console.log(`[ComponentDefinitions.load] Page 0 (initiale): ${pageMap.get(0).length} composants`);
+
+          const fetchPageWithRetry = async (page, maxAttempts = 5) => {
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              try {
+                const pageR = await fetch(`/api/components/definitions?page=${page}&limit=${perPage}`);
+                if (pageR.ok) {
+                  const pageText = await pageR.text();
+                  if (pageText && pageText.trim()) {
+                    const parsed = parseDefinitionsJson(pageText);
+                    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                  } else {
+                    console.warn(`[ComponentDefinitions.load] Page ${page} vide (tentative ${attempt}/${maxAttempts})`);
+                  }
+                } else {
+                  console.warn(`[ComponentDefinitions.load] Page ${page} HTTP ${pageR.status} (tentative ${attempt}/${maxAttempts})`);
+                }
+              } catch (e) {
+                console.warn(`[ComponentDefinitions.load] Page ${page} erreur réseau (tentative ${attempt}/${maxAttempts}):`, e);
               }
-              pageText = await pageR.text();
-              if (!pageText || !pageText.trim()) {
-                console.warn(`[ComponentDefinitions.load] Page ${page} encore vide après retry, arrêt`);
-                break;
-              }
+              await new Promise(resolve => setTimeout(resolve, 220 * attempt));
             }
-            const pageData = parseDefinitionsJson(pageText);
-            if (!Array.isArray(pageData)) {
-              console.warn(`[ComponentDefinitions.load] Page ${page} invalide (pas un tableau)`);
-              break;
+            return null;
+          };
+
+          const failedPages = [];
+          for (let page = 1; page < totalPages; page++) {
+            await new Promise(resolve => setTimeout(resolve, 70));
+            const pageData = await fetchPageWithRetry(page, 4);
+            if (Array.isArray(pageData) && pageData.length > 0) {
+              pageMap.set(page, pageData);
+              console.log(`[ComponentDefinitions.load] Page ${page}: ${pageData.length} composants`);
+            } else {
+              failedPages.push(page);
             }
-            
-            if (pageData.length === 0) {
-              console.log(`[ComponentDefinitions.load] Page ${page} vide, arrêt`);
-              break; /* Page vide, arrêter */
-            }
-            
-            this._cache.push(...pageData);
-            console.log(`[ComponentDefinitions.load] Page ${page} chargée: ${pageData.length} composants`);
           }
-          
-          console.log(`[ComponentDefinitions.load] Composants chargés (pagination): ${this._cache.length}/${totalCount}`);
-          console.log('[ComponentDefinitions.load] IDs des composants (pagination):', this._cache.map(d => d.id).join(', '));
+
+          /* Deuxième passe pour les pages ratées (ne pas abandonner tout le chargement) */
+          for (const page of failedPages) {
+            await new Promise(resolve => setTimeout(resolve, 350));
+            const pageData = await fetchPageWithRetry(page, 6);
+            if (Array.isArray(pageData) && pageData.length > 0) {
+              pageMap.set(page, pageData);
+              console.log(`[ComponentDefinitions.load] Page ${page} récupérée en 2e passe: ${pageData.length} composants`);
+            } else {
+              console.warn(`[ComponentDefinitions.load] Page ${page} irrécupérable après 2 passes`);
+            }
+          }
+
+          this._cache = [];
+          for (let page = 0; page < totalPages; page++) {
+            const pageData = pageMap.get(page);
+            if (Array.isArray(pageData) && pageData.length > 0) {
+              this._cache.push(...pageData.map(normalizeDef));
+            }
+          }
+
+          console.log(`[ComponentDefinitions.load] Total chargé: ${this._cache.length}/${totalCount}`);
+          if (this._cache.length < totalCount) {
+            console.warn(`[ComponentDefinitions.load] Chargement partiel: ${this._cache.length}/${totalCount}`);
+          }
+          console.log('[ComponentDefinitions.load] IDs:', this._cache.map(d => d.id).join(', '));
           return this._cache;
         }
       }
@@ -177,7 +277,7 @@ const ComponentDefinitions = {
         console.error('[ComponentDefinitions.load] Réponse invalide (pas un tableau):', data);
         return [];
       }
-      this._cache = data;
+      this._cache = data.map(normalizeDef);
       console.log('[ComponentDefinitions.load] Composants chargés:', this._cache.length);
       console.log('[ComponentDefinitions.load] IDs des composants:', this._cache.map(d => d.id).join(', '));
       return this._cache;

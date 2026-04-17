@@ -95,6 +95,7 @@
     "muxHC4051": "HC4051 (8 canaux)"
   },
   "components": {
+    "name": "Nom du Composant",
     "muxTitle": "Multiplexeurs analogiques",
     "muxDesc": "Ajouter un multiplexeur HC4067 pour etendre les entrees analogiques.",
     "addMux": "+ Ajouter HC4067",

@@ -269,6 +269,15 @@ function updateConfig() {
     } else if (!currentCfg.role && pcfg && pcfg[lbl]) {
       currentCfg = pcfg[lbl];
     }
+
+    /* Si le nom actuel est un nom généré pour l'ancien rôle, on le réinitialise pour le nouveau rôle */
+    if (currentCfg && currentCfg.name && previousRole && typeof isGeneratedComponentName === 'function') {
+      if (isGeneratedComponentName(previousRole, currentCfg.name, cur)) {
+        currentCfg.name = '';
+        console.log('[updateConfig] Nom du composant réinitialisé car généré pour l ancien rôle:', previousRole);
+      }
+    }
+
     showRoleCards(selectedRole, currentCfg);
     /* Après avoir régénéré le formulaire, lire les valeurs si elles existent déjà */
     setTimeout(() => {

@@ -7,6 +7,7 @@
 #   sync     - Synchroniser les fichiers seulement
 #   compile  - Synchroniser + compiler
 #   upload   - Synchroniser + compiler + uploader
+#   flash    - Uploader seulement (sans sync ni compile ; dernier binaire arduino-cli)
 #   all      - Tout faire (sync + compile + upload + test)
 #   clean    - Nettoyer le cache seulement
 #   help     - Afficher cette aide
@@ -14,7 +15,11 @@
 set -e  # Arrêter en cas d'erreur
 
 # Variables
+<<<<<<< HEAD
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+=======
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" )/.." && pwd)"
+>>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
 
 # Détection de la plateforme (macOS, WSL, Linux)
 PLATFORM="linux"
@@ -53,7 +58,10 @@ detect_sketchbook_path() {
     return 1
 }
 
+<<<<<<< HEAD
 # Dossiers Arduino (valeurs par défaut, surchargeables via ARDUINO_LIB_DIR / ARDUINO_CACHE_DIR)
+=======
+>>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
 MAC_LIB_DEFAULT="$HOME/Documents/Arduino/libraries/NiDMI"
 MAC_CACHE_DEFAULT="$HOME/Library/Caches/arduino/sketches"
 WSL_LIB_DEFAULT="$HOME/Arduino/libraries/NiDMI"
@@ -61,26 +69,41 @@ WSL_CACHE_DEFAULT="$HOME/.arduino15/sketches"
 LINUX_LIB_DEFAULT="$HOME/Arduino/libraries/NiDMI"
 LINUX_CACHE_DEFAULT="$HOME/.arduino15/sketches"
 
+<<<<<<< HEAD
 # Si possible, aligner la synchro sur le sketchbook utilisé par l'IDE Arduino
+=======
+>>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
 SKETCHBOOK_FROM_PREFS="$(detect_sketchbook_path || true)"
 
 case "$PLATFORM" in
     mac)
+<<<<<<< HEAD
         if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "$ARDUINO_LIB_DIR" ]; then
+=======
+        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "${ARDUINO_LIB_DIR:-}" ]; then
+>>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
             ARDUINO_LIB_DIR="$SKETCHBOOK_FROM_PREFS/libraries/NiDMI"
         fi
         ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$MAC_LIB_DEFAULT}"
         ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$MAC_CACHE_DEFAULT}"
         ;;
     wsl)
+<<<<<<< HEAD
         if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "$ARDUINO_LIB_DIR" ]; then
+=======
+        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "${ARDUINO_LIB_DIR:-}" ]; then
+>>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
             ARDUINO_LIB_DIR="$SKETCHBOOK_FROM_PREFS/libraries/NiDMI"
         fi
         ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$WSL_LIB_DEFAULT}"
         ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$WSL_CACHE_DEFAULT}"
         ;;
     linux)
+<<<<<<< HEAD
         if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "$ARDUINO_LIB_DIR" ]; then
+=======
+        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "${ARDUINO_LIB_DIR:-}" ]; then
+>>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
             ARDUINO_LIB_DIR="$SKETCHBOOK_FROM_PREFS/libraries/NiDMI"
         fi
         ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$LINUX_LIB_DEFAULT}"
@@ -92,6 +115,10 @@ case "$PLATFORM" in
         ;;
 esac
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
 BOARD_TYPE="s3"  # Par défaut: S3
 BOARD="esp32:esp32:XIAO_ESP32S3"
 DEFAULT_SKETCH="nidmi_basic"
@@ -130,6 +157,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --port)
             PORT_OVERRIDE="$2"
+<<<<<<< HEAD
+=======
+            SERIAL_PORT="$2"
+>>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
             shift 2
             ;;
         --clear-nvs)
@@ -159,10 +190,6 @@ while [[ $# -gt 0 ]]; do
         --split-fs)
             SPLIT_FS=true
             shift
-            ;;
-        --port)
-            SERIAL_PORT="$2"
-            shift 2
             ;;
         *)
             ARGS+=("$1")
@@ -227,6 +254,7 @@ show_help() {
     echo "  compile  - Synchroniser + compiler"
     echo "  build    - Synchroniser + compiler + stocker le binaire"
     echo "  upload   - Synchroniser + compiler + uploader"
+    echo "  flash    - Uploader sans recompiler (binaire déjà compilé pour ce sketch + board)"
     echo "  monitor  - Ouvrir le moniteur série"
     echo "  all      - Tout faire (sync + compile + upload + test)"
     echo "  clean    - Nettoyer le cache seulement"
@@ -248,6 +276,10 @@ show_help() {
     echo "  --no-pagination  - Désactiver la pagination (à utiliser seulement avec --large-app sur C3)"
     echo "  --port PORT      - Forcer le port série (ex: /dev/cu.usbmodem101)"
     echo ""
+    echo "Variables d'environnement (optionnel) :"
+    echo "  ARDUINO_LIB_DIR   Bibliothèque NiDMI (défaut: \$HOME/Documents/Arduino/libraries/NiDMI)"
+    echo "  ARDUINO_CACHE_DIR Cache sketches Arduino (défaut: macOS ~/Library/Caches/... ; Linux ~/.cache/...)"
+    echo ""
     echo "  Pagination : activée par défaut (C3 et S3). Évite la troncature du JSON des définitions."
     echo "  Partition C3 : --large-app est activé par défaut pour C3 (partition ~4 Mo). Utiliser --no-large-app pour désactiver."
     echo "  Split FS : optionnel via --split-fs (remplace la partition standard par app0 + seqfs + mapfs)."
@@ -265,6 +297,10 @@ show_help() {
     echo "  ./scripts/nidmi.sh compile --board s3 --split-fs       # S3 avec seqfs 512KB + mapfs 1MB"
     echo "  ./scripts/nidmi.sh compile --board s3      # Compiler pour ESP32-S3"
     echo "  ./scripts/nidmi.sh upload --board s3       # Uploader sur ESP32-S3"
+<<<<<<< HEAD
+=======
+    echo "  ./scripts/nidmi.sh flash --board c3        # Reflash rapide (même build qu’après compile)"
+>>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
     echo "  ./scripts/nidmi.sh upload --port /dev/ttyUSB0  # Uploader en forçant le port"
     echo "  ./scripts/nidmi.sh build                   # Build (S3 par défaut)"
     echo "  ./scripts/nidmi.sh upload nidmi_osc        # Upload sketch OSC"
@@ -305,7 +341,11 @@ sync_files() {
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
+<<<<<<< HEAD
     mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,midi,midi/handlers,network,osc,processors,server,storage,ui,utils}
+=======
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,mapping,midi,midi/handlers,network,osc,processors,server,ui,utils}
+>>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -363,6 +403,11 @@ sync_files() {
         cp -f $REPO_DIR/src/midi/handlers/*.cpp $ARDUINO_LIB_DIR/src/midi/handlers/ 2>/dev/null || true
         cp -f $REPO_DIR/src/midi/handlers/*.h $ARDUINO_LIB_DIR/src/midi/handlers/ 2>/dev/null || true
     fi
+    # Copier le moteur de mapping
+    if [ -d "$REPO_DIR/src/mapping" ]; then
+        cp -f $REPO_DIR/src/mapping/*.cpp $ARDUINO_LIB_DIR/src/mapping/ 2>/dev/null || true
+        cp -f $REPO_DIR/src/mapping/*.h $ARDUINO_LIB_DIR/src/mapping/ 2>/dev/null || true
+    fi
     cp -f $REPO_DIR/src/network/*.cpp $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true
     cp -f $REPO_DIR/src/network/*.h $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true
     cp -f $REPO_DIR/src/osc/*.cpp $ARDUINO_LIB_DIR/src/osc/ 2>/dev/null || true
@@ -396,6 +441,7 @@ clean_cache() {
     fi
     
     # Nettoyer les bibliothèques staging (copies temporaires Arduino)
+<<<<<<< HEAD
     case "$PLATFORM" in
         mac)
             ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
@@ -410,6 +456,21 @@ clean_cache() {
             ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
             ;;
     esac
+=======
+    if [ -z "${ARDUINO_STAGING_DIR:-}" ]; then
+        case "$PLATFORM" in
+            mac)
+                ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
+                ;;
+            wsl|linux)
+                ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
+                ;;
+            *)
+                ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
+                ;;
+        esac
+    fi
+>>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
     if [ -d "$ARDUINO_STAGING_DIR" ]; then
         rm -rf "$ARDUINO_STAGING_DIR"/* 2>/dev/null || true
         echo "   ✅ Bibliothèques staging nettoyées: $ARDUINO_STAGING_DIR"
@@ -430,8 +491,9 @@ clean_cache() {
     echo "   ✅ Cache Arduino nettoyé"
 }
 
-# Copie un CSV de partition custom dans le package Arduino
+# Copie un CSV de partitions dans le package ESP32 Arduino (Arduino15)
 install_partition_csv() {
+<<<<<<< HEAD
     local PKG_BASE
     case "$PLATFORM" in
         mac)
@@ -446,18 +508,33 @@ install_partition_csv() {
             ;;
     esac
     
+=======
+>>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
     local SRC="$1"
     local DST_NAME="$2"
-    local DST_DIR
-    DST_DIR=$(ls -d "$PKG_BASE"/[0-9]*.[0-9]*.[0-9]*/tools/partitions 2>/dev/null | tail -1)
-    if [ -z "$DST_DIR" ]; then
-        echo "   ⚠️  Package ESP32 non trouvé dans $PKG_BASE, installation partition ignorée"
+    local PKG_BASE=""
+    local DST_DIR=""
+
+    if [ -d "$HOME/Library/Arduino15/packages/esp32/hardware/esp32" ]; then
+        PKG_BASE="$HOME/Library/Arduino15/packages/esp32/hardware/esp32"
+    elif [ -d "$HOME/.arduino15/packages/esp32/hardware/esp32" ]; then
+        PKG_BASE="$HOME/.arduino15/packages/esp32/hardware/esp32"
+    fi
+
+    if [ -n "$PKG_BASE" ]; then
+        DST_DIR=$(ls -d "$PKG_BASE"/[0-9]*.[0-9]*.[0-9]*/tools/partitions 2>/dev/null | tail -1)
+    fi
+
+    if [ -z "$PKG_BASE" ] || [ -z "$DST_DIR" ]; then
+        echo "   ⚠️  Package ESP32 non trouvé (Arduino15), installation partition ignorée"
         return 1
     fi
+
     if [ ! -f "$SRC" ]; then
         echo "   ⚠️  Fichier partition manquant: $SRC, installation ignorée"
         return 1
     fi
+
     cp "$SRC" "$DST_DIR/$DST_NAME"
     echo "   📦 Partition installée: $DST_DIR/$DST_NAME"
     return 0
@@ -768,6 +845,20 @@ main() {
                    echo "   2. Ouvrir la console du navigateur (F12)"
                    echo "   3. Tester le clic sur SDA"
                    echo "   4. Vérifier les logs dans la console"
+                   ;;
+               "flash")
+                   echo "⚡ NiDMI - Upload seul (sans sync ni compilation)"
+                   echo "=================================================="
+                   echo "   Utilise le dernier binaire arduino-cli pour ce sketch et ce FQBN."
+                   echo "   Faire au moins un compile ou upload une fois avant, avec les mêmes options (--board, --split-fs, etc.)."
+                   if [ ! -f "$SKETCH_PATH" ]; then
+                       echo "   ❌ Sketch introuvable: $SKETCH_PATH"
+                       echo "   📝 Lance d’abord: ./scripts/nidmi.sh sync"
+                       exit 1
+                   fi
+                   upload_sketch
+                   echo ""
+                   echo "✅ Flash terminé (firmware inchangé depuis la dernière compilation)."
                    ;;
                "monitor")
                    echo "🚀 NiDMI - Moniteur série"

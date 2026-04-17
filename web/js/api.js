@@ -332,8 +332,29 @@ function getComponentsForPinType(pinType, implementedOnly = true) {
 }
 
 async function loadCaps(){
- const r=await fetch('/api/pins/caps');
- caps=await r.json();
+ for (let attempt = 1; attempt <= 3; attempt++) {
+  try {
+   const r = await fetch('/api/pins/caps');
+   if (!r.ok) {
+    console.warn(`[loadCaps] HTTP ${r.status} (tentative ${attempt}/3)`);
+   } else {
+    const text = await r.text();
+    if (text && text.trim()) {
+     caps = JSON.parse(text);
+     return caps;
+    }
+    console.warn(`[loadCaps] Réponse vide (tentative ${attempt}/3)`);
+   }
+  } catch (e) {
+   console.warn(`[loadCaps] Erreur (tentative ${attempt}/3):`, e);
+  }
+  await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+ }
+ /* Fallback pour éviter de casser l'initialisation UI */
+ if (typeof caps === 'undefined' || !caps) {
+  caps = { board: '', pins: [], bus: {} };
+ }
+ return caps;
 }
 
 /* Variable pour stocker les GPIOs utilisés (cache) */
@@ -478,6 +499,14 @@ async function saveAll(){
   console.error('[saveAll] Élément saveAllMsg non trouvé');
   return;
  }
+ /* --- 1. VALIDATION : ANTI-DOUBLONS --- */
+  const duplicateName = findDuplicateComponentName();
+  if (duplicateName) {
+    msg.textContent = `Erreur: Le nom "${duplicateName}" est utilisé plusieurs fois.`;
+    msg.style.color = '#ef4444';
+    // On arrête tout ici pour éviter une config invalide sur l'ESP32
+    return; 
+  }
  msg.textContent='Enregistrement...';
  try{
  if(typeof pcfg === 'undefined' || !pcfg) {
@@ -590,6 +619,7 @@ async function saveAll(){
  const p=new URLSearchParams();
  p.set('pinLabel',lbl);
  p.set('role',c.role);
+ if(c.name) p.set('name', c.name);
  /* Envoyer rtpMidiEnabled (ou rtpEnabled pour compatibilité) */
  if(c.rtpMidiEnabled) p.set('rtpMidiEnabled','true');
  else if(c.rtpEnabled) p.set('rtpEnabled','true'); /* Compatibilité ancien format */
@@ -684,6 +714,11 @@ async function saveAll(){
   console.warn('[saveAll] ERREUR: Composant devrait avoir additionalPins mais elles sont absentes. def:', def.id, 'def.additionalPins:', def.additionalPins, 'c.additionalPins:', c.additionalPins);
 }
 /* Sinon, c'est normal - composant simple sans additionalPins */
+
+ /* Champ Mapping Script */
+ if(c.mappingScript) p.set('mappingScript', c.mappingScript);
+ /* Mode MIDI (RTP vs Mapping) */
+ if(c.midiMode) p.set('midiMode', c.midiMode);
 
  /* Champs OSC et Debug (communs à tous) */
  if(c.oscEnabled) p.set('oscEnabled','true');

@@ -95,6 +95,7 @@
     "muxHC4051": "HC4051 (8 channels)"
   },
   "components": {
+    "name": "Component name",
     "muxTitle": "Analog multiplexers",
     "muxDesc": "Add an HC4067 multiplexer to extend analog inputs.",
     "addMux": "+ Add HC4067",

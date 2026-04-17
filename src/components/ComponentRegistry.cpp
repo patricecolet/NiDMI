@@ -9,6 +9,80 @@ std::vector<ComponentDefinition>* ComponentRegistry::definitions_ptr = nullptr;
 std::vector<ComponentDefinition>* ComponentRegistry::pending_definitions_ptr = nullptr;
 bool ComponentRegistry::initialized_ = false;
 
+namespace {
+void registerBuiltinDefinitions(std::vector<ComponentDefinition>& defs) {
+    auto addIfMissing = [&](ComponentDefinition&& def) {
+        if (def.id == nullptr) { def.cleanup(); return; }
+        for (const auto& existing : defs) {
+            if (existing.id && strcmp(existing.id, def.id) == 0) {
+                def.cleanup();
+                return;
+            }
+        }
+        defs.push_back(std::move(def));
+    };
+
+    // BASIC
+    addIfMissing(Components::Potentiometer::createDefinition());
+    addIfMissing(Components::Button::createDefinition());
+    addIfMissing(Components::Led::createDefinition());
+    addIfMissing(Components::Velostat::createDefinition());
+    addIfMissing(Components::Touch::createDefinition());
+    addIfMissing(Components::Joystick::createDefinition());
+    addIfMissing(Components::Ultrasonic::createDefinition());
+
+    // MULTIPLEXER
+    addIfMissing(Components::HC4067::createDefinition());
+    addIfMissing(Components::HC4051::createDefinition());
+
+    // DISTANCE
+    addIfMissing(Components::IrDistanceSharp::createDefinition());
+    addIfMissing(Components::LidarTof::createDefinition());
+    addIfMissing(Components::InductiveProximity::createDefinition());
+
+    // ENVIRONMENT
+    addIfMissing(Components::EnvironmentGeneric::createDefinition());
+    addIfMissing(Components::LightSensorGrove::createDefinition());
+    addIfMissing(Components::TempHumDht::createDefinition());
+    addIfMissing(Components::TempHumI2c::createDefinition());
+    addIfMissing(Components::BarometerDps310::createDefinition());
+    addIfMissing(Components::SoilMoistureCapacitive::createDefinition());
+    addIfMissing(Components::UvSensorGrove::createDefinition());
+
+    // MOTION
+    addIfMissing(Components::MotionGeneric::createDefinition());
+    addIfMissing(Components::PirMotion::createDefinition());
+    addIfMissing(Components::Imu6Axis::createDefinition());
+    addIfMissing(Components::Lis3dh::createDefinition());
+    addIfMissing(Components::GestureIr::createDefinition());
+    addIfMissing(Components::RadarDoppler::createDefinition());
+
+    // COLOR
+    addIfMissing(Components::ColorGeneric::createDefinition());
+
+    // INTERFACE
+    addIfMissing(Components::Fsr::createDefinition());
+    addIfMissing(Components::Mpr121::createDefinition());
+    addIfMissing(Components::RotaryAngleGrove::createDefinition());
+    addIfMissing(Components::ThumbJoystickGrove::createDefinition());
+
+    // ACTUATOR
+    addIfMissing(Components::ActuatorGeneric::createDefinition());
+    addIfMissing(Components::RelayGrove::createDefinition());
+    addIfMissing(Components::BuzzerGrove::createDefinition());
+    addIfMissing(Components::VibrationMotorGrove::createDefinition());
+    addIfMissing(Components::SolenoidGrove::createDefinition());
+
+    // DISPLAY
+    addIfMissing(Components::DisplayGeneric::createDefinition());
+    addIfMissing(Components::BargraphLedGrove::createDefinition());
+    addIfMissing(Components::OledI2cGrove::createDefinition());
+    addIfMissing(Components::Lcd16x2I2cGrove::createDefinition());
+    addIfMissing(Components::FourDigitDisplayGrove::createDefinition());
+    addIfMissing(Components::LedMatrixGrove::createDefinition());
+}
+} // namespace
+
 bool ComponentRegistry::registerDefinition(ComponentDefinition&& def) {
     // Créer le vecteur temporaire si nécessaire
     // Note: Ce vecteur est créé au premier enregistrement, même avant init()
@@ -56,7 +130,7 @@ void ComponentRegistry::init() {
         }
         // Réserver l'espace dans le vector pour éviter les réallocations
         // qui peuvent créer des copies temporaires
-        definitions_ptr->reserve(6);  // Augmenté à 6 pour permettre l'ajout futur
+        definitions_ptr->reserve(48);  // Marge confortable pour toutes les familles
     }
     
     // Initialiser le ValidationRegistry d'abord
@@ -94,6 +168,10 @@ void ComponentRegistry::init() {
         pending_definitions_ptr = nullptr;
     }
     
+    // Garantit un registre complet même si l'éditeur de liens ignore
+    // certains TU contenant les auto-register statiques.
+    registerBuiltinDefinitions(*definitions_ptr);
+
     // === FAMILLES FUTURES ===
     // ENCODER : encodeurs rotatifs
     // DISPLAY : écrans OLED, LCD
@@ -191,15 +269,6 @@ int ComponentRegistry::toJsonArrayPage(char* buffer, size_t bufferSize, int page
     int endIdx = startIdx + limit;
     int totalCount = static_cast<int>(definitions_ptr->size());
     
-    #ifdef ARDUINO
-    Serial.printf("[toJsonArrayPage] DEBUT: page=%d, limit=%d, totalCount=%d, startIdx=%d, endIdx=%d\n", 
-                 page, limit, totalCount, startIdx, endIdx);
-    // Afficher tous les IDs disponibles dans l'ordre
-    for (int j = 0; j < totalCount; j++) {
-        Serial.printf("[toJsonArrayPage] Composant %d: id=%s\n", j, (*definitions_ptr)[j].id ? (*definitions_ptr)[j].id : "NULL");
-    }
-    #endif
-    
     if (startIdx >= totalCount) {
         // Page vide
         buffer[written++] = ']';
@@ -218,16 +287,8 @@ int ComponentRegistry::toJsonArrayPage(char* buffer, size_t bufferSize, int page
         // Calculer l'espace restant AVANT d'écrire la virgule
         size_t remaining = bufferSize - written - 1; // -1 pour le ']' final
         
-        #ifdef ARDUINO
-        Serial.printf("[toJsonArrayPage] i=%d/%d, id=%s, remaining=%zu, written=%d\n", 
-                     i, endIdx-1, def.id ? def.id : "NULL", remaining, written);
-        #endif
-        
         // Vérifier si on a assez de place pour au moins un objet minimal
         if (remaining < 50) {
-            #ifdef ARDUINO
-            Serial.printf("[toJsonArrayPage] ARRÊT: remaining=%zu < 50 (id=%s)\n", remaining, def.id ? def.id : "NULL");
-            #endif
             break; // Pas assez de place même pour un objet minimal
         }
         
@@ -243,21 +304,11 @@ int ComponentRegistry::toJsonArrayPage(char* buffer, size_t bufferSize, int page
         // Écrire la définition en JSON
         int defLen = def.toJson(buffer + written, remaining);
         
-        #ifdef ARDUINO
-        Serial.printf("[toJsonArrayPage] id=%s, defLen=%d, remaining=%zu, condition=%s\n", 
-                     def.id ? def.id : "NULL", defLen, remaining, 
-                     (defLen <= 0 || defLen >= (int)remaining) ? "ARRÊT" : "OK");
-        #endif
-        
         if (defLen <= 0 || defLen >= (int)remaining) {
             // Pas assez de place pour cet objet → annuler la virgule si on l'a écrite
             if (wroteComma && written > 1) {
                 written--; // Retirer la virgule orpheline
             }
-            #ifdef ARDUINO
-            Serial.printf("[toJsonArrayPage] ARRÊT: id=%s, defLen=%d, remaining=%zu\n", 
-                         def.id ? def.id : "NULL", defLen, remaining);
-            #endif
             break; // Arrêter proprement, JSON reste valide
         }
         

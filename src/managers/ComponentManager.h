@@ -4,6 +4,7 @@
 #include <Preferences.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/queue.h>
 #include "../utils/PinMapper.h"
 #include "../midi/MidiSender.h"
 #include "../midi/MidiMessageType.h"
@@ -51,6 +52,12 @@ private:
     bool midiTaskStarted;
     static void midiTask(void* parameter);
     void midiTaskLoop();
+    
+    struct TelemetryWsMsg {
+        char payload[192];
+    };
+    QueueHandle_t telemetryQueue;
+    uint32_t telemetryDropCount;
 
     // Garde NVS : les tâches temps réel vérifient ce flag et yieldent
     volatile bool _nvsWriteInProgress = false;

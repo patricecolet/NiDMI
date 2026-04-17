@@ -21,11 +21,9 @@
 #include "../Globals.h"
 #include "../components/motion/Lis3dhDef.h"
 
-// Déclaré dans WebAPI.cpp (runtime-only, jamais persistant NVS)
-extern volatile bool g_pinMonitoringEnabled;
-
 ComponentManager::ComponentManager()
-    : component_count(0), midi_sender(nullptr), midiTaskHandle(nullptr), midiTaskStarted(false) {
+    : component_count(0), midi_sender(nullptr), midiTaskHandle(nullptr), midiTaskStarted(false),
+      telemetryQueue(nullptr), telemetryDropCount(0) {
     // Initialiser les filtres
     for (int i = 0; i < MAX_COMPONENTS; i++) {
         filters[i].alpha = 0.1f;
@@ -42,11 +40,16 @@ ComponentManager::~ComponentManager() {
         midiTaskHandle = nullptr;
         midiTaskStarted = false;
     }
+    if (telemetryQueue != nullptr) {
+        vQueueDelete(telemetryQueue);
+        telemetryQueue = nullptr;
+    }
     clearAll();
 }
 
 void ComponentManager::begin(MidiSender* sender) {
     midi_sender = sender;
+    telemetryQueue = xQueueCreate(8, sizeof(TelemetryWsMsg));
     /* Charger d'abord les MUX */
     loadMuxConfigFromNVS();
     /* Puis charger les configs des pins */
@@ -112,10 +115,9 @@ void ComponentManager::update() {
             Serial.println("[ComponentManager] No MIDI sender configured");
             lastLog = millis();
         }
-        return;
+        // Ne pas return : OSC / queue WS doivent tourner même sans MIDI (USB absent, etc.)
     }
-    
-    
+
     // Log périodique du nombre de composants
     static unsigned long lastComponentLog = 0;
     // if (millis() - lastComponentLog > 30000) { // Log toutes les 30s
@@ -148,6 +150,17 @@ void ComponentManager::update() {
     
     // Le traitement des composants directs (non-MUX) est maintenant dans la tâche MIDI sur Core 0
     // On ne garde ici que le traitement réseau/OSC qui doit rester sur Core 1
+
+    // Drainer la queue télémétrie (remplie par midiTaskLoop sur Core 0)
+    // textAll() est appelé ici sur Core 1, où vit le serveur web — thread-safe.
+    if (telemetryQueue) {
+        TelemetryWsMsg tm;
+        uint8_t drained = 0;
+        while (drained < 8 && xQueueReceive(telemetryQueue, &tm, 0) == pdTRUE) {
+            serverCore.websocket().textAll(tm.payload);
+            drained++;
+        }
+    }
 }
 
 void ComponentManager::reloadConfigs() {
@@ -621,15 +634,15 @@ void ComponentManager::midiTaskLoop() {
                     };
 
                     auto sendTelemetry = [&](const String& pinLabel, uint32_t raw, uint8_t midi, uint32_t ts, bool show_value) {
-                        String json = "{";
-                        json += "\"raw\":" + String(raw) + ",";
-                        json += "\"midi\":" + String(midi) + ",";
-                        json += "\"active\":1,";
-                        json += "\"ts\":" + String(ts) + ",";
-                        json += "\"show_value\":" + String(show_value ? "true" : "false");
-                        json += "}";
-                        String msg = "PIN_TELEMETRY:" + pinLabel + ":" + json;
-                        serverCore.websocket().textAll(msg);
+                        if (!telemetryQueue) return;
+                        TelemetryWsMsg tm;
+                        snprintf(tm.payload, sizeof(tm.payload),
+                                 "PIN_TELEMETRY:%s:{\"raw\":%lu,\"midi\":%u,\"active\":1,\"ts\":%lu,\"show_value\":%s}",
+                                 pinLabel.c_str(), (unsigned long)raw, (unsigned)midi,
+                                 (unsigned long)ts, show_value ? "true" : "false");
+                        if (xQueueSend(telemetryQueue, &tm, 0) != pdTRUE) {
+                            telemetryDropCount++;
+                        }
                     };
 
                     auto sendToPhysicalLabels2 = [&](const char* l1, const char* l2, uint32_t raw, uint8_t midi, uint32_t ts, bool show_value) {

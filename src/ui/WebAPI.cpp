@@ -28,8 +28,6 @@ void setupSequencerPlaybackAPI(AsyncWebServer& server);
 
 
 Preferences preferences;
-// Monitoring SVG runtime-only (NE PAS persister en NVS)
-volatile bool g_pinMonitoringEnabled = false;
 
 // Fonction pour obtenir la configuration par défaut d'une pin
 String getDefaultConfig(String pin) {
@@ -169,21 +167,19 @@ String getDefaultConfig(String pin) {
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
     if (type == WS_EVT_CONNECT) {
         Serial.println("WebSocket client connected");
-        // Monitoring OFF par défaut à chaque nouvelle session
-        g_pinMonitoringEnabled = false;
-        if (client) client->text("PIN_MONITORING_STATE:0");
     } else if (type == WS_EVT_DISCONNECT) {
         Serial.println("WebSocket client disconnected");
     } else if (type == WS_EVT_DATA) {
-        String message = String((char*)data);
+        AwsFrameInfo *info = (AwsFrameInfo*)arg;
+        if (!info || info->opcode != WS_TEXT) return;
+        // Frame texte complète (1er fragment) — ne pas exiger info->len==len (certaines stacks divergent)
+        if (!(info->final && info->index == 0)) return;
+        if (!data || len == 0) return;
 
-        // Activation/désactivation runtime-only du monitoring SVG
-        // Format attendu: PIN_MONITORING:1 ou PIN_MONITORING:0
-        if (message.startsWith("PIN_MONITORING:")) {
-            String val = message.substring(15);
-            g_pinMonitoringEnabled = (val == "1");
-            if (client) client->text(String("PIN_MONITORING_STATE:") + (g_pinMonitoringEnabled ? "1" : "0"));
-            return;
+        String message;
+        message.reserve(len);
+        for (size_t i = 0; i < len; i++) {
+            message += (char)data[i];
         }
 
         // Commande globale de calibration touch (toutes les baselines)
