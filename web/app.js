@@ -14,6 +14,22 @@ document.addEventListener('DOMContentLoaded', async ()=>{
  loadMidiInterfaces();
  /* Initialiser les formulaires */
  initForms();
+ /* Initialiser le toggle du mode MIDI (RTP vs Mapping) */
+ if (typeof initMidiModeToggle === 'function') {
+   initMidiModeToggle();
+ }
+ 
+ const compNameInput = document.getElementById('ComponentName');
+ if (compNameInput) {
+  compNameInput.oninput = (e) => {
+   if (typeof cur !== 'undefined' && cur && pcfg && pcfg[cur]) {
+  // Enregistrer le nom dans l'objet de configuration global
+    pcfg[cur].name = e.target.value;
+    updatePinsList();
+   }
+  };
+ }
+
  /* Charger les définitions de composants AVANT de dessiner le board */
  loadComponentDefinitions().then(async () => {
   /* Charger les capacités de la carte, puis dessiner le board */
@@ -44,6 +60,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
    updateBusVisuals();
   });
  });
+
  /* Initialiser le bouton "Enregistrer tout" */
  if($('#saveAllBtn')) $('#saveAllBtn').onclick=saveAll;
  /* Initialiser WebSocket avec un délai pour éviter les conflits */

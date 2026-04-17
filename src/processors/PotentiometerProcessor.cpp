@@ -3,6 +3,7 @@
 #include "../components/ComponentTypes.h"  // Définitions communes
 #include "../components/basic/PotentiometerDef.h"
 #include "../midi/handlers/MidiOutputCoordinator.h"
+#include "../mapping/MappingEngine.h"
 
 void PotentiometerProcessor::process(
     const ComponentConfig& config,
@@ -171,14 +172,22 @@ void PotentiometerProcessor::process(
     uint16_t raw_value_for_handler = (config.msg_type == MidiMessageType::PITCH_BEND) 
                                     ? filtered_raw_value  // Pitchbend : valeur brute filtrée
                                     : filtered_value;     // Autres : valeur normalisée
-    MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, midi_value, raw_value_for_handler);
+    if (config.midiMode != MidiMode::SCRIPT) {
+        MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, midi_value, raw_value_for_handler);
+    }
     
     // Mettre à jour last_value UNE SEULE FOIS après l'envoi (comme le MUX)
     state.last_value = midi_value;
     state.last_time = millis();
-    state.last_raw_value_u32 = raw_value_for_handler;
-    state.last_midi_value_u8 = midi_value;
-    state.last_telemetry_ts = state.last_time;
+    
+    // Update FluxRegistry only when the component has a declared name.
+    if (config.name && config.name[0] != '\0') {
+        FluxRegistry::update(config.name, (float)midi_value);
+    }
+    // Script mode must run even without a component name.
+    if (config.midiMode == MidiMode::SCRIPT && config.mappingScript[0] != '\0') {
+        MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
+    }
 }
 
 // Wrapper pour normaliser la signature (filter par pointeur au lieu de référence)

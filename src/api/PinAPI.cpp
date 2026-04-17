@@ -332,7 +332,10 @@ void setupPinAPI(AsyncWebServer& server) {
         addParam("rtpEnabled"); // Ancien format pour compatibilité
         addParam("midiMessageType"); // Nouveau format
         addParam("rtpType"); // Ancien format pour compatibilité
-        
+        /* Champs personnalisés de mapping script */
+        addParam("mappingScript");
+        /* Mode MIDI: RTP vs Mapping Script */
+        addParam("midiMode");
         /* Pour composants avec axes (joystick, IMU), sauvegarder les types MIDI par axe */
         addParam("midiMessageTypeX");
         addParam("midiMessageTypeY");
@@ -453,6 +456,9 @@ void setupPinAPI(AsyncWebServer& server) {
         addParam("oscFormat");
         addParam("dbgEnabled");
         addParam("dbgHeader");
+        
+        /* Nom personnalisé du composant */
+        addParam("name");
         
         /* Vérifier si le composant a des additionalPins */
         bool hasAdditionalPins = false;

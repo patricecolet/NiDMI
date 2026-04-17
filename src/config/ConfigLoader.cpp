@@ -284,6 +284,49 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                         Serial.printf("[ConfigLoader] OSC address empty for %s, using default: '%s'\n", 
                                       pinLabelCStr, config->osc_address);
                     }
+
+                    // Mapping script: stocke la chaîne user-defined dans le ComponentConfig
+                    bool hasMappingScript = false;
+                    {
+                        String script = JSONParser::extractStr(pinConfig, "mappingScript", "");
+                        if (script.length() > 0) {
+                            strncpy(config->mappingScript, script.c_str(), sizeof(config->mappingScript) - 1);
+                            config->mappingScript[sizeof(config->mappingScript) - 1] = '\0';
+                            hasMappingScript = true;
+                        } else {
+                            config->mappingScript[0] = '\0';
+                        }
+                    }
+
+                    // Nom personnalisé du composant
+                    {
+                        String componentName = JSONParser::extractStr(pinConfig, "name", "");
+                        if (componentName.length() > 0) {
+                            strncpy(config->name, componentName.c_str(), sizeof(config->name) - 1);
+                            config->name[sizeof(config->name) - 1] = '\0';
+                        } else {
+                            config->name[0] = '\0';
+                        }
+                    }
+
+                    // MIDI mode: RTP vs Mapping
+                    // Compat legacy: si midiMode absent mais mappingScript présent, activer SCRIPT.
+                    {
+                        String midiModeStr = JSONParser::extractStr(pinConfig, "midiMode", "");
+                        if (midiModeStr == "script") {
+                            config->midiMode = MidiMode::SCRIPT;
+                        } else if (midiModeStr == "rtp") {
+                            config->midiMode = MidiMode::RTP;
+                        } else {
+                            config->midiMode = hasMappingScript ? MidiMode::SCRIPT : MidiMode::RTP;
+                        }
+
+                        Serial.printf("[ConfigLoader] pin=%s midiModeRaw='%s' midiMode=%s mappingScript='%s'\n",
+                                      pinLabelCStr,
+                                      midiModeStr.c_str(),
+                                      (config->midiMode == MidiMode::SCRIPT) ? "SCRIPT" : "RTP",
+                                      config->mappingScript);
+                    }
                     
                     // Charger les configurations spécifiques selon le type de composant
                     // La config spécifique doit déjà être allouée par ComponentInitializer
@@ -847,6 +890,17 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
         }
         if (oscFormat == "raw") configPtr->flags |= 0x08;
         else if (oscFormat == "midi") configPtr->flags |= 0x04;
+
+        // Nom personnalisé du composant
+        {
+            String componentName = JSONParser::extractStr(pinConfig, "name", "");
+            if (componentName.length() > 0) {
+                strncpy(configPtr->name, componentName.c_str(), sizeof(configPtr->name) - 1);
+                configPtr->name[sizeof(configPtr->name) - 1] = '\0';
+            } else {
+                configPtr->name[0] = '\0';
+            }
+        }
 
         // Charger la configuration spécifique selon le type de composant
         if (configPtr->type == ComponentType::IMU && configPtr->specificConfig.imu) {

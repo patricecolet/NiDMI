@@ -7,6 +7,7 @@
 #include "../midi/MidiMessageType.h"
 #include "../midi/handlers/MidiOutputCoordinator.h"
 #include "../utils/AxisUtils.h"
+#include "../mapping/MappingEngine.h"
 
 // Instance statique du driver LIS3DH (singleton par GPIO)
 static Lis3dhDriver* lis3dh_driver = nullptr;
@@ -197,6 +198,15 @@ void ImuProcessor::process(
     
     state.last_value = (uint16_t)(xFiltered + 32768); // Stocker X pour compatibilité
     state.last_time = millis();
+    
+    // Update FluxRegistry only when the component has a declared name.
+    if (config.name && config.name[0] != '\0') {
+        FluxRegistry::update(config.name, (float)state.last_value);
+    }
+    // Script mode must run even without a component name.
+    if (config.midiMode == MidiMode::SCRIPT && config.mappingScript[0] != '\0') {
+        MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
+    }
 }
 
 int8_t ImuProcessor::mapAxisValue(

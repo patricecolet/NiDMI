@@ -15,7 +15,7 @@
 set -e  # Arrêter en cas d'erreur
 
 # Variables
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" )/.." && pwd)"
 
 # Détection de la plateforme (macOS, WSL, Linux)
 PLATFORM="linux"
@@ -54,7 +54,6 @@ detect_sketchbook_path() {
     return 1
 }
 
-# Dossiers Arduino (valeurs par défaut, surchargeables via ARDUINO_LIB_DIR / ARDUINO_CACHE_DIR)
 MAC_LIB_DEFAULT="$HOME/Documents/Arduino/libraries/NiDMI"
 MAC_CACHE_DEFAULT="$HOME/Library/Caches/arduino/sketches"
 WSL_LIB_DEFAULT="$HOME/Arduino/libraries/NiDMI"
@@ -62,26 +61,25 @@ WSL_CACHE_DEFAULT="$HOME/.arduino15/sketches"
 LINUX_LIB_DEFAULT="$HOME/Arduino/libraries/NiDMI"
 LINUX_CACHE_DEFAULT="$HOME/.arduino15/sketches"
 
-# Si possible, aligner la synchro sur le sketchbook utilisé par l'IDE Arduino
 SKETCHBOOK_FROM_PREFS="$(detect_sketchbook_path || true)"
 
 case "$PLATFORM" in
     mac)
-        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "$ARDUINO_LIB_DIR" ]; then
+        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "${ARDUINO_LIB_DIR:-}" ]; then
             ARDUINO_LIB_DIR="$SKETCHBOOK_FROM_PREFS/libraries/NiDMI"
         fi
         ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$MAC_LIB_DEFAULT}"
         ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$MAC_CACHE_DEFAULT}"
         ;;
     wsl)
-        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "$ARDUINO_LIB_DIR" ]; then
+        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "${ARDUINO_LIB_DIR:-}" ]; then
             ARDUINO_LIB_DIR="$SKETCHBOOK_FROM_PREFS/libraries/NiDMI"
         fi
         ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$WSL_LIB_DEFAULT}"
         ARDUINO_CACHE_DIR="${ARDUINO_CACHE_DIR:-$WSL_CACHE_DEFAULT}"
         ;;
     linux)
-        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "$ARDUINO_LIB_DIR" ]; then
+        if [ -n "$SKETCHBOOK_FROM_PREFS" ] && [ -z "${ARDUINO_LIB_DIR:-}" ]; then
             ARDUINO_LIB_DIR="$SKETCHBOOK_FROM_PREFS/libraries/NiDMI"
         fi
         ARDUINO_LIB_DIR="${ARDUINO_LIB_DIR:-$LINUX_LIB_DEFAULT}"
@@ -92,6 +90,7 @@ case "$PLATFORM" in
         exit 1
         ;;
 esac
+
 
 BOARD_TYPE="s3"  # Par défaut: S3
 BOARD="esp32:esp32:XIAO_ESP32S3"
@@ -247,6 +246,10 @@ show_help() {
     echo "  --no-pagination  - Désactiver la pagination (à utiliser seulement avec --large-app sur C3)"
     echo "  --port PORT      - Forcer le port série (ex: /dev/cu.usbmodem101)"
     echo ""
+    echo "Variables d'environnement (optionnel) :"
+    echo "  ARDUINO_LIB_DIR   Bibliothèque NiDMI (défaut: \$HOME/Documents/Arduino/libraries/NiDMI)"
+    echo "  ARDUINO_CACHE_DIR Cache sketches Arduino (défaut: macOS ~/Library/Caches/... ; Linux ~/.cache/...)"
+    echo ""
     echo "  Pagination : activée par défaut (C3 et S3). Évite la troncature du JSON des définitions."
     echo "  Partition C3 : --large-app est activé par défaut pour C3 (partition ~4 Mo). Utiliser --no-large-app pour désactiver."
     echo "  Split FS : optionnel via --split-fs (remplace la partition standard par app0 + seqfs + mapfs)."
@@ -305,7 +308,7 @@ sync_files() {
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
-    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,midi,midi/handlers,network,osc,processors,server,ui,utils}
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,mapping,midi,midi/handlers,network,osc,processors,server,ui,utils}
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -363,6 +366,11 @@ sync_files() {
         cp -f $REPO_DIR/src/midi/handlers/*.cpp $ARDUINO_LIB_DIR/src/midi/handlers/ 2>/dev/null || true
         cp -f $REPO_DIR/src/midi/handlers/*.h $ARDUINO_LIB_DIR/src/midi/handlers/ 2>/dev/null || true
     fi
+    # Copier le moteur de mapping
+    if [ -d "$REPO_DIR/src/mapping" ]; then
+        cp -f $REPO_DIR/src/mapping/*.cpp $ARDUINO_LIB_DIR/src/mapping/ 2>/dev/null || true
+        cp -f $REPO_DIR/src/mapping/*.h $ARDUINO_LIB_DIR/src/mapping/ 2>/dev/null || true
+    fi
     cp -f $REPO_DIR/src/network/*.cpp $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true
     cp -f $REPO_DIR/src/network/*.h $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true
     cp -f $REPO_DIR/src/osc/*.cpp $ARDUINO_LIB_DIR/src/osc/ 2>/dev/null || true
@@ -394,20 +402,19 @@ clean_cache() {
     fi
     
     # Nettoyer les bibliothèques staging (copies temporaires Arduino)
-    case "$PLATFORM" in
-        mac)
-            ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
-            ;;
-        wsl)
-            ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
-            ;;
-        linux)
-            ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
-            ;;
-        *)
-            ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
-            ;;
-    esac
+    if [ -z "${ARDUINO_STAGING_DIR:-}" ]; then
+        case "$PLATFORM" in
+            mac)
+                ARDUINO_STAGING_DIR="$HOME/Library/Arduino15/staging/libraries"
+                ;;
+            wsl|linux)
+                ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
+                ;;
+            *)
+                ARDUINO_STAGING_DIR="$HOME/.arduino15/staging/libraries"
+                ;;
+        esac
+    fi
     if [ -d "$ARDUINO_STAGING_DIR" ]; then
         rm -rf "$ARDUINO_STAGING_DIR"/* 2>/dev/null || true
         echo "   ✅ Bibliothèques staging nettoyées: $ARDUINO_STAGING_DIR"
@@ -428,21 +435,33 @@ clean_cache() {
     echo "   ✅ Cache Arduino nettoyé"
 }
 
-# Copie un CSV de partition custom dans le package Arduino
+# Copie un CSV de partitions dans le package ESP32 Arduino (Arduino15)
 install_partition_csv() {
-    local PKG_BASE="${HOME}/Library/Arduino15/packages/esp32/hardware/esp32"
     local SRC="$1"
     local DST_NAME="$2"
-    local DST_DIR
-    DST_DIR=$(ls -d "$PKG_BASE"/[0-9]*.[0-9]*.[0-9]*/tools/partitions 2>/dev/null | tail -1)
-    if [ -z "$DST_DIR" ]; then
-        echo "   ⚠️  Package ESP32 non trouvé dans $PKG_BASE, installation partition ignorée"
+    local PKG_BASE=""
+    local DST_DIR=""
+
+    if [ -d "$HOME/Library/Arduino15/packages/esp32/hardware/esp32" ]; then
+        PKG_BASE="$HOME/Library/Arduino15/packages/esp32/hardware/esp32"
+    elif [ -d "$HOME/.arduino15/packages/esp32/hardware/esp32" ]; then
+        PKG_BASE="$HOME/.arduino15/packages/esp32/hardware/esp32"
+    fi
+
+    if [ -n "$PKG_BASE" ]; then
+        DST_DIR=$(ls -d "$PKG_BASE"/[0-9]*.[0-9]*.[0-9]*/tools/partitions 2>/dev/null | tail -1)
+    fi
+
+    if [ -z "$PKG_BASE" ] || [ -z "$DST_DIR" ]; then
+        echo "   ⚠️  Package ESP32 non trouvé (Arduino15), installation partition ignorée"
         return 1
     fi
+
     if [ ! -f "$SRC" ]; then
         echo "   ⚠️  Fichier partition manquant: $SRC, installation ignorée"
         return 1
     fi
+
     cp "$SRC" "$DST_DIR/$DST_NAME"
     echo "   📦 Partition installée: $DST_DIR/$DST_NAME"
     return 0

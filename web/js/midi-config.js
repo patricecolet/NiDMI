@@ -552,46 +552,29 @@ const MidiConfig = {
    * @returns {Object} Configuration MIDI
    */
   readConfig(def) {
+    // Ne retourner ici QUE les champs MIDI lus depuis le formulaire.
+    // Le reste de la config (role, midiMode, mappingScript, formFields, etc.)
+    // est géré par readCfg() et ne doit pas être réécrasé avec un état ancien.
     const config = {
-      /* Interfaces MIDI (checkboxes HTML, codées en dur OK) */
+      midiMessageType: $('#rtpMsgType')?.value || '',
+      rtpType: $('#rtpMsgType')?.value || '',
       rtpMidiEnabled: !!$('#rtpMidiEnabled')?.checked,
-      rtpEnabled: !!$('#rtpMidiEnabled')?.checked || !!$('#rtpEnabled2')?.checked, /* Alias pour compatibilité */
-      /* USB-MIDI et Debug MIDI sont hardcodés dans HTML (si présents) */
+      rtpEnabled: !!$('#rtpMidiEnabled')?.checked || !!$('#rtpEnabled2')?.checked,
       usbMidiEnabled: !!$('#usbMidiEnabled')?.checked,
       debugMidiEnabled: !!$('#debugMidiEnabled')?.checked
     };
-
-    /* Pour les composants multi-axes (joystick, lis3dh), lire les configs MIDI séparées par axe */
+    
+    // 3. Lire dynamiquement tous les paramètres MIDI (joystick/lis3dh : par axe, sinon global)
     const isMultiAxis = def && (def.id === 'joystick' || def.id === 'lis3dh');
-    if(isMultiAxis) {
-      const axes = def.id === 'lis3dh' ? ['X','Y','Z'] : ['X','Y'];
-      axes.forEach(axis => {
-        const selectId = `#rtpMsgType${axis}`;
-        const keyType = `midiMessageType${axis}`;
-        const keyRtp  = `rtpType${axis}`;
-        config[keyType] = $(selectId)?.value || '';
-        config[keyRtp]  = $(selectId)?.value || '';
-      });
-    } else {
-      /* Pour les autres composants, comportement normal */
-      config.midiMessageType = $('#rtpMsgType')?.value || '';
-      config.rtpType = $('#rtpMsgType')?.value || '';
-    }
 
-    /* Pour les composants multi-axes, lire les paramètres avec préfixes X_/Y_/Z_ */
-    if(isMultiAxis) {
-      const axes = def.id === 'lis3dh' ? ['X','Y','Z'] : ['X','Y'];
-      axes.forEach(axis => {
-        const lowerAxis = axis.toLowerCase();
-        const paramsContainer = $(`#rtpParams${axis}`);
-        if(paramsContainer && def.midiMessages) {
-          /* Filtrer strictement : seulement les messages de cet axe */
+    if(def && def.midiMessages && Array.isArray(def.midiMessages)) {
+      if(isMultiAxis) {
+        const axes = def.id === 'lis3dh' ? ['X', 'Y', 'Z'] : ['X', 'Y'];
+        axes.forEach(axis => {
+          const lowerAxis = axis.toLowerCase();
           def.midiMessages
             .filter(m => {
-              if(!m.axis || m.axis.length === 0) {
-                /* Si le message n'a pas d'axis, l'exclure (sauf fallback pour compatibilité) */
-                return false;
-              }
+              if(!m.axis || m.axis.length === 0) return false;
               const msgAxis = String(m.axis).toLowerCase().trim();
               return msgAxis === lowerAxis;
             })
@@ -613,22 +596,15 @@ const MidiConfig = {
                 });
               }
             });
-        }
-      });
-    } else {
-      /* Pour les autres composants, comportement normal */
-      /* Lire dynamiquement tous les paramètres MIDI depuis les définitions */
-      /* Parcourt tous les messages MIDI et leurs paramètres (cc, note, channel, velocity, range, etc.) */
-      if(def && def.midiMessages && Array.isArray(def.midiMessages)) {
+        });
+      } else {
         def.midiMessages.forEach(msg => {
           if(msg.params && Array.isArray(msg.params)) {
             msg.params.forEach(param => {
               if(param.id) {
-                /* Pour les paramètres RANGE, traiter différemment car il n'y a pas d'élément avec param.id */
                 if(param.type === 4) { /* RANGE */
                   const elMin = $('#' + param.id + 'Min');
                   const elMax = $('#' + param.id + 'Max');
-                  /* Toujours collecter les valeurs (même si par défaut ou cachées) */
                   if(elMin) {
                     let minValue = elMin.value;
                     if (!minValue) {
@@ -642,10 +618,8 @@ const MidiConfig = {
                     }
                     config[param.id + 'Min'] = minValue;
                   } else if(param.defaultMin) {
-                    /* Si le champ n'existe pas, utiliser la valeur par défaut */
                     config[param.id + 'Min'] = String(param.defaultMin);
                   } else {
-                    /* Fallback final */
                     config[param.id + 'Min'] = String(param.min || '0');
                   }
                   if(elMax) {
@@ -661,18 +635,13 @@ const MidiConfig = {
                     }
                     config[param.id + 'Max'] = maxValue;
                   } else if(param.defaultMax) {
-                    /* Si le champ n'existe pas, utiliser la valeur par défaut */
                     config[param.id + 'Max'] = String(param.defaultMax);
                   } else {
-                    /* Fallback final */
                     config[param.id + 'Max'] = String(param.max || '127');
                   }
                 } else {
-                  /* Pour les autres types, chercher l'élément normal */
                   const el = $('#' + param.id);
-                  if(el) {
-                    config[param.id] = el.value || '';
-                  }
+                  if(el) config[param.id] = el.value || '';
                 }
               }
             });

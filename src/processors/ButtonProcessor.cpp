@@ -3,6 +3,7 @@
 #include "../components/ComponentTypes.h"  // Définitions communes
 #include "../components/basic/ButtonDef.h"
 #include "../midi/handlers/MidiOutputCoordinator.h"
+#include "../mapping/MappingEngine.h"
 
 void ButtonProcessor::process(
     const ComponentConfig& config,
@@ -33,6 +34,22 @@ void ButtonProcessor::process(
     }
     
     uint32_t now = millis();
+
+    // Prime debounce state on first run to avoid a synthetic edge at boot.
+    if (state.last_time == 0) {
+        state.last_button_state = pressed;
+        state.prev_stable_state = pressed;
+        state.last_change_time = now;
+        state.last_value = pressed ? 127 : 0;
+        // SCRIPT arming state (reuse note_on_time):
+        // 0 = not armed yet, >0 = armed timestamp.
+        state.note_on_time = 0;
+        state.last_time = now;
+        if (config.name && config.name[0] != '\0') {
+            FluxRegistry::update(config.name, pressed ? 1.0f : 0.0f);
+        }
+        return;
+    }
     
     // Debouncing simple et fiable
     static const unsigned long DEBOUNCE_TIME = 50; // 50ms
@@ -62,47 +79,150 @@ void ButtonProcessor::process(
     // Mettre à jour l'état stable précédent pour la prochaine itération
     state.prev_stable_state = currentStableState;
     
+    // In script mode, arm after a short stabilization window regardless of idle polarity.
+    // This suppresses startup/floating transients while still working with pullup or pulldown wiring.
+    if (config.midiMode == MidiMode::SCRIPT && state.note_on_time == 0) {
+        if ((now - state.last_time) > 300) {
+            state.note_on_time = now;
+            state.last_button_state = pressed;
+            state.prev_stable_state = currentStableState;
+            state.last_change_time = now;
+            if (config.name && config.name[0] != '\0') {
+                FluxRegistry::update(config.name, currentStableState ? 1.0f : 0.0f);
+            }
+            Serial.printf("[ButtonProcessor] GPIO%d script armed (stable=%d)\n", config.gpio, currentStableState ? 1 : 0);
+        }
+    }
+
     // Si pas de transition, on s'arrête là
     if (!falling && !rising) {
         return;
     }
+
+    Serial.printf("[ButtonProcessor] GPIO%d edge=%s midiMode=%s script=%s\n",
+                 config.gpio,
+                 falling ? "press" : "release",
+                 (config.midiMode == MidiMode::SCRIPT) ? "SCRIPT" : "RTP",
+                 (config.mappingScript[0] != '\0') ? config.mappingScript : "<empty>");
     
-    // Fonction helper pour envoyer Note On (utilise le coordinateur)
-    uint32_t raw_for_event = 0; // RAW digital monitoring : 1=press, 0=release (valeur physique stable au moment du handler)
+    // Fonction helper pour envoyer Note On (utilise le coordinateur si mode RTP)
+    uint32_t raw_for_event = falling ? 1 : 0; // RAW digital monitoring : 1=press, 0=release
     auto sendNoteOn = [&]() {
         uint8_t value = 127; // Défaut pour Note
         if (config.msg_type == MidiMessageType::CONTROL_CHANGE) {
-            // Pour Control Change, utiliser la valeur configurée pour ON
-            // Note: midiCcOnOffMin contient la valeur "ON" (car le RANGE est inversé : 127→0)
             value = config.midiCcOnOffMin;
         }
-        MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, value);
+        if (config.midiMode != MidiMode::SCRIPT) {
+            MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, value);
+        }
         state.last_raw_value_u32 = raw_for_event;
         state.last_midi_value_u8 = value;
         state.last_telemetry_ts = millis();
     };
     
-    // Fonction helper pour envoyer Note Off (utilise le coordinateur)
+    // Fonction helper pour envoyer Note Off (utilise le coordinateur si mode RTP)
     auto sendNoteOff = [&]() {
-        // Pour certains types (PROGRAM_CHANGE, CLOCK, TAP_TEMPO), pas de "off"
         if (config.msg_type == MidiMessageType::PROGRAM_CHANGE ||
             config.msg_type == MidiMessageType::CLOCK ||
             config.msg_type == MidiMessageType::TAP_TEMPO) {
-            return; // Pas de "off" pour ces types
+            return;
         }
-        // Pour Control Change, utiliser la valeur configurée pour OFF
-        uint8_t value = 0; // Défaut pour Note Off
+        uint8_t value = 0;
         if (config.msg_type == MidiMessageType::CONTROL_CHANGE) {
-            // Note: midiCcOnOffMax contient la valeur "OFF" (car le RANGE est inversé : 127→0)
             value = config.midiCcOnOffMax;
         }
-        // Pour les autres types, envoyer avec value=0 (le handler gère Note Off vs CC=0)
-        MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, value);
+        if (config.midiMode != MidiMode::SCRIPT) {
+            MidiOutputCoordinator::sendMidiAndOsc(midi_sender, osc_queue, config, value);
+        }
         state.last_raw_value_u32 = raw_for_event;
         state.last_midi_value_u8 = value;
         state.last_telemetry_ts = millis();
     };
     
+    // In script mode, button behavior must be deterministic and edge-driven,
+    // independently of btnMode (pulse/toggle/press_release).
+    if (config.midiMode == MidiMode::SCRIPT) {
+        // If not armed yet, do not emit MIDI on this edge.
+        if (state.note_on_time == 0) {
+            state.last_time = now;
+            return;
+        }
+
+        state.last_value = falling ? 127 : 0;
+        state.last_raw_value_u32 = raw_for_event;
+        state.last_midi_value_u8 = (uint8_t)state.last_value;
+        state.last_telemetry_ts = now;
+
+        if (config.name && config.name[0] != '\0') {
+            // Keep script source logical (0/1), not MIDI-scaled (0/127),
+            // so arithmetic like *(100) produces expected velocities.
+            FluxRegistry::update(config.name, currentStableState ? 1.0f : 0.0f);
+        }
+
+        if (config.mappingScript[0] != '\0') {
+            const bool hasNoteOn = strstr(config.mappingScript, "note.on(") != nullptr;
+            const bool hasNoteOff = strstr(config.mappingScript, "note.off(") != nullptr;
+            const bool hasNoteOut = strstr(config.mappingScript, "note.out(") != nullptr;
+            const bool hasSeqOut = strstr(config.mappingScript, "seq.out(") != nullptr;
+            const bool hasCtlOut = strstr(config.mappingScript, "ctl.out(") != nullptr;
+            float scriptInput = currentStableState ? 1.0f : 0.0f;
+
+            auto buildEdgeScript = [&](bool onPress) -> String {
+                String src = String(config.mappingScript);
+                String out = "";
+                int start = 0;
+                int end = src.indexOf(':');
+                while (start < (int)src.length()) {
+                    int actualEnd = (end == -1) ? src.length() : end;
+                    String seg = src.substring(start, actualEnd);
+                    seg.trim();
+
+                    bool isNoteOnSeg = seg.startsWith("note.on(");
+                    bool isNoteOffSeg = seg.startsWith("note.off(");
+                    bool keep = true;
+                    if (onPress && isNoteOffSeg) keep = false;
+                    if (!onPress && isNoteOnSeg) keep = false;
+
+                    if (keep && seg.length() > 0) {
+                        if (out.length() > 0) out += ":";
+                        out += seg;
+                    }
+
+                    if (end == -1) break;
+                    start = end + 1;
+                    end = src.indexOf(':', start);
+                }
+                return out;
+            };
+
+            bool shouldExecute = false;
+            if (falling) {
+                // Press: execute any output-capable script, including seq.out and ctl.out.
+                shouldExecute = hasNoteOn || hasNoteOff || hasNoteOut || hasSeqOut || hasCtlOut;
+                if ((hasNoteOff || hasNoteOut || hasSeqOut || hasCtlOut) && !hasNoteOn) {
+                    scriptInput = 1.0f;
+                }
+            } else {
+                // Release: execute note.off, note.out, seq.out, or ctl.out scripts.
+                shouldExecute = hasNoteOff || hasNoteOut || hasSeqOut || hasCtlOut;
+            }
+
+            if (shouldExecute) {
+                if (hasNoteOn && hasNoteOff) {
+                    String edgeScript = buildEdgeScript(falling);
+                    if (edgeScript.length() > 0) {
+                        MappingEngine::execute(edgeScript.c_str(), scriptInput, midi_sender);
+                    }
+                } else {
+                    MappingEngine::execute(config.mappingScript, scriptInput, midi_sender);
+                }
+            }
+        }
+
+        state.last_time = now;
+        return;
+    }
+
     // Déterminer le mode (défaut: press_release)
     String btnMode = "press_release"; // Défaut
     if (config.specificConfig.button) {
@@ -123,7 +243,6 @@ void ButtonProcessor::process(
     
     // Implémenter les 3 modes
     if (falling) {
-        raw_for_event = 1;
         // Falling edge (press détecté)
         if (btnMode == "pulse") {
             // Mode pulse: selon le timing configuré
@@ -154,7 +273,6 @@ void ButtonProcessor::process(
             state.last_value = 127;
         }
     } else if (rising) {
-        raw_for_event = 0;
         // Rising edge (release détecté)
         if (btnMode == "pulse") {
             // Mode pulse: envoyer Note On + Note Off seulement si on avait été pressé
@@ -170,9 +288,13 @@ void ButtonProcessor::process(
         }
         // Pour toggle, on ne fait rien au Rising
     }
+    
+    // Update FluxRegistry only when the component has a declared name.
+    if (config.name && config.name[0] != '\0') {
+        FluxRegistry::update(config.name, currentStableState ? 1.0f : 0.0f);
+    }
+    state.last_time = now;
 }
-
-// Wrapper pour normaliser la signature (ajouter filter* même si non utilisé)
 static void processWrapper(
     const ComponentConfig& config,
     ComponentState& state,

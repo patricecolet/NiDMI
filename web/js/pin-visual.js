@@ -3,8 +3,7 @@
  * @brief Gestion visuelle des pins (SVG board + grisage)
  */
 
-// Références SVG pour le monitoring en temps réel
-// (utilisées par `web/js/websocket.js` sur les messages PIN_TELEMETRY)
+// Références SVG du board (valeurs conservées pour usages UI locaux)
 const valueTextByLabel = {};
 const ledByLabel = {};
 

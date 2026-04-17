@@ -100,6 +100,30 @@ function applyAdditionalPins(def, c, setV) {
  */
 function readCfg(roleOverride = null) {
   const c = {};
+  
+  /* Determine which MIDI mode is active */
+  const rtpRadio = $('#midiModeRtp');
+  const scriptRadio = $('#midiModeScript');
+  let midiMode = 'rtp';
+  if (scriptRadio && scriptRadio.checked) {
+    midiMode = 'script';
+  }
+  c.midiMode = midiMode;
+  
+  /* Only read mapping script if script mode is active */
+  if (midiMode === 'script') {
+    c.mappingScript = $('#mappingPin')?.value || '';
+  } else {
+    c.mappingScript = ''; /* Clear mapping script if RTP mode is active */
+  }
+  
+  /* Lire le nom personnalisé depuis l'input avant tout écrasement */
+  const nameInput = document.getElementById('ComponentName');
+  if (nameInput && nameInput.value) {
+    c.name = nameInput.value;
+  } else if (typeof cur !== 'undefined' && cur && typeof pcfg !== 'undefined' && pcfg[cur] && pcfg[cur].name) {
+    c.name = pcfg[cur].name;
+  }
   /* Utiliser le roleOverride si fourni, sinon lire depuis le select, sinon depuis pcfg */
   c.role = roleOverride || $('#funcSelect')?.value || '';
   /* Fallback : si funcSelect est vide mais qu'on a un composant dans pcfg, l'utiliser */
@@ -145,10 +169,13 @@ function readCfg(roleOverride = null) {
   }
 
   /* Lire les champs MIDI */
-  if (migratedRole && def && typeof MidiConfig !== 'undefined' && MidiConfig.readConfig) {
+  if (midiMode === 'rtp' && migratedRole && def && typeof MidiConfig !== 'undefined' && MidiConfig.readConfig) {
     const midiConfig = MidiConfig.readConfig(def);
     Object.assign(c, midiConfig);
+    // Défensif: garder le mode décidé par les radios UI.
+    c.midiMode = midiMode;
   }
+  /* If script mode, don't read RTP config */
 
   /* Auto-déterminer busInterface depuis le contexte (pin I2C ou SPI) */
   if (typeof cur !== 'undefined' && cur === 'SPI') {
@@ -174,6 +201,61 @@ function readCfg(roleOverride = null) {
 }
 
 /**
+ * Build default mapping script for a role and component name.
+ * @param {string} role - Normalized role id
+ * @param {string} componentName - User component name
+ * @returns {string} default script or empty string
+ */
+function buildDefaultMappingScriptForRole(role, componentName) {
+  const name = componentName || role || '';
+  const defaultScripts = {
+    'button': 'r("' + name + '"):*(127):note.out(60,1)',
+    'potentiometer': 'r("' + name + '"):*(127):ctl.out(7,1)',
+    'velostat': 'r("' + name + '"):*(127):ctl.out(7,1)',
+    'touch': 'r("' + name + '"):*(127):ctl.out(7,1)',
+    'joystick': 'r("' + name + '"):*(127):ctl.out(7,1)',
+    'lis3dh': 'r("' + name + '"):*(127):ctl.out(7,1)'
+  };
+  return defaultScripts[role] || '';
+}
+
+/**
+ * Check whether a script still matches the role default structure.
+ * If true, we can safely update the name in r("...") automatically.
+ * @param {string} role - Normalized role id
+ * @param {string} script - Current script
+ * @returns {boolean}
+ */
+function isRoleDefaultMappingScript(role, script) {
+  if (!script || typeof script !== 'string') return false;
+  const patterns = {
+    'button': /^r\(".*"\)\s*:\s*\*\(127\)\s*:\s*note\.out\(60,1\)$/,
+    'potentiometer': /^r\(".*"\)\s*:\s*\*\(127\)\s*:\s*ctl\.out\(7,1\)$/,
+    'velostat': /^r\(".*"\)\s*:\s*\*\(127\)\s*:\s*ctl\.out\(7,1\)$/,
+    'touch': /^r\(".*"\)\s*:\s*\*\(127\)\s*:\s*ctl\.out\(7,1\)$/,
+    'joystick': /^r\(".*"\)\s*:\s*\*\(127\)\s*:\s*ctl\.out\(7,1\)$/,
+    'lis3dh': /^r\(".*"\)\s*:\s*\*\(127\)\s*:\s*ctl\.out\(7,1\)$/
+  };
+  const re = patterns[role];
+  return !!(re && re.test(script.trim()));
+}
+
+/**
+ * Keep default mapping script in sync with component name.
+ * Only updates when script is empty or still in default format.
+ * @param {string} role - Normalized role id
+ * @param {string} componentName - User component name
+ */
+function syncDefaultMappingScriptWithName(role, componentName) {
+  const mappingEl = $('#mappingPin');
+  if (!mappingEl) return;
+  const current = (mappingEl.value || '').trim();
+  if (!current || isRoleDefaultMappingScript(role, current)) {
+    mappingEl.value = buildDefaultMappingScriptForRole(role, componentName || role);
+  }
+}
+
+/**
  * Applique une configuration dans le formulaire (simples et complexes)
  * @param {Object} c - Configuration depuis pcfg (peut contenir additionalPins)
  */
@@ -182,6 +264,25 @@ function applyCfg(c) {
   /* Les rôles de bus (I2C, SPI, UART) n'ont pas de formulaire de composant */
   if (c.role && typeof isBusRole === 'function' && isBusRole(c.role)) return;
 
+  const mappingIsEmpty = !c || !c.mappingScript || c.mappingScript.trim() === '';
+  if (c && typeof c.mappingScript === 'string' && c.mappingScript.trim() !== '') {
+    $('#mappingPin').value = c.mappingScript;
+  } else if (mappingIsEmpty && c && c.role) {
+    const role = migrateRoleValue(c.role);
+    $('#mappingPin').value = buildDefaultMappingScriptForRole(role, c.name || role);
+  } else {
+    $('#mappingPin').value = '';
+  }
+  
+  // Apply MIDI mode radio buttons and containers
+  // Migration fallback: old configs may not have midiMode but do have mappingScript.
+  const inferredScriptMode = !c.midiMode && !!(c.mappingScript && c.mappingScript.trim() !== '');
+  if (c.midiMode === 'script' || inferredScriptMode) {
+    applyMidiMode('script');
+  } else {
+    applyMidiMode('rtp');
+  }
+  
   const setV = (id, v) => {
     /* Gérer les IDs avec ou sans # */
     const idStr = typeof id === 'string' ? (id[0] === '#' ? id : '#' + id) : id;
@@ -233,6 +334,30 @@ function applyCfg(c) {
  * Applique les valeurs de configuration au formulaire (helper pour applyCfg)
  */
 function applyConfigValues(c, def, setV, setC) {
+  const nameInput = document.getElementById('ComponentName');
+  if (nameInput) {
+    // 1. Calcul du rang (ex: c'est le 2ème bouton)
+    let count = 0;
+    for (const l of Object.keys(pcfg)) {
+      if (pcfg[l] && pcfg[l].role === c.role) {
+        count++;
+        if (l === cur) break; 
+      }
+    }
+
+    // 2. Remplissage auto : Nom sauvegardé OU Nom par défaut (ex: Bouton 1)
+    nameInput.value = c.name || getRoleDisplayLabel(c.role, count);
+
+    // 3. Capture immédiate de la saisie pour éviter de perdre le nom au Save
+    nameInput.oninput = (e) => { 
+      if(pcfg[cur]) pcfg[cur].name = e.target.value;
+      syncDefaultMappingScriptWithName(migratedRole, e.target.value);
+      if(typeof updatePinsList === 'function') updatePinsList();
+    };
+
+    // Keep default script synced when loading a pin if user already typed a custom name.
+    syncDefaultMappingScriptWithName(migratedRole, nameInput.value);
+  }
   const migratedRole = migrateRoleValue(c.role);
   
   updateRtpForRole(migratedRole);
@@ -262,9 +387,10 @@ function applyConfigValues(c, def, setV, setC) {
   }
 
   /* Appliquer les champs MIDI */
-  if (def && typeof MidiConfig !== 'undefined' && MidiConfig.applyConfig) {
+  if (def && c.midiMode !== 'script' && typeof MidiConfig !== 'undefined' && MidiConfig.applyConfig) {
     MidiConfig.applyConfig(c, def);
   }
+  /* If script mode, don't apply RTP config */
 
   /* Appliquer les champs OSC et Debug */
   setV('oscAddress', c.oscAddress);
@@ -288,4 +414,54 @@ function applyConfigValues(c, def, setV, setC) {
 
   setC('dbgEnabled', c.dbgEnabled);
   setV('dbgHeader', c.dbgHeader);
+  
+  /* Appliquer le mode MIDI (RTP vs Mapping Script) */
+  const midiMode = c.midiMode || 'rtp';
+  applyMidiMode(midiMode);
+  
+  /* Appliquer la valeur du mapping script */
+  setV('mappingPin', c.mappingScript);
+}
+
+/**
+ * Initialize MIDI mode toggle on page load
+ */
+function initMidiModeToggle() {
+  const rtpRadio = $('#midiModeRtp');
+  const scriptRadio = $('#midiModeScript');
+  
+  if (!rtpRadio || !scriptRadio) return;
+  
+  rtpRadio.addEventListener('change', () => {
+    applyMidiMode('rtp');
+  });
+  
+  scriptRadio.addEventListener('change', () => {
+    applyMidiMode('script');
+  });
+}
+
+/**
+ * Apply MIDI mode visibility and clear unused fields
+ * @param {string} mode - 'rtp' or 'script'
+ */
+function applyMidiMode(mode) {
+  const rtpContainer = $('#rtpMidiConfigContainer');
+  const scriptContainer = $('#mappingScriptContainer');
+  const rtpRadio = $('#midiModeRtp');
+  const scriptRadio = $('#midiModeScript');
+  
+  if (!rtpContainer || !scriptContainer) return;
+  
+  if (mode === 'script') {
+    rtpContainer.style.display = 'none';
+    scriptContainer.style.display = 'block';
+    if (scriptRadio) scriptRadio.checked = true;
+    if (rtpRadio) rtpRadio.checked = false;
+  } else {
+    rtpContainer.style.display = 'block';
+    scriptContainer.style.display = 'none';
+    if (rtpRadio) rtpRadio.checked = true;
+    if (scriptRadio) scriptRadio.checked = false;
+  }
 }
