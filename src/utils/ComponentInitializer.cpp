@@ -32,7 +32,7 @@ void ComponentInitializer::initializeConfig(
     config.rtpNoteMin = 48;  // Défaut: C3
     config.rtpNoteMax = 72;  // Défaut: C5
     config.rtpNoteVelFix = 100; // Défaut: vélocité fixe
-    config.rtpNoteSweepAutoOffDelay = 0; // Défaut: désactivé
+    config.rtpNoteSweepAutoOffDelay = 1000; // Défaut: 1000 ms (0 = timer désactivé)
     
     // Initialiser la plage MIDI (défaut: 0-127 = plage complète)
     config.midiCcRangeMin = 0;   // Défaut: 0

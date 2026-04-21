@@ -64,7 +64,7 @@ struct ComponentConfig {
     uint8_t rtpNoteMin;    // Note min pour balayage (NOTE_SWEEP)
     uint8_t rtpNoteMax;   // Note max pour balayage (NOTE_SWEEP)
     uint8_t rtpNoteVelFix; // Vélocité fixe pour balayage (NOTE_SWEEP)
-    uint16_t rtpNoteSweepAutoOffDelay; // Délai auto-off en ms (0 = désactivé, max 65535)
+    uint16_t rtpNoteSweepAutoOffDelay; // Auto-off balayage (ms). 0 = timer désactivé ; défaut 1000.
     uint8_t midiCcRangeMin; // Plage MIDI min (0-127, défaut: 0) pour CC/autres messages
     uint8_t midiCcRangeMax; // Plage MIDI max (0-127, défaut: 127) pour CC/autres messages
     uint8_t midiCcOnOffMin; // Valeur CC pour état OFF (0-127, défaut: 0) - pour boutons

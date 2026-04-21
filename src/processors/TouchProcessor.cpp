@@ -4,6 +4,7 @@
 #include "../midi/handlers/MidiOutputCoordinator.h"
 #include "../utils/PinMapper.h"
 #include "../config/SystemConfig.h"
+#include "../utils/AxisUtils.h"
 
 // Inclure sdkconfig.h pour vérifier CONFIG_SOC_TOUCH_SENSOR_SUPPORTED
 #ifdef ESP32
@@ -394,16 +395,18 @@ static void processNoteSweep(
     static bool touch_sweep_latched[49];
     static uint32_t touch_sweep_last_transition[49];
 
-    // Auto-off
-    if (config.rtpNoteSweepAutoOffDelay > 0 &&
+    const uint16_t sweepOffMs = effectiveNoteSweepAutoOffMs(config.rtpNoteSweepAutoOffDelay);
+
+    // Auto-off : coupe la note si le délai est écoulé, mais conserve state.last_note
+    // pour éviter un retrigger si la position pointe toujours sur la même note.
+    if (sweepOffMs > 0 &&
         state.last_note != 255 &&
         state.note_on_time > 0) {
         uint32_t elapsed = millis() - state.note_on_time;
-        if (elapsed >= config.rtpNoteSweepAutoOffDelay) {
+        if (elapsed >= sweepOffMs) {
             if (midi_sender) {
                 midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
             }
-            state.last_note = 255;
             state.note_on_time = 0;
             touch_sweep_last_transition[gi] = millis();
         }
@@ -464,7 +467,8 @@ static void processNoteSweep(
         return;
     }
 
-    if (state.last_note != 255) {
+    // Note différente : couper l'ancienne uniquement si encore active.
+    if (state.last_note != 255 && state.note_on_time > 0) {
         if (midi_sender) {
             midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
         }
@@ -474,7 +478,7 @@ static void processNoteSweep(
         if (midi_sender) {
             midi_sender->sendNoteOn(config.midi_channel, newNote, config.rtpNoteVelFix);
         }
-        state.note_on_time = (config.rtpNoteSweepAutoOffDelay > 0) ? millis() : 0;
+        state.note_on_time = millis();
     } else {
         state.note_on_time = 0;
     }

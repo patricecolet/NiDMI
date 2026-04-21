@@ -40,6 +40,9 @@ public:
         uint8_t* lastYNormPtr = nullptr,
         uint8_t* lastZNormPtr = nullptr
     );
+
+    /** Coupe les notes NOTE_SWEEP actives (état interne IMU) — ex. suppression composant / clear config. */
+    static void silenceNoteSweepForGpio(uint8_t gpio, const ComponentConfig& config, MidiSender* midi_sender);
     
 private:
     /**

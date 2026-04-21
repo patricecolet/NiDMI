@@ -1,6 +1,7 @@
 #include "APICommon.h"
 #include "../Globals.h"
 #include "../server/ServerCore.h"
+#include "../server/WebDebugConsole.h"
 #include "../server/ServerCallbacks.h"
 #include <Preferences.h>
 #include <WiFi.h>
@@ -34,6 +35,7 @@ void setupNetworkAPI(AsyncWebServer& server) {
             json += ",\"osc_ip\":\"" + oscIp + "\"";
         }
         json += ",\"osc_broadcast\":" + String(oscBroadcast ? "true" : "false");
+        json += ",\"web_debug_console\":" + String(nidmi_web_debug_is_supported() ? "true" : "false");
         json += "}";
         request->send(200, "application/json", json);
     });

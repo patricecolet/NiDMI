@@ -10,6 +10,8 @@
 #include "../utils/JSONParser.h"
 #include "../processors/ProcessorRegistry.h"
 #include "../processors/Processors.h"  // Centralise tous les processeurs pour l'enregistrement automatique
+#include "../processors/ImuProcessor.h"
+#include "../processors/JoystickProcessor.h"
 #include "../components/ComponentRegistry.h"  // Pour trouver les définitions de composants
 #include "../components/basic/ButtonDef.h"    // Pour ButtonConfig (btnMode)
 #include "../components/ValidationRegistry.h"  // Pour la validation centralisée
@@ -260,6 +262,12 @@ bool ComponentManager::removeComponent(uint8_t gpio) {
     ComponentState& state = states[index];
     
     if (midi_sender) {
+        if (config.type == ComponentType::IMU) {
+            ImuProcessor::silenceNoteSweepForGpio(config.gpio, config, midi_sender);
+        }
+        if (config.type == ComponentType::JOYSTICK) {
+            JoystickProcessor::silenceNoteSweepForGpio(config.gpio, config, midi_sender);
+        }
         // 1. NOTE_SWEEP : éteindre la note active
         if (config.msg_type == MidiMessageType::NOTE_SWEEP && state.last_note != 255) {
             midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
@@ -329,6 +337,12 @@ void ComponentManager::clearAll() {
         ComponentState& state = states[i];
         
         if (midi_sender) {
+            if (config.type == ComponentType::IMU) {
+                ImuProcessor::silenceNoteSweepForGpio(config.gpio, config, midi_sender);
+            }
+            if (config.type == ComponentType::JOYSTICK) {
+                JoystickProcessor::silenceNoteSweepForGpio(config.gpio, config, midi_sender);
+            }
             // NOTE_SWEEP : éteindre la note active
             if (config.msg_type == MidiMessageType::NOTE_SWEEP && state.last_note != 255) {
                 midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);

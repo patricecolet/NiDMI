@@ -92,3 +92,13 @@ inline uint8_t mapNoteSweepFromFullAxisTravel(
     return static_cast<uint8_t>(constrain(noteL, 0L, 127L));
 }
 
+/**
+ * Auto-off balayage (rtpNoteSweepAutoOffDelay en ms, UI / NVS).
+ * - 0 → timer désactivé (la note reste jusqu’au prochain changement).
+ * - > 0 → délai max en ms avant Note Off si aucune nouvelle note n’arrive.
+ * Pas de plancher minimal : on respecte la valeur saisie par l’utilisateur.
+ */
+inline uint16_t effectiveNoteSweepAutoOffMs(uint16_t rtpNoteSweepAutoOffDelay) {
+    return rtpNoteSweepAutoOffDelay;
+}
+

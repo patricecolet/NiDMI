@@ -3,6 +3,8 @@
 #include "managers/ComponentManager.h"
 #include "utils/PinMapper.h"
 #include "midi/MidiRouter.h"
+#include "network/UsbMidiManager.h"
+#include "server/WebDebugConsole.h"
 #include "Globals.h"
 #include <Preferences.h>
 #include <WiFi.h>
@@ -99,7 +101,7 @@ void nidmi_begin() {
     g_staGwStr = "";
     g_staSnStr = "";
     bool touchEnabled = false;
-    bool usbMidiEnabled = false;
+    const bool usbMidiEnabled = nidmi_usb_midi_enabled_at_compile_time();
 
     if (preferences.begin("nidmi", true)) {
         serverName = preferences.getString("mdns_name", "nidmi");
@@ -109,8 +111,6 @@ void nidmi_begin() {
         g_staGwStr = preferences.getString("sta_gw", "");
         g_staSnStr = preferences.getString("sta_sn", "");
         touchEnabled = preferences.getBool("touch_enabled", false);
-        // Persisté via /api/usbmidi/enable (NVS) : USB-MIDI désactivé par défaut
-        usbMidiEnabled = preferences.getBool("usbmidi_enabled", false);
         preferences.end();
     } else {
         Serial.println("[NiDMI] ERREUR: ouverture NVS en lecture échouée - NVS peut être corrompue");
@@ -163,7 +163,7 @@ void nidmi_begin() {
         Serial.println("[NiDMI] No STA configuration found");
     }
     
-    // Appliquer l'état sauvegardé des interfaces MIDI au MidiRouter
+    // USB-MIDI : NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME dans UsbMidiManager.h (pas NVS)
     g_midiRouter.enableUsbMidi(usbMidiEnabled);
 
     // Initialiser MidiRouter (qui initialisera USB MIDI si activé et supporté)
@@ -187,6 +187,7 @@ void nidmi_begin() {
     touchDiag("APRES ComponentManager.begin (MuxTask+MidiTask demarres)");
     
     Serial.println("[NiDMI] Ready");
+    NIDMI_WEB_LOG("[NiDMI] Ready (console web dispo sur S3 si activée)");
     Serial.print("  AP SSID: "); Serial.println(apSsid);
     Serial.print("  AP PASS: "); Serial.println(apPass);
     Serial.print("  AP IP: "); Serial.println(WiFi.softAPIP());

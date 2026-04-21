@@ -1,4 +1,5 @@
 #include "UsbMidiManager.h"
+#include "../server/WebDebugConsole.h"
 
 #ifdef NIDMI_USB_MIDI_SUPPORTED
 #include <Preferences.h>
@@ -87,9 +88,9 @@ bool UsbMidiManager::begin() {
 #ifdef NIDMI_USB_MIDI_SUPPORTED
     // Vérifier que USB-OTG est activé
     if (!isUsbOtgEnabled()) {
-        Serial.println("[USB-MIDI] ERREUR: USB-OTG non activé!");
-        Serial.println("[USB-MIDI] Vérifiez que le fichier ci.json contient CONFIG_SOC_USB_OTG_SUPPORTED=y");
-        Serial.println("[USB-MIDI] Ou dans Arduino IDE: Outils > USB Type > USB-OTG (TinyUSB)");
+        NIDMI_WEB_LOG("[USB-MIDI] ERREUR: USB-OTG non activé!");
+        NIDMI_WEB_LOG("[USB-MIDI] Vérifiez ci.json / sdkconfig: CONFIG_SOC_USB_OTG_SUPPORTED=y");
+        NIDMI_WEB_LOG("[USB-MIDI] Arduino: Outils > USB Type > USB-OTG (TinyUSB)");
         available = false;
         return false;
     }
@@ -107,6 +108,8 @@ bool UsbMidiManager::begin() {
     }
 
     if (!usbInitialized) {
+        // Sans ceci, l’OS affiche encore le fabricant par défaut du core (« Espressif Systems »).
+        USB.manufacturerName("NiDMI");
         USB.productName(hostName.c_str());
         usbMidi->begin();
         USB.begin();
@@ -116,10 +119,10 @@ bool UsbMidiManager::begin() {
     isStarted = true;
     available = true;
 
-    Serial.printf("[USB-MIDI] Initialise (USB-OTG), nom USB/MIDI: %s\n", hostName.c_str());
+    NIDMI_WEB_LOG("[USB-MIDI] Initialise (USB-OTG), nom USB/MIDI: %s", hostName.c_str());
     return true;
 #else
-    Serial.println("[USB-MIDI] Non supporté sur ce MCU (ESP32-S3 requis)");
+    NIDMI_WEB_LOG("[USB-MIDI] Non supporté sur ce MCU (ESP32-S3 requis)");
     available = false;
     return false;
 #endif

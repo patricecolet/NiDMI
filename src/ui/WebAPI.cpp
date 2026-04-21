@@ -6,6 +6,7 @@
 #include "../api/NetworkAPI.h"
 #include "../api/RTPAPI.h"
 #include "../api/UsbMidiAPI.h"
+#include "../server/WebDebugConsole.h"
 #include "../Globals.h"
 #include "../server/ServerCallbacks.h"
 #include "../components/ComponentRegistry.h"
@@ -182,6 +183,13 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
             message += (char)data[i];
         }
 
+#if NIDMI_WEB_DEBUG_CONSOLE
+        if (message.startsWith("DEBUG_CONSOLE:")) {
+            nidmi_web_debug_handle_ws_text(client, message);
+            return;
+        }
+#endif
+
         // Activation/désactivation runtime-only du monitoring SVG
         // Format attendu: PIN_MONITORING:1 ou PIN_MONITORING:0
         if (message.startsWith("PIN_MONITORING:")) {
@@ -280,6 +288,9 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     // WebSocket
     ws.onEvent(onWsEvent);
     server.addHandler(&ws);
+#if NIDMI_WEB_DEBUG_CONSOLE
+    nidmi_web_debug_init(&ws);
+#endif
     
     // Initialiser le registre des composants
     ComponentRegistry::init();

@@ -38,7 +38,10 @@ public:
         uint8_t* lastXNormPtr = nullptr,
         uint8_t* lastYNormPtr = nullptr
     );
-    
+
+    /** Coupe les notes NOTE_SWEEP actives (état interne joystick). GPIO = pin axe X du couple. */
+    static void silenceNoteSweepForGpio(uint8_t xGpio, const ComponentConfig& config, MidiSender* midi_sender);
+
 private:
     /**
      * @brief Mappe une valeur brute vers une valeur normalisée (-127..127)

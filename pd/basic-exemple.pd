@@ -1,4 +1,4 @@
-#N canvas 450 347 959 581 12;
+#N canvas 400 189 959 581 12;
 #X obj 48 136 oscparse;
 #X text 221 154 split point;
 #X obj 610 192 ctlin;
@@ -113,14 +113,18 @@
 #X restore 746 405 pd notes;
 #X obj 270 219 spigot;
 #X obj 309 196 tgl 19 0 empty empty empty 0 -10 0 12 #fcfcfc #000000 #000000 0 1;
+#X obj 460 335 print;
+#X obj 454 310 pack f f;
 #X connect 0 0 63 0;
 #X connect 2 0 5 0;
 #X connect 2 1 4 0;
 #X connect 2 2 3 0;
 #X connect 6 0 9 0;
 #X connect 6 0 26 0;
+#X connect 6 0 83 0;
 #X connect 6 1 7 0;
 #X connect 6 1 26 1;
+#X connect 6 1 83 1;
 #X connect 6 2 8 0;
 #X connect 18 0 17 0;
 #X connect 18 1 16 0;
@@ -167,3 +171,4 @@
 #X connect 76 0 75 0;
 #X connect 80 0 78 0;
 #X connect 81 0 80 1;
+#X connect 83 0 82 0;

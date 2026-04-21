@@ -160,7 +160,7 @@ inline MidiMessageDef createNoteSweepMessage() {
     
     msg.params[0] = MidiParamDef{"midiNoteSweep", "{{t.pins.sweep}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "48", "72", "→", nullptr, nullptr, 90, nullptr};
     msg.params[1] = MidiParamDef{"midiNoteVelocityFix", "{{t.pins.fixedVelocity}}:", FieldType::NUMBER, 1, 127, "100", "100", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-    msg.params[2] = MidiParamDef{"midiNoteSweepAutoOffDelay", "{{t.pins.autoOff}}", FieldType::NUMBER, 0, 65535, "0", "0", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+    msg.params[2] = MidiParamDef{"midiNoteSweepAutoOffDelay", "{{t.pins.autoOff}}", FieldType::NUMBER, 0, 65535, "1000", "1000", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
     msg.params[3] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
     
     return msg;

@@ -702,7 +702,7 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                         if (vel > 127) vel = 127;
                         config->rtpNoteVelFix = (uint8_t)vel;
                         int off = JSONParser::extractInt(pinConfig, "midiNoteSweepAutoOffDelay",
-                            JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 0));
+                            JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 1000));
                         if (off < 0) off = 0;
                         if (off > 65535) off = 65535;
                         config->rtpNoteSweepAutoOffDelay = (uint16_t)off;
@@ -956,7 +956,7 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                 if (vel > 127) vel = 127;
                 configPtr->rtpNoteVelFix = (uint8_t)vel;
                 int off = JSONParser::extractInt(pinConfig, "midiNoteSweepAutoOffDelay",
-                    JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 0));
+                    JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 1000));
                 if (off < 0) off = 0;
                 if (off > 65535) off = 65535;
                 configPtr->rtpNoteSweepAutoOffDelay = (uint16_t)off;

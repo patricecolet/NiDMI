@@ -20,6 +20,127 @@ static bool lis3dh_initialized = false;
 static unsigned long lis3dh_init_cooldown_until = 0;
 static constexpr unsigned long kLis3dhInitRetryMs = 8000;
 
+static const uint8_t MAX_IMU_FILTERS = 8;
+static AnalogFilter yFilters[MAX_IMU_FILTERS];
+static AnalogFilter zFilters[MAX_IMU_FILTERS];
+static uint8_t imuFilterGpios[MAX_IMU_FILTERS];
+static uint8_t imuFilterCount = 0;
+static uint8_t lastXNormValues[MAX_IMU_FILTERS];
+static uint8_t lastYNormValues[MAX_IMU_FILTERS];
+static uint8_t lastZNormValues[MAX_IMU_FILTERS];
+static uint8_t imuSweepLastNote[MAX_IMU_FILTERS][3];
+static uint32_t imuSweepNoteOnTime[MAX_IMU_FILTERS][3];
+
+static uint8_t axisCharToSlot(char axis) {
+    if (axis == 'x') return 0;
+    if (axis == 'y') return 1;
+    return 2;
+}
+
+static uint8_t findImuIndexByGpio(uint8_t gpio) {
+    for (uint8_t i = 0; i < imuFilterCount; i++) {
+        if (imuFilterGpios[i] == gpio) {
+            return i;
+        }
+    }
+    return 255;
+}
+
+static uint8_t getOrCreateImuIndex(uint8_t gpio) {
+    for (uint8_t i = 0; i < imuFilterCount; i++) {
+        if (imuFilterGpios[i] == gpio) {
+            return i;
+        }
+    }
+    if (imuFilterCount < MAX_IMU_FILTERS) {
+        uint8_t idx = imuFilterCount++;
+        imuFilterGpios[idx] = gpio;
+        yFilters[idx].initialized = false;
+        zFilters[idx].initialized = false;
+        lastXNormValues[idx] = 255;
+        lastYNormValues[idx] = 255;
+        lastZNormValues[idx] = 255;
+        for (uint8_t a = 0; a < 3; a++) {
+            imuSweepLastNote[idx][a] = 255;
+            imuSweepNoteOnTime[idx][a] = 0;
+        }
+        return idx;
+    }
+    return 0;
+}
+
+static void processNoteSweepImuAxis(
+    uint8_t imuIdx,
+    char axis,
+    const ComponentConfig& config,
+    Components::ImuConfig* ic,
+    MidiSender* midi_sender,
+    int32_t rawFiltered
+) {
+    if (!midi_sender || !ic) {
+        return;
+    }
+    MidiMessageType msgType;
+    uint8_t channel;
+    uint8_t nmin;
+    uint8_t nmax;
+    int32_t axisMin;
+    int32_t axisMax;
+    bool inv;
+    if (axis == 'x') {
+        msgType = ic->xMsgType;
+        channel = ic->xMidiChannel;
+        nmin = ic->xNoteSweepMin;
+        nmax = ic->xNoteSweepMax;
+        axisMin = ic->xMin;
+        axisMax = ic->xMax;
+        inv = ic->invertX;
+    } else if (axis == 'y') {
+        msgType = ic->yMsgType;
+        channel = ic->yMidiChannel;
+        nmin = ic->yNoteSweepMin;
+        nmax = ic->yNoteSweepMax;
+        axisMin = ic->yMin;
+        axisMax = ic->yMax;
+        inv = ic->invertY;
+    } else {
+        msgType = ic->zMsgType;
+        channel = ic->zMidiChannel;
+        nmin = ic->zNoteSweepMin;
+        nmax = ic->zNoteSweepMax;
+        axisMin = ic->zMin;
+        axisMax = ic->zMax;
+        inv = ic->invertZ;
+    }
+    if (msgType != MidiMessageType::NOTE_SWEEP) {
+        return;
+    }
+    const uint16_t sweepOffMs = effectiveNoteSweepAutoOffMs(config.rtpNoteSweepAutoOffDelay);
+    uint8_t ax = axisCharToSlot(axis);
+    // Auto-off : coupe la note si le délai est écoulé, mais conserve imuSweepLastNote
+    // pour éviter un retrigger si la position correspond toujours à la même note.
+    if (sweepOffMs > 0 &&
+        imuSweepLastNote[imuIdx][ax] != 255 &&
+        imuSweepNoteOnTime[imuIdx][ax] > 0) {
+        uint32_t elapsed = millis() - imuSweepNoteOnTime[imuIdx][ax];
+        if (elapsed >= sweepOffMs) {
+            midi_sender->sendNoteOff(channel, imuSweepLastNote[imuIdx][ax], 0);
+            imuSweepNoteOnTime[imuIdx][ax] = 0;
+        }
+    }
+    uint8_t newNote = mapNoteSweepFromFullAxisTravel(rawFiltered, axisMin, axisMax, nmin, nmax, inv);
+    if (newNote == imuSweepLastNote[imuIdx][ax]) {
+        return;
+    }
+    // Note différente : couper l'ancienne uniquement si encore active.
+    if (imuSweepLastNote[imuIdx][ax] != 255 && imuSweepNoteOnTime[imuIdx][ax] > 0) {
+        midi_sender->sendNoteOff(channel, imuSweepLastNote[imuIdx][ax], 0);
+    }
+    midi_sender->sendNoteOn(channel, newNote, config.rtpNoteVelFix);
+    imuSweepLastNote[imuIdx][ax] = newNote;
+    imuSweepNoteOnTime[imuIdx][ax] = millis();
+}
+
 void ImuProcessor::process(
     const ComponentConfig& config,
     ComponentState& state,
@@ -192,33 +313,47 @@ void ImuProcessor::process(
                      xNorm, yNorm, zNorm, imuConfig->xMin, imuConfig->xZeroMin, imuConfig->xZeroMax, imuConfig->xMax);
         lastDebugLog = millis();
     }
-    
-    // Envoyer MIDI/OSC si les valeurs ont changé
-    if (xNorm != lastXNorm && lastXNormPtr) {
-        sendMidiForAxis(midi_sender, config, 'x', xNorm, static_cast<int32_t>(xFiltered));
-        sendOscForAxis(osc_queue, config, 'x', xNorm, accel.x);  // RAW = valeur brute non filtrée
-        *lastXNormPtr = (uint8_t)(xNorm + 127);
 
+    uint8_t imuIdx = getOrCreateImuIndex(config.gpio);
+    bool xCh = (xNorm != lastXNorm);
+    bool yCh = (yNorm != lastYNorm);
+    bool zCh = (zNorm != lastZNorm);
+
+    // NOTE_SWEEP : à chaque lecture (auto-off après rtpNoteSweepAutoOffDelay ms, pas seulement au changement de norme).
+    if (imuConfig->xMsgType == MidiMessageType::NOTE_SWEEP) {
+        processNoteSweepImuAxis(imuIdx, 'x', config, imuConfig, midi_sender, static_cast<int32_t>(xFiltered));
+    } else if (xCh && lastXNormPtr) {
+        sendMidiForAxis(midi_sender, config, 'x', xNorm, static_cast<int32_t>(xFiltered));
+    }
+    if (xCh && lastXNormPtr) {
+        sendOscForAxis(osc_queue, config, 'x', xNorm, accel.x);
+        *lastXNormPtr = (uint8_t)(xNorm + 127);
         state.last_raw_value_u32 = (uint16_t)(xFiltered + 32768);
         state.last_midi_value_u8 = normToMidiValue(xNorm);
         state.last_telemetry_ts = millis();
     }
-    
-    if (yNorm != lastYNorm && lastYNormPtr) {
-        sendMidiForAxis(midi_sender, config, 'y', yNorm, static_cast<int32_t>(yFiltered));
-        sendOscForAxis(osc_queue, config, 'y', yNorm, accel.y);  // RAW = valeur brute non filtrée
-        *lastYNormPtr = (uint8_t)(yNorm + 127);
 
+    if (imuConfig->yMsgType == MidiMessageType::NOTE_SWEEP) {
+        processNoteSweepImuAxis(imuIdx, 'y', config, imuConfig, midi_sender, static_cast<int32_t>(yFiltered));
+    } else if (yCh && lastYNormPtr) {
+        sendMidiForAxis(midi_sender, config, 'y', yNorm, static_cast<int32_t>(yFiltered));
+    }
+    if (yCh && lastYNormPtr) {
+        sendOscForAxis(osc_queue, config, 'y', yNorm, accel.y);
+        *lastYNormPtr = (uint8_t)(yNorm + 127);
         state.last_raw_value_u32 = (uint16_t)(yFiltered + 32768);
         state.last_midi_value_u8 = normToMidiValue(yNorm);
         state.last_telemetry_ts = millis();
     }
-    
-    if (zNorm != lastZNorm && lastZNormPtr) {
-        sendMidiForAxis(midi_sender, config, 'z', zNorm, static_cast<int32_t>(zFiltered));
-        sendOscForAxis(osc_queue, config, 'z', zNorm, accel.z);  // RAW = valeur brute non filtrée
-        *lastZNormPtr = (uint8_t)(zNorm + 127);
 
+    if (imuConfig->zMsgType == MidiMessageType::NOTE_SWEEP) {
+        processNoteSweepImuAxis(imuIdx, 'z', config, imuConfig, midi_sender, static_cast<int32_t>(zFiltered));
+    } else if (zCh && lastZNormPtr) {
+        sendMidiForAxis(midi_sender, config, 'z', zNorm, static_cast<int32_t>(zFiltered));
+    }
+    if (zCh && lastZNormPtr) {
+        sendOscForAxis(osc_queue, config, 'z', zNorm, accel.z);
+        *lastZNormPtr = (uint8_t)(zNorm + 127);
         state.last_raw_value_u32 = (uint16_t)(zFiltered + 32768);
         state.last_midi_value_u8 = normToMidiValue(zNorm);
         state.last_telemetry_ts = millis();
@@ -301,38 +436,9 @@ void ImuProcessor::sendMidiForAxis(
         case MidiMessageType::AFTERTOUCH:
             midi_sender->sendAftertouch(channel, midiValue);
             break;
-        case MidiMessageType::NOTE_SWEEP: {
-            uint8_t nmin = config.rtpNoteMin;
-            uint8_t nmax = config.rtpNoteMax;
-            int32_t axisMin = 0;
-            int32_t axisMax = 1;
-            bool inv = false;
-            if (config.specificConfig.imu) {
-                Components::ImuConfig* ic = config.specificConfig.imu;
-                if (axis == 'x') {
-                    nmin = ic->xNoteSweepMin;
-                    nmax = ic->xNoteSweepMax;
-                    axisMin = ic->xMin;
-                    axisMax = ic->xMax;
-                    inv = ic->invertX;
-                } else if (axis == 'y') {
-                    nmin = ic->yNoteSweepMin;
-                    nmax = ic->yNoteSweepMax;
-                    axisMin = ic->yMin;
-                    axisMax = ic->yMax;
-                    inv = ic->invertY;
-                } else if (axis == 'z') {
-                    nmin = ic->zNoteSweepMin;
-                    nmax = ic->zNoteSweepMax;
-                    axisMin = ic->zMin;
-                    axisMax = ic->zMax;
-                    inv = ic->invertZ;
-                }
-            }
-            uint8_t note = mapNoteSweepFromFullAxisTravel(rawAxisValue, axisMin, axisMax, nmin, nmax, inv);
-            midi_sender->sendNoteOn(channel, note, config.rtpNoteVelFix);
+        case MidiMessageType::NOTE_SWEEP:
+            // Balayage géré dans process() via processNoteSweepImuAxis (chaque échantillon).
             break;
-        }
         default:
             midi_sender->sendControlChange(channel, param, midiValue);
             break;
@@ -384,41 +490,41 @@ int16_t ImuProcessor::filterSignedValue(AnalogFilter& filter, int16_t value) {
     return (int16_t)(filteredUnsigned - 32768);
 }
 
-// Wrapper pour normaliser la signature avec ProcessorRegistry
-static const uint8_t MAX_IMU_FILTERS = 8;
-static AnalogFilter yFilters[MAX_IMU_FILTERS];
-static AnalogFilter zFilters[MAX_IMU_FILTERS];
-static uint8_t imuFilterGpios[MAX_IMU_FILTERS];
-static uint8_t imuFilterCount = 0;
-
-// Stocker les dernières valeurs normalisées pour chaque IMU (indexé par GPIO)
-static uint8_t lastXNormValues[MAX_IMU_FILTERS];
-static uint8_t lastYNormValues[MAX_IMU_FILTERS];
-static uint8_t lastZNormValues[MAX_IMU_FILTERS];
-
-static uint8_t getOrCreateImuIndex(uint8_t gpio) {
-    // Chercher un index existant pour ce GPIO
-    for (uint8_t i = 0; i < imuFilterCount; i++) {
-        if (imuFilterGpios[i] == gpio) {
-            return i;
+void ImuProcessor::silenceNoteSweepForGpio(uint8_t gpio, const ComponentConfig& config, MidiSender* midi_sender) {
+    if (!midi_sender || !config.specificConfig.imu) {
+        return;
+    }
+    uint8_t idx = findImuIndexByGpio(gpio);
+    if (idx == 255) {
+        return;
+    }
+    Components::ImuConfig* ic = config.specificConfig.imu;
+    for (uint8_t ax = 0; ax < 3; ax++) {
+        if (imuSweepLastNote[idx][ax] == 255) {
+            continue;
         }
+        MidiMessageType msgType;
+        uint8_t channel;
+        if (ax == 0) {
+            msgType = ic->xMsgType;
+            channel = ic->xMidiChannel;
+        } else if (ax == 1) {
+            msgType = ic->yMsgType;
+            channel = ic->yMidiChannel;
+        } else {
+            msgType = ic->zMsgType;
+            channel = ic->zMidiChannel;
+        }
+        if (msgType != MidiMessageType::NOTE_SWEEP) {
+            continue;
+        }
+        midi_sender->sendNoteOff(channel, imuSweepLastNote[idx][ax], 0);
+        imuSweepLastNote[idx][ax] = 255;
+        imuSweepNoteOnTime[idx][ax] = 0;
     }
-    
-    // Créer un nouvel index si possible
-    if (imuFilterCount < MAX_IMU_FILTERS) {
-        uint8_t idx = imuFilterCount++;
-        imuFilterGpios[idx] = gpio;
-        yFilters[idx].initialized = false;
-        zFilters[idx].initialized = false;
-        lastXNormValues[idx] = 255;
-        lastYNormValues[idx] = 255;
-        lastZNormValues[idx] = 255;
-        return idx;
-    }
-    
-    return 0;
 }
 
+// Wrapper pour normaliser la signature avec ProcessorRegistry
 static void processWrapper(
     const ComponentConfig& config,
     ComponentState& state,
