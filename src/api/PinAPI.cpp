@@ -19,6 +19,32 @@ static const size_t NVS_MAX_PIN_CONFIG_SIZE = 1900U;
 /* Sentinelle pour indiquer au request handler que le body était trop gros (413) */
 static const void* PINAPI_PAYLOAD_TOO_LARGE = (const void*)1;
 
+/** Escape a string for JSON encoding */
+static String jsonEscape(const char* str) {
+    if (!str) return "";
+    String result = "";
+    for (int i = 0; str[i] != '\0'; i++) {
+        char c = str[i];
+        if (c == '"') {
+            result += "\\\"";
+        } else if (c == '\\') {
+            result += "\\\\";
+        } else if (c == '\n') {
+            result += "\\n";
+        } else if (c == '\r') {
+            result += "\\r";
+        } else if (c == '\t') {
+            result += "\\t";
+        } else if (c >= 0 && c < 32) {
+            // Control characters - skip
+            continue;
+        } else {
+            result += c;
+        }
+    }
+    return result;
+}
+
 /** Extrait la valeur d'une clé JSON "\"key\":\"value\"" depuis un buffer (évite String complète = moins de pile) */
 static bool extractJsonQuoted(const char* json, size_t jsonLen, const char* key, char* out, size_t outLen) {
     if (!json || !key || !out || outLen == 0) return false;
@@ -306,22 +332,29 @@ void setupPinAPI(AsyncWebServer& server) {
             if(json.indexOf(keyCheck) >= 0) return;
             if(request->hasParam(name, true)) {
                 String val = request->getParam(name, true)->value();
+                
+                /* Treat mappingScript with full JSON escaping */
+                if (strcmp(name, "mappingScript") == 0) {
+                    if (val.length() > 0) {
+                        String escaped = jsonEscape(val.c_str());
+                        json += ",\"" + String(name) + "\":\"" + escaped + "\"";
+                        Serial.printf("[PinAPI] mappingScript escaped: input_len=%d -> escaped_len=%d\n", val.length(), escaped.length());
+                    }
+                    return;
+                }
+                
                 if(val == "true" || val == "false") {
                     json += ",\"" + String(name) + "\":" + val;
                 } else if(val.indexOf(',') >= 0) {
                     /* Valeur avec virgule (ex. "0,0" ou "2000,500") → toujours chaîne JSON échappée */
-                    String escaped = val;
-                    escaped.replace("\\", "\\\\");
-                    escaped.replace("\"", "\\\"");
+                    String escaped = jsonEscape(val.c_str());
                     json += ",\"" + String(name) + "\":\"" + escaped + "\"";
                 } else if(val.length() > 0 && (val[0] >= '0' && val[0] <= '9')) {
                     json += ",\"" + String(name) + "\":" + val;
                 } else if(val.length() > 1 && val[0] == '-' && (val[1] >= '0' && val[1] <= '9')) {
                     json += ",\"" + String(name) + "\":" + val;
                 } else {
-                    String escaped = val;
-                    escaped.replace("\\", "\\\\");
-                    escaped.replace("\"", "\\\"");
+                    String escaped = jsonEscape(val.c_str());
                     json += ",\"" + String(name) + "\":\"" + escaped + "\"";
                 }
             }

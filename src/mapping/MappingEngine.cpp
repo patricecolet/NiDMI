@@ -36,6 +36,13 @@ bool FluxRegistry::has(const char* name) {
     }
     return false;
 }
+
+void FluxRegistry::debug() {
+    Serial.printf("[FluxRegistry] Registry contents (%d entries):\n", count);
+    for (int i = 0; i < count; i++) {
+        Serial.printf("  [%d] '%s' = %.2f\n", i, entries[i].name, entries[i].value);
+    }
+}
 // Helper pour envoyer CC via MIDI
 static void sendMidiControlChange(uint8_t cc, uint8_t value, uint8_t chan, MidiSender* sender) {
     if (sender) {
@@ -70,6 +77,13 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
 
     float current = inputVal;
     String s = String(script);
+    
+    // Remove comments (everything after //)
+    int commentIdx = s.indexOf("//");
+    if (commentIdx != -1) {
+        s = s.substring(0, commentIdx);
+    }
+    
     int start = 0;
     int end = s.indexOf(':');
 
@@ -85,37 +99,115 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
                 String target = seg.substring(3, closeIdx);
                 if (FluxRegistry::has(target.c_str())) {
                     current = FluxRegistry::get(target.c_str());
+                    Serial.printf("[MappingEngine] r(\"%s\") found → value = %.2f\n", target.c_str(), current);
                 } else {
                     // Fallback: keep current input value if named source does not exist.
-                    Serial.printf("[MappingEngine] WARNING: source '%s' not found, fallback to input %.2f\n", target.c_str(), current);
+                    Serial.printf("[MappingEngine] WARNING: r(\"%s\") not found! Available:\n", target.c_str());
+                    FluxRegistry::debug();  // Print what's in the registry
+                    Serial.printf("[MappingEngine] Fallback to input value: %.2f\n", current);
                 }
+            }
+        }
+        // f("...") — Load a constant numeric value (variable declaration)
+        else if (seg.startsWith("f(\"")) {
+            int closeIdx = seg.indexOf("\")");
+            if (closeIdx != -1) {
+                String valueStr = seg.substring(3, closeIdx);
+                current = valueStr.toFloat();
+                Serial.printf("[MappingEngine] Loaded constant value: %.2f\n", current);
+            }
+        }
+        // s("...") — Store current flux value as a variable (send/store to registry)
+        else if (seg.startsWith("s(\"")) {
+            int closeIdx = seg.indexOf("\")");
+            if (closeIdx != -1) {
+                String varName = seg.substring(3, closeIdx);
+                FluxRegistry::update(varName.c_str(), current);
+                Serial.printf("[MappingEngine] s(\"%s\"): stored value %.2f\n", varName.c_str(), current);
+                Serial.printf("[MappingEngine] Registry now has %d entries\n", FluxRegistry::count);
             }
         } 
         else if (seg.startsWith("*(")) { 
             int closeIdx = seg.indexOf(")");
             if (closeIdx != -1) {
-                float m = seg.substring(2, closeIdx).toFloat();
+                String operand = seg.substring(2, closeIdx);
+                float m;
+                // Check if operand is a variable reference r("name")
+                if (operand.startsWith("r(\"")) {
+                    int varCloseIdx = operand.indexOf("\")");
+                    if (varCloseIdx != -1) {
+                        String varName = operand.substring(3, varCloseIdx);
+                        m = FluxRegistry::get(varName.c_str());
+                        Serial.printf("[MappingEngine] Multiply by variable '%s' = %.2f\n", varName.c_str(), m);
+                    } else {
+                        m = 0;
+                    }
+                } else {
+                    m = operand.toFloat();
+                }
                 current *= m;
             }
         }
         else if (seg.startsWith("+(")) { 
             int closeIdx = seg.indexOf(")");
             if (closeIdx != -1) {
-                float a = seg.substring(2, closeIdx).toFloat();
+                String operand = seg.substring(2, closeIdx);
+                float a;
+                // Check if operand is a variable reference r("name")
+                if (operand.startsWith("r(\"")) {
+                    int varCloseIdx = operand.indexOf("\")");
+                    if (varCloseIdx != -1) {
+                        String varName = operand.substring(3, varCloseIdx);
+                        a = FluxRegistry::get(varName.c_str());
+                        Serial.printf("[MappingEngine] Add variable '%s' = %.2f\n", varName.c_str(), a);
+                    } else {
+                        a = 0;
+                    }
+                } else {
+                    a = operand.toFloat();
+                }
                 current += a;
             }
         }
         else if (seg.startsWith("-(")) { 
             int closeIdx = seg.indexOf(")");
             if (closeIdx != -1) {
-                float s = seg.substring(2, closeIdx).toFloat();
+                String operand = seg.substring(2, closeIdx);
+                float s;
+                // Check if operand is a variable reference r("name")
+                if (operand.startsWith("r(\"")) {
+                    int varCloseIdx = operand.indexOf("\")");
+                    if (varCloseIdx != -1) {
+                        String varName = operand.substring(3, varCloseIdx);
+                        s = FluxRegistry::get(varName.c_str());
+                        Serial.printf("[MappingEngine] Subtract variable '%s' = %.2f\n", varName.c_str(), s);
+                    } else {
+                        s = 0;
+                    }
+                } else {
+                    s = operand.toFloat();
+                }
                 current -= s;
             }
         }
         else if (seg.startsWith("/(")) { 
             int closeIdx = seg.indexOf(")");
             if (closeIdx != -1) {
-                float d = seg.substring(2, closeIdx).toFloat();
+                String operand = seg.substring(2, closeIdx);
+                float d;
+                // Check if operand is a variable reference r("name")
+                if (operand.startsWith("r(\"")) {
+                    int varCloseIdx = operand.indexOf("\")");
+                    if (varCloseIdx != -1) {
+                        String varName = operand.substring(3, varCloseIdx);
+                        d = FluxRegistry::get(varName.c_str());
+                        Serial.printf("[MappingEngine] Divide by variable '%s' = %.2f\n", varName.c_str(), d);
+                    } else {
+                        d = 1; // Avoid division by zero
+                    }
+                } else {
+                    d = operand.toFloat();
+                }
                 if (d != 0) current /= d;
             }
         }
@@ -189,6 +281,38 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
                 } else {
                     sendMidiNoteOff((uint8_t)note, (uint8_t)chan, 0, midi_sender);
                 }
+            }
+        }
+        // Pass-through functions that don't modify the flux but can be chained
+        else if (seg.startsWith("print(")) {
+            int closeIdx = seg.indexOf(')');
+            if (closeIdx != -1) {
+                Serial.printf("[MappingEngine] DEBUG: flux value = %.2f\n", current);
+            }
+        }
+        else if (seg.startsWith("graph(")) {
+            int closeIdx = seg.indexOf(')');
+            if (closeIdx != -1) {
+                // Graph function - currently just logs the value
+                Serial.printf("[MappingEngine] GRAPH: %.2f\n", current);
+            }
+        }
+        // s() without parameters - pass-through storage reference
+        else if (seg == "s()") {
+            // Pass-through, does nothing
+            Serial.printf("[MappingEngine] Pass-through s() - current value: %.2f\n", current);
+        }
+        // ctl.out() variations - these are already handled above but ensure pass-through
+        // osc.out() - pass-through function (handled separately)
+        else if (seg.startsWith("osc.out(")) {
+            int firstQuote = seg.indexOf('"');
+            int lastQuote = seg.lastIndexOf('"');
+            int closeIdx = seg.indexOf(')');
+            if (firstQuote != -1 && lastQuote != -1 && closeIdx != -1 && firstQuote < lastQuote) {
+                String oscPath = seg.substring(firstQuote + 1, lastQuote);
+                // OSC output - flux passes through
+                Serial.printf("[MappingEngine] OSC out: path='%s' value=%.2f\n", oscPath.c_str(), current);
+                // TODO: Implement actual OSC sending if needed
             }
         }
 

@@ -47,6 +47,7 @@ void ButtonProcessor::process(
         state.last_time = now;
         if (config.name && config.name[0] != '\0') {
             FluxRegistry::update(config.name, pressed ? 1.0f : 0.0f);
+            Serial.printf("[ButtonProcessor] GPIO%d INIT: name='%s' state=%d\n", config.gpio, config.name, pressed ? 1 : 0);
         }
         return;
     }
@@ -157,6 +158,8 @@ void ButtonProcessor::process(
             // Keep script source logical (0/1), not MIDI-scaled (0/127),
             // so arithmetic like *(100) produces expected velocities.
             FluxRegistry::update(config.name, currentStableState ? 1.0f : 0.0f);
+            Serial.printf("[ButtonProcessor] GPIO%d BEFORE SCRIPT: name='%s' button_value=%d (0/1), edge=%s\n",
+                         config.gpio, config.name, currentStableState ? 1 : 0, falling ? "PRESS" : "RELEASE");
         }
 
         if (config.mappingScript[0] != '\0') {
@@ -165,7 +168,12 @@ void ButtonProcessor::process(
             const bool hasNoteOut = strstr(config.mappingScript, "note.out(") != nullptr;
             const bool hasSeqOut = strstr(config.mappingScript, "seq.out(") != nullptr;
             const bool hasCtlOut = strstr(config.mappingScript, "ctl.out(") != nullptr;
+            const bool hasOscOut = strstr(config.mappingScript, "osc.out(") != nullptr;
+            const bool hasNoteMessage = hasNoteOn || hasNoteOff || hasNoteOut;
             float scriptInput = currentStableState ? 1.0f : 0.0f;
+            
+            Serial.printf("[ButtonProcessor] Executing script (input=%.1f, edge=%s):\n  '%s'\n",
+                         scriptInput, falling ? "PRESS" : "RELEASE", config.mappingScript);
 
             auto buildEdgeScript = [&](bool onPress) -> String {
                 String src = String(config.mappingScript);
@@ -195,26 +203,33 @@ void ButtonProcessor::process(
                 return out;
             };
 
-            bool shouldExecute = false;
-            if (falling) {
-                // Press: execute any output-capable script, including seq.out and ctl.out.
-                shouldExecute = hasNoteOn || hasNoteOff || hasNoteOut || hasSeqOut || hasCtlOut;
-                if ((hasNoteOff || hasNoteOut || hasSeqOut || hasCtlOut) && !hasNoteOn) {
-                    scriptInput = 1.0f;
-                }
-            } else {
-                // Release: execute note.off, note.out, seq.out, or ctl.out scripts.
-                shouldExecute = hasNoteOff || hasNoteOut || hasSeqOut || hasCtlOut;
-            }
-
+            // Script is executable if it contains any output function
+            bool shouldExecute = hasNoteMessage || hasSeqOut || hasCtlOut || hasOscOut;
+            
             if (shouldExecute) {
-                if (hasNoteOn && hasNoteOff) {
-                    String edgeScript = buildEdgeScript(falling);
-                    if (edgeScript.length() > 0) {
-                        MappingEngine::execute(edgeScript.c_str(), scriptInput, midi_sender);
+                if (falling) {
+                    // Press: execute normally
+                    if (hasNoteMessage && hasNoteOn && hasNoteOff) {
+                        // Has both note.on and note.off: filter based on edge
+                        String edgeScript = buildEdgeScript(falling);
+                        if (edgeScript.length() > 0) {
+                            MappingEngine::execute(edgeScript.c_str(), scriptInput, midi_sender);
+                        }
+                    } else {
+                        MappingEngine::execute(config.mappingScript, scriptInput, midi_sender);
                     }
                 } else {
-                    MappingEngine::execute(config.mappingScript, scriptInput, midi_sender);
+                    // Release: execute only if script has note.off, note.out, seq.out, ctl.out, or osc.out
+                    if (hasNoteOff || hasNoteOut || hasSeqOut || hasCtlOut || hasOscOut) {
+                        if (hasNoteMessage && hasNoteOn && hasNoteOff) {
+                            String edgeScript = buildEdgeScript(false);
+                            if (edgeScript.length() > 0) {
+                                MappingEngine::execute(edgeScript.c_str(), scriptInput, midi_sender);
+                            }
+                        } else {
+                            MappingEngine::execute(config.mappingScript, scriptInput, midi_sender);
+                        }
+                    }
                 }
             }
         }
