@@ -6,6 +6,9 @@
 #define ASYNCWEBSERVER_REGEX 1
 #define HTTP_MAX_DATA_WAIT 30000
 
+// Limiter les connexions simultanées pour éviter les fuites mémoire
+#define ASYNCWEBSERVER_MAX_CLIENTS 6
+
 // setupWebAPI est déclaré plus bas et défini dans WebAPI.cpp
 
 // Déclaration de la fonction setupHttp définie dans WebAPI.cpp
@@ -170,8 +173,23 @@ void ServerCore::setStaticStaIp(IPAddress ip, IPAddress gateway, IPAddress subne
 }
 
 void ServerCore::update() {
-    // Mise à jour du WebSocket
-    ws.cleanupClients();
+    // Mise à jour du WebSocket avec nettoyage agressif
+    static unsigned long lastCleanup = 0;
+    unsigned long now = millis();
+    
+    // Nettoyer les clients WebSocket très fréquemment (toutes les 100ms)
+    if (now - lastCleanup >= 100) {
+        ws.cleanupClients();
+        lastCleanup = now;
+        
+        // Debug: afficher l'état du heap et du WebSocket
+        static unsigned long lastDebug = 0;
+        if (now - lastDebug >= 5000) {  // Log tous les 5 secondes
+            Serial.printf("[ServerCore] WS clients: %u, Free heap: %d bytes\n", 
+                ws.count(), (int)ESP.getFreeHeap());
+            lastDebug = now;
+        }
+    }
     
     // Mise à jour RTP-MIDI
     rtpMidiInstance.update();

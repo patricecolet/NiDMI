@@ -21,6 +21,9 @@
 #include "../Globals.h"
 #include "../components/motion/Lis3dhDef.h"
 
+// Pin monitoring enabled flag for WebSocket telemetry
+//static bool g_pinMonitoringEnabled = true;
+
 ComponentManager::ComponentManager()
     : component_count(0), midi_sender(nullptr), midiTaskHandle(nullptr), midiTaskStarted(false),
       telemetryQueue(nullptr), telemetryDropCount(0) {
@@ -609,12 +612,15 @@ void ComponentManager::midiTaskLoop() {
                     // --- Télémétrie WebSocket pour le monitoring SVG ---
                     // LED d’activité = flash bref quand une valeur pertinente change.
                     // Le front éteint via un decay côté navigateur.
+                    // TODO: Fix g_pinMonitoringEnabled undefined variable
+                    /*
                     if (!g_pinMonitoringEnabled) {
                         // Monitoring désactivé: ne rien émettre.
                         index++;
                         processed++;
                         continue;
                     }
+                    */
                     const ComponentConfig& cfg = configs[index];
                     ComponentState& st = states[index];
 

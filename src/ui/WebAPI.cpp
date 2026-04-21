@@ -166,9 +166,29 @@ String getDefaultConfig(String pin) {
 
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
     if (type == WS_EVT_CONNECT) {
-        Serial.println("WebSocket client connected");
+        std::vector<uint32_t> clientIds;
+        Serial.printf("[WebSocket] Client connected (ID: %u, Total clients: %u, Heap: %d)\n", 
+            client->id(), server->count(), (int)ESP.getFreeHeap());
+        
+        // Limiter à 2 clients max - forcer fermeture des autres
+        if (server->count() > 2) {
+            Serial.println("[WebSocket] ⚠️  Max clients exceeded, disconnecting oldest");
+            // Parcourir et fermer les anciens clients (garder les 2 plus récents)
+         
+            for (auto& c : server->getClients()) {
+                clientIds.push_back(c.id());
+            }
+            }
+            // Trier par ID (les plus anciens ont les IDs les plus bas)
+            if (clientIds.size() > 2) {
+                for (size_t i = 0; i < clientIds.size() - 2; i++) {
+                    server->client(clientIds[i])->close();
+                }
+            }
+        
     } else if (type == WS_EVT_DISCONNECT) {
-        Serial.println("WebSocket client disconnected");
+        Serial.printf("[WebSocket] Client disconnected (ID: %u, Total: %u, Heap: %d)\n",
+            client->id(), server->count(), (int)ESP.getFreeHeap());
     } else if (type == WS_EVT_DATA) {
         AwsFrameInfo *info = (AwsFrameInfo*)arg;
         if (!info || info->opcode != WS_TEXT) return;

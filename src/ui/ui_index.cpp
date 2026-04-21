@@ -63,7 +63,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <script src="/bundle"></script>
 </head>
 <body>
- <a href="/sequencer" class="seq-btn">🎹 Sequencer</a>
+ <a href="/sequencer" class="seq-btn">Sequencer</a>
  <div class="h"><h1>NiDMI</h1><p>Configuration Wi‑Fi, RTP‑MIDI et OSC</p></div>
  <div class="t"><div class="tab active" data-t="status">Statut</div><div class="tab" data-t="connection">Connection</div><div class="tab" data-t="pins">Pins</div></div>
  <div class="p active" id="panel-status">
@@ -82,7 +82,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div class="lp">
  <h3 id="boardName">ESP32‑C3</h3>
  <div class="l"><span class="s digital"></span> Digital <span class="s analog"></span> Analog <span class="s i2c"></span> I2C <span class="s uart"></span> UART <span class="s spi"></span> SPI <span class="s power"></span> Power <span class="s gnd"></span> GND</div>
-<<<<<<< HEAD
 
  <svg class="b" viewBox="50 -20 260 260">
  <rect x="114" y="20" width="122" height="188" rx="10" fill="#ffffff" stroke="#9ca3af"/>
@@ -94,9 +93,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  </svg>
 
 
-=======
- <svg class="b" viewBox="-32 -35 400 295" preserveAspectRatio="xMidYMid meet"><rect x="114" y="20" width="122" height="188" rx="10" fill="#ffffff" stroke="#9ca3af"/><text x="174" y="114" text-anchor="middle" font-size="12" fill="#6b7280">MCU</text><rect x="144" y="2" width="60" height="60" rx="6" fill="#e5e7eb" stroke="#9ca3af"/><g id="pinsLeft"></g><g id="pinsRight"></g></svg>
->>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
  <div id="touchCalibrateContainer" class="f" style="margin-top:10px;display:none;"><button type="button" id="touchCalibrateBtn" class="btn" style="width:100%;">Calibrer touch</button><div class="hint" id="touchCalibrateMsg"></div></div>
  <div class="plist"><h4>Pins configurées</h4><div id="pinsList" class="list"></div><button id="saveAllBtn" class="btn-p">Enregistrer tout</button><div id="saveAllMsg" class="hint"></div></div>
  </div>
@@ -106,38 +102,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <div class="r"><label>Pin:</label><span id="selPin">-</span></div>
  <div class="r"><label>Famille:</label><select id="familySelect"></select></div>
  <div class="r"><label>Composant:</label><select id="funcSelect"></select></div>
-<<<<<<< HEAD
 
  <div id="componentFormCard" class="subcard" style="display:none;"></div>
  <h4>MIDI</h4>
  <div id="rtpMidiSection"></div>
- <h4>Séquenceur</h4>
- <div class="seq-actions" style="margin-bottom:15px">
- <div class="r" style="gap:8px">
- <label>Importer fichier</label>
- <input type="file" id="nidmidFile" accept=".nidmid,.bin">
- <button class="btn" onclick="uploadFile()" style="flex:0">Upload</button>
  
- </div>
- </div>
- <div id="seqUploadStatus" class="seq-status" style="display:none;margin-bottom:15px;padding:12px;border-radius:6px;font-size:14px;font-weight:500"></div>
-
- <style>
- .seq-status{display:block !important}
- .seq-status-success{background:#d1fae5;color:#065f46;border-left:4px solid #10b981}
- .seq-status-error{background:#fee2e2;color:#991b1b;border-left:4px solid #ef4444}
- .seq-status-info{background:#dbeafe;color:#0c4a6e;border-left:4px solid #0284c7}
- .seq-empty{color:#9ca3af;font-style:italic;text-align:center;padding:20px}
- .seq-steps{display:flex;flex-direction:column;gap:8px}
- .seq-measure{background:#fff;padding:8px 12px;border-radius:4px;border-left:4px solid #3b82f6;margin-bottom:8px}
- .seq-measure strong{color:#1f2937}
- .seq-step{display:flex;gap:6px;flex-wrap:wrap;padding:6px 12px;background:#f0f9ff;border-radius:4px;font-size:13px}
- .seq-note{background:#e0e7ff;color:#312e81;padding:3px 6px;border-radius:3px;font-family:monospace;font-size:12px}
- .seq-empty-note{background:#f3f4f6;color:#9ca3af}
- </style>
-
 <h4>Interfaces MIDI</h4>
-=======
  <div class="r"><label for="ComponentName">Nom du Composant:</label><input type="text" id="ComponentName"></div>
 <div id="componentFormCard" class="subcard" style="display:none;"></div>
 <h4>MIDI Output</h4>
@@ -152,7 +122,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 <div id="rtpMidiConfigContainer" style="display: block;">
  <div id="rtpMidiSection"></div>
- <h4 style="margin-top: 15px;">Interfaces MIDI</h4>
+ <h4 style="margin-top: 15px;">Interface MIDI</h4>
 </div>
 
 <div id="mappingScriptContainer" style="display: none;">
@@ -162,7 +132,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 </div>
 </div>
 <h4 style="display: none;">Interfaces MIDI</h4>
->>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
 <div class="r switch"><input type="checkbox" id="debugMidiEnabled"><label for="debugMidiEnabled">Debug MIDI</label></div>
 <h4>OSC</h4>
 <div class="r"><label>Addr:</label><input type="text" id="oscAddress" placeholder="/ctl"></div>

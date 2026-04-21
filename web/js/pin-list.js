@@ -61,7 +61,6 @@ function updatePinsList() {
         const it = document.createElement('div');
         it.className = `item complex ${pType(lbl)}`;
         it.innerHTML = `<span class="lbl">${lbl}</span><span class="role">${roleName}</span><span class="stat">${statText}</span><button class="del-btn">×</button>`;
-<<<<<<< HEAD
         it.onclick = () => {
           if (window._selRect) window._selRect.classList.remove('selectedSquare');
           const r = prect[lbl];
@@ -93,10 +92,8 @@ function updatePinsList() {
           updatePinsList();
           updateBusVisuals();
         };
-=======
         
         setupPinEvents(it, lbl, roleName);
->>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
         pl.appendChild(it);
       }
       return;
@@ -109,7 +106,6 @@ function updatePinsList() {
 
     const it = document.createElement('div');
     it.className = `item ${pType(lbl)}`;
-<<<<<<< HEAD
     it.innerHTML = `<span class="lbl">${lbl}</span><span class="role">${getRoleDisplayLabel(cfg.role)}</span><span class="stat">${stat(cfg, lbl)}</span><button class="del-btn">×</button>`;
     it.onclick = () => {
       if (window._selRect) window._selRect.classList.remove('selectedSquare');
@@ -141,11 +137,9 @@ function updatePinsList() {
       updatePinsList();
       updateBusVisuals();
     };
-=======
     it.innerHTML = `<span class="lbl">${lbl}</span><span class="role">${roleName}</span><span class="stat">${stat(cfg, lbl)}</span><button class="del-btn">×</button>`;
     
     setupPinEvents(it, lbl, roleName);
->>>>>>> 86c724ede13eadc73ef7732ba0df919866b41f8e
     pl.appendChild(it);
   });
 }
