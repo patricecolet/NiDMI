@@ -182,11 +182,22 @@ void PotentiometerProcessor::process(
     
     // Update FluxRegistry only when the component has a declared name.
     if (config.name && config.name[0] != '\0') {
-        FluxRegistry::update(config.name, (float)midi_value);
+        // For SCRIPT mode, pass normalized float (0.0-1.0)
+        // For RTP mode, pass the MIDI-normalized value (0-127)
+        if (config.midiMode == MidiMode::SCRIPT) {
+            // Pass full range as normalized float (0.0-1.0) for mapping scripts
+            float normalized = (float)filtered_value / 4095.0f;
+            FluxRegistry::update(config.name, normalized);
+        } else {
+            // Pass MIDI value (0-127) for compatibility
+            FluxRegistry::update(config.name, (float)midi_value);
+        }
     }
     // Script mode must run even without a component name.
     if (config.midiMode == MidiMode::SCRIPT && config.mappingScript[0] != '\0') {
-        MappingEngine::execute(config.mappingScript, (float)state.last_value, midi_sender);
+        // Pass full range as normalized float (0.0-1.0) for the script
+        float normalized = (float)filtered_value / 4095.0f;
+        MappingEngine::execute(config.mappingScript, normalized, midi_sender);
     }
 }
 
