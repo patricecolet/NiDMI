@@ -75,7 +75,6 @@ static void sendMidiNoteOff(uint8_t note, uint8_t channel, uint8_t velocity, Mid
 void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi_sender) {
     if (!script || script[0] == '\0') return;
 
-    float current = inputVal;
     String s = String(script);
     
     // Remove comments (everything after //)
@@ -84,59 +83,90 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
         s = s.substring(0, commentIdx);
     }
     
-    int start = 0;
-    int end = s.indexOf(':');
-
     Serial.printf("[MappingEngine] execute script='%s' input=%.2f\n", script, inputVal);
-    while (start < (int)s.length()) {
-        int actualEnd = (end == -1) ? s.length() : end;
-        String seg = s.substring(start, actualEnd);
-        seg.trim();
+    
+    // Split by ';' to get statements
+    int statementStart = 0;
+    int statementEnd = s.indexOf(';');
+    
+    while (statementStart < (int)s.length()) {
+        int actualStatementEnd = (statementEnd == -1) ? s.length() : statementEnd;
+        String statement = s.substring(statementStart, actualStatementEnd);
+        statement.trim();
+        
+        if (statement.length() == 0) {
+            if (statementEnd == -1) break;
+            statementStart = statementEnd + 1;
+            statementEnd = s.indexOf(';', statementStart);
+            continue;
+        }
+        
+        // Execute this statement (process by ':' within the statement)
+        float current = inputVal;
+        int start = 0;
+        int end = statement.indexOf(':');
+        
+        while (start < (int)statement.length()) {
+            int actualEnd = (end == -1) ? statement.length() : end;
+            String seg = statement.substring(start, actualEnd);
+            seg.trim();
+            
+            if (seg.length() == 0) {
+                if (end == -1) break;
+                start = end + 1;
+                end = statement.indexOf(':', start);
+                continue;
+            }
 
         if (seg.startsWith("r(\"")) { 
-            int closeIdx = seg.indexOf("\")");
+            int closeIdx = seg.indexOf("\"", 3);  // Find closing quote, starting after the opening quote
             if (closeIdx != -1) {
-                String target = seg.substring(3, closeIdx);
+                String target = seg.substring(3, closeIdx);  // Extract between the quotes
                 if (FluxRegistry::has(target.c_str())) {
                     current = FluxRegistry::get(target.c_str());
                     Serial.printf("[MappingEngine] r(\"%s\") found → value = %.2f\n", target.c_str(), current);
                 } else {
                     // Fallback: keep current input value if named source does not exist.
-                    Serial.printf("[MappingEngine] WARNING: r(\"%s\") not found! Available:\n", target.c_str());
+                    Serial.printf("[MappingEngine] *** ERROR *** r(\"%s\") NOT FOUND! ***\n", target.c_str());
+                    Serial.printf("[MappingEngine] Registry contains:\n");
                     FluxRegistry::debug();  // Print what's in the registry
-                    Serial.printf("[MappingEngine] Fallback to input value: %.2f\n", current);
+                    Serial.printf("[MappingEngine] Using input value instead: %.2f\n", current);
                 }
             }
         }
-        // f("...") — Load a constant numeric value (variable declaration)
-        else if (seg.startsWith("f(\"")) {
-            int closeIdx = seg.indexOf("\")");
+        // f(...) — Load a numeric constant (with or without quotes)
+        else if (seg.startsWith("f(")) {
+            int closeIdx = seg.indexOf(")");
             if (closeIdx != -1) {
-                String valueStr = seg.substring(3, closeIdx);
+                String valueStr = seg.substring(2, closeIdx);
+                // Remove quotes if present
+                if (valueStr.startsWith("\"") && valueStr.endsWith("\"")) {
+                    valueStr = valueStr.substring(1, valueStr.length() - 1);
+                }
                 current = valueStr.toFloat();
                 Serial.printf("[MappingEngine] Loaded constant value: %.2f\n", current);
             }
         }
         // s("...") — Store current flux value as a variable (send/store to registry)
         else if (seg.startsWith("s(\"")) {
-            int closeIdx = seg.indexOf("\")");
+            int closeIdx = seg.indexOf("\"", 3);  // Find closing quote, starting after the opening quote
             if (closeIdx != -1) {
-                String varName = seg.substring(3, closeIdx);
+                String varName = seg.substring(3, closeIdx);  // Extract between the quotes
                 FluxRegistry::update(varName.c_str(), current);
                 Serial.printf("[MappingEngine] s(\"%s\"): stored value %.2f\n", varName.c_str(), current);
                 Serial.printf("[MappingEngine] Registry now has %d entries\n", FluxRegistry::count);
             }
         } 
         else if (seg.startsWith("*(")) { 
-            int closeIdx = seg.indexOf(")");
+            int closeIdx = seg.lastIndexOf(")");
             if (closeIdx != -1) {
                 String operand = seg.substring(2, closeIdx);
                 float m;
                 // Check if operand is a variable reference r("name")
                 if (operand.startsWith("r(\"")) {
-                    int varCloseIdx = operand.indexOf("\")");
+                    int varCloseIdx = operand.indexOf("\"", 3);  // Find closing quote
                     if (varCloseIdx != -1) {
-                        String varName = operand.substring(3, varCloseIdx);
+                        String varName = operand.substring(3, varCloseIdx);  // Extract between the quotes
                         m = FluxRegistry::get(varName.c_str());
                         Serial.printf("[MappingEngine] Multiply by variable '%s' = %.2f\n", varName.c_str(), m);
                     } else {
@@ -149,15 +179,15 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
             }
         }
         else if (seg.startsWith("+(")) { 
-            int closeIdx = seg.indexOf(")");
+            int closeIdx = seg.lastIndexOf(")");
             if (closeIdx != -1) {
                 String operand = seg.substring(2, closeIdx);
                 float a;
                 // Check if operand is a variable reference r("name")
                 if (operand.startsWith("r(\"")) {
-                    int varCloseIdx = operand.indexOf("\")");
+                    int varCloseIdx = operand.indexOf("\"", 3);  // Find closing quote
                     if (varCloseIdx != -1) {
-                        String varName = operand.substring(3, varCloseIdx);
+                        String varName = operand.substring(3, varCloseIdx);  // Extract between the quotes
                         a = FluxRegistry::get(varName.c_str());
                         Serial.printf("[MappingEngine] Add variable '%s' = %.2f\n", varName.c_str(), a);
                     } else {
@@ -170,15 +200,15 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
             }
         }
         else if (seg.startsWith("-(")) { 
-            int closeIdx = seg.indexOf(")");
+            int closeIdx = seg.lastIndexOf(")");
             if (closeIdx != -1) {
                 String operand = seg.substring(2, closeIdx);
                 float s;
                 // Check if operand is a variable reference r("name")
                 if (operand.startsWith("r(\"")) {
-                    int varCloseIdx = operand.indexOf("\")");
+                    int varCloseIdx = operand.indexOf("\"", 3);  // Find closing quote
                     if (varCloseIdx != -1) {
-                        String varName = operand.substring(3, varCloseIdx);
+                        String varName = operand.substring(3, varCloseIdx);  // Extract between the quotes
                         s = FluxRegistry::get(varName.c_str());
                         Serial.printf("[MappingEngine] Subtract variable '%s' = %.2f\n", varName.c_str(), s);
                     } else {
@@ -191,15 +221,15 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
             }
         }
         else if (seg.startsWith("/(")) { 
-            int closeIdx = seg.indexOf(")");
+            int closeIdx = seg.lastIndexOf(")");
             if (closeIdx != -1) {
                 String operand = seg.substring(2, closeIdx);
                 float d;
                 // Check if operand is a variable reference r("name")
                 if (operand.startsWith("r(\"")) {
-                    int varCloseIdx = operand.indexOf("\")");
+                    int varCloseIdx = operand.indexOf("\"", 3);  // Find closing quote
                     if (varCloseIdx != -1) {
-                        String varName = operand.substring(3, varCloseIdx);
+                        String varName = operand.substring(3, varCloseIdx);  // Extract between the quotes
                         d = FluxRegistry::get(varName.c_str());
                         Serial.printf("[MappingEngine] Divide by variable '%s' = %.2f\n", varName.c_str(), d);
                     } else {
@@ -275,10 +305,13 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
                 int chan = seg.substring(comma1 + 1, closeIdx).toInt();
                 note = constrain(note, 0, 127);
                 chan = constrain(chan, 1, 16);
+                Serial.printf("[MappingEngine] note.out(%d,%d): current=%.2f ", note, chan, current);
                 if (current > 0) {
                     uint8_t vel = (uint8_t)constrain((int)current, 1, 127);  // At least 1 for note on
+                    Serial.printf("→ NOTE ON (vel=%d)\n", vel);
                     sendMidiNoteOn((uint8_t)note, (uint8_t)chan, vel, midi_sender);
                 } else {
+                    Serial.printf("→ NOTE OFF\n");
                     sendMidiNoteOff((uint8_t)note, (uint8_t)chan, 0, midi_sender);
                 }
             }
@@ -316,8 +349,14 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
             }
         }
 
-        if (end == -1) break;
-        start = end + 1;
-        end = s.indexOf(':', start);
+            if (end == -1) break;
+            start = end + 1;
+            end = statement.indexOf(':', start);
+        }
+        
+        // Move to next statement
+        if (statementEnd == -1) break;
+        statementStart = statementEnd + 1;
+        statementEnd = s.indexOf(';', statementStart);
     }
 }

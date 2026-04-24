@@ -49,6 +49,48 @@ void ButtonProcessor::process(
             FluxRegistry::update(config.name, pressed ? 1.0f : 0.0f);
             Serial.printf("[ButtonProcessor] GPIO%d INIT: name='%s' state=%d\n", config.gpio, config.name, pressed ? 1 : 0);
         }
+        
+        // Execute setup statements (f(), s(), r() without output functions) once at init
+        if (config.midiMode == MidiMode::SCRIPT && config.mappingScript[0] != '\0') {
+            String script = String(config.mappingScript);
+            String setupStatements = "";
+            
+            // Extract all setup statements (no output functions)
+            int statementStart = 0;
+            int statementEnd = script.indexOf(';');
+            
+            while (statementStart < (int)script.length()) {
+                int actualEnd = (statementEnd == -1) ? script.length() : statementEnd;
+                String statement = script.substring(statementStart, actualEnd);
+                statement.trim();
+                
+                if (statement.length() > 0) {
+                    // Check if this is a setup statement (no output functions)
+                    bool isSetupStatement = (strstr(statement.c_str(), "note.on(") == nullptr &&
+                                           strstr(statement.c_str(), "note.off(") == nullptr &&
+                                           strstr(statement.c_str(), "note.out(") == nullptr &&
+                                           strstr(statement.c_str(), "seq.out(") == nullptr &&
+                                           strstr(statement.c_str(), "ctl.out(") == nullptr &&
+                                           strstr(statement.c_str(), "osc.out(") == nullptr);
+                    
+                    if (isSetupStatement) {
+                        if (setupStatements.length() > 0) setupStatements += ";";
+                        setupStatements += statement;
+                    }
+                }
+                
+                if (statementEnd == -1) break;
+                statementStart = statementEnd + 1;
+                statementEnd = script.indexOf(';', statementStart);
+            }
+            
+            // Execute setup statements once
+            if (setupStatements.length() > 0) {
+                Serial.printf("[ButtonProcessor] GPIO%d: Executing setup statements at init:\n  '%s'\n", config.gpio, setupStatements.c_str());
+                MappingEngine::execute(setupStatements.c_str(), 0.0f, midi_sender);
+            }
+        }
+        
         return;
     }
     
@@ -80,6 +122,13 @@ void ButtonProcessor::process(
     // Mettre à jour l'état stable précédent pour la prochaine itération
     state.prev_stable_state = currentStableState;
     
+    // ALWAYS update FluxRegistry so r() can read this button's state
+    if (config.name && config.name[0] != '\0') {
+        FluxRegistry::update(config.name, currentStableState ? 1.0f : 0.0f);
+        Serial.printf("[ButtonProcessor] GPIO%d REGISTRY UPDATE: name='%s' = %.1f (stable=%d)\n", 
+                     config.gpio, config.name, currentStableState ? 1.0f : 0.0f, currentStableState ? 1 : 0);
+    }
+    
     // In script mode, arm after a short stabilization window regardless of idle polarity.
     // This suppresses startup/floating transients while still working with pullup or pulldown wiring.
     if (config.midiMode == MidiMode::SCRIPT && state.note_on_time == 0) {
@@ -88,9 +137,6 @@ void ButtonProcessor::process(
             state.last_button_state = pressed;
             state.prev_stable_state = currentStableState;
             state.last_change_time = now;
-            if (config.name && config.name[0] != '\0') {
-                FluxRegistry::update(config.name, currentStableState ? 1.0f : 0.0f);
-            }
             Serial.printf("[ButtonProcessor] GPIO%d script armed (stable=%d)\n", config.gpio, currentStableState ? 1 : 0);
         }
     }
@@ -154,14 +200,6 @@ void ButtonProcessor::process(
         state.last_midi_value_u8 = (uint8_t)state.last_value;
         state.last_telemetry_ts = now;
 
-        if (config.name && config.name[0] != '\0') {
-            // Keep script source logical (0/1), not MIDI-scaled (0/127),
-            // so arithmetic like *(100) produces expected velocities.
-            FluxRegistry::update(config.name, currentStableState ? 1.0f : 0.0f);
-            Serial.printf("[ButtonProcessor] GPIO%d BEFORE SCRIPT: name='%s' button_value=%d (0/1), edge=%s\n",
-                         config.gpio, config.name, currentStableState ? 1 : 0, falling ? "PRESS" : "RELEASE");
-        }
-
         if (config.mappingScript[0] != '\0') {
             const bool hasNoteOn = strstr(config.mappingScript, "note.on(") != nullptr;
             const bool hasNoteOff = strstr(config.mappingScript, "note.off(") != nullptr;
@@ -179,58 +217,70 @@ void ButtonProcessor::process(
                 String src = String(config.mappingScript);
                 String out = "";
                 int start = 0;
-                int end = src.indexOf(':');
+                int end = src.indexOf(';');
+                
                 while (start < (int)src.length()) {
                     int actualEnd = (end == -1) ? src.length() : end;
-                    String seg = src.substring(start, actualEnd);
-                    seg.trim();
-
-                    bool isNoteOnSeg = seg.startsWith("note.on(");
-                    bool isNoteOffSeg = seg.startsWith("note.off(");
-                    bool keep = true;
-                    if (onPress && isNoteOffSeg) keep = false;
-                    if (!onPress && isNoteOnSeg) keep = false;
-
-                    if (keep && seg.length() > 0) {
-                        if (out.length() > 0) out += ":";
-                        out += seg;
+                    String statement = src.substring(start, actualEnd);
+                    statement.trim();
+                    
+                    if (statement.length() == 0) {
+                        if (end == -1) break;
+                        start = end + 1;
+                        end = src.indexOf(';', start);
+                        continue;
                     }
-
+                    
+                    // Check if this statement is a "setup" statement (no output functions)
+                    bool isSetupStatement = (strstr(statement.c_str(), "note.on(") == nullptr &&
+                                           strstr(statement.c_str(), "note.off(") == nullptr &&
+                                           strstr(statement.c_str(), "note.out(") == nullptr &&
+                                           strstr(statement.c_str(), "note.off(") == nullptr &&
+                                           strstr(statement.c_str(), "seq.out(") == nullptr &&
+                                           strstr(statement.c_str(), "ctl.out(") == nullptr &&
+                                           strstr(statement.c_str(), "osc.out(") == nullptr);
+                    
+                    // Setup statements execute on both press and release
+                    if (isSetupStatement) {
+                        if (out.length() > 0) out += ";";
+                        out += statement;
+                    } else {
+                        // Output statements: filter based on edge and presence of note.off
+                        bool hasNoteOnInStatement = strstr(statement.c_str(), "note.on(") != nullptr;
+                        bool hasNoteOffInStatement = strstr(statement.c_str(), "note.off(") != nullptr;
+                        bool hasNoteOutInStatement = strstr(statement.c_str(), "note.out(") != nullptr;
+                        
+                        bool includeStatement = true;
+                        
+                        // On press: include everything except pure note.off statements
+                        if (onPress) {
+                            if (hasNoteOffInStatement && !hasNoteOnInStatement && !hasNoteOutInStatement) {
+                                includeStatement = false;
+                            }
+                        } else {
+                            // On release: include only note.off, note.out, seq.out, ctl.out, osc.out
+                            if (hasNoteOnInStatement && !hasNoteOffInStatement && !hasNoteOutInStatement) {
+                                includeStatement = false;  // Pure note.on() - skip on release
+                            }
+                        }
+                        
+                        if (includeStatement) {
+                            if (out.length() > 0) out += ";";
+                            out += statement;
+                        }
+                    }
+                    
                     if (end == -1) break;
                     start = end + 1;
-                    end = src.indexOf(':', start);
+                    end = src.indexOf(';', start);
                 }
                 return out;
             };
 
-            // Script is executable if it contains any output function
-            bool shouldExecute = hasNoteMessage || hasSeqOut || hasCtlOut || hasOscOut;
-            
-            if (shouldExecute) {
-                if (falling) {
-                    // Press: execute normally
-                    if (hasNoteMessage && hasNoteOn && hasNoteOff) {
-                        // Has both note.on and note.off: filter based on edge
-                        String edgeScript = buildEdgeScript(falling);
-                        if (edgeScript.length() > 0) {
-                            MappingEngine::execute(edgeScript.c_str(), scriptInput, midi_sender);
-                        }
-                    } else {
-                        MappingEngine::execute(config.mappingScript, scriptInput, midi_sender);
-                    }
-                } else {
-                    // Release: execute only if script has note.off, note.out, seq.out, ctl.out, or osc.out
-                    if (hasNoteOff || hasNoteOut || hasSeqOut || hasCtlOut || hasOscOut) {
-                        if (hasNoteMessage && hasNoteOn && hasNoteOff) {
-                            String edgeScript = buildEdgeScript(false);
-                            if (edgeScript.length() > 0) {
-                                MappingEngine::execute(edgeScript.c_str(), scriptInput, midi_sender);
-                            }
-                        } else {
-                            MappingEngine::execute(config.mappingScript, scriptInput, midi_sender);
-                        }
-                    }
-                }
+            // Always filter statements based on edge
+            String filteredScript = buildEdgeScript(falling);
+            if (filteredScript.length() > 0) {
+                MappingEngine::execute(filteredScript.c_str(), scriptInput, midi_sender);
             }
         }
 
