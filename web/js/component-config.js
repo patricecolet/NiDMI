@@ -319,6 +319,8 @@ function applyCfg(c) {
     /* Attendre que les champs soient créés avant d'appliquer les valeurs */
     setTimeout(() => {
       applyConfigValues(c, def, setV, setC);
+      /* Initialize mapping template dropdown after config is applied */
+      initMappingTemplate();
     }, 50);
   } else {
     /* S'assurer que le conteneur est visible */
@@ -327,6 +329,8 @@ function applyCfg(c) {
     }
     /* Appliquer directement les valeurs si le formulaire existe déjà */
     applyConfigValues(c, def, setV, setC);
+    /* Initialize mapping template dropdown after config is applied */
+    initMappingTemplate();
   }
 }
 
@@ -438,6 +442,35 @@ function initMidiModeToggle() {
   
   scriptRadio.addEventListener('change', () => {
     applyMidiMode('script');
+  });
+}
+
+/**
+ * Initialize mapping template selector on page load
+ */
+function initMappingTemplate() {
+  const templateSelect = $('#mappingTemplate');
+  const mappingPin = $('#mappingPin');
+  
+  if (!templateSelect || !mappingPin) return;
+  
+  const templates = {
+    'seq_play_step': 'seq.out("play_step")',
+    'midi_note': 'note.out(60,1)',
+    'midi_cc': 'ctl.out(7,1)'
+  };
+  
+  templateSelect.addEventListener('change', () => {
+    const selectedTemplate = templateSelect.value;
+    if (selectedTemplate && templates[selectedTemplate]) {
+      mappingPin.value = templates[selectedTemplate];
+      // Trigger change event for auto-save
+      if (typeof updateConfig === 'function') {
+        updateConfig();
+      }
+    }
+    // Reset dropdown to custom script after selection
+    templateSelect.value = '';
   });
 }
 

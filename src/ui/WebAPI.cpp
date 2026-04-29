@@ -166,7 +166,6 @@ String getDefaultConfig(String pin) {
 
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
     if (type == WS_EVT_CONNECT) {
-        std::vector<uint32_t> clientIds;
         Serial.printf("[WebSocket] Client connected (ID: %u, Total clients: %u, Heap: %d)\n", 
             client->id(), server->count(), (int)ESP.getFreeHeap());
         
@@ -174,10 +173,9 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
         if (server->count() > 2) {
             Serial.println("[WebSocket] ⚠️  Max clients exceeded, disconnecting oldest");
             // Parcourir et fermer les anciens clients (garder les 2 plus récents)
-         
+            std::vector<uint32_t> clientIds;
             for (auto& c : server->getClients()) {
                 clientIds.push_back(c.id());
-            }
             }
             // Trier par ID (les plus anciens ont les IDs les plus bas)
             if (clientIds.size() > 2) {
@@ -185,7 +183,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
                     server->client(clientIds[i])->close();
                 }
             }
-        
+        }
     } else if (type == WS_EVT_DISCONNECT) {
         Serial.printf("[WebSocket] Client disconnected (ID: %u, Total: %u, Heap: %d)\n",
             client->id(), server->count(), (int)ESP.getFreeHeap());

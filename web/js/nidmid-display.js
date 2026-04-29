@@ -30,19 +30,15 @@ function renderSteps(steps) {
         console.log('[renderSteps] Aucune séquence chargée');
         return;
     }
-
     console.log('=== Sequence chargee ===');
-
     let currentMeasure = -1;
     let measureCount = 0;
-
     steps.forEach((step, index) => {
         if (step.measure !== currentMeasure) {
             currentMeasure = step.measure;
             measureCount++;
             console.log(`\n--- Mesure ${step.measure} ---`);
         }
-
         let notesStr = '';
         if (step.notes && step.notes.length > 0) {
             notesStr = step.notes
@@ -51,7 +47,6 @@ function renderSteps(steps) {
         } else {
             notesStr = '—';
         }
-
         console.log(`Step ${index}: ${notesStr}`);
     });
 
