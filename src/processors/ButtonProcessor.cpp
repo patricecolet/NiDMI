@@ -125,8 +125,6 @@ void ButtonProcessor::process(
     // ALWAYS update FluxRegistry so r() can read this button's state
     if (config.name && config.name[0] != '\0') {
         FluxRegistry::update(config.name, currentStableState ? 1.0f : 0.0f);
-        Serial.printf("[ButtonProcessor] GPIO%d REGISTRY UPDATE: name='%s' = %.1f (stable=%d)\n", 
-                     config.gpio, config.name, currentStableState ? 1.0f : 0.0f, currentStableState ? 1 : 0);
     }
     
     // In script mode, arm after a short stabilization window regardless of idle polarity.
@@ -144,6 +142,10 @@ void ButtonProcessor::process(
     // Si pas de transition, on s'arrête là
     if (!falling && !rising) {
         return;
+    }
+
+    if (config.midiMode == MidiMode::SCRIPT && config.mappingScript[0] == '\0') {
+        Serial.printf("[ButtonProcessor] WARNING: SCRIPT mode active but mappingScript empty on GPIO%d\n", config.gpio);
     }
 
     Serial.printf("[ButtonProcessor] GPIO%d edge=%s midiMode=%s script=%s\n",
@@ -238,7 +240,8 @@ void ButtonProcessor::process(
                                            strstr(statement.c_str(), "note.off(") == nullptr &&
                                            strstr(statement.c_str(), "seq.out(") == nullptr &&
                                            strstr(statement.c_str(), "ctl.out(") == nullptr &&
-                                           strstr(statement.c_str(), "osc.out(") == nullptr);
+                                           strstr(statement.c_str(), "osc.out(") == nullptr &&
+                                           strstr(statement.c_str(), "print(") == nullptr);
                     
                     // Setup statements execute on both press and release
                     if (isSetupStatement) {
@@ -279,6 +282,15 @@ void ButtonProcessor::process(
 
             // Always filter statements based on edge
             String filteredScript = buildEdgeScript(falling);
+            Serial.printf("[ButtonProcessor] Filtered script for edge=%s on GPIO%d: '%s'\n",
+                         falling ? "PRESS" : "RELEASE",
+                         config.gpio,
+                         filteredScript.c_str());
+            if (filteredScript.length() == 0) {
+                Serial.printf("[ButtonProcessor] WARNING: Script filtered to empty on GPIO%d, original script='%s'\n",
+                             config.gpio,
+                             config.mappingScript);
+            }
             if (filteredScript.length() > 0) {
                 MappingEngine::execute(filteredScript.c_str(), scriptInput, midi_sender);
             }

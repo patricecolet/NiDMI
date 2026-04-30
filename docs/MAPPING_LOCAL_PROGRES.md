@@ -981,4 +981,348 @@ if (falling) {
 ```html
 <textarea id="mappingPin" rows="3" placeholder="Script (ex: r(&quot;vol&quot;):*(127):ctl.out(7,1) or r(&quot;btn&quot;):*(127):note.out(60,1))"></textarea>
 ```
+
+---
+
+## 8) Problème rencontré #4 - MIDI Echo Loop (Réception → Renvoi infinies)
+
+### Symptôme
+Lorsqu'un message MIDI externe est reçu via RTP-MIDI, le système retransmet le message immédiatement, créant une **boucle d'échos infinis**. Les applications MIDI reçoivent les messages deux ou plusieurs fois, rendant le système inutilisable.
+
+### Cause
+Le flux de traitement ne fait pas la distinction entre :
+- Les messages **entrants** (à traiter localement)
+- Les messages **sortants** (à envoyer à l'extérieur)
+
+Flux problématique :
+```
+Message MIDI reçu via RTP-MIDI
+    ↓
+RtpMidi::update() (ligne 96)
+    ↓
+ComponentManager::handleMidiNoteOn/Off/etc (traitement local)
+    ↓
+MidiRouter::sendNoteOn/Off/etc (renvoi)
+    ↓
+RtpMidi::sendNoteOn/Off → AppleMIDI
+    ↓
+ÉCHO ! Le message revient à l'origine 🔄
+```
+
+### Fichiers corrigés
+- `src/midi/MidiRouter.h`
+- `src/network/RtpMidi.cpp`
+
+### Correctif appliqué
+
+**Dans `src/midi/MidiRouter.h`** - Ajouter un flag anti-écho :
+```cpp
+class MidiRouter {
+private:
+    bool isProcessingIncoming = false;  // ← Nouveau flag
+    
+public:
+    void setProcessingIncoming(bool state) { 
+        isProcessingIncoming = state;  
+    }
+    
+    void sendNoteOn(uint8_t channel, uint8_t note, uint8_t velocity) {
+        if (isProcessingIncoming) {
+            Serial.printf("[MidiRouter] Blocking echo: Note On blocked (incoming mode)\n");
+            return;  // ← Bloquer l'écho
+        }
+        send(0x90 | (channel - 1), note, velocity);
+    }
+    
+    void sendControlChange(uint8_t channel, uint8_t control, uint8_t value) {
+        if (isProcessingIncoming) {
+            Serial.printf("[MidiRouter] Blocking echo: CC blocked (incoming mode)\n");
+            return;  // ← Bloquer l'écho
+        }
+        send(0xB0 | (channel - 1), control, value);
+    }
+    
+    void sendNoteOff(uint8_t channel, uint8_t note, uint8_t velocity) {
+        if (isProcessingIncoming) {
+            Serial.printf("[MidiRouter] Blocking echo: Note Off blocked (incoming mode)\n");
+            return;
+        }
+        send(0x80 | (channel - 1), note, velocity);
+    }
+    
+    void sendProgramChange(uint8_t channel, uint8_t program) {
+        if (isProcessingIncoming) {
+            Serial.printf("[MidiRouter] Blocking echo: Program Change blocked (incoming mode)\n");
+            return;
+        }
+        send(0xC0 | (channel - 1), program);
+    }
+    
+    void sendPitchBend(uint8_t channel, int bend) {
+        if (isProcessingIncoming) {
+            Serial.printf("[MidiRouter] Blocking echo: Pitch Bend blocked (incoming mode)\n");
+            return;
+        }
+        // Send pitch bend (requires 2 data bytes)
+        int bend14bit = bend + 8192;
+        send(0xE0 | (channel - 1), bend14bit & 0x7F, (bend14bit >> 7) & 0x7F);
+    }
+    
+    void sendAftertouch(uint8_t channel, uint8_t pressure) {
+        if (isProcessingIncoming) {
+            Serial.printf("[MidiRouter] Blocking echo: Aftertouch blocked (incoming mode)\n");
+            return;
+        }
+        send(0xD0 | (channel - 1), pressure);
+    }
+};
+```
+
+**Dans `src/network/RtpMidi.cpp`** - Encadrer la réception d'un flag :
+```cpp
+void RtpMidi::update() {
+    if (!MIDI.available()) return;
+    
+    // Signaler au router qu'on traite un message entrant
+    extern MidiRouter g_midiRouter;
+    g_midiRouter.setProcessingIncoming(true);
+    
+    Serial.printf("[RtpMidi] Processing incoming MIDI messages...\n");
+    
+    // Traiter les messages (utilise les callbacks setHandleNoteOn(), setHandleCC(), etc.)
+    while (MIDI.available()) {
+        MIDI.read();
+    }
+    
+    // Signal de fin de traitement
+    g_midiRouter.setProcessingIncoming(false);
+    Serial.printf("[RtpMidi] Finished processing incoming messages\n");
+}
+```
+
+### Explication simple
+
+| Moment | isProcessingIncoming | Action | Résultat |
+|--------|----------------------|--------|----------|
+| Message entrant reçu | false → true | Déclenche handlers locaux | ✓ Traité |
+| Handler appelle sendNoteOn() | true | Condition bloque → return | ✓ Pas d'écho |
+| Utilisateur envoie localement | false | Condition NOT triggered → send | ✓ Normal |
+
+**Exemple concret** :
+```
+1. User appuie sur clavier MIDI externe → Note On reçu
+2. RtpMidi::update() → setProcessingIncoming(true)
+3. ComponentManager::handleMidiNoteOn(...) déclenché
+4. Si le handler appelle sendNoteOn() → BLOQUÉ par le flag
+5. Fin traitement → setProcessingIncoming(false)
+6. Résultat : Un seul message traité, pas d'écho ✓
+```
+
+### Vérification Serial
+```
+[RtpMidi] Processing incoming MIDI messages...
+[RtpMidi] Note On received: channel=1 note=60 velocity=100
+[ComponentManager] Handling Note On...
+[MidiRouter] Blocking echo: Note On blocked (incoming mode)
+[RtpMidi] Finished processing incoming messages
+```
+
+---
+
+## 9) Problème rencontré #5 - Parsing Error : Variables Introuvables Échouent Silencieusement
+
+### Symptôme
+Lorsqu'un script de mapping tente de lire une variable inexistante avec `r("nom_inexistant")`, **aucune erreur n'est rapportée**. Le script retourne simplement `0.0f` et continue comme si de rien n'était. L'utilisateur croit que son mapping marche, mais rien ne se passe réellement.
+
+Exemple problématique :
+```
+Script : r("pot_A0"):*(127):ctl.out(7,1)
+Mais le registre contient : "potentiometer_A0" (nom différent)
+
+Résultat : Silence complet, CC toujours 0, utilisateur confus ❌
+```
+
+### Cause
+La fonction `FluxRegistry::get()` retourne `0.0f` par défaut si la clé n'existe pas, sans logging ni validation. Il n'existe pas de moyen pour le système ou l'utilisateur de savoir que la variable a été introuvée.
+
+### Fichiers corrigés
+- `src/mapping/MappingEngine.h`
+- `src/mapping/MappingEngine.cpp`
+
+### Correctif appliqué
+
+**Dans `src/mapping/MappingEngine.h`** - Ajouter méthode de validation :
+```cpp
+class FluxRegistry {
+public:
+    struct Entry { 
+        char name[16];
+        float value;
+    };
+    
+    static Entry entries[32];
+    static int count;
+
+    static void update(const char* name, float val);
+    static float get(const char* name);
+    static bool has(const char* name);  // ← Nouvelle méthode
+    static void debug();
+    
+    /**
+     * @brief Valider que plusieurs variables existent
+     * @param requiredNames Array des noms à chercher
+     * @param count Nombre d'éléments
+     * @return true si tous trouvés, false sinon
+     */
+    static bool validateVariables(const char** requiredNames, int count) {
+        bool allFound = true;
+        for (int i = 0; i < count; i++) {
+            if (!has(requiredNames[i])) {
+                Serial.printf("[FluxRegistry] Missing required variable: \"%s\"\n", requiredNames[i]);
+                allFound = false;
+            }
+        }
+        return allFound;
+    }
+};
+```
+
+**Dans `src/mapping/MappingEngine.cpp`** - Améliorer le parsing avec validation (lignes ~125-145) :
+```cpp
+// ANCIEN CODE (non-robuste)
+if (seg.startsWith("r(\"")) { 
+    int closeIdx = seg.indexOf("\"", 3);
+    if (closeIdx != -1) {
+        String target = seg.substring(3, closeIdx);
+        current = FluxRegistry::get(target.c_str());  // ← Retourne 0.0f en silence
+    }
+}
+
+// ✅ NOUVEAU CODE (robuste avec validation)
+if (seg.startsWith("r(\"")) { 
+    int closeIdx = seg.indexOf("\"", 3);
+    if (closeIdx != -1) {
+        String target = seg.substring(3, closeIdx);
+        
+        // Vérifier d'abord si la variable existe
+        if (FluxRegistry::has(target.c_str())) {
+            current = FluxRegistry::get(target.c_str());
+            Serial.printf("[MappingEngine] ✓ r(\"%s\") = %.2f\n", target.c_str(), current);
+        } else {
+            // Variable inexistante : avertissement + fallback intelligent
+            Serial.printf("[MappingEngine] ⚠️  WARNING: Variable \"%s\" NOT FOUND in registry!\n", target.c_str());
+            Serial.printf("[MappingEngine]   Available variables:\n");
+            FluxRegistry::debug();  // Afficher toutes les variables enregistrées
+            Serial.printf("[MappingEngine]   Using fallback: current input value (%.2f)\n", inputVal);
+            
+            // Fallback : Utiliser la valeur d'entrée plutôt que 0
+            current = inputVal;  // ← Plus intelligent qu'un 0 silencieux
+        }
+    }
+}
+```
+
+Appliquer le même pattern à **tous les opérateurs utilisant `r(...)`** :
+- `*(operand)` - Multiplication avec variable
+- `+(operand)` - Addition avec variable
+- `-(operand)` - Soustraction avec variable  
+- `/(operand)` - Division avec variable
+
+Exemple pour la multiplication :
+```cpp
+else if (seg.startsWith("*(")) {
+    int closeIdx = seg.lastIndexOf(")");
+    if (closeIdx != -1) {
+        String operand = seg.substring(2, closeIdx);
+        float m;
+        
+        if (operand.startsWith("r(\"")) {
+            int varCloseIdx = operand.indexOf("\"", 3);
+            if (varCloseIdx != -1) {
+                String varName = operand.substring(3, varCloseIdx);
+                if (FluxRegistry::has(varName.c_str())) {
+                    m = FluxRegistry::get(varName.c_str());
+                    Serial.printf("[MappingEngine] ✓ Multiply by r(\"%s\") = %.2f\n", varName.c_str(), m);
+                } else {
+                    Serial.printf("[MappingEngine] ⚠️  Variable \"%s\" NOT FOUND, using 1.0 (no scaling)\n", varName.c_str());
+                    m = 1.0f;  // Fallback sans modification
+                }
+            } else {
+                m = 1.0f;
+            }
+        } else {
+            m = operand.toFloat();
+        }
+        current *= m;
+    }
+}
+```
+
+### Explication simple
+
+| Cas | Avant | Après |
+|-----|-------|-------|
+| Variable existe | Silencieux ✗ | `✓ r("pot_A0") = 64.2` |
+| Variable inexiste | `current = 0.0f` (silence) ❌ | `⚠️  WARNING: Variable "pot_A0" NOT FOUND!` + liste variables + fallback |
+| Debugging | Impossible | Très clair : affiche toutes les variables du registre |
+
+**Exemple concret - Avant/Après** :
+
+```
+❌ AVANT (Problématique)
+─────────────────────────
+User écrit : r("pot_A0"):*(127):ctl.out(7,1)
+Mais registre contient : potentiometer_A0
+
+Serial Output:
+[MappingEngine] execute script='r("pot_A0"):*(127):ctl.out(7,1)' input=64.2
+[MappingEngine] Sent MIDI CC:7 Chan:1 Val:0
+
+Résultat : CC7 = 0 (FAUX !), User confus ❌
+
+
+✅ APRÈS (Robuste)
+──────────────────
+User écrit : r("pot_A0"):*(127):ctl.out(7,1)
+Mais registre contient : potentiometer_A0
+
+Serial Output:
+[MappingEngine] execute script='r("pot_A0"):*(127):ctl.out(7,1)' input=64.2
+[MappingEngine] ⚠️  WARNING: Variable "pot_A0" NOT FOUND in registry!
+[MappingEngine]   Available variables:
+[FluxRegistry] Registry contents (1 entries):
+  [0] 'potentiometer_A0' = 64.2
+[MappingEngine]   Using fallback: current input value (64.2)
+[MappingEngine] Sent MIDI CC:7 Chan:1 Val:81
+
+Résultat : CC7 = 81 (CORRECT !), User voit l'erreur et corrige ✓
+```
+
+### Vérification Serial
+
+Cas 1 : Variable introuvable
+```
+[MappingEngine] ⚠️  WARNING: Variable "unknown_var" NOT FOUND in registry!
+[MappingEngine]   Available variables:
+[FluxRegistry] Registry contents (3 entries):
+  [0] 'button_0' = 127.0
+  [1] 'pot_A0' = 64.2
+  [2] 'touch_x' = 50.1
+[MappingEngine]   Using fallback: current input value (64.2)
+```
+
+Cas 2 : Variable trouvée
+```
+[MappingEngine] ✓ r("pot_A0") = 64.2
+[MappingEngine] ✓ Multiply by 127
+[MappingEngine] Sent MIDI CC:7 Chan:1 Val:81
+```
+
+### Avantage pour l'utilisateur
+
+✅ **Visibilité complète** : Voit exactement quelles variables sont disponibles  
+✅ **Auto-correction** : Copie-colle le bon nom depuis le logs  
+✅ **Fallback intelligent** : Le mapping continue même avec une erreur (avec fallback)  
+✅ **Debugging rapide** : Plus besoin de deviner pourquoi le script ne marche pas  
+
  

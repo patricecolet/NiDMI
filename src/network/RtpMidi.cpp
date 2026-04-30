@@ -118,16 +118,19 @@ void RtpMidi::update() {
 void RtpMidi::sendNoteOn(uint8_t channel, uint8_t note, uint8_t velocity) {
     if (!isStarted) return;
     MIDI.sendNoteOn(note, velocity, channel);
+    yield();
 }
 
 void RtpMidi::sendNoteOff(uint8_t channel, uint8_t note, uint8_t velocity) {
     if (!isStarted) return;
     MIDI.sendNoteOff(note, velocity, channel);
+    yield();
 }
 
 void RtpMidi::sendControlChange(uint8_t channel, uint8_t control, uint8_t value) {
     if (!isStarted) return;
     MIDI.sendControlChange(control, value, channel);
+    yield();
 }
 
 void RtpMidi::sendProgramChange(uint8_t channel, uint8_t program) {

@@ -58,6 +58,8 @@ static void sendMidiNoteOn(uint8_t note, uint8_t channel, uint8_t velocity, Midi
     if (sender) {
         sender->sendNoteOn(channel, note, velocity);
         Serial.printf("[MappingEngine] Sent MIDI Note On: Note:%d Chan:%d Vel:%d\n", note, channel, velocity);
+        yield();
+        delayMicroseconds(500);  // Increased delay for RTP-MIDI buffer management
     } else {
         Serial.printf("[MappingEngine] WARNING: No MIDI sender available for Note On\n");
     }
@@ -68,6 +70,8 @@ static void sendMidiNoteOff(uint8_t note, uint8_t channel, uint8_t velocity, Mid
     if (sender) {
         sender->sendNoteOff(channel, note, velocity);
         Serial.printf("[MappingEngine] Sent MIDI Note Off: Note:%d Chan:%d Vel:%d\n", note, channel, velocity);
+        yield();
+        delayMicroseconds(500);  // Increased delay for RTP-MIDI buffer management
     } else {
         Serial.printf("[MappingEngine] WARNING: No MIDI sender available for Note Off\n");
     }
@@ -296,7 +300,8 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
                 Serial.printf("[MappingEngine] Sent seq event source='%s' value=%d\n", source.c_str(), current > 0 ? 1 : 0);
             }
         }
-        // note.out(note, chan) — sends note.on when pressed (>0), note.off with vel 0 when released (<=0)
+        // note.out(note, chan) — sends note.on when pressed (>0), note.off when released (<=0)
+        // Uses a standard note-off message for better host compatibility on release.
         else if (seg.startsWith("note.out(")) {
             int comma1 = seg.indexOf(',');
             int closeIdx = seg.indexOf(')');
@@ -306,7 +311,7 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
                 note = constrain(note, 0, 127);
                 chan = constrain(chan, 1, 16);
                 Serial.printf("[MappingEngine] note.out(%d,%d): current=%.2f ", note, chan, current);
-                if (current > 0) {
+                if (current > 0.5f) {
                     uint8_t vel = (uint8_t)constrain((int)current, 1, 127);  // At least 1 for note on
                     Serial.printf("→ NOTE ON (vel=%d)\n", vel);
                     sendMidiNoteOn((uint8_t)note, (uint8_t)chan, vel, midi_sender);
@@ -320,7 +325,17 @@ void MappingEngine::execute(const char* script, float inputVal, MidiSender* midi
         else if (seg.startsWith("print(")) {
             int closeIdx = seg.indexOf(')');
             if (closeIdx != -1) {
-                Serial.printf("[MappingEngine] DEBUG: flux value = %.2f\n", current);
+                String content = seg.substring(6, closeIdx);  // Extract content inside print()
+                content.trim();
+                if (content.startsWith("\"") && content.endsWith("\"")) {
+                    // Quoted string: print("message")
+                    String message = content.substring(1, content.length() - 1);
+                    Serial.printf("[MappingEngine] PRINT: %s\n", message.c_str());
+                    Serial.println(message);
+                } else {
+                    // No quotes: print current flux value
+                    Serial.printf("[MappingEngine] DEBUG: flux value = %.2f\n", current);
+                }
             }
         }
         else if (seg.startsWith("graph(")) {
