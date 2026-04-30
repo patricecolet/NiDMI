@@ -1,6 +1,8 @@
 #include "SequencerPlaybackAPI.h"
 #include "storage/SequencerFileStore.h"
 #include "processors/SequencerProcessor.h"
+#include "Globals.h"
+#include "server/ServerCore.h"
 #include <LittleFS.h>
 
 // ============================================================================
@@ -291,6 +293,7 @@ void setupSequencerPlaybackAPI(AsyncWebServer& server) {
         // Get first note (or create default if no notes)
         uint8_t note = (step.noteCount > 0) ? step.notes[0].pitch : 60;
         uint8_t velocity = (step.noteCount > 0) ? step.notes[0].velocity : 64;
+        uint8_t channel = 1;  // Default MIDI channel
         
         // Update state
         g_playbackState.currentMeasure = step.measure;
@@ -303,12 +306,32 @@ void setupSequencerPlaybackAPI(AsyncWebServer& server) {
             g_playbackState.stepIndex = 0;  // Loop back
         }
         
+        // Send MIDI Note On via RTP-MIDI
+        serverCore.rtpMidi().sendNoteOn(channel, note, velocity);
+        Serial.printf("[SequencerPlaybackAPI] Sent MIDI Note On: note=%d, vel=%d, ch=%d\n", note, velocity, channel);
+        
+        // Send Note Off after a short delay (80ms gate time)
+        static unsigned long lastNoteOffTime = 0;
+        static uint8_t lastNote = 0;
+        static uint8_t lastChannel = 0;
+        
+        // Send off for previous note if enough time has passed
+        if (millis() - lastNoteOffTime > 100 && lastNote != 0) {
+            serverCore.rtpMidi().sendNoteOff(lastChannel, lastNote, 0);
+            Serial.printf("[SequencerPlaybackAPI] Sent MIDI Note Off: note=%d, ch=%d\n", lastNote, lastChannel);
+        }
+        
+        // Store for next off
+        lastNoteOffTime = millis();
+        lastNote = note;
+        lastChannel = channel;
+        
         // Build response
         String response = "{";
         response += "\"ok\":true,";
         response += "\"note\":" + String(note) + ",";
         response += "\"velocity\":" + String(velocity) + ",";
-        response += "\"channel\":1,";
+        response += "\"channel\":" + String(channel) + ",";
         response += "\"measure\":" + String(step.measure) + ",";
         response += "\"stepIndex\":" + String(stepIdx) + ",";
         response += "\"totalSteps\":" + String(stepCount) + ",";

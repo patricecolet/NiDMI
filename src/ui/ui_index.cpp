@@ -133,8 +133,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
  <select id="mappingTemplate">
  <option value="">-- Custom script --</option>
  <option value="seq_play_step">Sequencer Play Step</option>
- <option value="midi_note">MIDI Note (60, ch 1)</option>
- <option value="midi_cc">MIDI CC (7, ch 1)</option>
  </select>
  </div>
  <textarea id="mappingPin" rows="3" placeholder="Script (ex: r(&quot;vol&quot;):*(127):ctl.out(7,1) or r(&quot;btn&quot;):*(127):note.out(60,1))"></textarea>
