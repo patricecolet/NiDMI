@@ -51,7 +51,13 @@ struct JoystickConfig {
 
     uint8_t xNoteSweepMin, xNoteSweepMax;
     uint8_t yNoteSweepMin, yNoteSweepMax;
-    
+
+    /** Auto-off NOTE_SWEEP par axe en ms (NVS : X_midiNoteSweepAutoOffDelay, etc.). 0 = timer désactivé. */
+    uint16_t xAutoOffDelay, yAutoOffDelay;
+
+    /** Vélocité fixe NOTE_SWEEP par axe (NVS : X_midiNoteVelocityFix, etc.). 1..127. */
+    uint8_t xNoteVelFix, yNoteVelFix;
+
     JoystickConfig() 
         : filter_intensity(5)
         , joyXMin(200), joyXZeroMin(1900), joyXZeroMax(2100), joyXMax(4000)
@@ -61,7 +67,9 @@ struct JoystickConfig {
         , xMidiParam(1), yMidiParam(2)
         , xMidiChannel(1), yMidiChannel(1)
         , xNoteSweepMin(48), xNoteSweepMax(72)
-        , yNoteSweepMin(48), yNoteSweepMax(72) {}
+        , yNoteSweepMin(48), yNoteSweepMax(72)
+        , xAutoOffDelay(1000), yAutoOffDelay(1000)
+        , xNoteVelFix(100), yNoteVelFix(100) {}
 };
 
 /**

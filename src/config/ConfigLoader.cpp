@@ -495,7 +495,33 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
 
                                 loadNoteSweepRangeFromJson(pinConfig, "X", joyConfig->xNoteSweepMin, joyConfig->xNoteSweepMax);
                                 loadNoteSweepRangeFromJson(pinConfig, "Y", joyConfig->yNoteSweepMin, joyConfig->yNoteSweepMax);
-                                    
+
+                                // Auto-off NOTE_SWEEP et vélocité fixe par axe (formulaire préfixe X_/Y_)
+                                auto loadAxisAutoOff = [&](const char* axisPrefix) -> uint16_t {
+                                    char key[40];
+                                    snprintf(key, sizeof(key), "%s_midiNoteSweepAutoOffDelay", axisPrefix);
+                                    int off = JSONParser::extractInt(pinConfig, key, -1);
+                                    if (off < 0) off = JSONParser::extractInt(pinConfig, "midiNoteSweepAutoOffDelay", -1);
+                                    if (off < 0) off = JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 1000);
+                                    if (off < 0) off = 0;
+                                    if (off > 65535) off = 65535;
+                                    return (uint16_t)off;
+                                };
+                                auto loadAxisVel = [&](const char* axisPrefix) -> uint8_t {
+                                    char key[40];
+                                    snprintf(key, sizeof(key), "%s_midiNoteVelocityFix", axisPrefix);
+                                    int vel = JSONParser::extractInt(pinConfig, key, -1);
+                                    if (vel < 0) vel = JSONParser::extractInt(pinConfig, "midiNoteVelocityFix", -1);
+                                    if (vel < 0) vel = JSONParser::extractInt(pinConfig, "rtpNoteVelFix", 100);
+                                    if (vel < 1) vel = 1;
+                                    if (vel > 127) vel = 127;
+                                    return (uint8_t)vel;
+                                };
+                                joyConfig->xAutoOffDelay = loadAxisAutoOff("X");
+                                joyConfig->yAutoOffDelay = loadAxisAutoOff("Y");
+                                joyConfig->xNoteVelFix = loadAxisVel("X");
+                                joyConfig->yNoteVelFix = loadAxisVel("Y");
+
                                 // Aussi mettre à jour le msg_type principal pour le X
                                 config->msg_type = joyConfig->xMsgType;
                                 
@@ -695,14 +721,20 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                     config->midiCcOnOffMax = (midiCcOnOffMax >= 0 && midiCcOnOffMax <= 127) ? midiCcOnOffMax : 127;
                     
                     // Balayage NOTE_SWEEP : clés midiNoteSweepMin/Max (formulaire), pas seulement midiNoteMin
+                    // Pour les composants multi-axes (joystick), le formulaire envoie des clés préfixées
+                    // X_/Y_ ; on les essaie en fallback si la clé globale n'existe pas.
                     {
-                        int vel = JSONParser::extractInt(pinConfig, "midiNoteVelocityFix",
-                            JSONParser::extractInt(pinConfig, "rtpNoteVelFix", 100));
+                        int vel = JSONParser::extractInt(pinConfig, "midiNoteVelocityFix", -1);
+                        if (vel < 0) vel = JSONParser::extractInt(pinConfig, "X_midiNoteVelocityFix", -1);
+                        if (vel < 0) vel = JSONParser::extractInt(pinConfig, "Y_midiNoteVelocityFix", -1);
+                        if (vel < 0) vel = JSONParser::extractInt(pinConfig, "rtpNoteVelFix", 100);
                         if (vel < 1) vel = 1;
                         if (vel > 127) vel = 127;
                         config->rtpNoteVelFix = (uint8_t)vel;
-                        int off = JSONParser::extractInt(pinConfig, "midiNoteSweepAutoOffDelay",
-                            JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 1000));
+                        int off = JSONParser::extractInt(pinConfig, "midiNoteSweepAutoOffDelay", -1);
+                        if (off < 0) off = JSONParser::extractInt(pinConfig, "X_midiNoteSweepAutoOffDelay", -1);
+                        if (off < 0) off = JSONParser::extractInt(pinConfig, "Y_midiNoteSweepAutoOffDelay", -1);
+                        if (off < 0) off = JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 1000);
                         if (off < 0) off = 0;
                         if (off > 65535) off = 65535;
                         config->rtpNoteSweepAutoOffDelay = (uint16_t)off;
@@ -950,16 +982,37 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
             loadNoteSweepRangeFromJson(pinConfig, "Y", imuConfig->yNoteSweepMin, imuConfig->yNoteSweepMax);
             loadNoteSweepRangeFromJson(pinConfig, "Z", imuConfig->zNoteSweepMin, imuConfig->zNoteSweepMax);
             {
-                int vel = JSONParser::extractInt(pinConfig, "midiNoteVelocityFix",
-                    JSONParser::extractInt(pinConfig, "rtpNoteVelFix", 100));
-                if (vel < 1) vel = 1;
-                if (vel > 127) vel = 127;
-                configPtr->rtpNoteVelFix = (uint8_t)vel;
-                int off = JSONParser::extractInt(pinConfig, "midiNoteSweepAutoOffDelay",
-                    JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 1000));
-                if (off < 0) off = 0;
-                if (off > 65535) off = 65535;
-                configPtr->rtpNoteSweepAutoOffDelay = (uint16_t)off;
+                // Auto-off et vélocité fixe NOTE_SWEEP par axe (formulaire préfixe X_/Y_/Z_).
+                // Legacy global (midi.../rtp...) conservé en fallback pour les configs existantes.
+                auto loadAxisAutoOff = [&](const char* axisPrefix) -> uint16_t {
+                    char key[40];
+                    snprintf(key, sizeof(key), "%s_midiNoteSweepAutoOffDelay", axisPrefix);
+                    int off = JSONParser::extractInt(pinConfig, key, -1);
+                    if (off < 0) off = JSONParser::extractInt(pinConfig, "midiNoteSweepAutoOffDelay", -1);
+                    if (off < 0) off = JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 1000);
+                    if (off < 0) off = 0;
+                    if (off > 65535) off = 65535;
+                    return (uint16_t)off;
+                };
+                auto loadAxisVel = [&](const char* axisPrefix) -> uint8_t {
+                    char key[40];
+                    snprintf(key, sizeof(key), "%s_midiNoteVelocityFix", axisPrefix);
+                    int vel = JSONParser::extractInt(pinConfig, key, -1);
+                    if (vel < 0) vel = JSONParser::extractInt(pinConfig, "midiNoteVelocityFix", -1);
+                    if (vel < 0) vel = JSONParser::extractInt(pinConfig, "rtpNoteVelFix", 100);
+                    if (vel < 1) vel = 1;
+                    if (vel > 127) vel = 127;
+                    return (uint8_t)vel;
+                };
+                imuConfig->xAutoOffDelay = loadAxisAutoOff("X");
+                imuConfig->yAutoOffDelay = loadAxisAutoOff("Y");
+                imuConfig->zAutoOffDelay = loadAxisAutoOff("Z");
+                imuConfig->xNoteVelFix = loadAxisVel("X");
+                imuConfig->yNoteVelFix = loadAxisVel("Y");
+                imuConfig->zNoteVelFix = loadAxisVel("Z");
+                // Champs globaux conservés = X (rétrocompat pour les parties non multi-axes du processeur).
+                configPtr->rtpNoteVelFix = imuConfig->xNoteVelFix;
+                configPtr->rtpNoteSweepAutoOffDelay = imuConfig->xAutoOffDelay;
             }
             loadNoteSweepRangeFromJson(pinConfig, nullptr, configPtr->rtpNoteMin, configPtr->rtpNoteMax);
 

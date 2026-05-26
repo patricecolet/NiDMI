@@ -67,7 +67,13 @@ struct ImuConfig {
     uint8_t xNoteSweepMin, xNoteSweepMax;
     uint8_t yNoteSweepMin, yNoteSweepMax;
     uint8_t zNoteSweepMin, zNoteSweepMax;
-    
+
+    /** Auto-off NOTE_SWEEP par axe en ms (NVS : X_midiNoteSweepAutoOffDelay, etc.). 0 = timer désactivé. */
+    uint16_t xAutoOffDelay, yAutoOffDelay, zAutoOffDelay;
+
+    /** Vélocité fixe NOTE_SWEEP par axe (NVS : X_midiNoteVelocityFix, etc.). 1..127. */
+    uint8_t xNoteVelFix, yNoteVelFix, zNoteVelFix;
+
     ImuConfig()
         : filter_intensity(5)
         , bus_interface(0)    // 0 = I2C par défaut
@@ -87,7 +93,9 @@ struct ImuConfig {
         , xMidiChannel(1), yMidiChannel(1), zMidiChannel(1)
         , xNoteSweepMin(48), xNoteSweepMax(72)
         , yNoteSweepMin(48), yNoteSweepMax(72)
-        , zNoteSweepMin(48), zNoteSweepMax(72) {}
+        , zNoteSweepMin(48), zNoteSweepMax(72)
+        , xAutoOffDelay(1000), yAutoOffDelay(1000), zAutoOffDelay(1000)
+        , xNoteVelFix(100), yNoteVelFix(100), zNoteVelFix(100) {}
 };
 
 /**

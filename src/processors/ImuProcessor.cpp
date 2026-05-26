@@ -87,6 +87,8 @@ static void processNoteSweepImuAxis(
     int32_t axisMin;
     int32_t axisMax;
     bool inv;
+    uint16_t axisAutoOffMs;
+    uint8_t axisVelocity;
     if (axis == 'x') {
         msgType = ic->xMsgType;
         channel = ic->xMidiChannel;
@@ -95,6 +97,8 @@ static void processNoteSweepImuAxis(
         axisMin = ic->xMin;
         axisMax = ic->xMax;
         inv = ic->invertX;
+        axisAutoOffMs = ic->xAutoOffDelay;
+        axisVelocity = ic->xNoteVelFix;
     } else if (axis == 'y') {
         msgType = ic->yMsgType;
         channel = ic->yMidiChannel;
@@ -103,6 +107,8 @@ static void processNoteSweepImuAxis(
         axisMin = ic->yMin;
         axisMax = ic->yMax;
         inv = ic->invertY;
+        axisAutoOffMs = ic->yAutoOffDelay;
+        axisVelocity = ic->yNoteVelFix;
     } else {
         msgType = ic->zMsgType;
         channel = ic->zMidiChannel;
@@ -111,11 +117,13 @@ static void processNoteSweepImuAxis(
         axisMin = ic->zMin;
         axisMax = ic->zMax;
         inv = ic->invertZ;
+        axisAutoOffMs = ic->zAutoOffDelay;
+        axisVelocity = ic->zNoteVelFix;
     }
     if (msgType != MidiMessageType::NOTE_SWEEP) {
         return;
     }
-    const uint16_t sweepOffMs = effectiveNoteSweepAutoOffMs(config.rtpNoteSweepAutoOffDelay);
+    const uint16_t sweepOffMs = effectiveNoteSweepAutoOffMs(axisAutoOffMs);
     uint8_t ax = axisCharToSlot(axis);
     // Auto-off : coupe la note si le délai est écoulé, mais conserve imuSweepLastNote
     // pour éviter un retrigger si la position correspond toujours à la même note.
@@ -136,7 +144,7 @@ static void processNoteSweepImuAxis(
     if (imuSweepLastNote[imuIdx][ax] != 255 && imuSweepNoteOnTime[imuIdx][ax] > 0) {
         midi_sender->sendNoteOff(channel, imuSweepLastNote[imuIdx][ax], 0);
     }
-    midi_sender->sendNoteOn(channel, newNote, config.rtpNoteVelFix);
+    midi_sender->sendNoteOn(channel, newNote, axisVelocity);
     imuSweepLastNote[imuIdx][ax] = newNote;
     imuSweepNoteOnTime[imuIdx][ax] = millis();
 }

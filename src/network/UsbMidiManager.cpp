@@ -214,13 +214,13 @@ void UsbMidiManager::sendPitchBend(uint8_t channel, int bend) {
     if (usbMidi && isConnected()) {
         // Convertir bend (-8192 à 8191) en format MIDI (0-16383)
         uint16_t midiBend = (uint16_t)(bend + 8192);
-        // USB MIDI format: CIN=0x05 pour Channel Voice Messages à 3 octets
+        // USB MIDI format: CIN=0x0E pour Pitch Bend Change (3 octets)
         // Status: 0xE0-0xEF (Pitch Bend Change, 0xEn où n=channel 0-15)
         // Data1: LSB (bits 0-6), Data2: MSB (bits 7-13)
         uint8_t status = 0xE0 | (channel & 0x0F); // Channel 1-16 -> 0-15
         uint8_t lsb = midiBend & 0x7F; // Bits 0-6
         uint8_t msb = (midiBend >> 7) & 0x7F; // Bits 7-13
-        midiEventPacket_t packet = {0x05, status, lsb, msb};
+        midiEventPacket_t packet = {0x0E, status, lsb, msb};
         usbMidi->writePacket(&packet);
     }
 #endif
@@ -230,10 +230,11 @@ void UsbMidiManager::sendAftertouch(uint8_t channel, uint8_t pressure) {
 #ifdef NIDMI_USB_MIDI_SUPPORTED
     if (usbMidi && isConnected()) {
         // USB MIDI format: CIN=0x04 pour Channel Voice Messages à 2 octets
+        // USB MIDI format: CIN=0x0D pour Channel Pressure (2 octets)
         // Status: 0xD0-0xDF (Channel Pressure, 0xDn où n=channel 0-15)
         // Data1: pressure (0-127), Data2: 0x00 (non utilisé)
         uint8_t status = 0xD0 | (channel & 0x0F); // Channel 1-16 -> 0-15
-        midiEventPacket_t packet = {0x04, status, pressure, 0x00};
+        midiEventPacket_t packet = {0x0D, status, pressure, 0x00};
         usbMidi->writePacket(&packet);
     }
 #endif
@@ -246,10 +247,11 @@ void UsbMidiManager::sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pres
 #ifdef NIDMI_USB_MIDI_SUPPORTED
     if (usbMidi && isConnected()) {
         // USB MIDI format: CIN=0x04 pour Channel Voice Messages à 2 octets
+        // USB MIDI format: CIN=0x0A pour Polyphonic Key Pressure (3 octets)
         // Status: 0xA0-0xAF (Polyphonic Key Pressure, 0xAn où n=channel 0-15)
         // Data1: note (0-127), Data2: pressure (0-127)
         uint8_t status = 0xA0 | (channel & 0x0F); // Channel 1-16 -> 0-15
-        midiEventPacket_t packet = {0x04, status, note & 0x7F, pressure & 0x7F};
+        midiEventPacket_t packet = {0x0A, status, note & 0x7F, pressure & 0x7F};
         usbMidi->writePacket(&packet);
     }
 #endif

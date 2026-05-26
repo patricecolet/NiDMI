@@ -68,6 +68,8 @@ static void processNoteSweepJoystickAxis(
     int32_t axisMin = 0;
     int32_t axisMax = 4095;
     bool inv = false;
+    uint16_t axisAutoOffMs = config.rtpNoteSweepAutoOffDelay;
+    uint8_t axisVelocity = config.rtpNoteVelFix;
     if (jc) {
         if (axis == 'x') {
             msgType = jc->xMsgType;
@@ -77,6 +79,8 @@ static void processNoteSweepJoystickAxis(
             axisMin = static_cast<int32_t>(jc->joyXMin);
             axisMax = static_cast<int32_t>(jc->joyXMax);
             inv = jc->invertX;
+            axisAutoOffMs = jc->xAutoOffDelay;
+            axisVelocity = jc->xNoteVelFix;
         } else {
             msgType = jc->yMsgType;
             channel = jc->yMidiChannel;
@@ -85,12 +89,14 @@ static void processNoteSweepJoystickAxis(
             axisMin = static_cast<int32_t>(jc->joyYMin);
             axisMax = static_cast<int32_t>(jc->joyYMax);
             inv = jc->invertY;
+            axisAutoOffMs = jc->yAutoOffDelay;
+            axisVelocity = jc->yNoteVelFix;
         }
     }
     if (msgType != MidiMessageType::NOTE_SWEEP) {
         return;
     }
-    const uint16_t sweepOffMs = effectiveNoteSweepAutoOffMs(config.rtpNoteSweepAutoOffDelay);
+    const uint16_t sweepOffMs = effectiveNoteSweepAutoOffMs(axisAutoOffMs);
     uint8_t ax = axisCharToJoySlot(axis);
     // Auto-off : coupe la note si le délai est écoulé, mais conserve joySweepLastNote
     // pour éviter un retrigger si la position correspond toujours à la même note.
@@ -111,7 +117,7 @@ static void processNoteSweepJoystickAxis(
     if (joySweepLastNote[joyIdx][ax] != 255 && joySweepNoteOnTime[joyIdx][ax] > 0) {
         midi_sender->sendNoteOff(channel, joySweepLastNote[joyIdx][ax], 0);
     }
-    midi_sender->sendNoteOn(channel, newNote, config.rtpNoteVelFix);
+    midi_sender->sendNoteOn(channel, newNote, axisVelocity);
     joySweepLastNote[joyIdx][ax] = newNote;
     joySweepNoteOnTime[joyIdx][ax] = millis();
 }
