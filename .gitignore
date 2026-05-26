@@ -31,6 +31,8 @@ test/native/test_*
 !test/native/test_*.cpp
 !test/native/test_*.h
 
+src/ui/ui_bundle.h
+
 
 
 
