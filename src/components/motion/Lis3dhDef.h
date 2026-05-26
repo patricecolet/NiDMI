@@ -62,7 +62,18 @@ struct ImuConfig {
     uint8_t xMidiChannel;      // Canal MIDI axe X (1-16)
     uint8_t yMidiChannel;      // Canal MIDI axe Y (1-16)
     uint8_t zMidiChannel;      // Canal MIDI axe Z (1-16)
-    
+
+    /** Plage balayage NOTE_SWEEP par axe (NVS : X_midiNoteSweepMin, etc.) */
+    uint8_t xNoteSweepMin, xNoteSweepMax;
+    uint8_t yNoteSweepMin, yNoteSweepMax;
+    uint8_t zNoteSweepMin, zNoteSweepMax;
+
+    /** Auto-off NOTE_SWEEP par axe en ms (NVS : X_midiNoteSweepAutoOffDelay, etc.). 0 = timer désactivé. */
+    uint16_t xAutoOffDelay, yAutoOffDelay, zAutoOffDelay;
+
+    /** Vélocité fixe NOTE_SWEEP par axe (NVS : X_midiNoteVelocityFix, etc.). 1..127. */
+    uint8_t xNoteVelFix, yNoteVelFix, zNoteVelFix;
+
     ImuConfig()
         : filter_intensity(5)
         , bus_interface(0)    // 0 = I2C par défaut
@@ -79,7 +90,12 @@ struct ImuConfig {
         , yMsgType(MidiMessageType::CONTROL_CHANGE)
         , zMsgType(MidiMessageType::CONTROL_CHANGE)
         , xMidiParam(1), yMidiParam(2), zMidiParam(3)
-        , xMidiChannel(1), yMidiChannel(1), zMidiChannel(1) {}
+        , xMidiChannel(1), yMidiChannel(1), zMidiChannel(1)
+        , xNoteSweepMin(48), xNoteSweepMax(72)
+        , yNoteSweepMin(48), yNoteSweepMax(72)
+        , zNoteSweepMin(48), zNoteSweepMax(72)
+        , xAutoOffDelay(1000), yAutoOffDelay(1000), zAutoOffDelay(1000)
+        , xNoteVelFix(100), yNoteVelFix(100), zNoteVelFix(100) {}
 };
 
 /**
@@ -135,7 +151,9 @@ struct Lis3dh {
                 "r"
             ))
             // GPIO CS pour SPI (masqué en I2C par le frontend)
-            // Mapping C3: D0=GPIO2, D1=GPIO3, D2=GPIO4, D3=GPIO5, D4=GPIO6, D5=GPIO7, D6=GPIO21, D7=GPIO20
+            // Valeurs NVS = GPIO XIAO-ESP32C3 pour le pad Dx. Sur S3, ImuProcessor applique
+            // PinMapper::resolveImuCsGpioFromNvs() (ex. D7 : 20 → 44).
+            // Mapping C3: D0=2 … D7=20 ; S3 équivalent: D0=1 … D7=44
             .addFormField(makeSelectField(
                 "csGpio",
                 "Pin CS",

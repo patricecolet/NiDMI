@@ -32,10 +32,16 @@ cd /Users/patricecolet/repo/NiDMI
 
 ### Reset NVS (sketch dédié)
 
-Pour effacer la NVS, utiliser le sketch `nidmi_clear_nvs` via l'option `--clear-nvs` :
+Pour effacer la NVS, utiliser le sketch `nidmi_clear_nvs` via l’option `--clear-nvs`. **Reprend les mêmes options que pour un `upload` normal** (`--board`, `--split-fs`, `--no-large-app`, `--port`, etc.) : sans `--split-fs`, le profil par défaut est déjà aligné entre `nidmi_clear_nvs` et `nidmi_basic` (sur S3, partition Arduino par défaut ; sur C3, `--large-app` du script sauf `--no-large-app`). N’ajoute `--split-fs` que si tu l’utilises déjà pour le firmware.
 
 ```bash
 ./scripts/nidmi.sh upload --clear-nvs
+```
+
+Alternative côté PC (`pip install esptool`) :
+
+```bash
+./scripts/nidmi.sh erase-nvs --port /dev/cu.usbmodemXXXX
 ```
 
 ### Compiler et générer le fichier binaire

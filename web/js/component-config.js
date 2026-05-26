@@ -184,8 +184,13 @@ function readCfg(roleOverride = null) {
     c.busInterface = '0';
   }
 
-  /* Lire les champs OSC et Debug */
-  c.oscEnabled = !!$('#oscEnabled2')?.checked;
+  /* OSC par pin (NVS) : ne pas utiliser la checkbox globale oscEnabled2 (sortie globale = /api/osc/output-enable) */
+  if (typeof cur !== 'undefined' && cur && typeof pcfg !== 'undefined' && pcfg[cur] &&
+      pcfg[cur].oscEnabled !== undefined && pcfg[cur].oscEnabled !== null) {
+    c.oscEnabled = !!(pcfg[cur].oscEnabled === true || pcfg[cur].oscEnabled === 'true');
+  } else {
+    c.oscEnabled = true;
+  }
   c.oscAddress = $('#oscAddress')?.value || '';
   c.oscFormat = $('#oscFormat')?.value || 'float';
   c.dbgEnabled = !!$('#dbgEnabled')?.checked;

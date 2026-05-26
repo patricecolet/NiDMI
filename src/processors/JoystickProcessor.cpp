@@ -10,6 +10,119 @@
 #include "../managers/complex/ComplexHandlerRegistry.h"
 #include "../mapping/MappingEngine.h"
 
+static const uint8_t MAX_JOYSTICK_FILTERS = 16;
+static AnalogFilter yFilters[MAX_JOYSTICK_FILTERS];
+static uint8_t yFilterGpios[MAX_JOYSTICK_FILTERS];
+static uint8_t yFilterCount = 0;
+static uint8_t lastXNormValues[MAX_JOYSTICK_FILTERS];
+static uint8_t lastYNormValues[MAX_JOYSTICK_FILTERS];
+static uint8_t joySweepLastNote[MAX_JOYSTICK_FILTERS][2];
+static uint32_t joySweepNoteOnTime[MAX_JOYSTICK_FILTERS][2];
+
+static uint8_t axisCharToJoySlot(char axis) {
+    return (axis == 'x') ? 0u : 1u;
+}
+
+static uint8_t findJoystickIndexByXGpio(uint8_t xGpio) {
+    for (uint8_t i = 0; i < yFilterCount; i++) {
+        if (yFilterGpios[i] == xGpio) {
+            return i;
+        }
+    }
+    return 255;
+}
+
+static uint8_t getOrCreateJoystickIndex(uint8_t xGpio) {
+    for (uint8_t i = 0; i < yFilterCount; i++) {
+        if (yFilterGpios[i] == xGpio) {
+            return i;
+        }
+    }
+    if (yFilterCount < MAX_JOYSTICK_FILTERS) {
+        uint8_t idx = yFilterCount++;
+        yFilterGpios[idx] = xGpio;
+        yFilters[idx].initialized = false;
+        lastXNormValues[idx] = 255;
+        lastYNormValues[idx] = 255;
+        joySweepLastNote[idx][0] = joySweepLastNote[idx][1] = 255;
+        joySweepNoteOnTime[idx][0] = joySweepNoteOnTime[idx][1] = 0;
+        return idx;
+    }
+    return 0;
+}
+
+static void processNoteSweepJoystickAxis(
+    uint8_t joyIdx,
+    char axis,
+    const ComponentConfig& config,
+    Components::JoystickConfig* jc,
+    MidiSender* midi_sender,
+    int32_t rawAxisValue
+) {
+    if (!midi_sender) {
+        return;
+    }
+    MidiMessageType msgType = config.msg_type;
+    uint8_t channel = config.midi_channel;
+    uint8_t nmin = config.rtpNoteMin;
+    uint8_t nmax = config.rtpNoteMax;
+    int32_t axisMin = 0;
+    int32_t axisMax = 4095;
+    bool inv = false;
+    uint16_t axisAutoOffMs = config.rtpNoteSweepAutoOffDelay;
+    uint8_t axisVelocity = config.rtpNoteVelFix;
+    if (jc) {
+        if (axis == 'x') {
+            msgType = jc->xMsgType;
+            channel = jc->xMidiChannel;
+            nmin = jc->xNoteSweepMin;
+            nmax = jc->xNoteSweepMax;
+            axisMin = static_cast<int32_t>(jc->joyXMin);
+            axisMax = static_cast<int32_t>(jc->joyXMax);
+            inv = jc->invertX;
+            axisAutoOffMs = jc->xAutoOffDelay;
+            axisVelocity = jc->xNoteVelFix;
+        } else {
+            msgType = jc->yMsgType;
+            channel = jc->yMidiChannel;
+            nmin = jc->yNoteSweepMin;
+            nmax = jc->yNoteSweepMax;
+            axisMin = static_cast<int32_t>(jc->joyYMin);
+            axisMax = static_cast<int32_t>(jc->joyYMax);
+            inv = jc->invertY;
+            axisAutoOffMs = jc->yAutoOffDelay;
+            axisVelocity = jc->yNoteVelFix;
+        }
+    }
+    if (msgType != MidiMessageType::NOTE_SWEEP) {
+        return;
+    }
+    const uint16_t sweepOffMs = effectiveNoteSweepAutoOffMs(axisAutoOffMs);
+    uint8_t ax = axisCharToJoySlot(axis);
+    // Auto-off : coupe la note si le délai est écoulé, mais conserve joySweepLastNote
+    // pour éviter un retrigger si la position correspond toujours à la même note.
+    if (sweepOffMs > 0 &&
+        joySweepLastNote[joyIdx][ax] != 255 &&
+        joySweepNoteOnTime[joyIdx][ax] > 0) {
+        uint32_t elapsed = millis() - joySweepNoteOnTime[joyIdx][ax];
+        if (elapsed >= sweepOffMs) {
+            midi_sender->sendNoteOff(channel, joySweepLastNote[joyIdx][ax], 0);
+            joySweepNoteOnTime[joyIdx][ax] = 0;
+        }
+    }
+    uint8_t newNote = mapNoteSweepFromFullAxisTravel(rawAxisValue, axisMin, axisMax, nmin, nmax, inv);
+    if (newNote == joySweepLastNote[joyIdx][ax]) {
+        return;
+    }
+    // Note différente : couper l'ancienne uniquement si encore active.
+    if (joySweepLastNote[joyIdx][ax] != 255 && joySweepNoteOnTime[joyIdx][ax] > 0) {
+        midi_sender->sendNoteOff(channel, joySweepLastNote[joyIdx][ax], 0);
+    }
+    midi_sender->sendNoteOn(channel, newNote, axisVelocity);
+    joySweepLastNote[joyIdx][ax] = newNote;
+    joySweepNoteOnTime[joyIdx][ax] = millis();
+}
+
 void JoystickProcessor::process(
     const ComponentConfig& config,
     ComponentState& state,
@@ -76,24 +189,48 @@ void JoystickProcessor::process(
     
     int8_t lastXNorm = (lastXNormPtr && *lastXNormPtr != 255) ? (int8_t)(*lastXNormPtr - 127) : 128;
     int8_t lastYNorm = (lastYNormPtr && *lastYNormPtr != 255) ? (int8_t)(*lastYNormPtr - 127) : 128;
-    
-    if (xNorm != lastXNorm && lastXNormPtr) {
-        sendMidiForAxis(midi_sender, config, 'x', xNorm);
+
+    uint8_t joyIdx = getOrCreateJoystickIndex(config.gpio);
+    bool xCh = (xNorm != lastXNorm);
+    bool yCh = (yNorm != lastYNorm);
+
+    Components::JoystickConfig* joyCfg = config.specificConfig.joystick;
+
+    if (joyCfg) {
+        if (joyCfg->xMsgType == MidiMessageType::NOTE_SWEEP) {
+            processNoteSweepJoystickAxis(joyIdx, 'x', config, joyCfg, midi_sender, static_cast<int32_t>(xFiltered));
+        } else if (xCh && lastXNormPtr) {
+            sendMidiForAxis(midi_sender, config, 'x', xNorm, static_cast<int32_t>(xFiltered));
+        }
+    } else if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
+        processNoteSweepJoystickAxis(joyIdx, 'x', config, nullptr, midi_sender, static_cast<int32_t>(xFiltered));
+    } else if (xCh && lastXNormPtr) {
+        sendMidiForAxis(midi_sender, config, 'x', xNorm, static_cast<int32_t>(xFiltered));
+    }
+
+    if (xCh && lastXNormPtr) {
         sendOscForAxis(osc_queue, config, 'x', xNorm, xFiltered);
         *lastXNormPtr = (uint8_t)(xNorm + 127);
-
-        // Monitoring SVG : RAW par pin + fonctionnel MIDI (data1 OSC)
         state.last_raw_value_u32 = xFiltered;
         state.last_midi_value_u8 = normToMidiValue(xNorm);
         state.last_telemetry_ts = millis();
     }
-    
-    if (yNorm != lastYNorm && lastYNormPtr) {
-        sendMidiForAxis(midi_sender, config, 'y', yNorm);
+
+    if (joyCfg) {
+        if (joyCfg->yMsgType == MidiMessageType::NOTE_SWEEP) {
+            processNoteSweepJoystickAxis(joyIdx, 'y', config, joyCfg, midi_sender, static_cast<int32_t>(yFiltered));
+        } else if (yCh && lastYNormPtr) {
+            sendMidiForAxis(midi_sender, config, 'y', yNorm, static_cast<int32_t>(yFiltered));
+        }
+    } else if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
+        processNoteSweepJoystickAxis(joyIdx, 'y', config, nullptr, midi_sender, static_cast<int32_t>(yFiltered));
+    } else if (yCh && lastYNormPtr) {
+        sendMidiForAxis(midi_sender, config, 'y', yNorm, static_cast<int32_t>(yFiltered));
+    }
+
+    if (yCh && lastYNormPtr) {
         sendOscForAxis(osc_queue, config, 'y', yNorm, yFiltered);
         *lastYNormPtr = (uint8_t)(yNorm + 127);
-
-        // Monitoring SVG : RAW par pin (axe Y) + data1 OSC (MIDI)
         state.last_raw_value_aux_u32 = yFiltered;
         state.last_midi_value_aux_u8 = normToMidiValue(yNorm);
         state.last_telemetry_ts_aux = millis();
@@ -133,7 +270,8 @@ void JoystickProcessor::sendMidiForAxis(
     MidiSender* midi_sender,
     const ComponentConfig& config,
     char axis,
-    int8_t normalizedValue
+    int8_t normalizedValue,
+    int32_t rawAxisValue
 ) {
     if (!midi_sender) return;
     
@@ -181,7 +319,7 @@ void JoystickProcessor::sendMidiForAxis(
             midi_sender->sendAftertouch(channel, midiValue);
             break;
         case MidiMessageType::NOTE_SWEEP:
-            midi_sender->sendNoteOn(channel, midiValue, 100);
+            // Balayage géré dans process() via processNoteSweepJoystickAxis (chaque échantillon).
             break;
         default:
             midi_sender->sendControlChange(channel, param, midiValue);
@@ -223,41 +361,43 @@ void JoystickProcessor::sendOscForAxis(
     }
 }
 
-// Wrapper pour normaliser la signature avec ProcessorRegistry
-// Note: Le filtre Y sera stocké dans un tableau statique indexé par GPIO X
-// pour gérer plusieurs joysticks simultanément
-static const uint8_t MAX_JOYSTICK_FILTERS = 16;
-static AnalogFilter yFilters[MAX_JOYSTICK_FILTERS];
-static uint8_t yFilterGpios[MAX_JOYSTICK_FILTERS]; // GPIO X associé à chaque filtre
-static uint8_t yFilterCount = 0;
-
-// Stocker les dernières valeurs normalisées pour chaque joystick (indexé par GPIO X)
-// lastXNorm et lastYNorm stockés avec offset 127 (0-254) pour éviter les valeurs négatives
-static uint8_t lastXNormValues[MAX_JOYSTICK_FILTERS];
-static uint8_t lastYNormValues[MAX_JOYSTICK_FILTERS];
-
-static uint8_t getOrCreateJoystickIndex(uint8_t xGpio) {
-    // Chercher un index existant pour ce GPIO X
-    for (uint8_t i = 0; i < yFilterCount; i++) {
-        if (yFilterGpios[i] == xGpio) {
-            return i;
+void JoystickProcessor::silenceNoteSweepForGpio(uint8_t xGpio, const ComponentConfig& config, MidiSender* midi_sender) {
+    if (!midi_sender) {
+        return;
+    }
+    uint8_t idx = findJoystickIndexByXGpio(xGpio);
+    if (idx == 255) {
+        return;
+    }
+    Components::JoystickConfig* jc = config.specificConfig.joystick;
+    for (uint8_t ax = 0; ax < 2; ax++) {
+        if (joySweepLastNote[idx][ax] == 255) {
+            continue;
         }
+        MidiMessageType msgType;
+        uint8_t channel;
+        if (jc) {
+            if (ax == 0) {
+                msgType = jc->xMsgType;
+                channel = jc->xMidiChannel;
+            } else {
+                msgType = jc->yMsgType;
+                channel = jc->yMidiChannel;
+            }
+        } else {
+            msgType = config.msg_type;
+            channel = config.midi_channel;
+        }
+        if (msgType != MidiMessageType::NOTE_SWEEP) {
+            continue;
+        }
+        midi_sender->sendNoteOff(channel, joySweepLastNote[idx][ax], 0);
+        joySweepLastNote[idx][ax] = 255;
+        joySweepNoteOnTime[idx][ax] = 0;
     }
-    
-    // Créer un nouvel index si possible
-    if (yFilterCount < MAX_JOYSTICK_FILTERS) {
-        uint8_t idx = yFilterCount++;
-        yFilterGpios[idx] = xGpio;
-        yFilters[idx].initialized = false; // Sera initialisé lors du premier process()
-        lastXNormValues[idx] = 255; // Initialiser à valeur invalide (première exécution)
-        lastYNormValues[idx] = 255; // Initialiser à valeur invalide (première exécution)
-        return idx;
-    }
-    
-    // Pas de place disponible, utiliser le premier index (pas idéal mais mieux que rien)
-    return 0;
 }
 
+// Wrapper pour normaliser la signature avec ProcessorRegistry
 static void processWrapper(
     const ComponentConfig& config,
     ComponentState& state,

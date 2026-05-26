@@ -20,6 +20,10 @@ async function loadStatus(){
  oscInfo='Broadcast STA ('+(d.sta_ip||'0.0.0.0')+':'+d.osc_port+')';
  }
  $('#oscConfig').textContent=oscInfo;
+ const wdc = document.getElementById('webDebugConsoleSection');
+ if (wdc) {
+  wdc.style.display = d.web_debug_console ? 'block' : 'none';
+ }
 }
 
 async function loadMdns(){
@@ -35,8 +39,13 @@ async function loadOscConfig(){
  if($('#oscTarget')) $('#oscTarget').value=d.target||'sta';
  if($('#oscPort')) $('#oscPort').value=d.port||8000;
  if($('#oscIp')) $('#oscIp').value=d.ip||'';
-if($('#oscBroadcast')) $('#oscBroadcast').checked=!!d.broadcast;
-
+ if($('#oscBroadcast')) $('#oscBroadcast').checked=!!d.broadcast;
+ const oscOutCb = $('#oscEnabled2');
+ if(oscOutCb && oscOutCb.type === 'checkbox' && d.output_all_enabled !== undefined) {
+   oscOutCb.checked = !!d.output_all_enabled;
+ }
+ const oscOutMsg = $('#oscOutputMsg');
+ if(oscOutMsg) { oscOutMsg.textContent = ''; oscOutMsg.style.color = ''; }
 
 const oscTarget = $('#oscTarget');
  const oscIpRow = $('#oscIpRow');
@@ -82,28 +91,28 @@ async function loadMidiInterfaces(){
       }
     }
     
-    /* Charger l'état USB MIDI (supporté/activé/mémorisé + statut) */
+    /* USB-MIDI : état compile-time + runtime (pas de toggle NVS) */
     const usbRes = await fetch('/api/usbmidi/status');
     if(usbRes.ok) {
       const usbData = await usbRes.json();
       const statusEl = document.getElementById('usbMidiStatus');
       const usbCheckbox = $('#usbMidiEnabled');
       if(usbCheckbox && usbCheckbox.type === 'checkbox') {
-        usbCheckbox.disabled = !usbData.supported;
-        // On préfère l'état mémorisé (NVS) si disponible
-        const nextChecked = (usbData.savedEnabled !== undefined) ? !!usbData.savedEnabled : !!usbData.enabled;
-        usbCheckbox.checked = nextChecked;
+        usbCheckbox.disabled = true;
+        const compiled = (usbData.compiledEnabled !== undefined) ? !!usbData.compiledEnabled : !!usbData.savedEnabled;
+        usbCheckbox.checked = compiled;
       }
       if(statusEl) {
+        const compiled = (usbData.compiledEnabled !== undefined) ? !!usbData.compiledEnabled : !!usbData.savedEnabled;
         let statusText = '';
         if(!usbData.supported) {
-          statusText = '❌ Non supporté';
-        } else if(usbData.savedEnabled === false || usbData.enabled === false) {
-          statusText = '⛔ Désactivé';
+          statusText = '❌ Non supporté (MCU)';
+        } else if(!compiled) {
+          statusText = '⛔ Désactivé au build (UsbMidiManager.h)';
         } else if(usbData.connected) {
           statusText = '✅ Connecté';
         } else if(usbData.enabled) {
-          statusText = '⚠️ Activé (non connecté)';
+          statusText = '⚠️ Activé (USB non connecté ou hôte)';
         } else {
           statusText = '❌ Non initialisé';
         }
@@ -136,42 +145,59 @@ function initForms(){
  updateOscForm();
  }
 
-  /* USB-MIDI : toggle depuis la checkbox */
-  const usbCheckbox = $('#usbMidiEnabled');
-  if(usbCheckbox && usbCheckbox.type === 'checkbox') {
-    usbCheckbox.addEventListener('change', async () => {
-      if(usbCheckbox.disabled) return;
-      const enabled = !!usbCheckbox.checked;
-      const statusEl = document.getElementById('usbMidiStatus');
-      if(statusEl) statusEl.textContent = enabled ? 'Activation...' : 'Désactivation...';
-
+  /* Sortie OSC globale : enregistrement immédiat (NVS osc_out_all + rechargement runtime) */
+  const oscOutCheckbox = $('#oscEnabled2');
+  if(oscOutCheckbox && oscOutCheckbox.type === 'checkbox') {
+    oscOutCheckbox.addEventListener('change', async () => {
+      const enabled = !!oscOutCheckbox.checked;
+      const msgEl = $('#oscOutputMsg');
+      if(msgEl) {
+        msgEl.textContent = enabled ? 'Enregistrement…' : 'Enregistrement…';
+        msgEl.style.color = '#6b7280';
+      }
       try {
-        usbCheckbox.disabled = true;
-        const formData = new URLSearchParams();
-        formData.append('enable', enabled ? 'true' : 'false');
-
-        const resp = await fetch('/api/usbmidi/enable', {
+        oscOutCheckbox.disabled = true;
+        const fd = new URLSearchParams();
+        fd.append('enable', enabled ? 'true' : 'false');
+        const resp = await fetch('/api/osc/output-enable', {
           method: 'POST',
-          headers: {'Content-Type':'application/x-www-form-urlencoded'},
-          body: formData.toString()
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: fd.toString()
         });
-
-        if(!resp.ok) {
-          const txt = await resp.text().catch(()=>'');
-          throw new Error(txt || ('HTTP ' + resp.status));
+        const d = await resp.json().catch(() => ({}));
+        if(!resp.ok || d.status !== 'ok') {
+          throw new Error(d.error || ('HTTP ' + resp.status));
         }
-
-        // Quand on désactive, on force un "reconnect" côté navigateur après reboot.
-        if(!enabled) {
-          setTimeout(() => location.reload(), 3500);
+        if(msgEl) {
+          msgEl.textContent = enabled ? 'Sortie OSC activée (mémorisée)' : 'Sortie OSC désactivée (mémorisée)';
+          msgEl.style.color = '#059669';
         }
       } catch(err) {
-        console.log('Erreur toggle USB-MIDI:', err);
+        console.log('Erreur toggle sortie OSC:', err);
+        oscOutCheckbox.checked = !enabled;
+        if(msgEl) {
+          msgEl.textContent = 'Erreur : impossible d’enregistrer';
+          msgEl.style.color = '#dc2626';
+        }
       } finally {
-        usbCheckbox.disabled = false;
-        // Si on reboot, la page va se recharger: éviter les appels inutiles.
-        if(enabled) await loadMidiInterfaces();
+        oscOutCheckbox.disabled = false;
       }
+    });
+  }
+
+  const webDbgCb = $('#webDebugConsoleEnabled');
+  const webDbgClear = $('#webDebugConsoleClear');
+  if (webDbgCb && webDbgCb.type === 'checkbox') {
+    webDbgCb.addEventListener('change', () => {
+      if (typeof websocket === 'undefined' || !websocket) return;
+      if (websocket.readyState !== WebSocket.OPEN) return;
+      websocket.send(webDbgCb.checked ? 'DEBUG_CONSOLE:1' : 'DEBUG_CONSOLE:0');
+    });
+  }
+  if (webDbgClear) {
+    webDbgClear.addEventListener('click', () => {
+      const pre = document.getElementById('webDebugConsoleOut');
+      if (pre) pre.textContent = '';
     });
   }
  
@@ -477,17 +503,6 @@ async function loadConfiguredPins(){
 
  updatePinsList();
  updateBusVisuals();
-
- /* Initialiser l'activation globale OSC selon les pins chargées */
- const oscCheckboxEl = $('#oscEnabled2');
- if(oscCheckboxEl && oscCheckboxEl.type === 'checkbox' && typeof pcfg !== 'undefined' && pcfg) {
-   let anyEnabled = false;
-   for (const lbl of Object.keys(pcfg)) {
-     const c = pcfg[lbl];
-     if (c && c.oscEnabled) { anyEnabled = true; break; }
-   }
-   oscCheckboxEl.checked = anyEnabled;
- }
  } catch(err) {
  console.log('Erreur chargement pins:', err);
  }
@@ -528,10 +543,6 @@ async function saveAll(){
    }
  }
  
- /* OSC (global) : activer/désactiver tous les OSC à partir de la checkbox globale */
- const oscCheckboxEl = $('#oscEnabled2');
- const globalOscEnabled = (oscCheckboxEl && oscCheckboxEl.type === 'checkbox') ? !!oscCheckboxEl.checked : undefined;
-
 /* Sauvegarder tous les composants séquentiellement (évite saturation NVS ESP32) */
  const pinLabels = Object.keys(pcfg);
  const validPins = pinLabels.filter(l => pcfg[l] && pcfg[l].role);
@@ -548,8 +559,6 @@ async function saveAll(){
   const fresh = readCfg(freshRole || null);
   if(fresh && fresh.role && (typeof isBusRole !== 'function' || !isBusRole(fresh.role))) c = fresh;
  }
-
-  if(globalOscEnabled !== undefined) c.oscEnabled = globalOscEnabled;
 
  const role = migrateRole(c.role);
  const def = typeof getComponentDefinition === 'function' ? getComponentDefinition(role) : null;
@@ -720,11 +729,13 @@ async function saveAll(){
  /* Mode MIDI (RTP vs Mapping) */
  if(c.midiMode) p.set('midiMode', c.midiMode);
 
- /* Champs OSC et Debug (communs à tous) */
- if(c.oscEnabled) p.set('oscEnabled','true');
+ /* Champs OSC et Debug (communs à tous) — toujours envoyer les booléens */
+ const oscOn = (c.oscEnabled === true || c.oscEnabled === 'true');
+ p.set('oscEnabled', oscOn ? 'true' : 'false');
  if(c.oscAddress) p.set('oscAddress',c.oscAddress);
  if(c.oscFormat) p.set('oscFormat',c.oscFormat);
- if(c.dbgEnabled) p.set('dbgEnabled','true');
+ const dbgOn = (c.dbgEnabled === true || c.dbgEnabled === 'true');
+ p.set('dbgEnabled', dbgOn ? 'true' : 'false');
  if(c.dbgHeader) p.set('dbgHeader',c.dbgHeader);
  if(lbl === 'SPI' || lbl === 'I2C') {
   console.log('[saveAll] POST body pour', lbl, ':', p.toString());
@@ -806,7 +817,7 @@ try {
       }
     }
   }
-  /* USB MIDI : toggle via checkbox (via /api/usbmidi/enable), pas via saveAll */
+  /* USB-MIDI : compile-time uniquement, pas via saveAll */
 } catch(e) {
   console.error('Erreur sauvegarde interfaces MIDI:', e);
 }

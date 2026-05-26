@@ -117,10 +117,31 @@ function initWebSocket(){
   websocket = new WebSocket(wsUrl);
   websocket.onopen = function(){
    console.log('WebSocket connected');
+   websocket.send('PIN_MONITORING:0');
+   const wdc = document.getElementById('webDebugConsoleEnabled');
+   if (wdc && wdc.checked) {
+    websocket.send('DEBUG_CONSOLE:1');
+   } else {
+    websocket.send('DEBUG_CONSOLE:0');
+   }
   };
   websocket.onmessage = function(event){
   if(!event || !event.data) return;
   const message = String(event.data);
+
+  if (message.startsWith('DEBUG_LOG:')) {
+   const pre = document.getElementById('webDebugConsoleOut');
+   if (pre) {
+    const line = message.substring(10);
+    pre.textContent += line + '\n';
+    const lines = pre.textContent.split('\n');
+    if (lines.length > 500) {
+     pre.textContent = lines.slice(-500).join('\n');
+    }
+    pre.scrollTop = pre.scrollHeight;
+   }
+   return;
+  }
 
   // Accusé de réception de calibration touch (globale)
   if (message === 'TOUCH_CALIBRATE_DONE') {

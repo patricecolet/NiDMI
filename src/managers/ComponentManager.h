@@ -61,6 +61,9 @@ private:
 
     // Garde NVS : les tâches temps réel vérifient ce flag et yieldent
     volatile bool _nvsWriteInProgress = false;
+
+    /** Master switch OSC sortie (NVS osc_out_all), rechargé dans reloadConfigs() */
+    bool osc_output_all_enabled_ = true;
     
 public:
     bool isNvsWriteInProgress() const { return _nvsWriteInProgress; }

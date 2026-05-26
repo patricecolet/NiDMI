@@ -225,6 +225,35 @@ uint8_t PinMapper::labelToGpio(const String& label) {
     return labelToGpio(label.c_str());
 }
 
+uint8_t PinMapper::resolveImuCsGpioFromNvs(uint8_t stored_gpio) {
+    detectMcu();
+    if (detected_mcu != McuType::ESP32_S3) {
+        return stored_gpio;
+    }
+    // Valeurs du formulaire Lis3dhDef (csGpio) = GPIO XIAO-ESP32C3 pour le pad Dx
+    // XIAO S3 : mêmes pads Dx, numéros GPIO différents (doc Seeed)
+    switch (stored_gpio) {
+        case 2:
+            return 1;   // D0
+        case 3:
+            return 2;   // D1
+        case 4:
+            return 3;   // D2
+        case 5:
+            return 4;   // D3
+        case 6:
+            return 5;   // D4
+        case 7:
+            return 6;   // D5
+        case 21:
+            return 43;  // D6 (TX sur S3)
+        case 20:
+            return 44;  // D7 (RX sur S3) — sur C3 D7 était GPIO 20
+        default:
+            return stored_gpio;
+    }
+}
+
 uint8_t PinMapper::labelToGpio(const char* label) {
     detectMcu();
     

@@ -1,6 +1,7 @@
 #include "UltrasonicProcessor.h"
 #include "ProcessorRegistry.h"
 #include "../midi/handlers/MidiOutputCoordinator.h"
+#include "../utils/AxisUtils.h"
 
 // Lecture distance en mm sur un capteur ultrasonique utilisant une seule pin
 static uint16_t readDistanceMM(uint8_t pin, uint16_t lastValid) {
@@ -90,13 +91,15 @@ void UltrasonicProcessor::process(
 
     // ===== Traitement NOTE_SWEEP (copie de PotentiometerProcessor) =====
     if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
-        if (config.rtpNoteSweepAutoOffDelay > 0 &&
+        const uint16_t sweepOffMs = effectiveNoteSweepAutoOffMs(config.rtpNoteSweepAutoOffDelay);
+        // Auto-off : coupe la note si le délai est écoulé, mais conserve state.last_note
+        // pour éviter un retrigger si la position pointe toujours sur la même note.
+        if (sweepOffMs > 0 &&
             state.last_note != 255 &&
             state.note_on_time > 0) {
             uint32_t elapsed = millis() - state.note_on_time;
-            if (elapsed >= config.rtpNoteSweepAutoOffDelay) {
+            if (elapsed >= sweepOffMs) {
                 midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
-                state.last_note = 255;
                 state.note_on_time = 0;
             }
         }
@@ -121,14 +124,14 @@ void UltrasonicProcessor::process(
             return;
         }
 
-        if (state.last_note != 255) {
+        // Note différente : couper l'ancienne uniquement si encore active.
+        if (state.last_note != 255 && state.note_on_time > 0) {
             midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
         }
 
         if (newNote != 255) {
             midi_sender->sendNoteOn(config.midi_channel, newNote, config.rtpNoteVelFix);
-            state.note_on_time =
-                (config.rtpNoteSweepAutoOffDelay > 0) ? millis() : 0;
+            state.note_on_time = millis();
         } else {
             state.note_on_time = 0;
         }

@@ -1,4 +1,33 @@
 #include "UsbMidiManager.h"
+#include "../server/WebDebugConsole.h"
+
+#ifdef NIDMI_USB_MIDI_SUPPORTED
+#include <Preferences.h>
+#include <esp_arduino_version.h>
+
+// Même clé et règles que nidmi_begin() : mdns_name (SSID AP, mDNS, RTP, BT, nom USB MIDI).
+static String nidmiUsbMidiHostNameFromNvs() {
+    Preferences prefs;
+    String name = "nidmi";
+    if (prefs.begin("nidmi", true)) {
+        name = prefs.getString("mdns_name", "nidmi");
+        prefs.end();
+    }
+    name.trim();
+    name.replace("\n", "");
+    name.replace("\r", "");
+    name.replace("\t", "");
+    if (name.length() == 0) {
+        name = "nidmi";
+    }
+    // Limite constructeur USBMIDI(const char*) sur Arduino-ESP32 >= 3.3.1
+    const size_t kMaxUsbMidiName = 32;
+    if (name.length() > kMaxUsbMidiName) {
+        name = name.substring(0, kMaxUsbMidiName);
+    }
+    return name;
+}
+#endif
 
 UsbMidiManager::UsbMidiManager() 
 #ifdef NIDMI_USB_MIDI_SUPPORTED
@@ -59,20 +88,29 @@ bool UsbMidiManager::begin() {
 #ifdef NIDMI_USB_MIDI_SUPPORTED
     // Vérifier que USB-OTG est activé
     if (!isUsbOtgEnabled()) {
-        Serial.println("[USB-MIDI] ERREUR: USB-OTG non activé!");
-        Serial.println("[USB-MIDI] Vérifiez que le fichier ci.json contient CONFIG_SOC_USB_OTG_SUPPORTED=y");
-        Serial.println("[USB-MIDI] Ou dans Arduino IDE: Outils > USB Type > USB-OTG (TinyUSB)");
+        NIDMI_WEB_LOG("[USB-MIDI] ERREUR: USB-OTG non activé!");
+        NIDMI_WEB_LOG("[USB-MIDI] Vérifiez ci.json / sdkconfig: CONFIG_SOC_USB_OTG_SUPPORTED=y");
+        NIDMI_WEB_LOG("[USB-MIDI] Arduino: Outils > USB Type > USB-OTG (TinyUSB)");
         available = false;
         return false;
     }
     
+    const String hostName = nidmiUsbMidiHostNameFromNvs();
+
     // Ne pas ré-initialiser complètement à chaque activation.
     // On crée l'objet une fois, puis on réutilise l'initialisation USB déjà faite.
     if (!usbMidi) {
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 3, 1)
+        usbMidi = new USBMIDI(hostName.c_str());
+#else
         usbMidi = new USBMIDI();
+#endif
     }
 
     if (!usbInitialized) {
+        // Sans ceci, l’OS affiche encore le fabricant par défaut du core (« Espressif Systems »).
+        USB.manufacturerName("NiDMI");
+        USB.productName(hostName.c_str());
         usbMidi->begin();
         USB.begin();
         usbInitialized = true;
@@ -80,11 +118,11 @@ bool UsbMidiManager::begin() {
 
     isStarted = true;
     available = true;
-    
-    Serial.println("[USB-MIDI] Initialisé (ESP32-S3 avec USB-OTG)");
+
+    NIDMI_WEB_LOG("[USB-MIDI] Initialise (USB-OTG), nom USB/MIDI: %s", hostName.c_str());
     return true;
 #else
-    Serial.println("[USB-MIDI] Non supporté sur ce MCU (ESP32-S3 requis)");
+    NIDMI_WEB_LOG("[USB-MIDI] Non supporté sur ce MCU (ESP32-S3 requis)");
     available = false;
     return false;
 #endif
@@ -176,13 +214,13 @@ void UsbMidiManager::sendPitchBend(uint8_t channel, int bend) {
     if (usbMidi && isConnected()) {
         // Convertir bend (-8192 à 8191) en format MIDI (0-16383)
         uint16_t midiBend = (uint16_t)(bend + 8192);
-        // USB MIDI format: CIN=0x05 pour Channel Voice Messages à 3 octets
+        // USB MIDI format: CIN=0x0E pour Pitch Bend Change (3 octets)
         // Status: 0xE0-0xEF (Pitch Bend Change, 0xEn où n=channel 0-15)
         // Data1: LSB (bits 0-6), Data2: MSB (bits 7-13)
         uint8_t status = 0xE0 | (channel & 0x0F); // Channel 1-16 -> 0-15
         uint8_t lsb = midiBend & 0x7F; // Bits 0-6
         uint8_t msb = (midiBend >> 7) & 0x7F; // Bits 7-13
-        midiEventPacket_t packet = {0x05, status, lsb, msb};
+        midiEventPacket_t packet = {0x0E, status, lsb, msb};
         usbMidi->writePacket(&packet);
     }
 #endif
@@ -192,10 +230,11 @@ void UsbMidiManager::sendAftertouch(uint8_t channel, uint8_t pressure) {
 #ifdef NIDMI_USB_MIDI_SUPPORTED
     if (usbMidi && isConnected()) {
         // USB MIDI format: CIN=0x04 pour Channel Voice Messages à 2 octets
+        // USB MIDI format: CIN=0x0D pour Channel Pressure (2 octets)
         // Status: 0xD0-0xDF (Channel Pressure, 0xDn où n=channel 0-15)
         // Data1: pressure (0-127), Data2: 0x00 (non utilisé)
         uint8_t status = 0xD0 | (channel & 0x0F); // Channel 1-16 -> 0-15
-        midiEventPacket_t packet = {0x04, status, pressure, 0x00};
+        midiEventPacket_t packet = {0x0D, status, pressure, 0x00};
         usbMidi->writePacket(&packet);
     }
 #endif
@@ -208,10 +247,11 @@ void UsbMidiManager::sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pres
 #ifdef NIDMI_USB_MIDI_SUPPORTED
     if (usbMidi && isConnected()) {
         // USB MIDI format: CIN=0x04 pour Channel Voice Messages à 2 octets
+        // USB MIDI format: CIN=0x0A pour Polyphonic Key Pressure (3 octets)
         // Status: 0xA0-0xAF (Polyphonic Key Pressure, 0xAn où n=channel 0-15)
         // Data1: note (0-127), Data2: pressure (0-127)
         uint8_t status = 0xA0 | (channel & 0x0F); // Channel 1-16 -> 0-15
-        midiEventPacket_t packet = {0x04, status, note & 0x7F, pressure & 0x7F};
+        midiEventPacket_t packet = {0x0A, status, note & 0x7F, pressure & 0x7F};
         usbMidi->writePacket(&packet);
     }
 #endif

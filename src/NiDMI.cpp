@@ -3,8 +3,11 @@
 #include "managers/ComponentManager.h"
 #include "utils/PinMapper.h"
 #include "midi/MidiRouter.h"
+#include "network/UsbMidiManager.h"
+#include "server/WebDebugConsole.h"
 #include "Globals.h"
 #include <Preferences.h>
+#include <WiFi.h>
 #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV) || defined(ARDUINO_ESP32S3)
 #include <esp32-hal-tinyusb.h>
 #endif
@@ -77,6 +80,10 @@ void nidmi_begin() {
 
     touchDiag("AVANT tout (juste apres Serial)");
 
+    // Ne pas laisser la pile WiFi relire/écrire une config STA/AP dans la NVS système
+    // (notre SSID AP et STA viennent du namespace Preferences "nidmi").
+    WiFi.persistent(false);
+
     // Détecter et afficher le MCU
     PinMapper::detectMcu();
     PinMapper::printMappings();
@@ -85,25 +92,30 @@ void nidmi_begin() {
     // (décommentez la ligne suivante pour forcer le reset)
     // Preferences::clear("nidmi\n\n");
 
-    // Lire nom serveur + STA depuis NVS (lecture seule d'abord pour éviter crash si NVS abîmée)
+    // Lire nom serveur + STA depuis NVS (ne pas appeler get* si begin a échoué)
     Preferences preferences;
-    if (!preferences.begin("nidmi", true)) {
+    String serverName = "nidmi";
+    g_staSsid = "";
+    g_staPass = "";
+    g_staIpStr = "";
+    g_staGwStr = "";
+    g_staSnStr = "";
+    bool touchEnabled = false;
+    const bool usbMidiEnabled = nidmi_usb_midi_enabled_at_compile_time();
+
+    if (preferences.begin("nidmi", true)) {
+        serverName = preferences.getString("mdns_name", "nidmi");
+        g_staSsid = preferences.getString("sta_ssid", "");
+        g_staPass = preferences.getString("sta_pass", "");
+        g_staIpStr = preferences.getString("sta_ip", "");
+        g_staGwStr = preferences.getString("sta_gw", "");
+        g_staSnStr = preferences.getString("sta_sn", "");
+        touchEnabled = preferences.getBool("touch_enabled", false);
+        preferences.end();
+    } else {
         Serial.println("[NiDMI] ERREUR: ouverture NVS en lecture échouée - NVS peut être corrompue");
         Serial.println("[NiDMI] Utilisation des valeurs par défaut. Flashez nidmi_clear_nvs pour réinitialiser.");
     }
-    
-    String serverName = preferences.getString("mdns_name", "nidmi");
-    g_staSsid = preferences.getString("sta_ssid", "");
-    g_staPass = preferences.getString("sta_pass", "");
-    g_staIpStr = preferences.getString("sta_ip", "");
-    g_staGwStr = preferences.getString("sta_gw", "");
-    g_staSnStr = preferences.getString("sta_sn", "");
-    bool touchEnabled = preferences.getBool("touch_enabled", false);
-    // Persisté via /api/usbmidi/enable (NVS) : USB-MIDI désactivé par défaut
-    bool usbMidiEnabled = preferences.getBool("usbmidi_enabled", false);
-    
-    
-    preferences.end();
     
     // Nettoyer le nom serveur (supprimer caractères invalides pour SSID WiFi)
     serverName.trim();  // Supprimer espaces en début/fin
@@ -151,7 +163,7 @@ void nidmi_begin() {
         Serial.println("[NiDMI] No STA configuration found");
     }
     
-    // Appliquer l'état sauvegardé des interfaces MIDI au MidiRouter
+    // USB-MIDI : NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME dans UsbMidiManager.h (pas NVS)
     g_midiRouter.enableUsbMidi(usbMidiEnabled);
 
     // Initialiser MidiRouter (qui initialisera USB MIDI si activé et supporté)
@@ -175,6 +187,7 @@ void nidmi_begin() {
     touchDiag("APRES ComponentManager.begin (MuxTask+MidiTask demarres)");
     
     Serial.println("[NiDMI] Ready");
+    NIDMI_WEB_LOG("[NiDMI] Ready (console web dispo sur S3 si activée)");
     Serial.print("  AP SSID: "); Serial.println(apSsid);
     Serial.print("  AP PASS: "); Serial.println(apPass);
     Serial.print("  AP IP: "); Serial.println(WiFi.softAPIP());

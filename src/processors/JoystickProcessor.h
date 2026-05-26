@@ -38,7 +38,10 @@ public:
         uint8_t* lastXNormPtr = nullptr,
         uint8_t* lastYNormPtr = nullptr
     );
-    
+
+    /** Coupe les notes NOTE_SWEEP actives (état interne joystick). GPIO = pin axe X du couple. */
+    static void silenceNoteSweepForGpio(uint8_t xGpio, const ComponentConfig& config, MidiSender* midi_sender);
+
 private:
     /**
      * @brief Mappe une valeur brute vers une valeur normalisée (-127..127)
@@ -60,17 +63,14 @@ private:
     );
     
     /**
-     * @brief Envoie un message MIDI pour un axe
-     * @param midi_sender Sender MIDI
-     * @param config Configuration du composant
-     * @param axis Axe ('x' ou 'y')
-     * @param normalizedValue Valeur normalisée (-127..127)
+     * @param rawAxisValue ADC filtré (0..4095) : pour NOTE_SWEEP, balayage sur toute la course joyXMin..joyXMax
      */
     static void sendMidiForAxis(
         MidiSender* midi_sender,
         const ComponentConfig& config,
         char axis,
-        int8_t normalizedValue
+        int8_t normalizedValue,
+        int32_t rawAxisValue
     );
     
     /**

@@ -4,6 +4,7 @@
 #include "../components/basic/PotentiometerDef.h"
 #include "../midi/handlers/MidiOutputCoordinator.h"
 #include "../mapping/MappingEngine.h"
+#include "../utils/AxisUtils.h"
 
 void PotentiometerProcessor::process(
     const ComponentConfig& config,
@@ -82,14 +83,16 @@ void PotentiometerProcessor::process(
     
     // ===== TRAITEMENT SPÉCIAL NOTE_SWEEP (GPIO normales) =====
     if (config.msg_type == MidiMessageType::NOTE_SWEEP) {
-        // 1. Vérifier l'auto-off AVANT tout
-        if (config.rtpNoteSweepAutoOffDelay > 0 && 
-            state.last_note != 255 && 
+        const uint16_t sweepOffMs = effectiveNoteSweepAutoOffMs(config.rtpNoteSweepAutoOffDelay);
+        // 1. Auto-off : coupe la note si le délai est écoulé, mais on conserve
+        //    state.last_note pour éviter un retrigger tant que la position pointe
+        //    toujours sur la même note.
+        if (sweepOffMs > 0 &&
+            state.last_note != 255 &&
             state.note_on_time > 0) {
             uint32_t elapsed = millis() - state.note_on_time;
-            if (elapsed >= config.rtpNoteSweepAutoOffDelay) {
+            if (elapsed >= sweepOffMs) {
                 midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
-                state.last_note = 255;
                 state.note_on_time = 0;
             }
         }
@@ -114,20 +117,20 @@ void PotentiometerProcessor::process(
             newNote = map(stable_midi_value, 1, 127, noteMin, noteMax);
         }
         
-        // 5. Si la note est identique à la précédente, ne rien faire
+        // 5. Si la note est identique à la précédente, ne rien faire (pas de retrigger)
         if (newNote == state.last_note) {
             return;
         }
         
-        // 6. Éteindre l'ancienne note si elle existe
-        if (state.last_note != 255) {
+        // 6. Note différente : couper l'ancienne uniquement si encore active
+        if (state.last_note != 255 && state.note_on_time > 0) {
             midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
         }
         
         // 7. Jouer la nouvelle note (sauf si 255)
         if (newNote != 255) {
             midi_sender->sendNoteOn(config.midi_channel, newNote, config.rtpNoteVelFix);
-            state.note_on_time = (config.rtpNoteSweepAutoOffDelay > 0) ? millis() : 0;
+            state.note_on_time = millis();
         } else {
             state.note_on_time = 0;
         }

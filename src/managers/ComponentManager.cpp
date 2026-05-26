@@ -10,6 +10,8 @@
 #include "../utils/JSONParser.h"
 #include "../processors/ProcessorRegistry.h"
 #include "../processors/Processors.h"  // Centralise tous les processeurs pour l'enregistrement automatique
+#include "../processors/ImuProcessor.h"
+#include "../processors/JoystickProcessor.h"
 #include "../components/ComponentRegistry.h"  // Pour trouver les définitions de composants
 #include "../components/basic/ButtonDef.h"    // Pour ButtonConfig (btnMode)
 #include "../components/ValidationRegistry.h"  // Pour la validation centralisée
@@ -142,8 +144,10 @@ void ComponentManager::update() {
     osc_manager.update();
     
     // Les multiplexeurs sont maintenant lus par la tâche FreeRTOS sur Core 0
-    // Seulement envoyer les batches OSC (rapide, synchrone)
-    mux_manager.sendOscBatches(osc_queue);
+    // Seulement envoyer les batches OSC si la sortie OSC globale est activée (NVS osc_out_all)
+    if (osc_output_all_enabled_) {
+        mux_manager.sendOscBatches(osc_queue);
+    }
     
     // Traiter OSC en priorité (avec queue FreeRTOS)
     osc_queue.update();
@@ -164,6 +168,12 @@ void ComponentManager::update() {
 }
 
 void ComponentManager::reloadConfigs() {
+    {
+        Preferences prefs;
+        prefs.begin("nidmi", true);
+        osc_output_all_enabled_ = prefs.getBool("osc_out_all", true);
+        prefs.end();
+    }
     bool wdt = pauseRealtimeTasks();
     clearAll();
     loadMuxConfigFromNVS();
@@ -249,6 +259,12 @@ bool ComponentManager::removeComponent(uint8_t gpio) {
     ComponentState& state = states[index];
     
     if (midi_sender) {
+        if (config.type == ComponentType::IMU) {
+            ImuProcessor::silenceNoteSweepForGpio(config.gpio, config, midi_sender);
+        }
+        if (config.type == ComponentType::JOYSTICK) {
+            JoystickProcessor::silenceNoteSweepForGpio(config.gpio, config, midi_sender);
+        }
         // 1. NOTE_SWEEP : éteindre la note active
         if (config.msg_type == MidiMessageType::NOTE_SWEEP && state.last_note != 255) {
             midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
@@ -318,6 +334,12 @@ void ComponentManager::clearAll() {
         ComponentState& state = states[i];
         
         if (midi_sender) {
+            if (config.type == ComponentType::IMU) {
+                ImuProcessor::silenceNoteSweepForGpio(config.gpio, config, midi_sender);
+            }
+            if (config.type == ComponentType::JOYSTICK) {
+                JoystickProcessor::silenceNoteSweepForGpio(config.gpio, config, midi_sender);
+            }
             // NOTE_SWEEP : éteindre la note active
             if (config.msg_type == MidiMessageType::NOTE_SWEEP && state.last_note != 255) {
                 midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);

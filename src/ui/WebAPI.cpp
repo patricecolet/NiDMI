@@ -6,6 +6,7 @@
 #include "../api/NetworkAPI.h"
 #include "../api/RTPAPI.h"
 #include "../api/UsbMidiAPI.h"
+#include "../server/WebDebugConsole.h"
 #include "../Globals.h"
 #include "../server/ServerCallbacks.h"
 #include "../components/ComponentRegistry.h"
@@ -177,6 +178,22 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
             message += (char)data[i];
         }
 
+#if NIDMI_WEB_DEBUG_CONSOLE
+        if (message.startsWith("DEBUG_CONSOLE:")) {
+            nidmi_web_debug_handle_ws_text(client, message);
+            return;
+        }
+#endif
+
+        // Activation/désactivation runtime-only du monitoring SVG
+        if (message.startsWith("PIN_MONITORING:")) {
+            String val = message.substring(15);
+            g_pinMonitoringEnabled = (val == "1");
+            if (client) client->text(String("PIN_MONITORING_STATE:") + (g_pinMonitoringEnabled ? "1" : "0"));
+            return;
+        }
+
+
         // Commande globale de calibration touch (toutes les baselines)
         if (message == "TOUCH_CALIBRATE_ALL") {
             TouchProcessor::resetAllBaselines();
@@ -266,6 +283,9 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     // WebSocket
     ws.onEvent(onWsEvent);
     server.addHandler(&ws);
+#if NIDMI_WEB_DEBUG_CONSOLE
+    nidmi_web_debug_init(&ws);
+#endif
     
     // Initialiser le registre des composants
     ComponentRegistry::init();

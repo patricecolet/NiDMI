@@ -281,8 +281,10 @@ arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32C3 examples/nidmi_basic/nidmi_b
 # Build complet + upload
 ./scripts/nidmi.sh upload
 
-# Reset NVS (utiliser le sketch nidmi_clear_nvs)
+# Reset NVS (sketch nidmi_clear_nvs) — reprendre les mêmes options que ton upload habituel (ex. --split-fs seulement si tu l’utilises)
 ./scripts/nidmi.sh upload --clear-nvs
+# Alternative esptool si besoin
+./scripts/nidmi.sh erase-nvs --port /dev/cu.usbmodem1101
 
 # Moniteur série pour logs
 ./scripts/nidmi.sh monitor

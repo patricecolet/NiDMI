@@ -1,5 +1,7 @@
 #include "DebugManager.h"
+#include "WebDebugConsole.h"
 #include <cstdarg>
+#include <cstring>
 
 // Instance globale (sera initialisée depuis le sketch)
 DebugManager* g_debug = nullptr;
@@ -109,20 +111,26 @@ void DebugManager::debug(const char* format, ...) {
 }
 
 void DebugManager::printLog(const char* prefix, const char* format, va_list args) {
-    // Timestamp
-    Serial.printf("[%lu] ", millis());
-    
-    // Prefix
+    char body[192];
+    vsnprintf(body, sizeof(body), format, args);
+    body[sizeof(body) - 1] = '\0';
+
+    Serial.printf("[%lu] ", static_cast<unsigned long>(millis()));
     Serial.print(prefix);
-    
-    // Message formaté
-    Serial.printf(format, args);
-    
-    // Nouvelle ligne si pas déjà présente
-    size_t len = strlen(format);
-    if (len == 0 || format[len-1] != '\n') {
+    Serial.print(body);
+    size_t len = strlen(body);
+    if (len == 0 || body[len - 1] != '\n') {
         Serial.println();
     }
+
+    char line[256];
+    snprintf(line, sizeof(line), "[%lu] %s%s",
+             static_cast<unsigned long>(millis()), prefix, body);
+    len = strlen(line);
+    while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+        line[--len] = '\0';
+    }
+    nidmi_web_debug_append_line(line);
 }
 
 bool DebugManager::shouldLog(VerbosityLevel level) const {

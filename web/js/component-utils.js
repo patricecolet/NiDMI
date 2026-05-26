@@ -69,7 +69,7 @@ function getAllFieldIds() {
     });
 
     /* Ajouter les champs OSC et Debug */
-    ids.push('#oscEnabled2', '#oscAddress', '#oscFormat', '#dbgEnabled', '#dbgHeader');
+    ids.push('#oscAddress', '#oscFormat', '#dbgEnabled', '#dbgHeader');
 
     /* Collecter les IDs des additionalPins depuis toutes les définitions */
     defsCache.forEach(def => {

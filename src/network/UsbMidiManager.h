@@ -8,6 +8,22 @@
 #endif
 
 #ifdef NIDMI_USB_MIDI_SUPPORTED
+#ifndef NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
+/** 1 = USB-MIDI initialisé au boot ; 0 = désactivé (série USB plus simple pour le dev). */
+#define NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME 1
+#endif
+#endif
+
+/** Vrai si le firmware a été compilé avec USB-MIDI activé au boot (S3 uniquement). */
+inline bool nidmi_usb_midi_enabled_at_compile_time() {
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && (NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME)
+    return true;
+#else
+    return false;
+#endif
+}
+
+#ifdef NIDMI_USB_MIDI_SUPPORTED
 #include <USB.h>
 #include <USBMIDI.h>
 #endif

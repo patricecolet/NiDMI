@@ -1,5 +1,6 @@
 #include "APICommon.h"
-#include "../server/ServerCallbacks.h"/* Pour nidmi_requestReloadOsc */
+#include "../server/ServerCallbacks.h"
+#include <Preferences.h>
 
 void setupOSC_API(AsyncWebServer& server) {
     /* API - Configuration OSC */
@@ -31,6 +32,21 @@ void setupOSC_API(AsyncWebServer& server) {
         }
     });
 
+    /* API - Activer / désactiver la sortie OSC globale (toutes les pins + MUX), NVS + rechargement runtime */
+    server.on("/api/osc/output-enable", HTTP_POST, [](AsyncWebServerRequest *request){
+        if (!request->hasParam("enable", true)) {
+            request->send(400, "application/json", "{\"status\":\"error\",\"error\":\"enable required\"}");
+            return;
+        }
+        bool enabled = request->getParam("enable", true)->value() == "true";
+        Preferences preferences;
+        preferences.begin("nidmi", false);
+        preferences.putBool("osc_out_all", enabled);
+        preferences.end();
+        nidmi_requestReloadPins();
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+    });
+
     /* API - Statut OSC */
     server.on("/api/osc/status", HTTP_GET, [](AsyncWebServerRequest *request){
         Preferences preferences;
@@ -39,12 +55,14 @@ void setupOSC_API(AsyncWebServer& server) {
         int port = preferences.getInt("osc_port", 8000);
         bool broadcast = preferences.getBool("osc_broadcast", false);
         String interface = preferences.getString("osc_interface", "ap");
+        bool outputAll = preferences.getBool("osc_out_all", true);
         preferences.end();
         String json = "{";
         json += "\"target\":\"" + target + "\",";
         json += "\"port\":" + String(port) + ",";
         json += "\"broadcast\":" + String(broadcast ? "true" : "false") + ",";
-        json += "\"interface\":\"" + interface + "\"";
+        json += "\"interface\":\"" + interface + "\",";
+        json += "\"output_all_enabled\":" + String(outputAll ? "true" : "false");
         json += "}";
         request->send(200, "application/json", json);
     });
