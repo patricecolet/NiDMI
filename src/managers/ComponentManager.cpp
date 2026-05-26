@@ -23,6 +23,8 @@
 #include "../Globals.h"
 #include "../components/motion/Lis3dhDef.h"
 
+extern volatile bool g_pinMonitoringEnabled;
+
 ComponentManager::ComponentManager()
     : component_count(0), midi_sender(nullptr), midiTaskHandle(nullptr), midiTaskStarted(false),
       telemetryQueue(nullptr), telemetryDropCount(0) {

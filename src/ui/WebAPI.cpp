@@ -25,6 +25,8 @@ void setupSystemAPI(AsyncWebServer& server);
 
 Preferences preferences;
 
+volatile bool g_pinMonitoringEnabled = false;
+
 // Fonction pour obtenir la configuration par défaut d'une pin
 String getDefaultConfig(String pin) {
     // Pins analogiques (A0, A1, A2, ... A10) - dynamique selon le MCU
@@ -165,6 +167,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
         Serial.println("WebSocket client connected");
     } else if (type == WS_EVT_DISCONNECT) {
         Serial.println("WebSocket client disconnected");
+        g_pinMonitoringEnabled = false;
     } else if (type == WS_EVT_DATA) {
         AwsFrameInfo *info = (AwsFrameInfo*)arg;
         if (!info || info->opcode != WS_TEXT) return;
