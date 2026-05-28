@@ -5,6 +5,7 @@ bin/*.map
 bin/*.bootloader.bin
 bin/*.merged.bin
 bin/*.partitions.bin
+bin/*.uf2
 
 # Fichiers de build Arduino
 build/
