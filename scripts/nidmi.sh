@@ -94,25 +94,9 @@ esac
 
 BOARD_TYPE="s3"  # Par défaut: S3
 BOARD="esp32:esp32:XIAO_ESP32S3"
-# USB build properties pour S3 — conditionnés par NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
-# Lire la valeur depuis UsbMidiManager.h (dernière ligne #define qui matche)
-_usb_midi_flag=$(grep -E '^\s*#define\s+NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME\s+' "$REPO_DIR/src/network/UsbMidiManager.h" 2>/dev/null | tail -1 | awk '{print $3}')
-if [ "$_usb_midi_flag" = "1" ]; then
-    # USB-MIDI activé : forcer USB-OTG (TinyUSB) pour que le firmware contrôle la pile USB
-    S3_USB_PROPS=(
-        --build-property "build.usb_mode=0"
-        --build-property "build.cdc_on_boot=0"
-    )
-else
-    # USB-MIDI désactivé : usb_mode=1 (Hardware CDC and JTAG) = port USB-Serial-JTAG
-    # MATÉRIEL, stable, toujours présent et qui survit aux crashs -> détection fiable.
-    # (usb_mode=0/OTG crée un CDC virtuel fragile qui disparaît au moindre reset/crash.)
-    # cdc_on_boot=1 : Serial sort sur ce port JTAG.
-    S3_USB_PROPS=(
-        --build-property "build.usb_mode=1"
-        --build-property "build.cdc_on_boot=1"
-    )
-fi
+# Le mode USB S3 (S3_USB_PROPS) et le flag USB-MIDI sont calculés APRÈS le parsing
+# des arguments — car --variant peut forcer le mode (voir compute_usb_midi_mode plus bas).
+S3_USB_PROPS=()
 DEFAULT_SKETCH="nidmi_basic"
 NVS_RESET_SKETCH="nidmi_clear_nvs"
 CLEAR_NVS=false
@@ -136,6 +120,12 @@ NO_LARGE_APP=false
 SPLIT_FS=false
 # Partition OTA (S3) : 2 slots app (app0/app1) + seqfs + mapfs -> permet la MAJ firmware par Wi-Fi
 OTA_MODE=false
+# Variante de firmware (off|on) : force le mode USB-MIDI au build sans éditer le header.
+#   off -> USB-MIDI désactivé, S3 en usb_mode=1 (HW CDC/JTAG, série stable)
+#   on  -> USB-MIDI activé, S3 en usb_mode=0 (OTG/TinyUSB, requis pour le MIDI)
+# Vide = utilise la valeur par défaut du header UsbMidiManager.h.
+VARIANT=""
+USB_MIDI_DEFINE=()
 
 # Parser les arguments pour --lang, --board, --light, --pagination, --no-pagination, --large-app, --no-large-app, --split-fs, --port
 ARGS=()
@@ -186,6 +176,10 @@ while [[ $# -gt 0 ]]; do
             OTA_MODE=true
             shift
             ;;
+        --variant)
+            VARIANT="$2"
+            shift 2
+            ;;
         *)
             ARGS+=("$1")
             shift
@@ -234,6 +228,26 @@ if [[ "$BOARD" == *"XIAO_ESP32C3"* ]] && [ "$NO_LARGE_APP" != true ]; then
     LARGE_APP=true
 fi
 
+# Mode USB-MIDI et build properties USB S3 (calculés après parsing ; --variant prioritaire)
+_usb_midi_flag=$(grep -E '^\s*#define\s+NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME\s+' "$REPO_DIR/src/network/UsbMidiManager.h" 2>/dev/null | tail -1 | awk '{print $3}')
+if [ -n "$VARIANT" ]; then
+    case "$VARIANT" in
+        off|OFF) _usb_midi_flag=0 ;;
+        on|ON)   _usb_midi_flag=1 ;;
+        *) echo "❌ --variant inconnu: '$VARIANT' (attendu: off | on)"; exit 1 ;;
+    esac
+    # Le header utilise #ifndef -> ce -D l'emporte sur sa valeur par défaut, sans éditer le fichier.
+    USB_MIDI_DEFINE=("-DNIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME=$_usb_midi_flag")
+fi
+if [ "$_usb_midi_flag" = "1" ]; then
+    # USB-MIDI activé : USB-OTG (TinyUSB), le firmware contrôle la pile USB (MIDI USB).
+    S3_USB_PROPS=( --build-property "build.usb_mode=0" --build-property "build.cdc_on_boot=0" )
+else
+    # USB-MIDI désactivé : usb_mode=1 (Hardware CDC and JTAG) = port USB-Serial-JTAG matériel,
+    # stable, toujours présent, survit aux crashs (détection fiable). cdc_on_boot=1 -> Serial sur JTAG.
+    S3_USB_PROPS=( --build-property "build.usb_mode=1" --build-property "build.cdc_on_boot=1" )
+fi
+
 # Export pour build_html_simple.sh
 export LANG_CODE
 
@@ -263,6 +277,8 @@ show_help() {
     echo "  --no-large-app  - [C3] Désactiver la partition agrandie (défaut: activée pour C3)"
     echo "  --split-fs      - [C3/S3] 2 partitions LittleFS dédiées (seqfs + mapfs)"
     echo "  --ota           - [S3] Partition OTA (app0/app1 + seqfs + mapfs) : MAJ firmware par Wi-Fi"
+    echo "  --variant V     - [S3] Force la variante USB-MIDI au build (off|on) sans éditer le header :"
+    echo "                    off = USB-MIDI désactivé, série stable (HW CDC/JTAG) ; on = MIDI USB (OTG)"
     echo "  --board BOARD - Type de carte ESP32 (c3|s3, défaut: s3)"
     echo "                  c3 = XIAO ESP32-C3"
     echo "                  s3 = XIAO ESP32-S3"
@@ -661,7 +677,12 @@ compile_sketch() {
         if [ "$PAGINATION_MODE" = true ]; then
             EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
         fi
-        
+
+        # --variant : forcer le flag USB-MIDI au build (sans éditer le header)
+        if [ ${#USB_MIDI_DEFINE[@]} -gt 0 ]; then
+            EXTRA_FLAGS_ARRAY+=("${USB_MIDI_DEFINE[@]}")
+        fi
+
         
         # Build properties (flags + partition C3 si --large-app)
         BUILD_PROPS=()
@@ -737,7 +758,12 @@ build_binary() {
         if [ "$PAGINATION_MODE" = true ]; then
             EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
         fi
-        
+
+        # --variant : forcer le flag USB-MIDI au build (sans éditer le header)
+        if [ ${#USB_MIDI_DEFINE[@]} -gt 0 ]; then
+            EXTRA_FLAGS_ARRAY+=("${USB_MIDI_DEFINE[@]}")
+        fi
+
         BUILD_PROPS=()
         if [[ "$BOARD" == *"XIAO_ESP32S3"* ]]; then
             BUILD_PROPS+=("${S3_USB_PROPS[@]}")
@@ -761,6 +787,15 @@ build_binary() {
         
         arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "${BUILD_PROPS[@]}" "$SKETCH_PATH"
         echo "   ✅ Binaire compilé et stocké dans bin/"
+        # --variant : étiqueter les binaires pour distinguer off/on
+        #   .bin        = image applicative (pour l'OTA, écrit dans le slot app)
+        #   .merged.bin = bootloader + partitions + app (pour ESP Web Tools / flash complet)
+        if [ -n "$VARIANT" ]; then
+            _vlabel="nidmi-${BOARD_TYPE}-usbmidi-${VARIANT}"
+            [ -f "$REPO_DIR/bin/$SKETCH_NAME.ino.bin" ] && cp -f "$REPO_DIR/bin/$SKETCH_NAME.ino.bin" "$REPO_DIR/bin/${_vlabel}.bin"
+            [ -f "$REPO_DIR/bin/$SKETCH_NAME.ino.merged.bin" ] && cp -f "$REPO_DIR/bin/$SKETCH_NAME.ino.merged.bin" "$REPO_DIR/bin/${_vlabel}.merged.bin"
+            echo "   🏷️  Variante '$VARIANT' -> bin/${_vlabel}.bin (OTA) + bin/${_vlabel}.merged.bin (Web Tools)"
+        fi
         echo "   📁 Fichiers créés:"
         ls -la "$REPO_DIR/bin/" 2>/dev/null || echo "   📁 Aucun fichier trouvé"
     else
