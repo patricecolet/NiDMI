@@ -8,7 +8,7 @@
 #include "Globals.h"
 #include <Preferences.h>
 #include <WiFi.h>
-#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV) || defined(ARDUINO_ESP32S3)
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
 #include <esp32-hal-tinyusb.h>
 #endif
 
@@ -23,9 +23,13 @@ static String g_staIpStr;
 static String g_staGwStr;
 static String g_staSnStr;
 
-// Gestion de la reconnexion STA
+// Gestion de la reconnexion STA (backoff exponentiel pour éviter le spam série
+// et les tentatives inutiles quand le réseau est durablement absent)
 static unsigned long g_lastStaConnectAttempt = 0;
-static const unsigned long STA_RECONNECT_INTERVAL_MS = 10000; // 10 s
+static const unsigned long STA_RECONNECT_BASE_MS = 10000;  // 1re tentative après 10 s
+static const unsigned long STA_RECONNECT_MAX_MS  = 60000;  // plafond du backoff
+static unsigned long g_staReconnectInterval = STA_RECONNECT_BASE_MS;
+static bool g_staWasConnected = false;  // pour logguer les transitions STA (visibilité)
 
 // Demande de rechargement des configs pins depuis l'API (débounce 500 ms pour grouper les sauvegardes séquentielles)
 static volatile bool g_requestReloadPins = false;
@@ -204,22 +208,37 @@ void nidmi_loop() {
         ESP.restart();
     }
 
-    // Tentative de reconnexion STA automatique si des identifiants sont connus
+    // Tentative de reconnexion STA automatique si des identifiants sont connus.
+    // connectSta() est non bloquant : on se contente de relancer WiFi.begin() et
+    // d'espacer les tentatives via un backoff (10 s -> 60 s) remis à zéro une fois connecté.
     if (g_staSsid.length() > 0) {
         wl_status_t staStatus = WiFi.status();
         unsigned long now = millis();
-        if (staStatus != WL_CONNECTED &&
-            now - g_lastStaConnectAttempt >= STA_RECONNECT_INTERVAL_MS) {
-            Serial.println("[NiDMI] STA not connected, attempting automatic reconnection...");
-            // Reconfigurer éventuellement l'IP statique
-            if (g_staIpStr.length() > 0 && g_staGwStr.length() > 0 && g_staSnStr.length() > 0) {
-                IPAddress ip, gw, sn;
-                if (ip.fromString(g_staIpStr) && gw.fromString(g_staGwStr) && sn.fromString(g_staSnStr)) {
-                    serverCore.setStaticStaIp(ip, gw, sn);
-                }
+        if (staStatus == WL_CONNECTED) {
+            if (!g_staWasConnected) {
+                g_staWasConnected = true;
+                Serial.printf("[NiDMI] STA connectée, IP: %s\n", WiFi.localIP().toString().c_str());
             }
-            serverCore.connectSta(g_staSsid.c_str(), g_staPass.length() > 0 ? g_staPass.c_str() : nullptr);
-            g_lastStaConnectAttempt = now;
+            g_staReconnectInterval = STA_RECONNECT_BASE_MS;
+        } else {
+            if (g_staWasConnected) {
+                g_staWasConnected = false;
+                Serial.println("[NiDMI] STA déconnectée");
+            }
+            if (now - g_lastStaConnectAttempt >= g_staReconnectInterval) {
+                Serial.printf("[NiDMI] STA non connecté, reconnexion auto (backoff %lus)...\n", g_staReconnectInterval / 1000);
+                // Reconfigurer éventuellement l'IP statique
+                if (g_staIpStr.length() > 0 && g_staGwStr.length() > 0 && g_staSnStr.length() > 0) {
+                    IPAddress ip, gw, sn;
+                    if (ip.fromString(g_staIpStr) && gw.fromString(g_staGwStr) && sn.fromString(g_staSnStr)) {
+                        serverCore.setStaticStaIp(ip, gw, sn);
+                    }
+                }
+                serverCore.connectSta(g_staSsid.c_str(), g_staPass.length() > 0 ? g_staPass.c_str() : nullptr);
+                g_lastStaConnectAttempt = now;
+                g_staReconnectInterval *= 2;
+                if (g_staReconnectInterval > STA_RECONNECT_MAX_MS) g_staReconnectInterval = STA_RECONNECT_MAX_MS;
+            }
         }
     }
 

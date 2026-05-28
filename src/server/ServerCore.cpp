@@ -130,30 +130,20 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
 }
 
 void ServerCore::connectSta(const char* staSsid, const char* staPass) {
-    Serial.printf("[ServerCore] Connecting to STA: %s\n", staSsid);
-    
+    Serial.printf("[ServerCore] STA: démarrage connexion à %s (non bloquant)\n", staSsid);
+
     if (useStaticSta) {
         Serial.printf("[ServerCore] Using static IP: %s\n", staIp.toString().c_str());
         WiFi.config(staIp, staGw, staSn);
     }
-    
+
+    /* Démarrage non bloquant : on lance l'association et on rend la main.
+     * L'ancienne boucle d'attente (20 x 500 ms) figeait la boucle Core 1
+     * — serveur web et nettoyage WebSocket — jusqu'à 10 s à chaque tentative,
+     * y compris pendant les reconnexions appelées depuis nidmi_loop().
+     * Le suivi de l'état de connexion se fait désormais dans la boucle
+     * (et via les événements WiFi). */
     WiFi.begin(staSsid, staPass);
-    
-    // Attendre la connexion avec timeout
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-        delay(500);
-        attempts++;
-        Serial.print(".");
-    }
-    Serial.println();
-    
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("[ServerCore] STA connected! IP: %s\n", WiFi.localIP().toString().c_str());
-    } else {
-        Serial.printf("[ServerCore] STA connection failed after %d attempts\n", attempts);
-        Serial.printf("[ServerCore] WiFi status: %d\n", WiFi.status());
-    }
 }
 
 void ServerCore::setStaticStaIp(IPAddress ip, IPAddress gateway, IPAddress subnet) {

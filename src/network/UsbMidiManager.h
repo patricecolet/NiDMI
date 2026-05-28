@@ -10,7 +10,7 @@
 #ifdef NIDMI_USB_MIDI_SUPPORTED
 #ifndef NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
 /** 1 = USB-MIDI initialisé au boot ; 0 = désactivé (série USB plus simple pour le dev). */
-#define NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME 1
+#define NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME 0
 #endif
 #endif
 
@@ -25,7 +25,9 @@ inline bool nidmi_usb_midi_enabled_at_compile_time() {
 
 #ifdef NIDMI_USB_MIDI_SUPPORTED
 #include <USB.h>
+#if NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
 #include <USBMIDI.h>
+#endif
 #endif
 
 /**
@@ -36,7 +38,7 @@ inline bool nidmi_usb_midi_enabled_at_compile_time() {
  */
 class UsbMidiManager {
 private:
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     USBMIDI* usbMidi;
     bool usbInitialized;
 #endif

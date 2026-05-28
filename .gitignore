@@ -11,6 +11,9 @@ build/
 *.hex
 *.eep
 
+# Logs runtime (moniteur série, etc.)
+.logs/
+
 # Fichiers système
 .DS_Store
 Thumbs.db

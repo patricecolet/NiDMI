@@ -1,7 +1,7 @@
 #include "UsbMidiManager.h"
 #include "../server/WebDebugConsole.h"
 
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
 #include <Preferences.h>
 #include <esp_arduino_version.h>
 
@@ -30,7 +30,7 @@ static String nidmiUsbMidiHostNameFromNvs() {
 #endif
 
 UsbMidiManager::UsbMidiManager() 
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     : usbMidi(nullptr), usbInitialized(false), isStarted(false), available(false) {
 #else
     : isStarted(false), available(false) {
@@ -40,7 +40,7 @@ UsbMidiManager::UsbMidiManager()
 UsbMidiManager::~UsbMidiManager() {
     stop();
 
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     // Nettoyer explicitement l'objet alloué (évite fuite mémoire si on re-désactive/active souvent)
     if (usbMidi) {
         delete usbMidi;
@@ -50,7 +50,7 @@ UsbMidiManager::~UsbMidiManager() {
 }
 
 bool UsbMidiManager::isSupported() const {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     return true;
 #else
     return false;
@@ -58,7 +58,7 @@ bool UsbMidiManager::isSupported() const {
 }
 
 bool UsbMidiManager::isUsbOtgEnabled() const {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     // Sur ESP32-S3, si sdkconfig.defaults contient CONFIG_SOC_USB_OTG_SUPPORTED=y,
     // USB-OTG est activé au niveau hardware même si ARDUINO_USB_MODE indique mode série.
     // On ne peut pas vérifier sdkconfig.defaults depuis le code C++, donc on fait confiance
@@ -85,7 +85,7 @@ bool UsbMidiManager::begin() {
         return true;
     }
     
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     // Vérifier que USB-OTG est activé
     if (!isUsbOtgEnabled()) {
         NIDMI_WEB_LOG("[USB-MIDI] ERREUR: USB-OTG non activé!");
@@ -129,7 +129,7 @@ bool UsbMidiManager::begin() {
 }
 
 void UsbMidiManager::stop() {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     // Désactiver le routage (etat "connected/enabled" pour l'API/UI),
     // sans détruire l'instance USB pour limiter les risques de crash
     // lors d'un toggle depuis l'interface web.
@@ -144,7 +144,7 @@ void UsbMidiManager::stop() {
 void UsbMidiManager::update() {
     // Vérification de connexion USB si nécessaire
     // Sur ESP32-S3, USB est toujours disponible une fois initialisé
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     if (isStarted && usbInitialized) {
         // Lire les messages MIDI entrants si nécessaire
         // (peut être ajouté plus tard pour la réception)
@@ -153,7 +153,7 @@ void UsbMidiManager::update() {
 }
 
 bool UsbMidiManager::isConnected() const {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     return isStarted && usbInitialized && available;
 #else
     return false;
@@ -161,7 +161,7 @@ bool UsbMidiManager::isConnected() const {
 }
 
 void UsbMidiManager::sendNoteOn(uint8_t channel, uint8_t note, uint8_t velocity) {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     if (usbMidi && isConnected()) {
         // USB MIDI format: CIN=0x09 pour Note On
         // Status: 0x90-0x9F (Note On, 0x9n où n=channel 0-15)
@@ -173,7 +173,7 @@ void UsbMidiManager::sendNoteOn(uint8_t channel, uint8_t note, uint8_t velocity)
 }
 
 void UsbMidiManager::sendNoteOff(uint8_t channel, uint8_t note, uint8_t velocity) {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     if (usbMidi && isConnected()) {
         // USB MIDI format: CIN=0x08 pour Note Off
         // Status: 0x80-0x8F (Note Off, 0x8n où n=channel 0-15)
@@ -185,7 +185,7 @@ void UsbMidiManager::sendNoteOff(uint8_t channel, uint8_t note, uint8_t velocity
 }
 
 void UsbMidiManager::sendControlChange(uint8_t channel, uint8_t control, uint8_t value) {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     if (usbMidi && isConnected()) {
         // USB MIDI format: CIN=0x0B pour Control Change
         // Status: 0xB0-0xBF (Control Change, 0xBn où n=channel 0-15)
@@ -197,7 +197,7 @@ void UsbMidiManager::sendControlChange(uint8_t channel, uint8_t control, uint8_t
 }
 
 void UsbMidiManager::sendProgramChange(uint8_t channel, uint8_t program) {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     if (usbMidi && isConnected()) {
         // USB MIDI format: CIN=0x0C pour Program Change
         // Status: 0xC0-0xCF (Program Change, 0xCn où n=channel 0-15)
@@ -210,7 +210,7 @@ void UsbMidiManager::sendProgramChange(uint8_t channel, uint8_t program) {
 }
 
 void UsbMidiManager::sendPitchBend(uint8_t channel, int bend) {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     if (usbMidi && isConnected()) {
         // Convertir bend (-8192 à 8191) en format MIDI (0-16383)
         uint16_t midiBend = (uint16_t)(bend + 8192);
@@ -227,7 +227,7 @@ void UsbMidiManager::sendPitchBend(uint8_t channel, int bend) {
 }
 
 void UsbMidiManager::sendAftertouch(uint8_t channel, uint8_t pressure) {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     if (usbMidi && isConnected()) {
         // USB MIDI format: CIN=0x04 pour Channel Voice Messages à 2 octets
         // USB MIDI format: CIN=0x0D pour Channel Pressure (2 octets)
@@ -244,7 +244,7 @@ void UsbMidiManager::sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pres
     // TEMPORAIREMENT DÉSACTIVÉ POUR DEBUG - CRASH SUSPECTÉ
     return;
     /*
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     if (usbMidi && isConnected()) {
         // USB MIDI format: CIN=0x04 pour Channel Voice Messages à 2 octets
         // USB MIDI format: CIN=0x0A pour Polyphonic Key Pressure (3 octets)
@@ -259,7 +259,7 @@ void UsbMidiManager::sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pres
 }
 
 void UsbMidiManager::sendClock() {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     if (usbMidi && isConnected()) {
         // USB MIDI format: header (CIN=0x0F pour Real-Time), byte1=message, byte2=0, byte3=0
         midiEventPacket_t packet = {0x0F, 0xF8, 0x00, 0x00}; // MIDI Clock (0xF8)
@@ -269,7 +269,7 @@ void UsbMidiManager::sendClock() {
 }
 
 void UsbMidiManager::sendStart() {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     if (usbMidi && isConnected()) {
         midiEventPacket_t packet = {0x0F, 0xFA, 0x00, 0x00}; // MIDI Start (0xFA)
         usbMidi->writePacket(&packet);
@@ -278,7 +278,7 @@ void UsbMidiManager::sendStart() {
 }
 
 void UsbMidiManager::sendStop() {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     if (usbMidi && isConnected()) {
         midiEventPacket_t packet = {0x0F, 0xFC, 0x00, 0x00}; // MIDI Stop (0xFC)
         usbMidi->writePacket(&packet);
@@ -287,7 +287,7 @@ void UsbMidiManager::sendStop() {
 }
 
 void UsbMidiManager::sendContinue() {
-#ifdef NIDMI_USB_MIDI_SUPPORTED
+#if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     if (usbMidi && isConnected()) {
         midiEventPacket_t packet = {0x0F, 0xFB, 0x00, 0x00}; // MIDI Continue (0xFB)
         usbMidi->writePacket(&packet);
