@@ -15,6 +15,9 @@ build/
 # Logs runtime (moniteur série, etc.)
 .logs/
 
+# En-tête de version généré au build (git describe + variante)
+src/nidmi_fw_version.h
+
 # Fichiers système
 .DS_Store
 Thumbs.db

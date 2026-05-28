@@ -53,7 +53,7 @@ ComponentManager::~ComponentManager() {
 
 void ComponentManager::begin(MidiSender* sender) {
     midi_sender = sender;
-    telemetryQueue = xQueueCreate(8, sizeof(TelemetryWsMsg));
+    telemetryQueue = xQueueCreate(32, sizeof(TelemetryWsMsg));  // 8->32 : moins d'overflow sur capteurs actifs
     /* Charger d'abord les MUX */
     loadMuxConfigFromNVS();
     /* Puis charger les configs des pins */
@@ -162,7 +162,7 @@ void ComponentManager::update() {
     if (telemetryQueue) {
         TelemetryWsMsg tm;
         uint8_t drained = 0;
-        while (drained < 8 && xQueueReceive(telemetryQueue, &tm, 0) == pdTRUE) {
+        while (drained < 32 && xQueueReceive(telemetryQueue, &tm, 0) == pdTRUE) {
             serverCore.websocket().textAll(tm.payload);
             drained++;
         }

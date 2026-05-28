@@ -147,9 +147,9 @@ void nidmi_begin() {
     touchDiag("AVANT WiFi/serveur");
 
     // Démarre l’AP : AP seul si aucun STA en NVS (évite soucis d’association client en APSTA « vide »)
-    Serial.printf("[MEM] avant WiFi: %d\n", (int)ESP.getFreeHeap());
+    NIDMI_WEB_LOG("[MEM] avant WiFi: %d\n", (int)ESP.getFreeHeap());
     serverCore.begin(apSsid, apPass, host, g_staSsid.length() == 0);
-    Serial.printf("[MEM] apres WiFi+serveur: %d\n", (int)ESP.getFreeHeap());
+    NIDMI_WEB_LOG("[MEM] apres WiFi+serveur: %d\n", (int)ESP.getFreeHeap());
 
     touchDiag("APRES WiFi/serveur");
 
@@ -172,21 +172,21 @@ void nidmi_begin() {
 
     // Initialiser MidiRouter (qui initialisera USB MIDI si activé et supporté)
     g_midiRouter.begin();
-    Serial.printf("[MEM] apres MidiRouter: %d\n", (int)ESP.getFreeHeap());
+    NIDMI_WEB_LOG("[MEM] apres MidiRouter: %d\n", (int)ESP.getFreeHeap());
     
     // Initialiser RTP-MIDI
     serverCore.rtpMidi().begin(serverName.c_str());
-    Serial.printf("[MEM] apres RTP-MIDI: %d\n", (int)ESP.getFreeHeap());
+    NIDMI_WEB_LOG("[MEM] apres RTP-MIDI: %d\n", (int)ESP.getFreeHeap());
     
     // Initialiser Bluetooth MIDI
     serverCore.bluetooth().begin(serverName.c_str());
-    Serial.printf("[MEM] apres Bluetooth: %d\n", (int)ESP.getFreeHeap());
+    NIDMI_WEB_LOG("[MEM] apres Bluetooth: %d\n", (int)ESP.getFreeHeap());
     
     touchDiag("AVANT ComponentManager.begin");
 
     // Initialiser ComponentManager
     g_componentManager.begin(&g_midiRouter);
-    Serial.printf("[MEM] apres ComponentManager: %d\n", (int)ESP.getFreeHeap());
+    NIDMI_WEB_LOG("[MEM] apres ComponentManager: %d\n", (int)ESP.getFreeHeap());
 
     touchDiag("APRES ComponentManager.begin (MuxTask+MidiTask demarres)");
     
@@ -217,16 +217,16 @@ void nidmi_loop() {
         if (staStatus == WL_CONNECTED) {
             if (!g_staWasConnected) {
                 g_staWasConnected = true;
-                Serial.printf("[NiDMI] STA connectée, IP: %s\n", WiFi.localIP().toString().c_str());
+                NIDMI_WEB_LOG("[NiDMI] STA connectée, IP: %s", WiFi.localIP().toString().c_str());
             }
             g_staReconnectInterval = STA_RECONNECT_BASE_MS;
         } else {
             if (g_staWasConnected) {
                 g_staWasConnected = false;
-                Serial.println("[NiDMI] STA déconnectée");
+                NIDMI_WEB_LOG("[NiDMI] STA déconnectée");
             }
             if (now - g_lastStaConnectAttempt >= g_staReconnectInterval) {
-                Serial.printf("[NiDMI] STA non connecté, reconnexion auto (backoff %lus)...\n", g_staReconnectInterval / 1000);
+                NIDMI_WEB_LOG("[NiDMI] STA non connecté, reconnexion auto (backoff %lus)...", g_staReconnectInterval / 1000);
                 // Reconfigurer éventuellement l'IP statique
                 if (g_staIpStr.length() > 0 && g_staGwStr.length() > 0 && g_staSnStr.length() > 0) {
                     IPAddress ip, gw, sn;

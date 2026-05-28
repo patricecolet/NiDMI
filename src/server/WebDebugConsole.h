@@ -11,12 +11,15 @@
 class AsyncWebSocket;
 class AsyncWebSocketClient;
 
+// Log "tee" : écrit TOUJOURS sur Serial, et en plus dans la console web si
+// supportée (S3). Compilé sur toutes les cartes (sur C3 = Serial seul).
+void nidmi_web_debug_log(const char* fmt, ...);
+
 #if NIDMI_WEB_DEBUG_CONSOLE
 
 void nidmi_web_debug_init(AsyncWebSocket* ws);
 void nidmi_web_debug_handle_ws_text(AsyncWebSocketClient* client, const String& message);
 void nidmi_web_debug_append_line(const char* line);
-void nidmi_web_debug_log(const char* fmt, ...);
 bool nidmi_web_debug_is_supported();
 
 #else
@@ -28,8 +31,5 @@ inline bool nidmi_web_debug_is_supported() { return false; }
 
 #endif
 
-#if NIDMI_WEB_DEBUG_CONSOLE
+// Disponible sur toutes les cartes : Serial + console web (si S3).
 #define NIDMI_WEB_LOG(...) nidmi_web_debug_log(__VA_ARGS__)
-#else
-#define NIDMI_WEB_LOG(...) ((void)0)
-#endif

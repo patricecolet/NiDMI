@@ -1,4 +1,6 @@
 #include "WebDebugConsole.h"
+#include <cstdarg>
+#include <cstdio>
 
 #if NIDMI_WEB_DEBUG_CONSOLE
 
@@ -88,8 +90,11 @@ void nidmi_web_debug_append_line(const char* line) {
     g_ws->textAll(msg);
 }
 
+#endif
+
+// Log "tee" : toujours compilé (Serial sur toutes les cartes, + console si S3).
 void nidmi_web_debug_log(const char* fmt, ...) {
-    char line[kLineCap];
+    char line[200];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(line, sizeof(line), fmt, ap);
@@ -97,7 +102,7 @@ void nidmi_web_debug_log(const char* fmt, ...) {
     line[sizeof(line) - 1] = '\0';
 
     Serial.println(line);
+#if NIDMI_WEB_DEBUG_CONSOLE
     nidmi_web_debug_append_line(line);
-}
-
 #endif
+}

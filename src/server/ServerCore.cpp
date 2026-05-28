@@ -13,6 +13,17 @@ ServerCore::ServerCore()
     : server(80), ws("/ws") {}
 
 void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostname, bool apOnlyMode) {
+    /* Événements WiFi : visibilité des drops STA (avec la RAISON, indisponible par polling)
+     * et de l'obtention d'IP. Log Serial uniquement — pas d'accès WebSocket depuis la tâche
+     * event WiFi, pour éviter les races avec la tâche serveur (AsyncWebSocket). */
+    WiFi.onEvent([](arduino_event_id_t event, arduino_event_info_t info){
+        if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
+            Serial.printf("[WiFi] STA got IP: %s\n", WiFi.localIP().toString().c_str());
+        } else if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+            Serial.printf("[WiFi] STA déconnectée (raison=%d)\n", (int)info.wifi_sta_disconnected.reason);
+        }
+    });
+
     /* Sans STA enregistré : AP seul (WIFI_AP). APSTA avec interface STA inactive peut provoquer
      * échecs ou boucles « mot de passe » / reconnexion sur téléphones (notamment ESP32-C3/S3). */
     if (apOnlyMode) {
@@ -190,7 +201,7 @@ void ServerCore::reconfigureMdns(const char* hostname) {
     bool mdnsOk = false;
     String workingName = "";
     
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 2; i++) { // 2 noms (corrige une lecture hors limites: tableau de 2)
         // Serial.print("[ServerCore] Trying mDNS name: "); Serial.println(mdnsNames[i]);
         if (MDNS.begin(mdnsNames[i].c_str())) {
             MDNS.addService("http", "tcp", 80);

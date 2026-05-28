@@ -6,6 +6,20 @@
 #include <Preferences.h>
 #include <WiFi.h>
 
+// Version firmware : en-tête généré au build (sync_files) et gravé dans l'image.
+// Valeurs par défaut si l'en-tête est absent (ex. build IDE sans le script).
+#if defined(__has_include)
+#  if __has_include("../nidmi_fw_version.h")
+#    include "../nidmi_fw_version.h"
+#  endif
+#endif
+#ifndef NIDMI_FW_VERSION
+#define NIDMI_FW_VERSION "dev"
+#endif
+#ifndef NIDMI_FW_VARIANT
+#define NIDMI_FW_VARIANT "?"
+#endif
+
 void setupNetworkAPI(AsyncWebServer& server) {
     // API - Statut général
     server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -36,6 +50,8 @@ void setupNetworkAPI(AsyncWebServer& server) {
         }
         json += ",\"osc_broadcast\":" + String(oscBroadcast ? "true" : "false");
         json += ",\"web_debug_console\":" + String(nidmi_web_debug_is_supported() ? "true" : "false");
+        json += ",\"fw_version\":\"" NIDMI_FW_VERSION "\"";
+        json += ",\"fw_variant\":\"" NIDMI_FW_VARIANT "\"";
         json += "}";
         request->send(200, "application/json", json);
     });

@@ -262,6 +262,7 @@ show_help() {
     echo "  sync     - Synchroniser les fichiers seulement"
     echo "  compile  - Synchroniser + compiler"
     echo "  build    - Synchroniser + compiler + stocker le binaire"
+    echo "  build-all- [S3] Builder toutes les variantes (usbmidi off + on) pour une release"
     echo "  upload   - Synchroniser + compiler + uploader"
     echo "  flash    - Uploader sans recompiler (binaire déjà compilé pour ce sketch + board)"
     echo "  monitor  - Ouvrir le moniteur série"
@@ -347,7 +348,14 @@ sync_files() {
     else
         echo "   ⚠️  Script de minification non trouvé, synchronisation sans minification"
     fi
-    
+
+    # Générer l'en-tête de version (gravé dans le firmware, exposé par /api/status).
+    # Version = git describe (ou date si hors git) ; variante = selon le flag USB-MIDI courant.
+    _fw_ver=$(cd "$REPO_DIR" && git describe --tags --always --dirty 2>/dev/null || date +%Y%m%d-%H%M%S)
+    _fw_variant=$([ "${_usb_midi_flag:-0}" = "1" ] && echo "usbmidi-on" || echo "usbmidi-off")
+    printf '#pragma once\n#define NIDMI_FW_VERSION "%s"\n#define NIDMI_FW_VARIANT "%s"\n' "$_fw_ver" "$_fw_variant" > "$REPO_DIR/src/nidmi_fw_version.h"
+    echo "   🏷️  Version firmware: $_fw_ver ($_fw_variant)"
+
     # Nettoyer les anciens fichiers source (pour éviter les conflits après réorganisation)
     rm -rf $ARDUINO_LIB_DIR/src/* 2>/dev/null || true
     
@@ -357,6 +365,7 @@ sync_files() {
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/nidmi_fw_version.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
     cp -f $REPO_DIR/src/nidmi_debug.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
     cp -f $REPO_DIR/src/Globals.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
     cp -f $REPO_DIR/src/NiDMI.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -906,6 +915,17 @@ main() {
                    echo ""
                    echo "✅ Build terminé !"
                    echo "📦 Binaire stocké dans bin/"
+                   ;;
+               "build-all")
+                   echo "🚀 NiDMI - Build de TOUTES les variantes S3 (release)"
+                   echo "======================================================"
+                   bash "$0" build --board s3 --ota --variant off
+                   bash "$0" build --board s3 --ota --variant on
+                   # Nettoyer les transitoires (régénérés à chaque build), ne garder que les étiquetés
+                   rm -f "$REPO_DIR"/bin/nidmi_basic.ino.* "$REPO_DIR"/bin/nidmi_basic.uf2 2>/dev/null
+                   echo ""
+                   echo "✅ Variantes prêtes (transitoires nettoyés) :"
+                   ls -la "$REPO_DIR"/bin/nidmi-*-usbmidi-*.bin "$REPO_DIR"/bin/nidmi-*-usbmidi-*.merged.bin 2>/dev/null
                    ;;
                "upload")
                    echo "🚀 NiDMI - Synchronisation + Compilation + Upload"
