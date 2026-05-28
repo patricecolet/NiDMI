@@ -22,6 +22,7 @@ void setupOSC_API(AsyncWebServer& server);
 void setupCacheAPI(AsyncWebServer& server);
 void setupComponentsAPI(AsyncWebServer& server);
 void setupSystemAPI(AsyncWebServer& server);
+void setupOtaAPI(AsyncWebServer& server);
 
 Preferences preferences;
 
@@ -302,4 +303,5 @@ void setupWebAPI(AsyncWebServer& server, AsyncWebSocket& ws) {
     setupCacheAPI(server);
     setupComponentsAPI(server);
     setupSystemAPI(server);
+    setupOtaAPI(server);
 }

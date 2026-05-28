@@ -236,6 +236,46 @@ function initForms(){
  }
  });
  
+ $('#ota').addEventListener('submit', (e) => {
+ e.preventDefault();
+ const f = $('#otaFile').files[0];
+ if (!f) return;
+ const prog = $('#otaProgress');
+ const msg = $('#otaMsg');
+ prog.style.display = 'block'; prog.value = 0;
+ msg.style.color = '#059669';
+ msg.textContent = 'Préparation...';
+ const xhr = new XMLHttpRequest();
+ xhr.open('POST', '/api/ota');
+ xhr.upload.onprogress = (ev) => {
+ if (ev.lengthComputable) {
+ const pct = Math.round(ev.loaded / ev.total * 100);
+ prog.value = pct;
+ msg.textContent = 'Envoi: ' + pct + '%';
+ }
+ };
+ xhr.onload = () => {
+ let ok = false, err = xhr.responseText;
+ try { const d = JSON.parse(xhr.responseText); ok = d.status === 'ok'; if (d.error) err = d.error; } catch(_e) {}
+ if (xhr.status === 200 && ok) {
+ prog.value = 100;
+ msg.textContent = 'Image reçue, redémarrage... (la page se recharge automatiquement)';
+ setTimeout(() => location.reload(), 8000);
+ } else {
+ msg.style.color = '#dc2626';
+ msg.textContent = 'Échec: ' + err;
+ prog.style.display = 'none';
+ }
+ };
+ xhr.onerror = () => {
+ msg.style.color = '#dc2626';
+ msg.textContent = 'Erreur réseau pendant l’envoi';
+ prog.style.display = 'none';
+ };
+ xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+ xhr.send(f);
+ });
+
  $('#osc').addEventListener('submit', async (e) => {
  e.preventDefault();
  const formData = new FormData();

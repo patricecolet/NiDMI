@@ -93,7 +93,7 @@ esac
 
 
 BOARD_TYPE="s3"  # Par défaut: S3
-BOARD="esp32:esp32:XIAO_ESP32S3"
+BOARD="esp32:esp32:XIAO_ESP32S3:PSRAM=opi"
 # Le mode USB S3 (S3_USB_PROPS) et le flag USB-MIDI sont calculés APRÈS le parsing
 # des arguments — car --variant peut forcer le mode (voir compute_usb_midi_mode plus bas).
 S3_USB_PROPS=()
@@ -213,12 +213,12 @@ case "$BOARD_TYPE" in
         BOARD_TYPE="c3"
         ;;
     s3|S3)
-        BOARD="esp32:esp32:XIAO_ESP32S3"
+        BOARD="esp32:esp32:XIAO_ESP32S3:PSRAM=opi"
         BOARD_TYPE="s3"
         ;;
     *)
         echo "⚠️  Board non supporté: $BOARD_TYPE, utilisation de 's3' par défaut"
-        BOARD="esp32:esp32:XIAO_ESP32S3"
+        BOARD="esp32:esp32:XIAO_ESP32S3:PSRAM=opi"
         BOARD_TYPE="s3"
         ;;
 esac
