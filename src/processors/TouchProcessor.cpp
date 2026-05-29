@@ -94,6 +94,10 @@ namespace {
     static uint32_t baseline_start_time[49]    = {0};
     static uint32_t baseline_wait_last_log[49] = {0};
     static const uint32_t BASELINE_STABILIZATION_TIME_MS = 2000; // Délai pour stabilisation du signal
+    static const uint8_t  BASELINE_SAMPLE_COUNT = 20;            // nb d'échantillons pour la baseline
+    // Échantillons gardés pour calculer la MÉDIANE (robuste aux pics : un pic isolé ne
+    // pollue pas la baseline, contrairement à la moyenne — cf. lectures touch bruitées sur S3).
+    static uint32_t baseline_samples[49][BASELINE_SAMPLE_COUNT] = {{0}};
 
     // Lissage flottant pour chaque GPIO (même EMA que AnalogFilter, en pleine résolution)
     static float smoothed_touch_f[49]          = {0.0f};
@@ -146,6 +150,9 @@ static bool establishBaseline(uint8_t gpio, uint32_t touch_value_in, uint32_t& b
     }
     
     uint32_t touch_value = touch_value_in;
+    if (baseline_count[idx] < BASELINE_SAMPLE_COUNT) {
+        baseline_samples[idx][baseline_count[idx]] = touch_value;  // pour la médiane
+    }
     baseline_sum[idx] += touch_value;
     baseline_count[idx]++;
     
@@ -162,13 +169,26 @@ static bool establishBaseline(uint8_t gpio, uint32_t touch_value_in, uint32_t& b
     }
     yield(); // Éviter task_wdt pendant l'établissement de la baseline (plusieurs pins)
 
-    if (baseline_count[idx] >= 20) {
-        baseline_value[idx] = baseline_sum[idx] / baseline_count[idx];
+    if (baseline_count[idx] >= BASELINE_SAMPLE_COUNT) {
+        // MÉDIANE des échantillons (robuste aux pics) au lieu de la moyenne :
+        // un pic isolé dans la fenêtre ne décale plus la baseline.
+        uint32_t sorted[BASELINE_SAMPLE_COUNT];
+        for (uint8_t i = 0; i < BASELINE_SAMPLE_COUNT; i++) sorted[i] = baseline_samples[idx][i];
+        for (uint8_t i = 1; i < BASELINE_SAMPLE_COUNT; i++) {   // tri par insertion (n=20)
+            uint32_t key = sorted[i];
+            int j = (int)i - 1;
+            while (j >= 0 && sorted[j] > key) { sorted[j + 1] = sorted[j]; j--; }
+            sorted[j + 1] = key;
+        }
+        uint32_t median = (sorted[BASELINE_SAMPLE_COUNT / 2 - 1] + sorted[BASELINE_SAMPLE_COUNT / 2]) / 2;
+        uint32_t mean   = baseline_sum[idx] / baseline_count[idx];  // pour comparaison dans le log
+        baseline_value[idx] = median;
         baseline_set[idx]   = true;
         baseline            = baseline_value[idx];
-        TOUCH_INFO("[TouchProcessor] ✓ Baseline GPIO%d établie: %lu (min=%lu, max=%lu, écart=%lu)\n",
+        TOUCH_INFO("[TouchProcessor] ✓ Baseline GPIO%d établie (médiane): %lu (moyenne=%lu, min=%lu, max=%lu, écart=%lu)\n",
                   gpio,
                   (unsigned long)baseline,
+                  (unsigned long)mean,
                   (unsigned long)baseline_min[idx],
                   (unsigned long)baseline_max[idx],
                   (unsigned long)(baseline_max[idx] - baseline_min[idx]));
