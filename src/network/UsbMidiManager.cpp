@@ -3,7 +3,6 @@
 
 #if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
 #include <Preferences.h>
-#include <esp_arduino_version.h>
 
 // Même clé et règles que nidmi_begin() : mdns_name (SSID AP, mDNS, RTP, BT, nom USB MIDI).
 static String nidmiUsbMidiHostNameFromNvs() {
@@ -100,7 +99,11 @@ bool UsbMidiManager::begin() {
     // Ne pas ré-initialiser complètement à chaque activation.
     // On crée l'objet une fois, puis on réutilise l'initialisation USB déjà faite.
     if (!usbMidi) {
-#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 3, 1)
+        // Garde par FONCTIONNALITÉ, pas par version : le paquet "3.3.1" rapporte
+        // ESP_ARDUINO_VERSION == 3.3.0 (PATCH=0 dans esp_arduino_version.h), donc
+        // un test >= VAL(3,3,1) ne prend jamais le constructeur nommé. La macro
+        // ESP32_USB_MIDI_DEFAULT_NAME n'existe que là où l'API nommée existe.
+#if defined(ESP32_USB_MIDI_DEFAULT_NAME)
         usbMidi = new USBMIDI(hostName.c_str());
 #else
         usbMidi = new USBMIDI();
