@@ -144,7 +144,14 @@ void nidmi_begin() {
         // incompatible), on réinitialise la config (pins/mux/mappings/osc) mais on
         // PRÉSERVE le réseau (STA + mDNS) -> la carte reste joignable, et on ne charge
         // jamais d'anciennes données dans une nouvelle structure.
-        if (storedSchema != NIDMI_NVS_SCHEMA_VERSION) {
+        if (storedSchema == 0) {
+            // Aucune version stockée : appareil existant déjà au format courant (ou NVS vierge).
+            // On tamponne la version SANS rien effacer -> les réglages existants sont conservés.
+            // (À la 1re introduction de la garde, le format courant EST le schéma v1.)
+            preferences.putUInt("nvs_schema", NIDMI_NVS_SCHEMA_VERSION);
+        } else if (storedSchema != NIDMI_NVS_SCHEMA_VERSION) {
+            // Version connue mais différente -> format NVS incompatible (vrai changement, ex. v1->v2) :
+            // on réinitialise la config (pins/mux/mappings/osc) mais on PRÉSERVE le réseau.
             Serial.printf("[NiDMI] Schéma NVS stocké=%u attendu=%u -> reset config (réseau préservé)\n",
                           (unsigned)storedSchema, (unsigned)NIDMI_NVS_SCHEMA_VERSION);
             preferences.clear();
@@ -155,6 +162,7 @@ void nidmi_begin() {
             if (g_staSnStr.length() > 0) preferences.putString("sta_sn", g_staSnStr);
             preferences.putUInt("nvs_schema", NIDMI_NVS_SCHEMA_VERSION);
         }
+        // storedSchema == NIDMI_NVS_SCHEMA_VERSION -> rien à faire (déjà à jour)
         preferences.putString("mdns_name", serverName);
         preferences.putString("rtp_name", serverName);
         preferences.end();
