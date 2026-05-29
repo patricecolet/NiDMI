@@ -31,6 +31,13 @@ static const unsigned long STA_RECONNECT_MAX_MS  = 60000;  // plafond du backoff
 static unsigned long g_staReconnectInterval = STA_RECONNECT_BASE_MS;
 static bool g_staWasConnected = false;  // pour logguer les transitions STA (visibilité)
 
+// Version du schéma de données NVS. À INCRÉMENTER quand le format stocké en NVS
+// change de façon incompatible (clés/types JSON, layout des blobs mux, etc.).
+// Au boot, si la version stockée diffère, la config (pins/mux/mappings) est
+// réinitialisée mais le réseau (STA + mDNS) est préservé -> évite de charger
+// d'anciennes données dans une nouvelle structure (crash / valeurs fausses).
+static const uint32_t NIDMI_NVS_SCHEMA_VERSION = 1;
+
 // Demande de rechargement des configs pins depuis l'API (débounce 500 ms pour grouper les sauvegardes séquentielles)
 static volatile bool g_requestReloadPins = false;
 static unsigned long g_reloadRequestTime = 0;
@@ -105,6 +112,7 @@ void nidmi_begin() {
     g_staGwStr = "";
     g_staSnStr = "";
     bool touchEnabled = false;
+    uint32_t storedSchema = 0;
     const bool usbMidiEnabled = nidmi_usb_midi_enabled_at_compile_time();
 
     if (preferences.begin("nidmi", true)) {
@@ -115,6 +123,7 @@ void nidmi_begin() {
         g_staGwStr = preferences.getString("sta_gw", "");
         g_staSnStr = preferences.getString("sta_sn", "");
         touchEnabled = preferences.getBool("touch_enabled", false);
+        storedSchema = preferences.getUInt("nvs_schema", 0);
         preferences.end();
     } else {
         Serial.println("[NiDMI] ERREUR: ouverture NVS en lecture échouée - NVS peut être corrompue");
@@ -131,6 +140,21 @@ void nidmi_begin() {
     
     // Sauvegarder le nom mDNS dans NVS pour RTP-MIDI (seulement si NVS ouvre en écriture)
     if (preferences.begin("nidmi", false)) {
+        // Garde de schéma NVS : si le format stocké diffère du firmware (mise à jour
+        // incompatible), on réinitialise la config (pins/mux/mappings/osc) mais on
+        // PRÉSERVE le réseau (STA + mDNS) -> la carte reste joignable, et on ne charge
+        // jamais d'anciennes données dans une nouvelle structure.
+        if (storedSchema != NIDMI_NVS_SCHEMA_VERSION) {
+            Serial.printf("[NiDMI] Schéma NVS stocké=%u attendu=%u -> reset config (réseau préservé)\n",
+                          (unsigned)storedSchema, (unsigned)NIDMI_NVS_SCHEMA_VERSION);
+            preferences.clear();
+            if (g_staSsid.length() > 0)  preferences.putString("sta_ssid", g_staSsid);
+            if (g_staPass.length() > 0)  preferences.putString("sta_pass", g_staPass);
+            if (g_staIpStr.length() > 0) preferences.putString("sta_ip", g_staIpStr);
+            if (g_staGwStr.length() > 0) preferences.putString("sta_gw", g_staGwStr);
+            if (g_staSnStr.length() > 0) preferences.putString("sta_sn", g_staSnStr);
+            preferences.putUInt("nvs_schema", NIDMI_NVS_SCHEMA_VERSION);
+        }
         preferences.putString("mdns_name", serverName);
         preferences.putString("rtp_name", serverName);
         preferences.end();
