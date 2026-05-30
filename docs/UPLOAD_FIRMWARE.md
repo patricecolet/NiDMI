@@ -2,6 +2,47 @@
 
 Guide concis pour uploader le firmware sur le XIAO ESP32-C3/S3 depuis macOS.
 
+---
+
+## Méthode 0 : OTA par l'interface web (flux de prod, sans câble) ⭐
+
+C'est la méthode utilisée en atelier/prod : on met à jour le firmware **par Wi-Fi**,
+via la page web servie par la carte, **sans câble série**.
+
+### Étapes
+
+1. **Builder l'image** (voir distinctions ci-dessous — la commande est `build`, PAS `compile`, et il faut `--ota`) :
+
+   ```bash
+   ./scripts/nidmi.sh build --board s3 --variant on --ota
+   ```
+
+2. **Récupérer l'image app** dans `bin/` :
+   - Variante prod : **`bin/nidmi-s3-usbmidi-on.bin`** (= copie de `bin/nidmi_basic.ino.bin`).
+   - ⚠️ Prendre l'**image app `.bin`**, surtout **PAS** le `.merged.bin` (bootloader+partitions+app, réservé au flash série complet / ESP Web Tools).
+   - Vérifier le `mtime` du fichier pour être sûr de charger le build du jour.
+
+3. **Flasher depuis l'interface** : ouvrir `http://192.168.4.1`, onglet/section **« Firmware (OTA) »** →
+   bouton **« Flasher »** → choisir le `.bin`. La carte écrit dans le slot OTA libre puis **redémarre** dessus.
+
+### Trois pièges à connaître (sources d'erreurs réelles)
+
+| Piège | Détail |
+|-------|--------|
+| **`compile` ≠ `build`** | `./scripts/nidmi.sh compile` ne fait que **vérifier** la compilation dans le cache Arduino (nettoyé juste après) → **rien n'est écrit dans `bin/`**. Seul **`build`** (`--output-dir bin`) produit l'image. Après un `compile`, le `bin/` contient encore l'**ancien** build (timestamp périmé). |
+| **Variante USB-MIDI** | `--variant on` = `usb_mode=0` (TinyUSB/OTG, **requis pour le MIDI USB**, c'est la variante de **prod**). `--variant off` = `usb_mode=1` (HW CDC/JTAG, série stable pour **debug**). Par défaut le script suit le flag du header `UsbMidiManager.h` — **toujours préciser `--variant on` pour la prod**. |
+| **`--ota` obligatoire** | L'OTA nécessite une table à **2 slots app** (`--ota` → `nidmi_s3_ota_dual_littlefs`). Sans `--ota` : la carte ne peut pas recevoir l'OTA (`Update.begin()` échoue), et flasher une image non-`--ota` fait **perdre la capacité OTA** pour la fois d'après. Cf. `src/api/OtaAPI.cpp`. |
+
+### Robustesse
+
+- Le corps est envoyé en **octet-stream brut** (Content-Length = taille exacte) ; si l'upload est
+  tronqué (coupure Wi-Fi), la dernière frame n'arrive pas → la partition n'est pas marquée bootable
+  → la carte **reste sur le firmware actuel** (pas de brick).
+- Endpoint `POST /api/ota` **non authentifié** : usage atelier sur AP isolé uniquement.
+  À protéger (token) si exposé sur un réseau ouvert.
+
+---
+
 ## Prérequis (Installation)
 
 ### Installer Python 3 et pip3
@@ -47,10 +88,15 @@ Alternative côté PC (`pip install esptool`) :
 ### Compiler et générer le fichier binaire
 
 ```bash
-./scripts/nidmi.sh build
+# Image OTA de prod (USB-MIDI ON, partition dual-OTA) :
+./scripts/nidmi.sh build --board s3 --variant on --ota
 ```
 
-Le fichier binaire sera généré dans `bin/nidmi_basic.ino.merged.bin` et le fichier UF2 dans `bin/nidmi_basic.uf2`.
+Génère dans `bin/` :
+- `bin/nidmi_basic.ino.bin` (+ copie étiquetée `bin/nidmi-s3-usbmidi-on.bin`) — **image app**, à charger en **OTA** (voir [Méthode 0](#méthode-0--ota-par-linterface-web-flux-de-prod-sans-câble-)).
+- `bin/nidmi_basic.ino.merged.bin` (+ `bin/nidmi-s3-usbmidi-on.merged.bin`) — image complète bootloader+partitions+app, pour le **flash série complet** (esptool / ESP Web Tools).
+
+> ⚠️ `build` écrit dans `bin/`. `compile` ne le fait **pas** (il vérifie seulement la compilation dans le cache).
 
 ## Méthode 2 : Arduino IDE
 
