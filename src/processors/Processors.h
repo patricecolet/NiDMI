@@ -23,6 +23,7 @@
 #include "TouchProcessor.h"
 #include "ImuProcessor.h"
 #include "Mpr121Processor.h"
+#include "NoiseSamplerProcessor.h"
 
 // Pour ajouter un nouveau processeur :
 // #include "MyComponentProcessor.h"

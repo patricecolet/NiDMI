@@ -32,7 +32,8 @@ enum class ComponentFamily : uint8_t {
     MOTION      = 6,  // PIR, IMU, radar, gestes
     COLOR       = 7,  // Capteurs de couleur / lumière avancés
     INTERFACE   = 8,  // Touch/MPR121, FSR, encodeurs, contrôles physiques
-    ACTUATOR    = 9   // Relais, moteurs, servos, buzzers
+    ACTUATOR    = 9,  // Relais, moteurs, servos, buzzers
+    SIGNAL      = 10  // Modules signal/CV : bruit, LFO, oscillateurs, VCA (génération + échantillonnage)
     // Ajouter de nouvelles familles ici
 };
 

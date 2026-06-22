@@ -9,6 +9,7 @@
 #include "../components/basic/JoystickDef.h"
 #include "../components/motion/Lis3dhDef.h"
 #include "../components/interface/Mpr121Def.h"
+#include "../components/signal/NoiseSamplerDef.h"
 #include "../midi/MidiMessageType.h"
 #include "../utils/PinMapper.h"  // Pour PinMapper::hasTouch()
 
@@ -235,6 +236,30 @@ void ComponentInitializer::initializeConfig(
             mpr121Config->midi_channel = channel;
             mpr121Config->msg_type = msg_type;
             config.specificConfig.mpr121 = mpr121Config;
+            break;
+        }
+        case ComponentType::NOISE_SAMPLER: {
+            Components::NoiseSamplerConfig* nsConfig = new Components::NoiseSamplerConfig();
+            if (def && def->formFields) {
+                for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                    const FormFieldDef& field = def->formFields[i];
+                    if (field.id && field.defaultValue) {
+                        if (strcmp(field.id, "sampleMode") == 0) {
+                            strncpy(nsConfig->sampleMode, field.defaultValue, sizeof(nsConfig->sampleMode) - 1);
+                            nsConfig->sampleMode[sizeof(nsConfig->sampleMode) - 1] = '\0';
+                        } else if (strcmp(field.id, "rateMs") == 0) {
+                            nsConfig->rateMs = (uint16_t)atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "inMin") == 0) {
+                            nsConfig->inMin = (uint16_t)atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "inMax") == 0) {
+                            nsConfig->inMax = (uint16_t)atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "filterIntensity") == 0) {
+                            nsConfig->filter_intensity = (uint8_t)atoi(field.defaultValue);
+                        }
+                    }
+                }
+            }
+            config.specificConfig.noiseSampler = nsConfig;
             break;
         }
         default:

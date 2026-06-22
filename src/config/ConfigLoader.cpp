@@ -9,6 +9,7 @@
 #include "../components/basic/JoystickDef.h"
 #include "../components/motion/Lis3dhDef.h"
 #include "../components/interface/Mpr121Def.h"
+#include "../components/signal/NoiseSamplerDef.h"
 #include "../utils/JSONParser.h"
 #include "../utils/PinMapper.h"
 #include "../utils/ComponentInitializer.h"  // Pour setupGpio
@@ -436,6 +437,34 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                                         }
                                     }
                                 }
+                            }
+                            break;
+                        }
+                        case ComponentType::NOISE_SAMPLER: {
+                            if (config->specificConfig.noiseSampler) {
+                                Components::NoiseSamplerConfig* nsConfig = config->specificConfig.noiseSampler;
+                                String mode = JSONParser::extractStr(pinConfig, "sampleMode", "sandh");
+                                if (mode.length() > 0) {
+                                    strncpy(nsConfig->sampleMode, mode.c_str(), sizeof(nsConfig->sampleMode) - 1);
+                                    nsConfig->sampleMode[sizeof(nsConfig->sampleMode) - 1] = '\0';
+                                }
+                                int rateMs = JSONParser::extractInt(pinConfig, "rateMs", 250);
+                                if (rateMs < 1) rateMs = 1;
+                                if (rateMs > 65535) rateMs = 65535;
+                                nsConfig->rateMs = (uint16_t)rateMs;
+                                int inMin = JSONParser::extractInt(pinConfig, "inMin", 0);
+                                int inMax = JSONParser::extractInt(pinConfig, "inMax", 4095);
+                                nsConfig->inMin = (inMin >= 0 && inMin <= 4095) ? inMin : 0;
+                                nsConfig->inMax = (inMax >= 0 && inMax <= 4095) ? inMax : 4095;
+                                if (nsConfig->inMin >= nsConfig->inMax) {
+                                    uint16_t t = nsConfig->inMin;
+                                    nsConfig->inMin = nsConfig->inMax;
+                                    nsConfig->inMax = t;
+                                }
+                                int fi = JSONParser::extractInt(pinConfig, "filterIntensity", 3);
+                                if (fi < 1) fi = 1;
+                                if (fi > 10) fi = 10;
+                                nsConfig->filter_intensity = (uint8_t)fi;
                             }
                             break;
                         }

@@ -68,6 +68,10 @@
 #include "actuator/VibrationMotorGroveDef.h"
 #include "actuator/SolenoidGroveDef.h"
 
+// === FAMILLE SIGNAL ===
+// Modules signal/CV : bruit, LFO, oscillateurs, VCA (génération + échantillonnage)
+#include "signal/NoiseSamplerDef.h"
+
 // === FAMILLE SCREEN ===
 #include "display/DisplayGenericDef.h"
 #include "display/BargraphLedGroveDef.h"

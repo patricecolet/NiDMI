@@ -26,7 +26,8 @@ enum class ComponentType : uint8_t {
     BARGRAPH      = 8,  // Bargraph LED (10 segments) - réutilise LedProcessor pour l'instant
     JOYSTICK      = 9,  // Joystick 2 axes analogiques
     IMU           = 10, // IMU (accéléromètre, gyroscope, etc.)
-    MPR121        = 11  // Touch capacitif 12 canaux (Grove, I2C)
+    MPR121        = 11, // Touch capacitif 12 canaux (Grove, I2C)
+    NOISE_SAMPLER = 12  // Source signal : bruit blanc externe échantillonné sur ADC (famille SIGNAL)
     // Facilement extensible pour de nouveaux types
 };
 
@@ -56,6 +57,7 @@ namespace Components {
     struct JoystickConfig;
     struct ImuConfig;
     struct Mpr121Config;
+    struct NoiseSamplerConfig;
 }
 
 // Configuration optimisée d'un composant
@@ -88,6 +90,7 @@ struct ComponentConfig {
         Components::JoystickConfig* joystick;
         Components::ImuConfig* imu;
         Components::Mpr121Config* mpr121;
+        Components::NoiseSamplerConfig* noiseSampler;
         void* specific;  // Pointeur générique pour accès type-agnostique
     } specificConfig;
     

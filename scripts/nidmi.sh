@@ -361,7 +361,7 @@ sync_files() {
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
-    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,mapping,midi,midi/handlers,network,osc,processors,server,ui,utils}
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,components/signal,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,mapping,midi,midi/handlers,network,osc,processors,server,ui,utils}
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -394,6 +394,8 @@ sync_files() {
     cp -f $REPO_DIR/src/components/actuator/*.cpp $ARDUINO_LIB_DIR/src/components/actuator/ 2>/dev/null || true
     cp -f $REPO_DIR/src/components/display/*.h $ARDUINO_LIB_DIR/src/components/display/ 2>/dev/null || true
     cp -f $REPO_DIR/src/components/display/*.cpp $ARDUINO_LIB_DIR/src/components/display/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/signal/*.h $ARDUINO_LIB_DIR/src/components/signal/ 2>/dev/null || true
+    cp -f $REPO_DIR/src/components/signal/*.cpp $ARDUINO_LIB_DIR/src/components/signal/ 2>/dev/null || true
     cp -f $REPO_DIR/src/config/*.cpp $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
     cp -f $REPO_DIR/src/config/*.h $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
     cp -f $REPO_DIR/src/hardware/*.cpp $ARDUINO_LIB_DIR/src/hardware/ 2>/dev/null || true
