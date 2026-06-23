@@ -1,9 +1,8 @@
 #pragma once
 
 #include "../ComponentDefinition.h"
-#include "../ComponentBuilder.h"
 #include "../FormFieldHelpers.h"
-#include "../MidiMessageFactory.h"
+#include "../MidiMessageCatalog.h"
 #include "../../utils/PinMapper.h"
 #include "../../midi/MidiMessageType.h"
 
@@ -108,71 +107,50 @@ struct Joystick {
      * @brief Crée la définition complète pour le registre
      */
     static ComponentDefinition createDefinition() {
-        return ComponentBuilder()
-            .setBasicInfo(ID, DISPLAY_NAME, "cardJoystick")
-            .setFamily(FAMILY, FAMILY_NAME)
-            .setType(TYPE, PIN_TYPE)
-            .setCapabilities(SUPPORTS_MIDI, SUPPORTS_OSC)
-            .setImplemented(IMPLEMENTED)
-            
-            // Pin principal (axe X)
-            // Note: Le pin Y sera ajouté via additionalPins
-            
+        static constexpr FormFieldDef FF[] = {
             // Seuils axe X
-            .addFormField(makeNumberField("xMin", "X Min", 0, 4095, "200", 1, 100, "f"))
-            .addFormField(makeNumberField("xZeroMin", "X Zero Min", 0, 4095, "1900", 1, 100, "f"))
-            .addFormField(makeNumberField("xZeroMax", "X Zero Max", 0, 4095, "2100", 1, 100, "f"))
-            .addFormField(makeNumberField("xMax", "X Max", 0, 4095, "4000", 1, 100, "f"))
-            
+            makeNumberField("xMin", "X Min", 0, 4095, "200", 1, 100, "f"),
+            makeNumberField("xZeroMin", "X Zero Min", 0, 4095, "1900", 1, 100, "f"),
+            makeNumberField("xZeroMax", "X Zero Max", 0, 4095, "2100", 1, 100, "f"),
+            makeNumberField("xMax", "X Max", 0, 4095, "4000", 1, 100, "f"),
             // Seuils axe Y
-            .addFormField(makeNumberField("yMin", "Y Min", 0, 4095, "200", 1, 100, "f"))
-            .addFormField(makeNumberField("yZeroMin", "Y Zero Min", 0, 4095, "1900", 1, 100, "f"))
-            .addFormField(makeNumberField("yZeroMax", "Y Zero Max", 0, 4095, "2100", 1, 100, "f"))
-            .addFormField(makeNumberField("yMax", "Y Max", 0, 4095, "4000", 1, 100, "f"))
-            
+            makeNumberField("yMin", "Y Min", 0, 4095, "200", 1, 100, "f"),
+            makeNumberField("yZeroMin", "Y Zero Min", 0, 4095, "1900", 1, 100, "f"),
+            makeNumberField("yZeroMax", "Y Zero Max", 0, 4095, "2100", 1, 100, "f"),
+            makeNumberField("yMax", "Y Max", 0, 4095, "4000", 1, 100, "f"),
             // Inversion d'axes
-            .addFormField(makeSelectField(
-                "invertX",
-                "Inverser axe X",
-                "[{\"value\":\"0\",\"label\":\"Normal\"},{\"value\":\"1\",\"label\":\"Inversé\"}]",
-                "0",
-                "r"
-            ))
-            .addFormField(makeSelectField(
-                "invertY",
-                "Inverser axe Y",
-                "[{\"value\":\"0\",\"label\":\"Normal\"},{\"value\":\"1\",\"label\":\"Inversé\"}]",
-                "0",
-                "r"
-            ))
-            
+            makeSelectField("invertX", "Inverser axe X",
+                "[{\"value\":\"0\",\"label\":\"Normal\"},{\"value\":\"1\",\"label\":\"Inversé\"}]", "0", "r"),
+            makeSelectField("invertY", "Inverser axe Y",
+                "[{\"value\":\"0\",\"label\":\"Normal\"},{\"value\":\"1\",\"label\":\"Inversé\"}]", "0", "r"),
             // Filtrage
-            .addFormField(makeNumberFieldWithHint(
-                "filterIntensity",
-                "Intensité filtrage (1-10)",
-                1, 10, "5", "1=rapide, 10=stable", 60, "r"
-            ))
-            
-            // Messages MIDI pour l'axe X
-            .addMidiMessage(createCcMessageForAxis("x", true))
-            .addMidiMessage(createPitchBendMessageForAxis("x"))
-            .addMidiMessage(createAftertouchMessageForAxis("x"))
-            .addMidiMessage(createNoteSweepMessageForAxis("x"))
-            
-            // Messages MIDI pour l'axe Y
-            .addMidiMessage(createCcMessageForAxis("y", true))
-            .addMidiMessage(createPitchBendMessageForAxis("y"))
-            .addMidiMessage(createAftertouchMessageForAxis("y"))
-            .addMidiMessage(createNoteSweepMessageForAxis("y"))
-            
-            // Pin additionnelle pour axe Y
-            .setAdditionalPins(
-                new AdditionalPinDef[]{
-                    AdditionalPinDef{"joyYPin", "Pin axe Y", PinType::PIN_ANALOG, false, 255}
-                },
-                1
-            )
-            .build();
+            makeNumberFieldWithHint("filterIntensity", "Intensité filtrage (1-10)", 1, 10, "5", "1=rapide, 10=stable", 60, "r"),
+        };
+        /* cc + range pour axe (dependsOnRole null) : params partagés X/Y */
+        static constexpr MidiParamDef CC_RANGE[] = {
+            {"midiCc",      "{{t.pins.cc}}:",        FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiChannel", "{{t.pins.channel}}:",   FieldType::NUMBER, 1, 16,  "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE,  0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, nullptr},
+        };
+        static constexpr MidiMessageDef MM[] = {
+            // Axe X
+            {"cc",         "Control Change (Axe X)", "CC#{cc}",          "x", 3, CC_RANGE,           3},
+            {"pitchbend",  "Pitch Bend (Axe X)",     "Pitch Bend",       "x", 1, PARAM_CHANNEL_ONLY, 1},
+            {"aftertouch", "Aftertouch (Axe X)",     "Aftertouch",       "x", 1, PARAM_CHANNEL_ONLY, 1},
+            {"notesweep",  "Note (balayage) (Axe X)","Note {note} scan", "x", 4, PARAM_NOTESWEEP,    4},
+            // Axe Y
+            {"cc",         "Control Change (Axe Y)", "CC#{cc}",          "y", 3, CC_RANGE,           3},
+            {"pitchbend",  "Pitch Bend (Axe Y)",     "Pitch Bend",       "y", 1, PARAM_CHANNEL_ONLY, 1},
+            {"aftertouch", "Aftertouch (Axe Y)",     "Aftertouch",       "y", 1, PARAM_CHANNEL_ONLY, 1},
+            {"notesweep",  "Note (balayage) (Axe Y)","Note {note} scan", "y", 4, PARAM_NOTESWEEP,    4},
+        };
+        /* Pin additionnelle pour axe Y */
+        static constexpr AdditionalPinDef AP[] = {
+            {"joyYPin", "Pin axe Y", PinType::PIN_ANALOG, false, 255},
+        };
+        return makeFlashDef(ID, DISPLAY_NAME, "cardJoystick", FAMILY, FAMILY_NAME, TYPE, PIN_TYPE,
+                            SUPPORTS_MIDI, SUPPORTS_OSC, IMPLEMENTED, FF, 11, MM, 8,
+                            nullptr, AP, 1);
     }
 };
 

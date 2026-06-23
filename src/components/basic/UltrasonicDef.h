@@ -1,9 +1,8 @@
 #pragma once
 
 #include "../ComponentDefinition.h"
-#include "../ComponentBuilder.h"
 #include "../FormFieldHelpers.h"
-#include "../MidiMessageFactory.h"
+#include "../MidiMessageCatalog.h"
 
 /**
  * @file UltrasonicDef.h
@@ -53,43 +52,27 @@ struct Ultrasonic {
      * @brief Crée la définition complète pour le registre
      */
     static ComponentDefinition createDefinition() {
-        return ComponentBuilder()
-            .setBasicInfo(ID, DISPLAY_NAME, "cardUltrasonic")
-            .setFamily(FAMILY, FAMILY_NAME)
-            .setType(TYPE, PIN_TYPE)
-            .setCapabilities(SUPPORTS_MIDI, SUPPORTS_OSC)
-            .setImplemented(IMPLEMENTED)
-            // Distance min/max en mm → réutilise potMin/potMax dans la config
-            .addFormField(makeNumberFieldWithHint(
-                "potMin",
-                "Distance min (mm)",
-                0, 4000,
-                "50",
-                "Distance minimale (mm) mappée sur 0 MIDI",
-                60
-            ))
-            .addFormField(makeNumberFieldWithHint(
-                "potMax",
-                "Distance max (mm)",
-                0, 4000,
-                "2000",
-                "Distance maximale (mm) mappée sur 127 MIDI",
-                60
-            ))
-            .addFormField(makeNumberFieldWithHint(
-                "filterIntensity",
-                "Intensité filtrage (1-10)",
-                1, 10,
-                "5",
-                "1=rapide, 10=stable",
-                60
-            ))
-            // Messages MIDI disponibles (comme Potentiometer)
-            .addMidiMessage(createCcMessage(true, "[\"ultrasonic\"]"))
-            .addMidiMessage(createPitchBendMessage())
-            .addMidiMessage(createAftertouchMessage())
-            .addMidiMessage(createNoteSweepMessage())
-            .build();
+        // Distance min/max en mm → réutilise potMin/potMax dans la config
+        static constexpr FormFieldDef FF[] = {
+            makeNumberFieldWithHint("potMin", "Distance min (mm)", 0, 4000, "50",
+                "Distance minimale (mm) mappée sur 0 MIDI", 60),
+            makeNumberFieldWithHint("potMax", "Distance max (mm)", 0, 4000, "2000",
+                "Distance maximale (mm) mappée sur 127 MIDI", 60),
+            makeNumberFieldWithHint("filterIntensity", "Intensité filtrage (1-10)", 1, 10, "5",
+                "1=rapide, 10=stable", 60),
+        };
+        /* cc + range, dependsOnRole ultrasonic */
+        static constexpr MidiParamDef CC_RANGE[] = {
+            {"midiCc",      "{{t.pins.cc}}:",        FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiChannel", "{{t.pins.channel}}:",   FieldType::NUMBER, 1, 16,  "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE,  0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, "[\"ultrasonic\"]"},
+        };
+        static constexpr MidiMessageDef MM[] = {
+            {"cc", "Control Change", "CC#{cc}", nullptr, 3, CC_RANGE, 3},
+            msgPitchBend(), msgAftertouch(), msgNoteSweep(),
+        };
+        return makeFlashDef(ID, DISPLAY_NAME, "cardUltrasonic", FAMILY, FAMILY_NAME, TYPE, PIN_TYPE,
+                            SUPPORTS_MIDI, SUPPORTS_OSC, IMPLEMENTED, FF, 3, MM, 4);
     }
 };
 

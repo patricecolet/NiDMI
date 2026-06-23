@@ -152,17 +152,18 @@ public:
             newMessages[i].axis = def.midiMessages[i].axis;
             newMessages[i].paramCount = def.midiMessages[i].paramCount;
             newMessages[i].paramsCapacity = def.midiMessages[i].paramCount;
-            // Copie profonde des params
+            // Copie profonde des params (temporaire non-const car .params est const*)
             if (def.midiMessages[i].paramCount > 0 && def.midiMessages[i].params) {
-                newMessages[i].params = new MidiParamDef[def.midiMessages[i].paramCount];
+                MidiParamDef* p = new MidiParamDef[def.midiMessages[i].paramCount];
                 for (uint8_t j = 0; j < def.midiMessages[i].paramCount; j++) {
-                    newMessages[i].params[j] = def.midiMessages[i].params[j];
+                    p[j] = def.midiMessages[i].params[j];
                 }
+                newMessages[i].params = p;
             } else {
                 newMessages[i].params = nullptr;
             }
         }
-        
+
         // Ajouter le nouveau message avec copie profonde des params
         newMessages[def.midiMessageCount].id = msg.id;
         newMessages[def.midiMessageCount].displayName = msg.displayName;
@@ -171,19 +172,20 @@ public:
         newMessages[def.midiMessageCount].paramCount = msg.paramCount;
         newMessages[def.midiMessageCount].paramsCapacity = msg.paramCount;
         if (msg.paramCount > 0 && msg.params) {
-            newMessages[def.midiMessageCount].params = new MidiParamDef[msg.paramCount];
+            MidiParamDef* p = new MidiParamDef[msg.paramCount];
             for (uint8_t j = 0; j < msg.paramCount; j++) {
-                newMessages[def.midiMessageCount].params[j] = msg.params[j];
+                p[j] = msg.params[j];
             }
+            newMessages[def.midiMessageCount].params = p;
         } else {
             newMessages[def.midiMessageCount].params = nullptr;
         }
         
-        // Libérer l'ancien tableau
+        // Libérer l'ancien tableau (toujours du heap builder ici)
         if (def.midiMessages) {
             // Libérer les params de chaque message
             for (uint8_t i = 0; i < def.midiMessagesCapacity; i++) {
-                def.midiMessages[i].cleanup();
+                const_cast<MidiMessageDef&>(def.midiMessages[i]).cleanup();
             }
             delete[] def.midiMessages;
         }
@@ -207,10 +209,11 @@ public:
         def.additionalPinCount = count;
         def.additionalPinsCapacity = count;
         if (count > 0) {
-            def.additionalPins = new AdditionalPinDef[count];
+            AdditionalPinDef* ap = new AdditionalPinDef[count];
             for (uint8_t i = 0; i < count; i++) {
-                def.additionalPins[i] = pins[i];
+                ap[i] = pins[i];
             }
+            def.additionalPins = ap;
         } else {
             def.additionalPins = nullptr;
         }
@@ -259,51 +262,57 @@ public:
         result.statusTextTemplate = def.statusTextTemplate;
         result.statusValueMappings = def.statusValueMappings;
         
-        // Copier les formFields
+        result.ownsArrays = true;  // tableaux alloués en heap ci-dessous → cleanup() les libère
+
+        // Copier les formFields (temporaire non-const car .formFields est const*)
         result.formFieldCount = def.formFieldCount;
         result.formFieldsCapacity = def.formFieldCount;
         if (def.formFieldCount > 0 && def.formFields) {
-            result.formFields = new FormFieldDef[def.formFieldCount];
+            FormFieldDef* ff = new FormFieldDef[def.formFieldCount];
             for (uint8_t i = 0; i < def.formFieldCount; i++) {
-                result.formFields[i] = def.formFields[i];
+                ff[i] = def.formFields[i];
             }
+            result.formFields = ff;
         } else {
             result.formFields = nullptr;
         }
-        
+
         // Copier les additionalPins
         result.additionalPinCount = def.additionalPinCount;
         result.additionalPinsCapacity = def.additionalPinCount;
         if (def.additionalPinCount > 0 && def.additionalPins) {
-            result.additionalPins = new AdditionalPinDef[def.additionalPinCount];
+            AdditionalPinDef* ap = new AdditionalPinDef[def.additionalPinCount];
             for (uint8_t i = 0; i < def.additionalPinCount; i++) {
-                result.additionalPins[i] = def.additionalPins[i];
+                ap[i] = def.additionalPins[i];
             }
+            result.additionalPins = ap;
         } else {
             result.additionalPins = nullptr;
         }
-        
+
         // Copier les midiMessages (copie profonde avec params)
         result.midiMessageCount = def.midiMessageCount;
         result.midiMessagesCapacity = def.midiMessageCount;
         if (def.midiMessageCount > 0 && def.midiMessages) {
-            result.midiMessages = new MidiMessageDef[def.midiMessageCount];
+            MidiMessageDef* mm = new MidiMessageDef[def.midiMessageCount];
             for (uint8_t i = 0; i < def.midiMessageCount; i++) {
-                result.midiMessages[i].id = def.midiMessages[i].id;
-                result.midiMessages[i].displayName = def.midiMessages[i].displayName;
-                result.midiMessages[i].statusTemplate = def.midiMessages[i].statusTemplate;
-                result.midiMessages[i].axis = def.midiMessages[i].axis;
-                result.midiMessages[i].paramCount = def.midiMessages[i].paramCount;
-                result.midiMessages[i].paramsCapacity = def.midiMessages[i].paramCount;
+                mm[i].id = def.midiMessages[i].id;
+                mm[i].displayName = def.midiMessages[i].displayName;
+                mm[i].statusTemplate = def.midiMessages[i].statusTemplate;
+                mm[i].axis = def.midiMessages[i].axis;
+                mm[i].paramCount = def.midiMessages[i].paramCount;
+                mm[i].paramsCapacity = def.midiMessages[i].paramCount;
                 if (def.midiMessages[i].paramCount > 0 && def.midiMessages[i].params) {
-                    result.midiMessages[i].params = new MidiParamDef[def.midiMessages[i].paramCount];
+                    MidiParamDef* p = new MidiParamDef[def.midiMessages[i].paramCount];
                     for (uint8_t j = 0; j < def.midiMessages[i].paramCount; j++) {
-                        result.midiMessages[i].params[j] = def.midiMessages[i].params[j];
+                        p[j] = def.midiMessages[i].params[j];
                     }
+                    mm[i].params = p;
                 } else {
-                    result.midiMessages[i].params = nullptr;
+                    mm[i].params = nullptr;
                 }
             }
+            result.midiMessages = mm;
         } else {
             result.midiMessages = nullptr;
         }

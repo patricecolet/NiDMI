@@ -89,8 +89,10 @@ struct MidiParamDef {
     uint16_t width;             // Largeur en px (0 = auto)
     const char* dependsOnRole;   // JSON array de rôles qui affichent ce paramètre (null = tous)
     
-    // Constructeur explicite pour permettre l'initialisation par accolades
-    MidiParamDef(const char* id = nullptr, const char* label = nullptr, FieldType type = FieldType::NUMBER,
+    // Constructeur explicite pour permettre l'initialisation par accolades.
+    // constexpr : permet de placer des tableaux de MidiParamDef en flash (.rodata)
+    // via `static constexpr MidiParamDef[]` plutôt qu'en heap (new[]).
+    constexpr MidiParamDef(const char* id = nullptr, const char* label = nullptr, FieldType type = FieldType::NUMBER,
                  int min = 0, int max = 0,
                  const char* placeholder = nullptr, const char* defaultValue = nullptr,
                  const char* defaultMin = nullptr, const char* defaultMax = nullptr,
@@ -117,18 +119,20 @@ static constexpr uint8_t MAX_MIDI_MESSAGES = 8;
  * @brief Description d'un type de message MIDI
  */
 struct MidiMessageDef {
-    const char* id;              // Identifiant (ex: "cc", "note", "pc")
-    const char* displayName;     // Nom affiché (ex: "Control Change", "Note")
-    const char* statusTemplate;  // Template pour le texte de statut (ex: "CC#{cc}", "Note {note}")
-    const char* axis;            // Axe pour joystick ("x", "y", ou nullptr pour les deux)
-    uint8_t paramCount;          // Nombre de paramètres requis pour ce message
-    MidiParamDef* params;        // Pointeur vers heap (alloué avec new[])
-    size_t paramsCapacity;       // Taille allouée (pour vérification)
-    
-    // Constructeur par défaut
-    MidiMessageDef() : params(nullptr), paramsCapacity(0), paramCount(0), axis(nullptr) {}
-    
-    // Cleanup : libère la mémoire allouée
+    // Agrégat (pas de constructeur) avec initialiseurs par défaut : permet à la fois
+    //   - `static constexpr MidiMessageDef[] = {{...}}` en flash (init agrégée),
+    //   - `MidiMessageDef msg;` + `new MidiMessageDef[]` côté builder (value-init).
+    // Ordre des champs == ordre d'init agrégée (voir MidiMessageCatalog.h).
+    const char* id = nullptr;            // Identifiant (ex: "cc", "note", "pc")
+    const char* displayName = nullptr;   // Nom affiché (ex: "Control Change", "Note")
+    const char* statusTemplate = nullptr;// Template pour le texte de statut (ex: "CC#{cc}", "Note {note}")
+    const char* axis = nullptr;          // Axe pour joystick ("x", "y", ou nullptr pour les deux)
+    uint8_t paramCount = 0;              // Nombre de paramètres requis pour ce message
+    const MidiParamDef* params = nullptr;// Tableau de params : heap (new[], builder) OU flash (static constexpr)
+    size_t paramsCapacity = 0;           // Taille allouée (pour vérification)
+
+    // Cleanup : libère la mémoire allouée (uniquement pour les messages alloués en heap par le builder ;
+    // ne PAS appeler sur des messages dont les params pointent vers de la flash).
     void cleanup() {
         if (params) {
             delete[] params;
@@ -217,21 +221,25 @@ struct ComponentDefinition {
     
     // Champs de formulaire pour l'UI
     uint8_t formFieldCount;     // Nombre de champs de formulaire
-    FormFieldDef* formFields;   // Pointeur vers heap (alloué avec new[])
+    const FormFieldDef* formFields;   // Tableau : heap (new[], builder) OU flash (static constexpr)
     size_t formFieldsCapacity;  // Taille allouée (pour vérification)
-    
+
     // Pins additionnelles pour composants complexes
     uint8_t additionalPinCount;  // Nombre de pins additionnelles (0 pour simple)
-    AdditionalPinDef* additionalPins; // Pointeur vers heap (alloué avec new[])
+    const AdditionalPinDef* additionalPins; // Tableau : heap (new[], builder) OU flash (static constexpr)
     size_t additionalPinsCapacity;    // Taille allouée (pour vérification)
-    
+
     // Messages MIDI supportés
     uint8_t midiMessageCount;    // Nombre de types de messages MIDI supportés
-    MidiMessageDef* midiMessages; // Pointeur vers heap (alloué avec new[])
+    const MidiMessageDef* midiMessages; // Tableau : heap (new[], builder) OU flash (static constexpr)
     size_t midiMessagesCapacity;  // Taille allouée (pour vérification)
-    
+
+    // true  = tableaux alloués en heap par ComponentBuilder → cleanup() doit les delete[].
+    // false = tableaux pointant vers de la flash (static constexpr) → cleanup() ne touche à rien.
+    bool ownsArrays;
+
     // Constructeur par défaut
-    ComponentDefinition() : 
+    ComponentDefinition() :
         id(nullptr), displayName(nullptr), icon(nullptr), cardId(nullptr),
         family(ComponentFamily::BASIC), familyName(nullptr),
         type(ComponentType::POTENTIOMETER), pinType(PinType::PIN_DIGITAL), altPinType(-1),
@@ -239,10 +247,18 @@ struct ComponentDefinition {
         statusTextTemplate(nullptr), statusValueMappings(nullptr),
         formFieldCount(0), formFields(nullptr), formFieldsCapacity(0),
         additionalPinCount(0), additionalPins(nullptr), additionalPinsCapacity(0),
-        midiMessageCount(0), midiMessages(nullptr), midiMessagesCapacity(0) {}
-    
-    // Cleanup : libère la mémoire allouée (récursif)
+        midiMessageCount(0), midiMessages(nullptr), midiMessagesCapacity(0),
+        ownsArrays(true) {}
+
+    // Cleanup : libère la mémoire allouée (récursif).
+    // No-op pour les définitions flash (ownsArrays == false) : leurs tableaux sont en .rodata.
     void cleanup() {
+        if (!ownsArrays) {
+            formFields = nullptr; formFieldsCapacity = 0;
+            additionalPins = nullptr; additionalPinsCapacity = 0;
+            midiMessages = nullptr; midiMessagesCapacity = 0;
+            return;
+        }
         if (formFields) {
             delete[] formFields;
             formFields = nullptr;
@@ -256,7 +272,8 @@ struct ComponentDefinition {
         if (midiMessages) {
             // Libérer les params de chaque message
             for (size_t i = 0; i < midiMessagesCapacity; i++) {
-                midiMessages[i].cleanup();
+                // const_cast : on possède ces messages (alloués en heap par le builder)
+                const_cast<MidiMessageDef&>(midiMessages[i]).cleanup();
             }
             delete[] midiMessages;
             midiMessages = nullptr;

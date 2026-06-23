@@ -2,9 +2,8 @@
 
 #include <Arduino.h>
 #include "../ComponentDefinition.h"
-#include "../ComponentBuilder.h"
 #include "../FormFieldHelpers.h"
-#include "../MidiMessageFactory.h"
+#include "../MidiMessageCatalog.h"
 #include "../../utils/PinMapper.h"
 
 /**
@@ -66,22 +65,17 @@ struct Led {
      * @brief Crée la définition complète pour le registre
      */
     static ComponentDefinition createDefinition() {
-        return ComponentBuilder()
-            .setBasicInfo(ID, DISPLAY_NAME, "cardLed")
-            .setFamily(FAMILY, FAMILY_NAME)
-            .setType(TYPE, PIN_TYPE)
-            .setCapabilities(SUPPORTS_MIDI, SUPPORTS_OSC)
-            .setImplemented(IMPLEMENTED)
-            .setStatusValueMappings("{\"ledMode\":{\"pwm\":\"PWM\",\"onoff\":\"On/Off\"}}")
-            .addFormField(makeSelectField(
-                "ledMode",
-                "LED",
+        static constexpr FormFieldDef FF[] = {
+            makeSelectField("ledMode", "LED",
                 "[{\"value\":\"onoff\",\"label\":\"On/Off\"},{\"value\":\"pwm\",\"label\":\"PWM\"}]",
-                "onoff"
-            ))
-            .addMidiMessage(createNoteMessage())
-            .addMidiMessage(createCcMessage())
-            .build();
+                "onoff"),
+        };
+        static constexpr MidiMessageDef MM[] = {
+            msgNote(), msgCc(),
+        };
+        return makeFlashDef(ID, DISPLAY_NAME, "cardLed", FAMILY, FAMILY_NAME, TYPE, PIN_TYPE,
+                            SUPPORTS_MIDI, SUPPORTS_OSC, IMPLEMENTED, FF, 1, MM, 2,
+                            "{\"ledMode\":{\"pwm\":\"PWM\",\"onoff\":\"On/Off\"}}");
     }
 };
 

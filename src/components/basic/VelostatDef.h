@@ -1,9 +1,8 @@
 #pragma once
 
 #include "../ComponentDefinition.h"
-#include "../ComponentBuilder.h"
 #include "../FormFieldHelpers.h"
-#include "../MidiMessageFactory.h"
+#include "../MidiMessageCatalog.h"
 #include "../../utils/PinMapper.h"
 
 /**
@@ -64,33 +63,27 @@ struct Velostat {
      * @brief Crée la définition complète pour le registre
      */
     static ComponentDefinition createDefinition() {
-        return ComponentBuilder()
-            .setBasicInfo(ID, DISPLAY_NAME, "cardVelostat")
-            .setFamily(FAMILY, FAMILY_NAME)
-            .setType(TYPE, PIN_TYPE)
-            .setCapabilities(SUPPORTS_MIDI, SUPPORTS_OSC)
-            .setImplemented(IMPLEMENTED)
-            .addFormField(makeNumberFieldWithHint(
-                "velocityThreshold",
-                "Seuil vélocité",
-                0, 4095, "50", "Seuil pour Note On (0-4095)", 60
-            ))
-            .addFormField(makeNumberFieldWithHint(
-                "aftertouchThreshold",
-                "Seuil aftertouch",
-                1, 127, "4", "Sensibilité aftertouch (1-127)", 60
-            ))
-            .addFormField(makeNumberFieldWithHint(
-                "filterIntensity",
-                "Intensité filtrage (1-10)",
-                1, 10, "5", "1=rapide, 10=stable", 60
-            ))
-            .addMidiMessage(createNoteWithKeyPressureMessage())
-            .addMidiMessage(createCcMessage(true, "[\"velostat\"]"))
-            .addMidiMessage(createPitchBendMessage())
-            .addMidiMessage(createAftertouchMessage())
-            .addMidiMessage(createNoteSweepMessage())
-            .build();
+        static constexpr FormFieldDef FF[] = {
+            makeNumberFieldWithHint("velocityThreshold", "Seuil vélocité", 0, 4095, "50",
+                "Seuil pour Note On (0-4095)", 60),
+            makeNumberFieldWithHint("aftertouchThreshold", "Seuil aftertouch", 1, 127, "4",
+                "Sensibilité aftertouch (1-127)", 60),
+            makeNumberFieldWithHint("filterIntensity", "Intensité filtrage (1-10)", 1, 10, "5",
+                "1=rapide, 10=stable", 60),
+        };
+        /* cc + range, dependsOnRole velostat */
+        static constexpr MidiParamDef CC_RANGE[] = {
+            {"midiCc",      "{{t.pins.cc}}:",        FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiChannel", "{{t.pins.channel}}:",   FieldType::NUMBER, 1, 16,  "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE,  0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, "[\"velostat\"]"},
+        };
+        static constexpr MidiMessageDef MM[] = {
+            msgNoteKeyPressure(),
+            {"cc", "Control Change", "CC#{cc}", nullptr, 3, CC_RANGE, 3},
+            msgPitchBend(), msgAftertouch(), msgNoteSweep(),
+        };
+        return makeFlashDef(ID, DISPLAY_NAME, "cardVelostat", FAMILY, FAMILY_NAME, TYPE, PIN_TYPE,
+                            SUPPORTS_MIDI, SUPPORTS_OSC, IMPLEMENTED, FF, 3, MM, 5);
     }
 };
 

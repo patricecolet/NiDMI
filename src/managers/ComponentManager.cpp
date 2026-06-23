@@ -79,19 +79,41 @@ void ComponentManager::begin(MidiSender* sender) {
     
     // Tâche MIDI sur Core 0 (avec MuxTask). loop()/serveur = Core 1 → éviter de charger Core 1 pour que le serveur ne plante pas avec 7+ pins touch.
     const BaseType_t midiTaskCore = 0;
-    BaseType_t result = xTaskCreatePinnedToCore(
+    const uint32_t midiTaskStackBytes = 8192;  // Stack pour traitement composants
+    BaseType_t result;
+#if defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION == 1)
+    // Stack allouée statiquement (.bss) plutôt que sur le heap : sur ESP32-C3 le heap
+    // est trop fragmenté après WiFi+serveur pour fournir 8 KB contigus, et l'alloc
+    // dynamique échouait (xTaskCreate → "Failed to create FreeRTOS MIDI task").
+    // Le buffer existe au link, donc la création ne peut plus échouer par manque de heap.
+    static StackType_t midiTaskStack[8192];
+    static StaticTask_t midiTaskTCB;
+    midiTaskHandle = xTaskCreateStaticPinnedToCore(
         midiTask,
         "MidiTask",
-        8192,              // Stack size (8KB pour traitement composants)
+        midiTaskStackBytes,
+        this,
+        4,                 // Priorité légèrement inférieure à MuxTask
+        midiTaskStack,
+        &midiTaskTCB,
+        midiTaskCore
+    );
+    result = (midiTaskHandle != nullptr) ? pdPASS : pdFAIL;
+#else
+    result = xTaskCreatePinnedToCore(
+        midiTask,
+        "MidiTask",
+        midiTaskStackBytes,
         this,
         4,                 // Priorité légèrement inférieure à MuxTask
         &midiTaskHandle,
         midiTaskCore
     );
-    
+#endif
+
     if (result == pdPASS) {
         midiTaskStarted = true;
-        Serial.printf("[ComponentManager] FreeRTOS MIDI task started on Core %d\n", (int)midiTaskCore);
+        Serial.printf("[ComponentManager] FreeRTOS MIDI task started on Core %d (free heap: %d)\n", (int)midiTaskCore, (int)ESP.getFreeHeap());
     } else {
         Serial.println("[ComponentManager] ERROR: Failed to create FreeRTOS MIDI task");
     }

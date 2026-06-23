@@ -26,18 +26,18 @@ inline MidiMessageDef createCcMessage(bool includeRange = false, const char* dep
     if (includeRange) {
         msg.paramCount = 3;
         msg.paramsCapacity = 3;
-        msg.params = new MidiParamDef[3];
+        MidiParamDef* _mp = new MidiParamDef[3]; msg.params = _mp;
         
-        msg.params[0] = MidiParamDef{"midiCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        msg.params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        msg.params[2] = MidiParamDef{"midiCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, dependsOnRole};
+        _mp[0] = MidiParamDef{"midiCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        _mp[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        _mp[2] = MidiParamDef{"midiCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, dependsOnRole};
     } else {
         msg.paramCount = 2;
         msg.paramsCapacity = 2;
-        msg.params = new MidiParamDef[2];
+        MidiParamDef* _mp = new MidiParamDef[2]; msg.params = _mp;
         
-        msg.params[0] = MidiParamDef{"midiCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        msg.params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        _mp[0] = MidiParamDef{"midiCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        _mp[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
     }
     
     return msg;
@@ -57,18 +57,18 @@ inline MidiMessageDef createNoteMessage(bool includeVelocity = false, const char
     if (includeVelocity) {
         msg.paramCount = 3;
         msg.paramsCapacity = 3;
-        msg.params = new MidiParamDef[3];
+        MidiParamDef* _mp = new MidiParamDef[3]; msg.params = _mp;
         
-        msg.params[0] = MidiParamDef{"midiNote", "{{t.pins.note}}:", FieldType::NUMBER, 0, 127, "60", "60", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        msg.params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        msg.params[2] = MidiParamDef{"midiVelocity", "{{t.pins.velocity}}:", FieldType::NUMBER, 1, 127, "100", "100", nullptr, nullptr, nullptr, nullptr, nullptr, 90, dependsOnRole};
+        _mp[0] = MidiParamDef{"midiNote", "{{t.pins.note}}:", FieldType::NUMBER, 0, 127, "60", "60", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        _mp[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        _mp[2] = MidiParamDef{"midiVelocity", "{{t.pins.velocity}}:", FieldType::NUMBER, 1, 127, "100", "100", nullptr, nullptr, nullptr, nullptr, nullptr, 90, dependsOnRole};
     } else {
         msg.paramCount = 2;
         msg.paramsCapacity = 2;
-        msg.params = new MidiParamDef[2];
+        MidiParamDef* _mp = new MidiParamDef[2]; msg.params = _mp;
         
-        msg.params[0] = MidiParamDef{"midiNote", "{{t.pins.note}}:", FieldType::NUMBER, 0, 127, "60", "60", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-        msg.params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        _mp[0] = MidiParamDef{"midiNote", "{{t.pins.note}}:", FieldType::NUMBER, 0, 127, "60", "60", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+        _mp[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
     }
     
     return msg;
@@ -84,10 +84,10 @@ inline MidiMessageDef createPcMessage() {
     msg.statusTemplate = "PC#{pc}";
     msg.paramCount = 2;
     msg.paramsCapacity = 2;
-    msg.params = new MidiParamDef[2];
+    MidiParamDef* _mp = new MidiParamDef[2]; msg.params = _mp;
     
-    msg.params[0] = MidiParamDef{"midiPc", "{{t.pins.program}}:", FieldType::NUMBER, 1, 128, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-    msg.params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+    _mp[0] = MidiParamDef{"midiPc", "{{t.pins.program}}:", FieldType::NUMBER, 1, 128, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+    _mp[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
     
     return msg;
 }
@@ -102,9 +102,9 @@ inline MidiMessageDef createPitchBendMessage() {
     msg.statusTemplate = "Pitch Bend";
     msg.paramCount = 1;
     msg.paramsCapacity = 1;
-    msg.params = new MidiParamDef[1];
+    MidiParamDef* _mp = new MidiParamDef[1]; msg.params = _mp;
     
-    msg.params[0] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+    _mp[0] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
     
     return msg;
 }
@@ -119,9 +119,9 @@ inline MidiMessageDef createAftertouchMessage() {
     msg.statusTemplate = "Aftertouch";
     msg.paramCount = 1;
     msg.paramsCapacity = 1;
-    msg.params = new MidiParamDef[1];
+    MidiParamDef* _mp = new MidiParamDef[1]; msg.params = _mp;
     
-    msg.params[0] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+    _mp[0] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
     
     return msg;
 }
@@ -137,11 +137,11 @@ inline MidiMessageDef createCcOnOffMessage(const char* dependsOnRole = nullptr) 
     msg.statusTemplate = "CC#{cc}";
     msg.paramCount = 3;
     msg.paramsCapacity = 3;
-    msg.params = new MidiParamDef[3];
+    MidiParamDef* _mp = new MidiParamDef[3]; msg.params = _mp;
     
-    msg.params[0] = MidiParamDef{"midiCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-    msg.params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-    msg.params[2] = MidiParamDef{"midiCcOnOff", "{{t.pins.values}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "127", "0", "→", nullptr, nullptr, 90, dependsOnRole};
+    _mp[0] = MidiParamDef{"midiCc", "{{t.pins.cc}}:", FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+    _mp[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+    _mp[2] = MidiParamDef{"midiCcOnOff", "{{t.pins.values}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "127", "0", "→", nullptr, nullptr, 90, dependsOnRole};
     
     return msg;
 }
@@ -156,12 +156,12 @@ inline MidiMessageDef createNoteSweepMessage() {
     msg.statusTemplate = "Note {note} scan";
     msg.paramCount = 4;
     msg.paramsCapacity = 4;
-    msg.params = new MidiParamDef[4];
+    MidiParamDef* _mp = new MidiParamDef[4]; msg.params = _mp;
     
-    msg.params[0] = MidiParamDef{"midiNoteSweep", "{{t.pins.sweep}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "48", "72", "→", nullptr, nullptr, 90, nullptr};
-    msg.params[1] = MidiParamDef{"midiNoteVelocityFix", "{{t.pins.fixedVelocity}}:", FieldType::NUMBER, 1, 127, "100", "100", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-    msg.params[2] = MidiParamDef{"midiNoteSweepAutoOffDelay", "{{t.pins.autoOff}}", FieldType::NUMBER, 0, 65535, "1000", "1000", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-    msg.params[3] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+    _mp[0] = MidiParamDef{"midiNoteSweep", "{{t.pins.sweep}}:", FieldType::RANGE, 0, 127, nullptr, nullptr, "48", "72", "→", nullptr, nullptr, 90, nullptr};
+    _mp[1] = MidiParamDef{"midiNoteVelocityFix", "{{t.pins.fixedVelocity}}:", FieldType::NUMBER, 1, 127, "100", "100", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+    _mp[2] = MidiParamDef{"midiNoteSweepAutoOffDelay", "{{t.pins.autoOff}}", FieldType::NUMBER, 0, 65535, "1000", "1000", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+    _mp[3] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
     
     return msg;
 }
@@ -176,9 +176,9 @@ inline MidiMessageDef createClockMessage() {
     msg.statusTemplate = "Clock";
     msg.paramCount = 1;
     msg.paramsCapacity = 1;
-    msg.params = new MidiParamDef[1];
+    MidiParamDef* _mp = new MidiParamDef[1]; msg.params = _mp;
     
-    msg.params[0] = MidiParamDef{"rtpClockHint", nullptr, FieldType::INFO, 0, 0, nullptr, nullptr, nullptr, nullptr, nullptr, "{{t.pins.clockHint}}", "color:#6b7280;", 0, nullptr};
+    _mp[0] = MidiParamDef{"rtpClockHint", nullptr, FieldType::INFO, 0, 0, nullptr, nullptr, nullptr, nullptr, nullptr, "{{t.pins.clockHint}}", "color:#6b7280;", 0, nullptr};
     
     return msg;
 }
@@ -193,10 +193,10 @@ inline MidiMessageDef createNoteWithKeyPressureMessage() {
     msg.statusTemplate = "Note {note} + Key Press";
     msg.paramCount = 2;
     msg.paramsCapacity = 2;
-    msg.params = new MidiParamDef[2];
+    MidiParamDef* _mp = new MidiParamDef[2]; msg.params = _mp;
     
-    msg.params[0] = MidiParamDef{"midiNote", "{{t.pins.note}}:", FieldType::NUMBER, 0, 127, "60", "60", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
-    msg.params[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+    _mp[0] = MidiParamDef{"midiNote", "{{t.pins.note}}:", FieldType::NUMBER, 0, 127, "60", "60", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
+    _mp[1] = MidiParamDef{"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16, "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr};
     
     return msg;
 }

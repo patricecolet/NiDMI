@@ -14,7 +14,7 @@ namespace Components {
 /**
  * @brief Crée un champ SELECT (liste déroulante)
  */
-inline FormFieldDef makeSelectField(
+inline constexpr FormFieldDef makeSelectField(
     const char* id,
     const char* label,
     const char* options,  // JSON array: [{"value":"v","label":"L"},...]
@@ -53,7 +53,7 @@ inline FormFieldDef makeSelectField(
 /**
  * @brief Crée un champ NUMBER
  */
-inline FormFieldDef makeNumberField(
+inline constexpr FormFieldDef makeNumberField(
     const char* id,
     const char* label,
     int min,
@@ -96,7 +96,7 @@ inline FormFieldDef makeNumberField(
 /**
  * @brief Crée un champ INFO (texte informatif)
  */
-inline FormFieldDef makeInfoField(
+inline constexpr FormFieldDef makeInfoField(
     const char* id,
     const char* hint,
     HintPosition hintPosition = HintPosition::BELOW,
@@ -132,7 +132,7 @@ inline FormFieldDef makeInfoField(
 /**
  * @brief Crée un champ TEXT (court, pour valeurs compactes type "0,0" ou "2000,500")
  */
-inline FormFieldDef makeTextField(
+inline constexpr FormFieldDef makeTextField(
     const char* id,
     const char* label,
     const char* defaultValue = nullptr,
@@ -171,7 +171,7 @@ inline FormFieldDef makeTextField(
 /**
  * @brief Crée un champ NUMBER avec hint inline (style commun pour filtrage, seuils, etc.)
  */
-inline FormFieldDef makeNumberFieldWithHint(
+inline constexpr FormFieldDef makeNumberFieldWithHint(
     const char* id,
     const char* label,
     int min,

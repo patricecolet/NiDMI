@@ -2,9 +2,8 @@
 
 #include <Arduino.h>
 #include "../ComponentDefinition.h"
-#include "../ComponentBuilder.h"
 #include "../FormFieldHelpers.h"
-#include "../MidiMessageFactory.h"
+#include "../MidiMessageCatalog.h"
 
 /**
  * @file ButtonDef.h
@@ -75,38 +74,36 @@ struct Button {
      * @brief Crée la définition complète pour le registre
      */
     static ComponentDefinition createDefinition() {
-        return ComponentBuilder()
-            .setBasicInfo(ID, DISPLAY_NAME, "cardBtn")
-            .setFamily(FAMILY, FAMILY_NAME)
-            .setType(TYPE, PIN_TYPE)
-            .setCapabilities(SUPPORTS_MIDI, SUPPORTS_OSC)
-            .setImplemented(IMPLEMENTED)
-            .addFormField(makeSelectField(
-                "btnMode",
-                "Mode bouton",
+        static constexpr FormFieldDef FF[] = {
+            makeSelectField("btnMode", "Mode bouton",
                 "[{\"value\":\"pulse\",\"label\":\"Push\"},{\"value\":\"press_release\",\"label\":\"Press/Release\"},{\"value\":\"toggle\",\"label\":\"Toggle\"}]",
-                "pulse"
-            ))
-            .addFormField(makeSelectField(
-                "btnPulseTiming",
-                "Timing Push",
+                "pulse"),
+            makeSelectField("btnPulseTiming", "Timing Push",
                 "[{\"value\":\"press\",\"label\":\"Au press\"},{\"value\":\"release\",\"label\":\"Au release\"}]",
-                "press",
-                "r",
-                "btnMode",
-                "[\"pulse\"]"
-            ))
-            .addFormField(makeSelectField(
-                "btnPullMode",
-                "Mode pull",
+                "press", "r", "btnMode", "[\"pulse\"]"),
+            makeSelectField("btnPullMode", "Mode pull",
                 "[{\"value\":\"pullup\",\"label\":\"Pull-up\"},{\"value\":\"pulldown\",\"label\":\"Pull-down\"},{\"value\":\"none\",\"label\":\"Aucun\"}]",
-                "pullup"
-            ))
-            .addMidiMessage(createNoteMessage(true, "[\"button\"]"))
-            .addMidiMessage(createCcOnOffMessage("[\"button\"]"))
-            .addMidiMessage(createPcMessage())
-            .addMidiMessage(createClockMessage())
-            .build();
+                "pullup"),
+        };
+        /* note + vélocité, dependsOnRole bouton */
+        static constexpr MidiParamDef NOTE_VEL[] = {
+            {"midiNote",     "{{t.pins.note}}:",     FieldType::NUMBER, 0, 127, "60",  "60",  nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiChannel",  "{{t.pins.channel}}:",  FieldType::NUMBER, 1, 16,  "1",   "1",   nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiVelocity", "{{t.pins.velocity}}:", FieldType::NUMBER, 1, 127, "100", "100", nullptr, nullptr, nullptr, nullptr, nullptr, 90, "[\"button\"]"},
+        };
+        /* cc on/off, dependsOnRole bouton */
+        static constexpr MidiParamDef CC_ONOFF[] = {
+            {"midiCc",      "{{t.pins.cc}}:",      FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiChannel", "{{t.pins.channel}}:", FieldType::NUMBER, 1, 16,  "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiCcOnOff", "{{t.pins.values}}:",  FieldType::RANGE,  0, 127, nullptr, nullptr, "127", "0", "→", nullptr, nullptr, 90, "[\"button\"]"},
+        };
+        static constexpr MidiMessageDef MM[] = {
+            {"note", "Note",           "Note {note}", nullptr, 3, NOTE_VEL, 3},
+            {"cc",   "Control Change", "CC#{cc}",     nullptr, 3, CC_ONOFF, 3},
+            msgPc(), msgClock(),
+        };
+        return makeFlashDef(ID, DISPLAY_NAME, "cardBtn", FAMILY, FAMILY_NAME, TYPE, PIN_TYPE,
+                            SUPPORTS_MIDI, SUPPORTS_OSC, IMPLEMENTED, FF, 3, MM, 4);
     }
 };
 

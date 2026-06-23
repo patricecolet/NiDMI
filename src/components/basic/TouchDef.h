@@ -1,9 +1,8 @@
 #pragma once
 
 #include "../ComponentDefinition.h"
-#include "../ComponentBuilder.h"
 #include "../FormFieldHelpers.h"
-#include "../MidiMessageFactory.h"
+#include "../MidiMessageCatalog.h"
 #include "../../utils/PinMapper.h"
 
 /**
@@ -61,35 +60,29 @@ struct Touch {
      * @brief Crée la définition complète pour le registre
      */
     static ComponentDefinition createDefinition() {
-        return ComponentBuilder()
-            .setBasicInfo(ID, DISPLAY_NAME, "cardTouch")
-            .setFamily(FAMILY, FAMILY_NAME)
-            .setType(TYPE, PIN_TYPE)
-            .setCapabilities(SUPPORTS_MIDI, SUPPORTS_OSC)
-            .setImplemented(IMPLEMENTED)
-            .addFormField(makeTextField(
-                "s",
-                "Seuils ON,OFF (raw)",
-                "0,0", "0,0", 16, 80,
-                "Depuis baseline: déclenchement,relâchement (0,0=auto)"
-            ))
-            .addFormField(makeNumberFieldWithHint(
-                "aftertouchRange",
-                "Plage aftertouch (raw)",
-                0, 500000, "20000", "Valeurs brutes au-dessus de la baseline pour modulation 0-127 (0=auto 20%)", 80
-            ))
-            .addFormField(makeNumberFieldWithHint(
-                "filterIntensity",
-                "Intensité filtrage (1-10)",
-                1, 10, "5", "1=rapide, 10=stable", 60
-            ))
-            // Messages MIDI disponibles
-            .addMidiMessage(createCcMessage(true, "[\"touch\"]"))
-            .addMidiMessage(createPitchBendMessage())
-            .addMidiMessage(createAftertouchMessage())
-            .addMidiMessage(createNoteWithKeyPressureMessage()) // Note + Key Pressure (comme Velostat)
-            .addMidiMessage(createNoteSweepMessage()) // Note simple avec balayage
-            .build();
+        static constexpr FormFieldDef FF[] = {
+            makeTextField("s", "Seuils ON,OFF (raw)", "0,0", "0,0", 16, 80,
+                "Depuis baseline: déclenchement,relâchement (0,0=auto)"),
+            makeNumberFieldWithHint("aftertouchRange", "Plage aftertouch (raw)", 0, 500000, "20000",
+                "Valeurs brutes au-dessus de la baseline pour modulation 0-127 (0=auto 20%)", 80),
+            makeNumberFieldWithHint("filterIntensity", "Intensité filtrage (1-10)", 1, 10, "5",
+                "1=rapide, 10=stable", 60),
+        };
+        /* cc + range, dependsOnRole touch */
+        static constexpr MidiParamDef CC_RANGE[] = {
+            {"midiCc",      "{{t.pins.cc}}:",        FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiChannel", "{{t.pins.channel}}:",   FieldType::NUMBER, 1, 16,  "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE,  0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, "[\"touch\"]"},
+        };
+        static constexpr MidiMessageDef MM[] = {
+            {"cc", "Control Change", "CC#{cc}", nullptr, 3, CC_RANGE, 3},
+            msgPitchBend(),
+            msgAftertouch(),
+            msgNoteKeyPressure(), // Note + Key Pressure (comme Velostat)
+            msgNoteSweep(),       // Note simple avec balayage
+        };
+        return makeFlashDef(ID, DISPLAY_NAME, "cardTouch", FAMILY, FAMILY_NAME, TYPE, PIN_TYPE,
+                            SUPPORTS_MIDI, SUPPORTS_OSC, IMPLEMENTED, FF, 3, MM, 5);
     }
 };
 

@@ -1,9 +1,8 @@
 #pragma once
 
 #include "../ComponentDefinition.h"
-#include "../ComponentBuilder.h"
 #include "../FormFieldHelpers.h"
-#include "../MidiMessageFactory.h"
+#include "../MidiMessageCatalog.h"
 #include "../../utils/PinMapper.h"
 
 /**
@@ -62,25 +61,23 @@ struct Potentiometer {
      * @brief Crée la définition complète pour le registre
      */
     static ComponentDefinition createDefinition() {
-        return ComponentBuilder()
-            .setBasicInfo(ID, DISPLAY_NAME, "cardPot")
-            .setFamily(FAMILY, FAMILY_NAME)
-            .setType(TYPE, PIN_TYPE)
-            .setCapabilities(SUPPORTS_MIDI, SUPPORTS_OSC)
-            .setImplemented(IMPLEMENTED)
-            .addFormField(makeNumberField("potMin", "Seuil minimum", 0, 4095, "0", 1, 100, "f"))
-            .addFormField(makeNumberField("potMax", "Seuil maximum", 0, 4095, "4095", 1, 100, "f"))
-            .addFormField(makeNumberFieldWithHint(
-                "filterIntensity",
-                "Intensité filtrage (1-10)",
-                1, 10, "5", "1=rapide, 10=stable", 60, "r"
-            ))
-            .addMidiMessage(createCcMessage(true, "[\"potentiometer\"]"))
-            .addMidiMessage(createPcMessage())
-            .addMidiMessage(createPitchBendMessage())
-            .addMidiMessage(createAftertouchMessage())
-            .addMidiMessage(createNoteSweepMessage())
-            .build();
+        static constexpr FormFieldDef FF[] = {
+            makeNumberField("potMin", "Seuil minimum", 0, 4095, "0", 1, 100, "f"),
+            makeNumberField("potMax", "Seuil maximum", 0, 4095, "4095", 1, 100, "f"),
+            makeNumberFieldWithHint("filterIntensity", "Intensité filtrage (1-10)", 1, 10, "5", "1=rapide, 10=stable", 60, "r"),
+        };
+        /* cc + range avec dependsOnRole spécifique au potentiomètre */
+        static constexpr MidiParamDef CC_RANGE[] = {
+            {"midiCc",      "{{t.pins.cc}}:",        FieldType::NUMBER, 0, 127, "7", "7", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiChannel", "{{t.pins.channel}}:",   FieldType::NUMBER, 1, 16,  "1", "1", nullptr, nullptr, nullptr, nullptr, nullptr, 90, nullptr},
+            {"midiCcRange", "{{t.pins.midiRange}}:", FieldType::RANGE,  0, 127, nullptr, nullptr, "0", "127", "→", nullptr, nullptr, 90, "[\"potentiometer\"]"},
+        };
+        static constexpr MidiMessageDef MM[] = {
+            {"cc", "Control Change", "CC#{cc}", nullptr, 3, CC_RANGE, 3},
+            msgPc(), msgPitchBend(), msgAftertouch(), msgNoteSweep(),
+        };
+        return makeFlashDef(ID, DISPLAY_NAME, "cardPot", FAMILY, FAMILY_NAME, TYPE, PIN_TYPE,
+                            SUPPORTS_MIDI, SUPPORTS_OSC, IMPLEMENTED, FF, 3, MM, 5);
     }
 };
 
