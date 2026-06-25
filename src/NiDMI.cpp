@@ -208,6 +208,11 @@ void nidmi_begin() {
     
     // Initialiser RTP-MIDI
     serverCore.rtpMidi().begin(serverName.c_str());
+    serverCore.rtpMidi().setMidiInputHooks(
+        [](uint8_t ch, uint8_t note, uint8_t vel) { g_componentManager.handleMidiNoteOn(ch, note, vel); },
+        [](uint8_t ch, uint8_t note, uint8_t vel) { g_componentManager.handleMidiNoteOff(ch, note, vel); },
+        [](uint8_t ch, uint8_t cc,   uint8_t val) { g_componentManager.handleMidiControlChange(ch, cc, val); }
+    );
     NIDMI_WEB_LOG("[MEM] apres RTP-MIDI: %d\n", (int)ESP.getFreeHeap());
     
     // Initialiser Bluetooth MIDI
@@ -228,7 +233,7 @@ void nidmi_begin() {
     Serial.print("  AP PASS: "); Serial.println(apPass);
     Serial.print("  AP IP: "); Serial.println(WiFi.softAPIP());
     Serial.print("  mDNS: http://"); Serial.print(host); Serial.println(".local/");
-    Serial.print("  RTP-MIDI: "); Serial.println(serverCore.rtpMidi().isInitialized() ? "Initialized" : "Failed");
+    Serial.print("  RTP-MIDI: "); Serial.println(serverCore.rtpMidi().isReady() ? "Initialized" : "Failed");
     Serial.print("  Bluetooth: "); Serial.println(serverCore.bluetooth().isInitialized() ? "Initialized" : "Failed");
     Serial.printf("Touch Enabled: %s\n", touchEnabled ? "true" : "false");
     Serial.println();

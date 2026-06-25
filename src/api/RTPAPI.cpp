@@ -20,7 +20,7 @@ void setupRTPAPI(AsyncWebServer& server) {
             
             // Redémarrer RTP-MIDI avec le nouveau nom
             serverCore.rtpMidi().stop();
-            serverCore.rtpMidi().begin(name);
+            serverCore.rtpMidi().begin(name.c_str());
             
             request->send(200, "application/json", "{\"status\":\"ok\"}");
         } else {
@@ -45,7 +45,7 @@ void setupRTPAPI(AsyncWebServer& server) {
                 preferences.begin("nidmi", false);
                 String name = preferences.getString("rtp_name", "ESP32-Studio");
                 preferences.end();
-                serverCore.rtpMidi().begin(name);
+                serverCore.rtpMidi().begin(name.c_str());
             } else {
                 serverCore.rtpMidi().stop();
             }
@@ -59,7 +59,7 @@ void setupRTPAPI(AsyncWebServer& server) {
     // API - Statut RTP-MIDI
     server.on("/api/rtp/status", HTTP_GET, [](AsyncWebServerRequest *request){
         // Pour le sketch de test : enabled = true si RTP-MIDI est initialisé
-        bool enabled = serverCore.rtpMidi().isInitialized();
+        bool enabled = serverCore.rtpMidi().isReady();
         
         Preferences preferences;
         preferences.begin("nidmi", false);

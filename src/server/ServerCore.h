@@ -5,7 +5,7 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncWebSocket.h>
 #include <IPAddress.h>
-#include "../network/RtpMidi.h"
+#include <nidmi_core/RtpMidiService.h>
 #include "../network/BluetoothManager.h"
 #include "../network/UsbMidiManager.h"
 
@@ -26,7 +26,7 @@ class ServerCore {
 private:
     AsyncWebServer server;
     AsyncWebSocket ws;
-    RtpMidi rtpMidiInstance;
+    nidmi::RtpMidiService rtpMidiInstance;
     BluetoothManager bluetoothInstance;
     UsbMidiManager usbMidiInstance;
     bool useStaticSta = false;
@@ -44,7 +44,7 @@ public:
     // Accès aux services
     AsyncWebServer& web();
     AsyncWebSocket& websocket();
-    RtpMidi& rtpMidi();
+    nidmi::RtpMidiService& rtpMidi();
     BluetoothManager& bluetooth();
     UsbMidiManager& usbMidi();
     

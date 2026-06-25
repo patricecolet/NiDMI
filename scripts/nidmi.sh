@@ -717,7 +717,7 @@ compile_sketch() {
             BUILD_PROPS+=(--build-property "upload.maximum_size=4063232")
         fi
         
-        arduino-cli compile --fqbn $BOARD "${BUILD_PROPS[@]}" $SKETCH_PATH
+        arduino-cli compile --fqbn $BOARD "${BUILD_PROPS[@]}" --library "$REPO_DIR/../nidmi-core" $SKETCH_PATH
         echo "   ✅ Compilation réussie"
     else
         echo "   ⚠️  arduino-cli non trouvé"
@@ -796,7 +796,7 @@ build_binary() {
             BUILD_PROPS+=(--build-property "upload.maximum_size=4063232")
         fi
         
-        arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "${BUILD_PROPS[@]}" "$SKETCH_PATH"
+        arduino-cli compile --fqbn "$BOARD" --output-dir "$REPO_DIR/bin" "${BUILD_PROPS[@]}" --library "$REPO_DIR/../nidmi-core" "$SKETCH_PATH"
         echo "   ✅ Binaire compilé et stocké dans bin/"
         # --variant : étiqueter les binaires pour distinguer off/on
         #   .bin        = image applicative (pour l'OTA, écrit dans le slot app)

@@ -245,8 +245,8 @@ AsyncWebSocket& ServerCore::websocket() {
     return ws; 
 }
 
-RtpMidi& ServerCore::rtpMidi() { 
-    return rtpMidiInstance; 
+nidmi::RtpMidiService& ServerCore::rtpMidi() {
+    return rtpMidiInstance;
 }
 
 BluetoothManager& ServerCore::bluetooth() { 
