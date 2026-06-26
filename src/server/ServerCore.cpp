@@ -245,7 +245,7 @@ AsyncWebSocket& ServerCore::websocket() {
     return ws; 
 }
 
-nidmi::RtpMidiService& ServerCore::rtpMidi() {
+nidmi_core::RtpMidiService& ServerCore::rtpMidi() {
     return rtpMidiInstance;
 }
 
