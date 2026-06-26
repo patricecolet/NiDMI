@@ -650,6 +650,29 @@ nidmi_clear_nvs_upload_hint() {
     echo ""
 }
 
+# Synchronise nidmi-core vers ~/Documents/Arduino/libraries/nidmi-core/
+# Priorité : repo local frère → git pull du clone Arduino → avertissement.
+sync_nidmi_core() {
+    local REPO_SRC="$REPO_DIR/../nidmi-core"
+    local ARDUINO_LIBS_BASE
+    case "$PLATFORM" in
+        mac)  ARDUINO_LIBS_BASE="$HOME/Documents/Arduino/libraries" ;;
+        *)    ARDUINO_LIBS_BASE="$HOME/Arduino/libraries" ;;
+    esac
+    local DEST="$ARDUINO_LIBS_BASE/nidmi-core"
+
+    if [ -d "$REPO_SRC/src" ]; then
+        mkdir -p "$DEST/src"
+        cp -r "$REPO_SRC/src/"* "$DEST/src/"
+        cp "$REPO_SRC/library.properties" "$DEST/" 2>/dev/null || true
+        echo "   ✅ nidmi-core synced depuis $REPO_SRC"
+    elif [ -d "$DEST/.git" ]; then
+        git -C "$DEST" pull --ff-only --quiet && echo "   ✅ nidmi-core updated (git pull)" || echo "   ⚠️  nidmi-core git pull échoué (merge conflict ?)"
+    else
+        echo "   ⚠️  nidmi-core introuvable. Lancer ./scripts/install_deps.sh" >&2
+    fi
+}
+
 # Fonction de compilation
 compile_sketch() {
     echo "🔨 Compilation du sketch..."
@@ -674,7 +697,9 @@ compile_sketch() {
         echo "   📦 Mode LARGE-APP activé (partition C3 sans SPIFFS, app ~4 Mo)"
         setup_c3_large_app_partition || true
     fi
-    
+
+    sync_nidmi_core
+
     if command -v arduino-cli &> /dev/null; then
         echo "   Utilisation d'arduino-cli..."
         
