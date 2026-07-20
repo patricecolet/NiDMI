@@ -11,7 +11,8 @@ Ce guide s'adresse aux stagiaires et développeurs qui souhaitent ajouter de nou
 5. [Création d'un composant complexe](#création-dun-composant-complexe)
 6. [Intégration dans l'UI](#intégration-dans-lui)
 7. [Bonnes pratiques](#bonnes-pratiques)
-8. [TODO - Prochaines étapes](#todo---prochaines-étapes)
+8. [Détection de pin non câblée](#-détection-de-pin-non-câblée-capteurs-mono-pin-uniquement)
+9. [TODO - Prochaines étapes](#todo---prochaines-étapes)
 
 ## 🏗️ Architecture des composants
 
@@ -447,6 +448,53 @@ Les composants avec `implemented: false` sont affichés en grisé.
 1. **Utiliser `ComponentConfig` pour les paramètres**
 2. **Valider les pins dans le Validator**
 3. **NVS est géré automatiquement par `ConfigLoader`**
+
+## 🔌 Détection de pin non câblée (capteurs mono-pin uniquement)
+
+Une entrée analogique laissée en l'air capte du bruit et envoie un flot de MIDI/OSC
+parasite. Pour l'éviter, un capteur **mono-pin** dont la pin est détectée « dans le
+vide » au setup est neutralisé : il reste configuré mais n'émet plus rien.
+
+### Fonctionnement
+
+`PinMapper::isPinFloating(gpio)` applique successivement le pull-up puis le pull-down
+interne (~45 kΩ) et lit la pin. Si elle suit le pull dans les deux sens (HIGH sous
+pull-up **et** LOW sous pull-down), c'est qu'aucune source externe ne s'y oppose :
+la pin est déclarée flottante.
+
+Le chaînage :
+
+1. `ComponentInitializer::setupGpio()` appelle le test pour les types mono-pin et
+   écrit le résultat dans `ComponentConfig::pin_disconnected`.
+2. La boucle de traitement de `ComponentManager` saute entièrement les composants dont
+   ce drapeau est levé — ni MIDI, ni OSC, ni télémétrie.
+
+Le test est refait à chaque (re)chargement de configuration : rebrancher le capteur
+puis sauvegarder depuis l'UI suffit à le réactiver, sans reflash.
+
+### Périmètre : mono-pin seulement
+
+| Type | Gate | Raison |
+|---|---|---|
+| `POTENTIOMETER`, `VELOSTAT`, `NOISE_SAMPLER` | ✅ actif | Une seule pin : flottante = composant inutilisable |
+| `JOYSTICK`, `JOYSTICK3` | ❌ exclus | Faux positifs constatés sur du matériel câblé |
+
+Les joysticks sortent de `setupGpio()` **avant** d'atteindre le test. Sur ces
+composants, le test déclarait flottants des axes pourtant correctement câblés, ce qui
+muselait le composant entier. La cause exacte n'a pas été isolée (impédance des
+potentiomètres du module vs pull interne, ou montage). **Ne pas les réintégrer sans
+avoir d'abord relevé, sur la cible, les valeurs réellement lues sur ces pins.**
+
+### Ajouter un nouveau capteur analogique au gate
+
+Si le composant a **une seule pin analogique**, l'ajouter à la liste
+`is_single_pin_analog_sensor` dans `ComponentInitializer::setupGpio()`. Pour un
+composant multi-pins, s'abstenir : le drapeau `pin_disconnected` est global au
+composant, il n'existe pas de granularité par pin.
+
+> ⚠️ Une détection trop zélée est pire que pas de détection : elle rend muet du
+> matériel qui fonctionne, et le symptôme (« ça n'envoie rien ») ne pointe pas du tout
+> vers sa cause. En cas de doute sur un nouveau type, ne pas activer le gate.
 
 ## 🎯 Checklist
 
