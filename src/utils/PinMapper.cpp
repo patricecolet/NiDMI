@@ -324,6 +324,37 @@ bool PinMapper::hasTouch(uint8_t gpio) {
     return pin ? pin->has_touch : false;
 }
 
+bool PinMapper::isPinFloating(uint8_t gpio) {
+    // Pins virtuelles MUX (200-247) : pas de test physique possible, jamais flottantes ici.
+    if (gpio >= 200 && gpio < 248) {
+        return false;
+    }
+    if (gpio > 48) {
+        return false;
+    }
+
+    pinMode(gpio, INPUT_PULLUP);
+    delayMicroseconds(20); // temps de charge de la capacité de ligne à travers le pull interne (~45kΩ)
+    bool highWithPullup = (digitalRead(gpio) == HIGH);
+
+    pinMode(gpio, INPUT_PULLDOWN);
+    delayMicroseconds(20);
+    bool lowWithPulldown = (digitalRead(gpio) == LOW);
+
+    // Neutraliser avant de repasser en lecture ADC (analogRead() reconfigure la pin,
+    // mais on évite tout pull résiduel qui biaiserait une lecture immédiate).
+    pinMode(gpio, INPUT);
+
+    // Flottante = suit systématiquement le pull interne dans les deux sens :
+    // aucune source externe basse impédance ne s'y oppose.
+    //
+    // ATTENTION au périmètre d'emploi : ce test n'est fiable que sur un capteur
+    // MONO-PIN à basse impédance (potentiomètre simple, velostat...). Utilisé sur les
+    // axes d'un joystick, il a produit des faux positifs qui muselaient du matériel
+    // pourtant câblé — d'où la restriction dans ComponentInitializer::setupGpio().
+    return highWithPullup && lowWithPulldown;
+}
+
 String PinMapper::getMcuName() {
     switch (detected_mcu) {
         case McuType::ESP32_C3: return "ESP32-C3";

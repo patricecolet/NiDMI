@@ -44,11 +44,11 @@ const MidiConfig = {
       return;
     }
     
-    /* Joystick et IMU LIS3DH : sections séparées par axe */
-    if(def.id === 'joystick' || def.id === 'lis3dh') {
+    /* Joystick, Joystick 3 axes et IMU LIS3DH : sections séparées par axe */
+    if(def.id === 'joystick' || def.id === 'joystick3' || def.id === 'lis3dh') {
       this.generateAxisSection(def, currentCfg, container, 'x');
       this.generateAxisSection(def, currentCfg, container, 'y');
-      if(def.id === 'lis3dh') {
+      if(def.id === 'joystick3' || def.id === 'lis3dh') {
         this.generateAxisSection(def, currentCfg, container, 'z');
       }
       return;
@@ -564,12 +564,12 @@ const MidiConfig = {
       debugMidiEnabled: !!$('#debugMidiEnabled')?.checked
     };
     
-    // 3. Lire dynamiquement tous les paramètres MIDI (joystick/lis3dh : par axe, sinon global)
-    const isMultiAxis = def && (def.id === 'joystick' || def.id === 'lis3dh');
+    // 3. Lire dynamiquement tous les paramètres MIDI (joystick/joystick3/lis3dh : par axe, sinon global)
+    const isMultiAxis = def && (def.id === 'joystick' || def.id === 'joystick3' || def.id === 'lis3dh');
 
     if(def && def.midiMessages && Array.isArray(def.midiMessages)) {
       if(isMultiAxis) {
-        const axes = def.id === 'lis3dh' ? ['X', 'Y', 'Z'] : ['X', 'Y'];
+        const axes = (def.id === 'joystick3' || def.id === 'lis3dh') ? ['X', 'Y', 'Z'] : ['X', 'Y'];
         axes.forEach(axis => {
           const lowerAxis = axis.toLowerCase();
           def.midiMessages
@@ -673,9 +673,9 @@ const MidiConfig = {
     };
     
     /* Pour les composants multi-axes, appliquer les configs MIDI séparées par axe */
-    const isMultiAxis = def && (def.id === 'joystick' || def.id === 'lis3dh');
+    const isMultiAxis = def && (def.id === 'joystick' || def.id === 'joystick3' || def.id === 'lis3dh');
     if(isMultiAxis) {
-      const axes = def.id === 'lis3dh' ? ['X','Y','Z'] : ['X','Y'];
+      const axes = (def.id === 'joystick3' || def.id === 'lis3dh') ? ['X','Y','Z'] : ['X','Y'];
       axes.forEach(axis => {
         const keyType = `midiMessageType${axis}`;
         const keyRtp  = `rtpType${axis}`;

@@ -7,6 +7,7 @@
 #include "../components/basic/PotentiometerDef.h"
 #include "../components/basic/VelostatDef.h"
 #include "../components/basic/JoystickDef.h"
+#include "../components/basic/Joystick3Def.h"
 #include "../components/motion/Lis3dhDef.h"
 #include "../components/interface/Mpr121Def.h"
 #include "../components/signal/NoiseSamplerDef.h"
@@ -48,7 +49,8 @@ void ComponentInitializer::initializeConfig(
     config.customField2[0] = '\0';
     config.customInt1 = 0;
     config.customInt2 = 0;
-    
+
+
     // Allouer et initialiser la configuration spécifique selon le type
     const ComponentDefinition* def = ComponentRegistry::findByType(type);
     
@@ -160,6 +162,51 @@ void ComponentInitializer::initializeConfig(
                 }
             }
             config.specificConfig.joystick = joyConfig;
+            break;
+        }
+        case ComponentType::JOYSTICK3: {
+            Components::Joystick3Config* joyConfig = new Components::Joystick3Config();
+            if (def && def->formFields) {
+                for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                    const FormFieldDef& field = def->formFields[i];
+                    if (field.id && field.defaultValue) {
+                        if (strcmp(field.id, "filterIntensity") == 0) {
+                            joyConfig->filter_intensity = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xMin") == 0) {
+                            joyConfig->joyXMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xZeroMin") == 0) {
+                            joyConfig->joyXZeroMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xZeroMax") == 0) {
+                            joyConfig->joyXZeroMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "xMax") == 0) {
+                            joyConfig->joyXMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yMin") == 0) {
+                            joyConfig->joyYMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yZeroMin") == 0) {
+                            joyConfig->joyYZeroMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yZeroMax") == 0) {
+                            joyConfig->joyYZeroMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "yMax") == 0) {
+                            joyConfig->joyYMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "zMin") == 0) {
+                            joyConfig->joyZMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "zZeroMin") == 0) {
+                            joyConfig->joyZZeroMin = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "zZeroMax") == 0) {
+                            joyConfig->joyZZeroMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "zMax") == 0) {
+                            joyConfig->joyZMax = atoi(field.defaultValue);
+                        } else if (strcmp(field.id, "invertX") == 0) {
+                            joyConfig->invertX = (atoi(field.defaultValue) != 0);
+                        } else if (strcmp(field.id, "invertY") == 0) {
+                            joyConfig->invertY = (atoi(field.defaultValue) != 0);
+                        } else if (strcmp(field.id, "invertZ") == 0) {
+                            joyConfig->invertZ = (atoi(field.defaultValue) != 0);
+                        }
+                    }
+                }
+            }
+            config.specificConfig.joystick3 = joyConfig;
             break;
         }
         case ComponentType::IMU: {
@@ -289,7 +336,12 @@ void ComponentInitializer::initializeState(ComponentState& state) {
     state.last_raw_value_aux_u32 = 0;
     state.last_midi_value_aux_u8 = 0;
     state.last_telemetry_ts_aux = 0;
-    
+
+    state.aux_gpio2 = 255;
+    state.last_raw_value_aux2_u32 = 0;
+    state.last_midi_value_aux2_u8 = 0;
+    state.last_telemetry_ts_aux2 = 0;
+
     // Initialiser les champs de debouncing simple
     state.last_button_state = false;
     state.last_change_time = 0;
@@ -298,73 +350,107 @@ void ComponentInitializer::initializeState(ComponentState& state) {
     state.last_aftertouch = 0;
 }
 
-void ComponentInitializer::setupGpio(uint8_t gpio, ComponentType type, const ComponentConfig* config) {
-    // IMPORTANT: Ne PAS appeler pinMode() sur les pins touch ESP32-S3
-    // car cela désactive la fonctionnalité touch (touchRead() ne fonctionnera plus)
+void ComponentInitializer::setupGpio(uint8_t gpio, ComponentType type, ComponentConfig* config) {
+    // IMPORTANT: Ne PAS appeler pinMode() sur une pin réellement utilisée en TOUCH,
+    // car cela désactiverait le touch sensing (touchRead() ne fonctionnerait plus).
+    // Ne PAS se baser sur la simple capacité physique (hasTouch()) : une pin
+    // touch-CAPABLE (ex. D2/GPIO3 sur S3) peut très bien être configurée comme un
+    // BOUTON classique — dans ce cas pinMode(INPUT_PULLUP/PULLDOWN) doit s'appliquer
+    // normalement, sinon aucun pull n'est jamais activé et la pin reste flottante.
     bool is_touch_type = (type == ComponentType::TOUCH);
-    bool has_touch_capability = PinMapper::hasTouch(gpio);
-    
-    if (is_touch_type || has_touch_capability) {
+
+    if (is_touch_type) {
         // Pour les pins touch, ne pas appeler pinMode()
         // touchRead() configure automatiquement la pin pour le touch sensing
-        Serial.printf("[ComponentInitializer] ═══ GPIO%d: Touch pin détectée ═══\n", gpio);
-        Serial.printf("[ComponentInitializer] Type=TOUCH: %s, hasTouch(): %s\n", 
-                     is_touch_type ? "OUI" : "NON", has_touch_capability ? "OUI" : "NON");
-        Serial.printf("[ComponentInitializer] ✓ Pas de pinMode() appelé (touchRead() configure automatiquement)\n");
-        Serial.printf("[ComponentInitializer] ════════════════════════════════════\n");
+        Serial.printf("[ComponentInitializer] GPIO%d: composant TOUCH, pas de pinMode() (touchRead() configure automatiquement)\n", gpio);
         return;
     }
-    
+
+    // Les types ci-dessous (BUTTON/LED puis les capteurs analogiques) sont traités
+    // AVANT de consulter ComponentRegistry::findByType(type) : cette fonction fait un
+    // scan linéaire et renvoie la PREMIÈRE définition dont .type == type. Or plusieurs
+    // définitions non-implémentées (placeholders, ex. RadarDopplerDef, MotionGenericDef)
+    // réutilisent délibérément ComponentType::BUTTON en attendant leur propre type — et
+    // ComponentDefinition::ComponentDefinition() donne PAR DÉFAUT type=POTENTIOMETER à
+    // toute définition qui ne fixe pas explicitement .type, donc N'IMPORTE QUEL
+    // placeholder qui l'oublie atterrit aussi sur POTENTIOMETER. Ces placeholders sont
+    // enregistrés avant les vrais composants dans ComponentRegistry, donc
+    // findByType(BUTTON) / findByType(POTENTIOMETER) renvoyaient LEUR définition
+    // (souvent pinType != celui attendu) au lieu de la bonne : le switch plus bas
+    // tombait alors dans la mauvaise branche (aucun pull-up/pulldown pour un bouton,
+    // aucun test de pin flottante pour un potentiomètre). On connaît le comportement
+    // de ces types sans ambiguïté : pas besoin de dépendre de cette recherche pour eux.
+    if (type == ComponentType::BUTTON) {
+        // Configurer le mode pull selon btnPullMode
+        String pullMode = "pullup"; // Défaut
+        if (config && config->specificConfig.button && strlen(config->specificConfig.button->btnPullMode) > 0) {
+            pullMode = String(config->specificConfig.button->btnPullMode);
+        }
+
+        if (pullMode == "pullup") {
+            pinMode(gpio, INPUT_PULLUP);
+        } else if (pullMode == "pulldown") {
+            pinMode(gpio, INPUT_PULLDOWN);
+        } else {
+            // "none" ou autre : pas de pull interne
+            pinMode(gpio, INPUT);
+        }
+        Serial.printf("[ComponentInitializer] GPIO%d: BUTTON pinMode appliqué, btnPullMode='%s', hasTouch=%s\n",
+                     gpio, pullMode.c_str(), PinMapper::hasTouch(gpio) ? "true" : "false");
+        return;
+    }
+    if (type == ComponentType::LED) {
+        pinMode(gpio, OUTPUT);
+        digitalWrite(gpio, LOW);
+        return;
+    }
+
+    // Joysticks (multi-pins) : rien à configurer, l'ADC est attaché à la lecture.
+    // Volontairement EXCLUS de la détection "pin dans le vide" ci-dessous : le test
+    // pull-up/pull-down y a produit des faux positifs qui muselaient des axes pourtant
+    // câblés (les 3 axes du joystick 3 axes devenaient muets). Ne les y réintégrer
+    // qu'avec une méthode validée sur la cible.
+    if (type == ComponentType::JOYSTICK || type == ComponentType::JOYSTICK3) {
+        return;
+    }
+
+    // Capteurs analogiques MONO-PIN connus (toujours PIN_ANALOG, cf. leurs *Def.h) :
+    // une seule pin, donc pin flottante = composant entier inutilisable. Traités ici
+    // plutôt que via findByType() pour la même raison d'ambiguïté que BUTTON/LED.
+    bool is_single_pin_analog_sensor =
+        type == ComponentType::POTENTIOMETER ||
+        type == ComponentType::VELOSTAT ||
+        type == ComponentType::NOISE_SAMPLER;
+    if (is_single_pin_analog_sensor) {
+        bool floating = PinMapper::isPinFloating(gpio);
+        if (config) {
+            config->pin_disconnected = floating;
+        }
+        if (floating) {
+            Serial.printf("[ComponentInitializer] GPIO%d: pin flottante détectée — envoi MIDI/OSC désactivé\n", gpio);
+        }
+        return;
+    }
+
     const ComponentDefinition* def = ComponentRegistry::findByType(type);
     if (!def) {
         // Fallback : comportement par défaut si définition non disponible
         pinMode(gpio, INPUT);
         return;
     }
-    
-    // Configurer le GPIO selon le pinType de la définition
+
+    // Pour les types restants, l'ambiguïté potentielle de findByType() ne casse rien
+    // ici : toutes les branches ci-dessous se résument à un simple INPUT.
     PinType pinType = static_cast<PinType>(def->pinType);
     switch (pinType) {
         case PinType::PIN_ANALOG:
-            // ADC auto, pas de configuration nécessaire
+            // Ne devrait plus arriver ici (types analogiques connus traités plus haut) ;
+            // gardé par sécurité pour un futur type analogique pas encore listé ci-dessus.
             break;
         case PinType::PIN_DIGITAL:
-            // Pour les composants digitaux, déterminer INPUT ou OUTPUT selon le type
-            if (type == ComponentType::BUTTON) {
-                // Configurer le mode pull selon btnPullMode
-                String pullMode = "pullup"; // Défaut
-                if (config && config->specificConfig.button && strlen(config->specificConfig.button->btnPullMode) > 0) {
-                    pullMode = String(config->specificConfig.button->btnPullMode);
-                }
-                
-                if (pullMode == "pullup") {
-                    pinMode(gpio, INPUT_PULLUP);
-                } else if (pullMode == "pulldown") {
-                    pinMode(gpio, INPUT_PULLDOWN);
-                } else {
-                    // "none" ou autre : pas de pull interne
-                    pinMode(gpio, INPUT);
-                }
-            } else if (type == ComponentType::LED) {
-                pinMode(gpio, OUTPUT);
-                digitalWrite(gpio, LOW);
-            } else {
-                // Par défaut pour les autres composants digitaux
-                pinMode(gpio, INPUT);
-            }
-            break;
         case PinType::PIN_ANALOG_OR_DIGITAL:
-            // Utiliser comme digital par défaut (peut être changé selon le composant)
-            pinMode(gpio, INPUT);
-            break;
         case PinType::PIN_PWM:
-            // PWM peut être INPUT ou OUTPUT selon le composant
-            if (type == ComponentType::LED) {
-                pinMode(gpio, OUTPUT);
-                digitalWrite(gpio, LOW);
-            } else {
-                pinMode(gpio, INPUT);
-            }
+            pinMode(gpio, INPUT);
             break;
     }
 }

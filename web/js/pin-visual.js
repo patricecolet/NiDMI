@@ -17,7 +17,29 @@ function updateBusVisuals() {
     const r = prect[lbl];
     if (!r || typeof r.classList === 'undefined') return;
     r.classList.remove('busDisabled');
+    r.classList.remove('pinSensitive');
+    const oldTitle = r.parentNode ? r.parentNode.querySelector('title[data-sensitive-title="1"]') : null;
+    if (oldTitle) oldTitle.remove();
   });
+
+  /* 1bis. Marquer les pins "sensibles" (occupées par un périphérique interne du firmware,
+     ex. Serial sur UART0 quand USB-MIDI est actif) : avertissement visuel, pas un blocage
+     (cohérent avec le choix du projet de ne pas bloquer la sélection de pin, cf. RESTRICTIONS
+     DÉSACTIVÉES plus bas dans ce fichier et dans form-generator.js). */
+  if (typeof caps !== 'undefined' && caps && caps.pins && Array.isArray(caps.pins)) {
+    caps.pins.forEach(p => {
+      if (!p || !p.sensitive || !p.label) return;
+      const r = prect[p.label];
+      if (!r || typeof r.classList === 'undefined') return;
+      r.classList.add('pinSensitive');
+      if (r.parentNode) {
+        const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+        title.setAttribute('data-sensitive-title', '1');
+        title.textContent = p.sensitiveReason || 'Pin réservée par le firmware';
+        r.parentNode.appendChild(title);
+      }
+    });
+  }
 
   if (typeof caps === 'undefined' || !caps || !caps.pins || !Array.isArray(caps.pins)) return;
 

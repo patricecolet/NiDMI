@@ -7,6 +7,7 @@
 #include "../components/basic/PotentiometerDef.h"
 #include "../components/basic/VelostatDef.h"
 #include "../components/basic/JoystickDef.h"
+#include "../components/basic/Joystick3Def.h"
 #include "../components/motion/Lis3dhDef.h"
 #include "../components/interface/Mpr121Def.h"
 #include "../components/signal/NoiseSamplerDef.h"
@@ -15,6 +16,7 @@
 #include "../utils/ComponentInitializer.h"  // Pour setupGpio
 #include "../managers/complex/ComplexHandlerRegistry.h"
 #include "../managers/complex/joystick/JoystickHandler.h"
+#include "../managers/complex/joystick3/Joystick3Handler.h"
 #include "../midi/MidiMessageType.h"
 #include <Preferences.h>
 
@@ -275,7 +277,26 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                 }
             }
         }
-        
+
+        // Joystick 3 axes : enregistrer les GPIO Y et Z dans le handler (chargement NVS)
+        if (type == ComponentType::JOYSTICK3) {
+            int joyYPin = JSONParser::extractInt(pinConfig, "joyYPin", 255);
+            int joyZPin = JSONParser::extractInt(pinConfig, "joyZPin", 255);
+            Serial.printf("[ConfigLoader] Joystick3 pins: X=GPIO%d Y=GPIO%d Z=GPIO%d\n",
+                         gpio, joyYPin, joyZPin);
+            if (joyYPin < 255 && joyZPin < 255) {
+                ComplexHandler* handler = ComplexHandlerRegistry::getHandler("joystick3");
+                if (handler) {
+                    Joystick3Handler* jh = static_cast<Joystick3Handler*>(handler);
+                    jh->registerAxes(gpio, (uint8_t)joyYPin, (uint8_t)joyZPin);
+                } else {
+                    Serial.println("[ConfigLoader] ERREUR: handler 'joystick3' introuvable — axes Y/Z non enregistrés");
+                }
+            } else {
+                Serial.println("[ConfigLoader] ERREUR: joyYPin/joyZPin absents ou invalides en NVS — le composant ne sera pas traité");
+            }
+        }
+
         // Configurer les flags OSC si le composant a été ajouté avec succès
         if (success) {
             // Trouver l'index du composant ajouté
@@ -600,6 +621,140 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                                 Serial.printf("[ConfigLoader] Joystick MIDI: X=%d(ch%d,p%d) Y=%d(ch%d,p%d)\n",
                                     (int)joyConfig->xMsgType, joyConfig->xMidiChannel, joyConfig->xMidiParam,
                                     (int)joyConfig->yMsgType, joyConfig->yMidiChannel, joyConfig->yMidiParam);
+                            }
+                            break;
+                        }
+                        case ComponentType::JOYSTICK3: {
+                            if (config->specificConfig.joystick3) {
+                                Components::Joystick3Config* joyConfig = config->specificConfig.joystick3;
+                                joyConfig->joyXMin = JSONParser::extractInt(pinConfig, "xMin", 200);
+                                joyConfig->joyXZeroMin = JSONParser::extractInt(pinConfig, "xZeroMin", 1900);
+                                joyConfig->joyXZeroMax = JSONParser::extractInt(pinConfig, "xZeroMax", 2100);
+                                joyConfig->joyXMax = JSONParser::extractInt(pinConfig, "xMax", 4000);
+                                joyConfig->joyYMin = JSONParser::extractInt(pinConfig, "yMin", 200);
+                                joyConfig->joyYZeroMin = JSONParser::extractInt(pinConfig, "yZeroMin", 1900);
+                                joyConfig->joyYZeroMax = JSONParser::extractInt(pinConfig, "yZeroMax", 2100);
+                                joyConfig->joyYMax = JSONParser::extractInt(pinConfig, "yMax", 4000);
+                                joyConfig->joyZMin = JSONParser::extractInt(pinConfig, "zMin", 200);
+                                joyConfig->joyZZeroMin = JSONParser::extractInt(pinConfig, "zZeroMin", 1900);
+                                joyConfig->joyZZeroMax = JSONParser::extractInt(pinConfig, "zZeroMax", 2100);
+                                joyConfig->joyZMax = JSONParser::extractInt(pinConfig, "zMax", 4000);
+                                // Valider les valeurs (0-4095)
+                                if (joyConfig->joyXMin > 4095) joyConfig->joyXMin = 200;
+                                if (joyConfig->joyXZeroMin > 4095) joyConfig->joyXZeroMin = 1900;
+                                if (joyConfig->joyXZeroMax > 4095) joyConfig->joyXZeroMax = 2100;
+                                if (joyConfig->joyXMax > 4095) joyConfig->joyXMax = 4000;
+                                if (joyConfig->joyYMin > 4095) joyConfig->joyYMin = 200;
+                                if (joyConfig->joyYZeroMin > 4095) joyConfig->joyYZeroMin = 1900;
+                                if (joyConfig->joyYZeroMax > 4095) joyConfig->joyYZeroMax = 2100;
+                                if (joyConfig->joyYMax > 4095) joyConfig->joyYMax = 4000;
+                                if (joyConfig->joyZMin > 4095) joyConfig->joyZMin = 200;
+                                if (joyConfig->joyZZeroMin > 4095) joyConfig->joyZZeroMin = 1900;
+                                if (joyConfig->joyZZeroMax > 4095) joyConfig->joyZZeroMax = 2100;
+                                if (joyConfig->joyZMax > 4095) joyConfig->joyZMax = 4000;
+                                if (def && def->formFields) {
+                                    for (uint8_t i = 0; i < def->formFieldCount && i < MAX_FORM_FIELDS; i++) {
+                                        const FormFieldDef& field = def->formFields[i];
+                                        if (field.id && strcmp(field.id, "filterIntensity") == 0) {
+                                            uint8_t filter_intensity = JSONParser::extractInt(pinConfig, "filterIntensity", field.defaultValue ? atoi(field.defaultValue) : 5);
+                                            if (filter_intensity < 1) filter_intensity = 1;
+                                            if (filter_intensity > 10) filter_intensity = 10;
+                                            joyConfig->filter_intensity = filter_intensity;
+                                        }
+                                    }
+                                }
+
+                                // Inversion d'axes (checkbox → "0"/"1" dans le JSON)
+                                joyConfig->invertX = JSONParser::extractBool(pinConfig, "invertX", false);
+                                joyConfig->invertY = JSONParser::extractBool(pinConfig, "invertY", false);
+                                joyConfig->invertZ = JSONParser::extractBool(pinConfig, "invertZ", false);
+
+                                // Charger les types MIDI par axe
+                                String xMsgTypeStr = JSONParser::extractStr(pinConfig, "midiMessageTypeX", "");
+                                String yMsgTypeStr = JSONParser::extractStr(pinConfig, "midiMessageTypeY", "");
+                                String zMsgTypeStr = JSONParser::extractStr(pinConfig, "midiMessageTypeZ", "");
+                                if (xMsgTypeStr.length() > 0) {
+                                    joyConfig->xMsgType = stringToMidiMessageType(xMsgTypeStr);
+                                } else {
+                                    // Fallback: utiliser le msg_type global (déjà parsé)
+                                    joyConfig->xMsgType = msg_type;
+                                }
+                                if (yMsgTypeStr.length() > 0) {
+                                    joyConfig->yMsgType = stringToMidiMessageType(yMsgTypeStr);
+                                } else {
+                                    joyConfig->yMsgType = joyConfig->xMsgType; // Même type que X par défaut
+                                }
+                                if (zMsgTypeStr.length() > 0) {
+                                    joyConfig->zMsgType = stringToMidiMessageType(zMsgTypeStr);
+                                } else {
+                                    joyConfig->zMsgType = joyConfig->xMsgType; // Même type que X par défaut
+                                }
+
+                                // Charger les paramètres MIDI par axe (préfixés X_/Y_/Z_)
+                                // Le param dépend du type de message sélectionné
+                                // CC -> midiCc, Note/Sweep -> midiNote, PitchBend/Aftertouch -> pas de param
+                                auto loadAxisParam = [&](const char* axisPrefix, MidiMessageType type, uint8_t fallback) -> uint8_t {
+                                    char key[20];
+                                    if (type == MidiMessageType::CONTROL_CHANGE) {
+                                        snprintf(key, sizeof(key), "%s_midiCc", axisPrefix);
+                                        return JSONParser::extractInt(pinConfig, key,
+                                            JSONParser::extractInt(pinConfig, "midiCc", fallback));
+                                    } else if (type == MidiMessageType::NOTE_SWEEP || type == MidiMessageType::NOTE) {
+                                        snprintf(key, sizeof(key), "%s_midiNote", axisPrefix);
+                                        return JSONParser::extractInt(pinConfig, key,
+                                            JSONParser::extractInt(pinConfig, "midiNote", fallback));
+                                    }
+                                    return fallback;
+                                };
+                                joyConfig->xMidiParam = loadAxisParam("X", joyConfig->xMsgType, midi_param);
+                                joyConfig->yMidiParam = loadAxisParam("Y", joyConfig->yMsgType, midi_param);
+                                joyConfig->zMidiParam = loadAxisParam("Z", joyConfig->zMsgType, midi_param);
+                                joyConfig->xMidiChannel = JSONParser::extractInt(pinConfig, "X_midiChannel",
+                                    JSONParser::extractInt(pinConfig, "midiChannel", channel));
+                                joyConfig->yMidiChannel = JSONParser::extractInt(pinConfig, "Y_midiChannel",
+                                    JSONParser::extractInt(pinConfig, "midiChannel", channel));
+                                joyConfig->zMidiChannel = JSONParser::extractInt(pinConfig, "Z_midiChannel",
+                                    JSONParser::extractInt(pinConfig, "midiChannel", channel));
+
+                                loadNoteSweepRangeFromJson(pinConfig, "X", joyConfig->xNoteSweepMin, joyConfig->xNoteSweepMax);
+                                loadNoteSweepRangeFromJson(pinConfig, "Y", joyConfig->yNoteSweepMin, joyConfig->yNoteSweepMax);
+                                loadNoteSweepRangeFromJson(pinConfig, "Z", joyConfig->zNoteSweepMin, joyConfig->zNoteSweepMax);
+
+                                // Auto-off NOTE_SWEEP et vélocité fixe par axe (formulaire préfixe X_/Y_/Z_)
+                                auto loadAxisAutoOff = [&](const char* axisPrefix) -> uint16_t {
+                                    char key[40];
+                                    snprintf(key, sizeof(key), "%s_midiNoteSweepAutoOffDelay", axisPrefix);
+                                    int off = JSONParser::extractInt(pinConfig, key, -1);
+                                    if (off < 0) off = JSONParser::extractInt(pinConfig, "midiNoteSweepAutoOffDelay", -1);
+                                    if (off < 0) off = JSONParser::extractInt(pinConfig, "rtpNoteSweepAutoOffDelay", 1000);
+                                    if (off < 0) off = 0;
+                                    if (off > 65535) off = 65535;
+                                    return (uint16_t)off;
+                                };
+                                auto loadAxisVel = [&](const char* axisPrefix) -> uint8_t {
+                                    char key[40];
+                                    snprintf(key, sizeof(key), "%s_midiNoteVelocityFix", axisPrefix);
+                                    int vel = JSONParser::extractInt(pinConfig, key, -1);
+                                    if (vel < 0) vel = JSONParser::extractInt(pinConfig, "midiNoteVelocityFix", -1);
+                                    if (vel < 0) vel = JSONParser::extractInt(pinConfig, "rtpNoteVelFix", 100);
+                                    if (vel < 1) vel = 1;
+                                    if (vel > 127) vel = 127;
+                                    return (uint8_t)vel;
+                                };
+                                joyConfig->xAutoOffDelay = loadAxisAutoOff("X");
+                                joyConfig->yAutoOffDelay = loadAxisAutoOff("Y");
+                                joyConfig->zAutoOffDelay = loadAxisAutoOff("Z");
+                                joyConfig->xNoteVelFix = loadAxisVel("X");
+                                joyConfig->yNoteVelFix = loadAxisVel("Y");
+                                joyConfig->zNoteVelFix = loadAxisVel("Z");
+
+                                // Aussi mettre à jour le msg_type principal pour le X
+                                config->msg_type = joyConfig->xMsgType;
+
+                                Serial.printf("[ConfigLoader] Joystick3 MIDI: X=%d(ch%d,p%d) Y=%d(ch%d,p%d) Z=%d(ch%d,p%d)\n",
+                                    (int)joyConfig->xMsgType, joyConfig->xMidiChannel, joyConfig->xMidiParam,
+                                    (int)joyConfig->yMsgType, joyConfig->yMidiChannel, joyConfig->yMidiParam,
+                                    (int)joyConfig->zMsgType, joyConfig->zMidiChannel, joyConfig->zMidiParam);
                             }
                             break;
                         }

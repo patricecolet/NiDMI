@@ -208,6 +208,71 @@ static ValidationResult validateJoystickComplex(const ComplexComponentData& data
     return result; // Tout est valide
 }
 
+// Fonction de validation pour composant complexe Joystick 3 axes
+static ValidationResult validateJoystick3Complex(const ComplexComponentData& data) {
+    ValidationResult result;
+    result.valid = true;
+
+    // Vérifier que la définition est présente
+    if (!data.def) {
+        result.valid = false;
+        result.error_message = "Définition du composant manquante";
+        return result;
+    }
+
+    // Vérifier que le GPIO principal (X) est valide
+    if (data.mainPinGpio >= 255) {
+        result.valid = false;
+        result.error_message = "GPIO principal (axe X) invalide";
+        return result;
+    }
+
+    // Vérifier que les GPIO Y et Z sont présents et valides
+    uint8_t yGpio = 255;
+    uint8_t zGpio = 255;
+    for (uint8_t i = 0; i < data.additionalPinCount; i++) {
+        const char* pinId = data.additionalPins[i].id;
+        if (pinId && strcmp(pinId, "joyYPin") == 0) {
+            yGpio = data.additionalPins[i].gpio;
+        } else if (pinId && strcmp(pinId, "joyZPin") == 0) {
+            zGpio = data.additionalPins[i].gpio;
+        }
+    }
+
+    if (yGpio >= 255) {
+        result.valid = false;
+        result.error_message = "Pin axe Y (joyYPin) requise";
+        return result;
+    }
+
+    if (zGpio >= 255) {
+        result.valid = false;
+        result.error_message = "Pin axe Z (joyZPin) requise";
+        return result;
+    }
+
+    // Vérifier que les GPIOs ont un ADC (analogique)
+    if (!PinMapper::hasAdc(data.mainPinGpio)) {
+        result.valid = false;
+        result.error_message = "GPIO principal (axe X) doit être analogique";
+        return result;
+    }
+
+    if (!PinMapper::hasAdc(yGpio)) {
+        result.valid = false;
+        result.error_message = "GPIO axe Y doit être analogique";
+        return result;
+    }
+
+    if (!PinMapper::hasAdc(zGpio)) {
+        result.valid = false;
+        result.error_message = "GPIO axe Z doit être analogique";
+        return result;
+    }
+
+    return result; // Tout est valide
+}
+
 bool ValidationRegistry::registerComplexValidator(const char* componentId, ComplexValidatorFunc validator) {
     if (complexValidatorCount_ >= MAX_COMPLEX_VALIDATORS) {
         return false; // Tableau plein
@@ -256,4 +321,5 @@ void ValidationRegistry::init() {
     registerComplexValidator("hc4067", validateMuxComplex);
     registerComplexValidator("hc4051", validateMuxComplex);
     registerComplexValidator("joystick", validateJoystickComplex);
+    registerComplexValidator("joystick3", validateJoystick3Complex);
 }

@@ -49,6 +49,7 @@ private:
     static constexpr uint8_t MAX_JOYSTICKS = 16;
     JoystickConfig joysticks[MAX_JOYSTICKS];
     uint8_t joystick_count;
-    
+
     int findJoystickIndex(uint8_t mainPinGpio) const;
+
 };

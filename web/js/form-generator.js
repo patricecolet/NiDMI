@@ -448,14 +448,21 @@ const FormGenerator = {
         
         const option = document.createElement('option');
         option.value = pin.gpio;
-        option.textContent = pin.label + ' (GPIO' + pin.gpio + ')';
+        /* Avertir sans bloquer : pin réservée par le firmware (ex. Serial sur UART0 avec USB-MIDI actif) */
+        option.textContent = pin.label + ' (GPIO' + pin.gpio + ')' + (pin.sensitive ? ' ⚠️ ' + (pin.sensitiveReason || 'réservée') : '');
+        if(pin.sensitive) option.title = pin.sensitiveReason || 'Pin réservée par le firmware';
         select.appendChild(option);
       });
       
-      /* Si cette additionalPin correspond au type de la pin principale, initialiser automatiquement */
+      /* Si cette additionalPin correspond au type de la pin principale, initialiser automatiquement.
+         Uniquement si c'est la SEULE additionalPin de ce type sur le composant : pour un composant
+         à 2+ pins additionnelles de même type (ex. joystick3 : joyYPin + joyZPin, toutes deux
+         PIN_ANALOG), pré-remplir les DEUX avec le même GPIO que la pin principale n'a aucun sens
+         (collision garantie, l'axe qui perd la course ne lit jamais rien). */
       const currentPinLabel = $('#selPin')?.textContent || '';
       const currentPin = caps?.pins?.find(p => p && p.label === currentPinLabel);
-      if(currentPin && currentPin.gpio !== undefined && currentPin.type !== undefined) {
+      const sameTypeCount = def.additionalPins.filter(ap => ap && ap.id && !ap.optional && ap.pinType === additionalPin.pinType).length;
+      if(currentPin && currentPin.gpio !== undefined && currentPin.type !== undefined && sameTypeCount === 1) {
         const mainPinGpio = parseInt(currentPin.gpio);
         const currentPinType = parseInt(currentPin.type);
         if(!isNaN(mainPinGpio) && !isNaN(currentPinType) && additionalPin.pinType === currentPinType && !additionalPin.optional) {
@@ -466,12 +473,17 @@ const FormGenerator = {
       
       /* Restaurer la valeur actuelle si présente */
       /* Chercher dans currentCfg.additionalPins[additionalPin.id] (structure depuis le serveur) */
+      /* IMPORTANT: la valeur sauvegardée doit TOUJOURS gagner sur l'auto-init ci-dessus.
+         Un <select> avec options n'a jamais value === '' (la 1re option est auto-sélectionnée),
+         donc l'ancienne condition select.value === '' ne restaurait jamais rien : à chaque
+         régénération du formulaire, les pins Y/Z retombaient sur le GPIO de la pin principale
+         puis étaient re-sauvegardées avec cette mauvaise valeur. */
       const currentValue = (currentCfg.additionalPins && currentCfg.additionalPins[additionalPin.id] !== undefined && currentCfg.additionalPins[additionalPin.id] !== null)
         ? currentCfg.additionalPins[additionalPin.id]
         : (currentCfg[fieldId] || currentCfg[additionalPin.id]);
-      if(currentValue !== undefined && currentValue !== null && select.value === '') {
+      if(currentValue !== undefined && currentValue !== null && currentValue !== '') {
         select.value = String(currentValue);
-      } else if(select.value === '' && additionalPin.defaultValue !== undefined && additionalPin.defaultValue !== 255) {
+      } else if(additionalPin.defaultValue !== undefined && additionalPin.defaultValue !== 255 && select.value === '') {
         select.value = String(additionalPin.defaultValue);
       }
       

@@ -29,6 +29,7 @@
 
 // === FAMILLE BASIC ===
 #include "joystick/JoystickHandler.h"
+#include "joystick3/Joystick3Handler.h"
 
 // Pour ajouter un nouveau handler :
 // 1. Ajouter #include "[famille]/MyHandler.h" ci-dessus

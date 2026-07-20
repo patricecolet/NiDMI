@@ -9,6 +9,7 @@
 #include "../components/ComponentRegistry.h"
 #include "../components/ValidationRegistry.h"
 #include "../managers/complex/ComplexHandlerRegistry.h"
+#include "../network/UsbMidiManager.h"
 
 /* Forward declarations */
 String getDefaultConfig(String pin);
@@ -54,9 +55,19 @@ void setupPinAPI(AsyncWebServer& server) {
         
         const PinMapping* mappings = PinMapper::getAllMappings();
         size_t count = PinMapper::getMappingCount();
-        
+
+        /* Pin(s) "sensible(s)" : occupée(s) par un périphérique interne au firmware, à ne pas
+         * réutiliser pour un composant. Cas actuel : sur S3 avec USB-MIDI actif au compile-time,
+         * l'USB natif est dédié au MIDI (TinyUSB) donc Serial retombe sur l'UART0 matériel
+         * (GPIO43/44 = D6/D7) -> ces pins sont occupées en continu par la console debug. */
+        bool serialOnUart = nidmi_usb_midi_enabled_at_compile_time();
+        uint8_t uartTxGpio = serialOnUart ? PinMapper::labelToGpio("TX") : 255;
+        uint8_t uartRxGpio = serialOnUart ? PinMapper::labelToGpio("RX") : 255;
+
         for (size_t i = 0; i < count; i++) {
             if (i > 0) json += ",";
+            bool isSensitive = serialOnUart &&
+                (mappings[i].gpio == uartTxGpio || mappings[i].gpio == uartRxGpio);
             json += "{";
             json += "\"gpio\":" + String(mappings[i].gpio) + ",";
             json += "\"label\":\"" + String(mappings[i].label) + "\",";
@@ -67,7 +78,10 @@ void setupPinAPI(AsyncWebServer& server) {
             json += "\"pwm\":" + String(mappings[i].has_pwm ? "true" : "false") + ",";
             json += "\"touch\":" + String(mappings[i].has_touch ? "true" : "false");
             json += "},";
-            json += "\"sensitive\":false";
+            json += "\"sensitive\":" + String(isSensitive ? "true" : "false");
+            if (isSensitive) {
+                json += ",\"sensitiveReason\":\"Console série (Serial) - USB natif dédié au MIDI\"";
+            }
             json += "}";
         }
         

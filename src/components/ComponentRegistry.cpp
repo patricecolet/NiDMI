@@ -29,6 +29,7 @@ void registerBuiltinDefinitions(std::vector<ComponentDefinition>& defs) {
     addIfMissing(Components::Velostat::createDefinition());
     addIfMissing(Components::Touch::createDefinition());
     addIfMissing(Components::Joystick::createDefinition());
+    addIfMissing(Components::Joystick3::createDefinition());
     addIfMissing(Components::Ultrasonic::createDefinition());
 
     // MULTIPLEXER

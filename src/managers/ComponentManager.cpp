@@ -12,6 +12,7 @@
 #include "../processors/Processors.h"  // Centralise tous les processeurs pour l'enregistrement automatique
 #include "../processors/ImuProcessor.h"
 #include "../processors/JoystickProcessor.h"
+#include "../processors/Joystick3Processor.h"
 #include "../components/ComponentRegistry.h"  // Pour trouver les définitions de composants
 #include "../components/basic/ButtonDef.h"    // Pour ButtonConfig (btnMode)
 #include "../components/ValidationRegistry.h"  // Pour la validation centralisée
@@ -34,6 +35,7 @@ ComponentManager::ComponentManager()
         filters[i].initialized = false;
         last_telemetry_sent_ts[i] = 0;
         last_telemetry_sent_ts_aux[i] = 0;
+        last_telemetry_sent_ts_aux2[i] = 0;
     }
 }
 
@@ -289,6 +291,9 @@ bool ComponentManager::removeComponent(uint8_t gpio) {
         if (config.type == ComponentType::JOYSTICK) {
             JoystickProcessor::silenceNoteSweepForGpio(config.gpio, config, midi_sender);
         }
+        if (config.type == ComponentType::JOYSTICK3) {
+            Joystick3Processor::silenceNoteSweepForGpio(config.gpio, config, midi_sender);
+        }
         // 1. NOTE_SWEEP : éteindre la note active
         if (config.msg_type == MidiMessageType::NOTE_SWEEP && state.last_note != 255) {
             midi_sender->sendNoteOff(config.midi_channel, state.last_note, 0);
@@ -363,6 +368,9 @@ void ComponentManager::clearAll() {
             }
             if (config.type == ComponentType::JOYSTICK) {
                 JoystickProcessor::silenceNoteSweepForGpio(config.gpio, config, midi_sender);
+            }
+            if (config.type == ComponentType::JOYSTICK3) {
+                Joystick3Processor::silenceNoteSweepForGpio(config.gpio, config, midi_sender);
             }
             // NOTE_SWEEP : éteindre la note active
             if (config.msg_type == MidiMessageType::NOTE_SWEEP && state.last_note != 255) {
@@ -639,6 +647,16 @@ void ComponentManager::midiTaskLoop() {
                         filter_ptr = nullptr;
                     }
                     
+                    // Capteur mono-pin dont la pin a été détectée dans le vide au setup
+                    // (voir ComponentInitializer::setupGpio) : on garde la config mais on
+                    // n'émet rien, plutôt que d'envoyer le bruit d'une entrée flottante.
+                    // Les joysticks ne lèvent jamais ce drapeau (exclus de la détection).
+                    if (config.pin_disconnected) {
+                        index++;
+                        processed++;
+                        continue;
+                    }
+
                     // Appeler le processeur enregistré pour ce type de composant
                     if (filter_ptr || !def || def->pinType != PinType::PIN_ANALOG) {
                         if (!ProcessorRegistry::process(config.type, configs[index], states[index], filter_ptr, midi_sender, osc_queue)) {
@@ -673,6 +691,7 @@ void ComponentManager::midiTaskLoop() {
                             case ComponentType::VELOSTAT:
                             case ComponentType::ULTRASONIC:
                             case ComponentType::JOYSTICK:
+                            case ComponentType::JOYSTICK3:
                                 return true;
                             default:
                                 return false; // LED activity only
@@ -725,7 +744,7 @@ void ComponentManager::midiTaskLoop() {
                                 // I2C: afficher sur SDA + SCL
                                 sendToPhysicalLabels2("SDA", "SCL", raw, midi, ts, false);
                             }
-                        } else if (cfg.type == ComponentType::JOYSTICK) {
+                        } else if (cfg.type == ComponentType::JOYSTICK || cfg.type == ComponentType::JOYSTICK3) {
                             // Joystick: afficher la valeur sur l’axe X (main gpio)
                             String pinLabel = PinMapper::gpioToLabel(cfg.gpio);
                             if (pinLabel.length() > 0) sendTelemetry(pinLabel, raw, midi, ts, true);
@@ -753,8 +772,24 @@ void ComponentManager::midiTaskLoop() {
                         last_telemetry_sent_ts_aux[index] = st.last_telemetry_ts_aux;
                     };
 
+                    auto sendAux2IfUpdated = [&]() {
+                        if (st.aux_gpio2 == 255) return;
+                        if (st.last_telemetry_ts_aux2 == 0) return;
+                        if (st.last_telemetry_ts_aux2 == last_telemetry_sent_ts_aux2[index]) return;
+
+                        uint32_t raw = st.last_raw_value_aux2_u32;
+                        uint8_t midi = st.last_midi_value_aux2_u8;
+                        uint32_t ts = st.last_telemetry_ts_aux2;
+
+                        String pinLabel = PinMapper::gpioToLabel(st.aux_gpio2);
+                        if (pinLabel.length() > 0) sendTelemetry(pinLabel, raw, midi, ts, true);
+
+                        last_telemetry_sent_ts_aux2[index] = st.last_telemetry_ts_aux2;
+                    };
+
                     sendMainIfUpdated();
                     sendAuxIfUpdated();
+                    sendAux2IfUpdated();
                 }
                 
                 index++;

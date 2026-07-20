@@ -112,8 +112,14 @@ static constexpr uint8_t MAX_ADDITIONAL_PINS = 6;
 
 /**
  * @brief Nombre max de types de messages MIDI par composant
+ *
+ * Doit couvrir le composant le plus riche : un multi-axes déclare 4 messages
+ * (cc / pitchbend / aftertouch / notesweep) PAR axe, soit 12 pour un 3 axes
+ * (joystick3, lis3dh). La valeur précédente (8) tronquait silencieusement les
+ * boucles de recherche de ConfigLoader au 8e message : tout le 3e axe (indices
+ * 8 à 11) était invisible, donc jamais résolu au chargement NVS.
  */
-static constexpr uint8_t MAX_MIDI_MESSAGES = 8;
+static constexpr uint8_t MAX_MIDI_MESSAGES = 16;
 
 /**
  * @brief Description d'un type de message MIDI

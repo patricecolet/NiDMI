@@ -361,7 +361,7 @@ sync_files() {
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
-    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,components/signal,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,mapping,midi,midi/handlers,network,osc,processors,server,ui,utils}
+    mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,components/signal,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,managers/complex/joystick3,mapping,midi,midi/handlers,network,osc,processors,server,ui,utils}
     
     # Copier les fichiers de la racine src/
     cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
@@ -413,6 +413,10 @@ sync_files() {
         if [ -d "$REPO_DIR/src/managers/complex/joystick" ]; then
             cp -f $REPO_DIR/src/managers/complex/joystick/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/joystick/ 2>/dev/null || true
             cp -f $REPO_DIR/src/managers/complex/joystick/*.h $ARDUINO_LIB_DIR/src/managers/complex/joystick/ 2>/dev/null || true
+        fi
+        if [ -d "$REPO_DIR/src/managers/complex/joystick3" ]; then
+            cp -f $REPO_DIR/src/managers/complex/joystick3/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/joystick3/ 2>/dev/null || true
+            cp -f $REPO_DIR/src/managers/complex/joystick3/*.h $ARDUINO_LIB_DIR/src/managers/complex/joystick3/ 2>/dev/null || true
         fi
     fi
     cp -f $REPO_DIR/src/midi/*.cpp $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true

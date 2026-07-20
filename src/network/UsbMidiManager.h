@@ -10,7 +10,7 @@
 #ifdef NIDMI_USB_MIDI_SUPPORTED
 #ifndef NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
 /** 1 = USB-MIDI initialisé au boot ; 0 = désactivé (série USB plus simple pour le dev). */
-#define NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME 0
+#define NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME 1
 #endif
 #endif
 

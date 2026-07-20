@@ -27,7 +27,8 @@ enum class ComponentType : uint8_t {
     JOYSTICK      = 9,  // Joystick 2 axes analogiques
     IMU           = 10, // IMU (accéléromètre, gyroscope, etc.)
     MPR121        = 11, // Touch capacitif 12 canaux (Grove, I2C)
-    NOISE_SAMPLER = 12  // Source signal : bruit blanc externe échantillonné sur ADC (famille SIGNAL)
+    NOISE_SAMPLER = 12, // Source signal : bruit blanc externe échantillonné sur ADC (famille SIGNAL)
+    JOYSTICK3     = 13  // Joystick 3 axes analogiques (X/Y/Z)
     // Facilement extensible pour de nouveaux types
 };
 
@@ -55,6 +56,7 @@ namespace Components {
     struct PotentiometerConfig;
     struct VelostatConfig;
     struct JoystickConfig;
+    struct Joystick3Config;
     struct ImuConfig;
     struct Mpr121Config;
     struct NoiseSamplerConfig;
@@ -88,6 +90,7 @@ struct ComponentConfig {
         Components::PotentiometerConfig* potentiometer;
         Components::VelostatConfig* velostat;
         Components::JoystickConfig* joystick;
+        Components::Joystick3Config* joystick3;
         Components::ImuConfig* imu;
         Components::Mpr121Config* mpr121;
         Components::NoiseSamplerConfig* noiseSampler;
@@ -99,7 +102,18 @@ struct ComponentConfig {
     char customField2[16];  // Champ générique réutilisable (ex: encoderMode, touchMode, etc.)
     uint8_t customInt1;     // Valeur numérique générique (ex: encoderSteps, touchSensitivity, etc.)
     uint8_t customInt2;     // Valeur numérique générique supplémentaire
-    
+
+    /**
+     * Pin détectée "dans le vide" au setup (test pull-up/pull-down, voir
+     * PinMapper::isPinFloating) : le composant reste configuré mais n'émet plus rien,
+     * pour ne pas envoyer le bruit d'une entrée flottante.
+     *
+     * Réservé aux capteurs MONO-PIN (potentiomètre, velostat, noiseSampler). Les
+     * joysticks en sont volontairement exclus : le test y donnait des faux positifs
+     * qui muselaient des axes pourtant câblés (voir ComponentInitializer::setupGpio).
+     */
+    bool pin_disconnected;
+
     ComponentConfig() {
         specificConfig.specific = nullptr;
         customField1[0] = '\0';
@@ -109,6 +123,7 @@ struct ComponentConfig {
         mappingScript[0] = '\0';
         name[0] = '\0';
         midiMode = MidiMode::RTP;  // Défaut: mode RTP classique
+        pin_disconnected = false;
     }
     
     ~ComponentConfig() {
@@ -138,6 +153,12 @@ struct ComponentState {
     uint32_t last_raw_value_aux_u32;
     uint8_t last_midi_value_aux_u8;
     uint32_t last_telemetry_ts_aux;
+
+    // --- Cas 3 axes (joystick3) : troisième axe (Z) ---
+    uint8_t aux_gpio2;                // GPIO de l'axe Z (ou 255 si non applicable)
+    uint32_t last_raw_value_aux2_u32;
+    uint8_t last_midi_value_aux2_u8;
+    uint32_t last_telemetry_ts_aux2;
     
     // Champs pour debouncing simple et fiable
     bool last_button_state; // État précédent du bouton (avant debounce)

@@ -42,5 +42,5 @@ public:
      * @param type Type de composant
      * @param config Configuration du composant (optionnel, nécessaire pour boutons avec btnPullMode)
      */
-    static void setupGpio(uint8_t gpio, ComponentType type, const ComponentConfig* config = nullptr);
+    static void setupGpio(uint8_t gpio, ComponentType type, ComponentConfig* config = nullptr);
 };

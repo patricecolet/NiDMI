@@ -107,6 +107,16 @@ public:
     static bool hasAdc(uint8_t gpio);
     static bool hasPwm(uint8_t gpio);
     static bool hasTouch(uint8_t gpio);
+
+    /**
+     * @brief Détecte si une pin est flottante (rien de connecté dessus) via le test
+     * pull-up/pull-down interne : si la pin suit systématiquement la résistance de
+     * pull interne (HIGH sous pull-up, LOW sous pull-down), aucune source externe à
+     * basse impédance ne s'y oppose. Test ponctuel (~qq dizaines de µs) : reconfigure
+     * temporairement la pin, à n'appeler qu'au setup, pas en boucle de lecture ADC.
+     * Ne pas utiliser sur les pins MUX virtuelles (200-247) ni les pins touch.
+     */
+    static bool isPinFloating(uint8_t gpio);
     
     // Getters
     static McuType getMcuType() { return detected_mcu; }

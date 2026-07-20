@@ -49,6 +49,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .subcard .r{margin:6px 0}
 .switch{display:flex;align-items:center;gap:8px}
 .busDisabled{opacity:0.45;filter:grayscale(100%);cursor:not-allowed;pointer-events:none}
+.pinSensitive{stroke:#d97706;stroke-width:2;stroke-dasharray:3,2}
 .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
 .modal-overlay.active{display:flex}
 .modal{background:#fff;border-radius:8px;padding:25px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 25px rgba(0,0,0,.3)}
