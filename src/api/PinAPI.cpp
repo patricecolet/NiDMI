@@ -118,6 +118,69 @@ void setupPinAPI(AsyncWebServer& server) {
 
     /* API - Liste des pins configurées (format pour saveAll avec pinLabel) */
     /* Inclut aussi les composants complexes depuis MuxManager */
+    /* API - Lecture ADC brute d'une pin.
+     * Outil de diagnostic câblage : permet de voir la valeur réellement lue par l'ADC
+     * sans dépendre de la télémétrie (qui n'est émise que lors d'un événement MIDI).
+     * Usage : /api/pins/read?gpio=1  ou  /api/pins/read?gpio=D0
+     * Retourne un échantillonnage court (min/max/moyenne) pour rendre le bruit visible. */
+    server.on("/api/pins/read", HTTP_GET, [](AsyncWebServerRequest *request){
+        if (!request->hasParam("gpio")) {
+            request->send(400, "application/json",
+                          "{\"error\":\"parametre 'gpio' manquant (ex: ?gpio=1 ou ?gpio=D0)\"}");
+            return;
+        }
+
+        String param = request->getParam("gpio")->value();
+        PinMapper::detectMcu();
+
+        /* Accepter soit un numéro de GPIO, soit un label de pad (D0, D1, ...) */
+        uint8_t gpio;
+        if (param.length() > 0 && isDigit(param.charAt(0))) {
+            gpio = (uint8_t)param.toInt();
+        } else {
+            gpio = PinMapper::labelToGpio(param);
+        }
+
+        if (gpio == 255 || gpio > 48) {
+            request->send(404, "application/json", "{\"error\":\"pin inconnue\"}");
+            return;
+        }
+
+        if (!PinMapper::hasAdc(gpio)) {
+            String err = "{\"error\":\"GPIO" + String(gpio) + " (" + PinMapper::gpioToLabel(gpio) +
+                         ") n'a pas d'ADC\"}";
+            request->send(400, "application/json", err);
+            return;
+        }
+
+        /* 16 échantillons rapprochés : assez pour révéler le bruit, assez court pour ne pas
+         * retarder la tâche réseau. */
+        const uint8_t SAMPLES = 16;
+        uint32_t sum = 0;
+        uint16_t vmin = 4095;
+        uint16_t vmax = 0;
+        uint16_t last = 0;
+        for (uint8_t i = 0; i < SAMPLES; i++) {
+            last = (uint16_t)analogRead(gpio);
+            sum += last;
+            if (last < vmin) vmin = last;
+            if (last > vmax) vmax = last;
+        }
+        uint16_t avg = (uint16_t)(sum / SAMPLES);
+
+        String json = "{";
+        json += "\"gpio\":" + String(gpio) + ",";
+        json += "\"label\":\"" + PinMapper::gpioToLabel(gpio) + "\",";
+        json += "\"raw\":" + String(last) + ",";
+        json += "\"avg\":" + String(avg) + ",";
+        json += "\"min\":" + String(vmin) + ",";
+        json += "\"max\":" + String(vmax) + ",";
+        /* Tension indicative : ADC 12 bits, atténuation par défaut (~3.3 V pleine échelle) */
+        json += "\"volts\":" + String(avg * 3.3f / 4095.0f, 2);
+        json += "}";
+        request->send(200, "application/json", json);
+    });
+
     server.on("/api/pins/list", HTTP_GET, [](AsyncWebServerRequest *request){
         String json = "{";
         json += "\"pins\":[";
