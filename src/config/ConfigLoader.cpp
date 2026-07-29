@@ -505,6 +505,21 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                                                 veloConfig->velocityThreshold = JSONParser::extractInt(pinConfig, "velocityThreshold", field.defaultValue ? atoi(field.defaultValue) : 50);
                                             } else if (strcmp(field.id, "aftertouchThreshold") == 0) {
                                                 veloConfig->aftertouchThreshold = JSONParser::extractInt(pinConfig, "aftertouchThreshold", field.defaultValue ? atoi(field.defaultValue) : 4);
+                                            } else if (strcmp(field.id, "velocityMax") == 0) {
+                                                int vmax = JSONParser::extractInt(pinConfig, "velocityMax", field.defaultValue ? atoi(field.defaultValue) : 4095);
+                                                if (vmax < 1) vmax = 1;
+                                                if (vmax > 4095) vmax = 4095;
+                                                veloConfig->velocityMax = (uint16_t)vmax;
+                                            } else if (strcmp(field.id, "scanTimeMs") == 0) {
+                                                int scan = JSONParser::extractInt(pinConfig, "scanTimeMs", field.defaultValue ? atoi(field.defaultValue) : 5);
+                                                if (scan < 0) scan = 0;
+                                                if (scan > 20) scan = 20;
+                                                veloConfig->scanTimeMs = (uint8_t)scan;
+                                            } else if (strcmp(field.id, "maskTimeMs") == 0) {
+                                                int mask = JSONParser::extractInt(pinConfig, "maskTimeMs", field.defaultValue ? atoi(field.defaultValue) : 30);
+                                                if (mask < 0) mask = 0;
+                                                if (mask > 200) mask = 200;
+                                                veloConfig->maskTimeMs = (uint8_t)mask;
                                             }
                                         }
                                     }
