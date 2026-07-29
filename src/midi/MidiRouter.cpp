@@ -36,6 +36,11 @@ void MidiRouter::sendNoteOn(uint8_t channel, uint8_t note, uint8_t velocity) {
     }
     // Optionnel: route OSC si disponible côté serveur
     // Activez avec -DNIDMI_ENABLE_OSC_ROUTER et implémentez les wrappers dans NiDMIServer
+    // Écho local : les LEDs/bargraphs sont pilotés par note+canal via handleMidiNoteOn(), qui
+    // n'était câblé qu'aux notes ENTRANTES (hooks RTP-MIDI). Sans cet écho, une note générée
+    // localement par un composant du boîtier n'allume aucune LED du même boîtier.
+    g_componentManager.handleMidiNoteOn(ch, note, velocity);
+
     #ifdef NIDMI_ENABLE_OSC_ROUTER
     if (oscEnabled) {
         serverCore.sendOscNote(ch, note, velocity, oscToSta, oscPort);
@@ -54,6 +59,9 @@ void MidiRouter::sendNoteOff(uint8_t channel, uint8_t note, uint8_t velocity) {
     if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
         serverCore.usbMidi().sendNoteOff(ch, note, velocity);
     }
+    // Écho local (cf. sendNoteOn) : éteint les LEDs appairées à cette note.
+    g_componentManager.handleMidiNoteOff(ch, note, velocity);
+
     #ifdef NIDMI_ENABLE_OSC_ROUTER
     if (oscEnabled) {
         serverCore.sendOscNoteOff(ch, note, velocity, oscToSta, oscPort);
