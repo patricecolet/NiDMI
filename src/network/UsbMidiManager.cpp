@@ -244,12 +244,8 @@ void UsbMidiManager::sendAftertouch(uint8_t channel, uint8_t pressure) {
 }
 
 void UsbMidiManager::sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pressure) {
-    // TEMPORAIREMENT DÉSACTIVÉ POUR DEBUG - CRASH SUSPECTÉ
-    return;
-    /*
 #if defined(NIDMI_USB_MIDI_SUPPORTED) && NIDMI_USB_MIDI_ENABLED_AT_COMPILE_TIME
     if (usbMidi && isConnected()) {
-        // USB MIDI format: CIN=0x04 pour Channel Voice Messages à 2 octets
         // USB MIDI format: CIN=0x0A pour Polyphonic Key Pressure (3 octets)
         // Status: 0xA0-0xAF (Polyphonic Key Pressure, 0xAn où n=channel 0-15)
         // Data1: note (0-127), Data2: pressure (0-127)
@@ -258,7 +254,6 @@ void UsbMidiManager::sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pres
         usbMidi->writePacket(&packet);
     }
 #endif
-    */
 }
 
 void UsbMidiManager::sendClock() {
