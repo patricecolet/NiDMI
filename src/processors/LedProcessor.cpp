@@ -5,6 +5,26 @@
 #include "../utils/AnalogFilter.h"
 #include "../utils/PinMapper.h"
 
+namespace {
+// Câblage "anode commune" : la LED est entre 3V3 et la pin (via sa résistance), donc elle
+// s'allume quand la pin est à l'état BAS, la pin absorbant le courant. Permet de partager
+// un rail 3V3 sur tout le montage plutôt que de tirer une masse par LED.
+// Toute la logique en amont continue de raisonner en "allumé / éteint" : seule l'écriture
+// finale est inversée, ici et à l'initialisation de la pin (ComponentInitializer).
+bool ledIsActiveLow(const ComponentConfig& config) {
+    return config.specificConfig.led && config.specificConfig.led->activeLow;
+}
+
+void ledWriteDigital(const ComponentConfig& config, bool on) {
+    const bool level = ledIsActiveLow(config) ? !on : on;
+    digitalWrite(config.gpio, level ? HIGH : LOW);
+}
+
+void ledWritePwm(const ComponentConfig& config, uint8_t brightness) {
+    analogWrite(config.gpio, ledIsActiveLow(config) ? (255 - brightness) : brightness);
+}
+} // namespace
+
 void LedProcessor::handleMidiNoteOn(
     const ComponentConfig* configs,
     uint8_t count,
@@ -29,10 +49,10 @@ void LedProcessor::handleMidiNoteOn(
                 uint8_t pwmValue = (velocity * 2); // 0-127 -> 0-254, on peut aller jusqu'à 255
                 if (pwmValue > 255) pwmValue = 255;
                 if (velocity == 127) pwmValue = 255; // Vélocité max = luminosité max
-                analogWrite(config.gpio, pwmValue);
+                ledWritePwm(config, pwmValue);
             } else {
                 // Mode on/off : allumer indépendamment de la vélocité
-                digitalWrite(config.gpio, HIGH);
+                ledWriteDigital(config, true);
             }
             // Serial.printf("[LedProcessor] LED GPIO%d ON (Note %d ch%d vel%d)\n", 
             //              config.gpio, note, channel, velocity);
@@ -60,9 +80,9 @@ void LedProcessor::handleMidiNoteOff(
                 ledMode = config.specificConfig.led->ledMode;
             }
             if (strcmp(ledMode, "pwm") == 0 && PinMapper::hasPwm(config.gpio)) {
-                analogWrite(config.gpio, 0); // PWM à 0%
+                ledWritePwm(config, 0);
             } else {
-                digitalWrite(config.gpio, LOW);
+                ledWriteDigital(config, false);
             }
             // Serial.printf("[LedProcessor] LED GPIO%d OFF (Note %d ch%d)\n", 
             //              config.gpio, note, channel);
@@ -93,11 +113,11 @@ void LedProcessor::handleMidiControlChange(
                 // Mode PWM : utiliser la valeur directement (0-127 -> 0-255)
                 uint8_t pwmValue = (value * 2); // 0-127 -> 0-254, on peut aller jusqu'à 255
                 if (pwmValue > 255) pwmValue = 255;
-                analogWrite(config.gpio, pwmValue);
+                ledWritePwm(config, pwmValue);
             } else {
                 // Mode on/off : seuil à 50%
                 bool ledState = (value > 63);
-                digitalWrite(config.gpio, ledState ? HIGH : LOW);
+                ledWriteDigital(config, ledState);
             }
             // Serial.printf("[LedProcessor] LED GPIO%d %s (CC %d ch%d val%d)\n", 
             //              config.gpio, ledState ? "ON" : "OFF", control, channel, value);

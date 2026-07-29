@@ -23,8 +23,9 @@ namespace Components {
  */
 struct LedConfig {
     char ledMode[16];  // Mode LED: "onoff", "pwm"
-    
-    LedConfig() {
+    bool activeLow;    // Anode commune : LED entre 3V3 et la pin, allumée à l'état bas
+
+    LedConfig() : activeLow(false) {
         strncpy(ledMode, "onoff", sizeof(ledMode) - 1);
         ledMode[sizeof(ledMode) - 1] = '\0';
     }
@@ -69,12 +70,16 @@ struct Led {
             makeSelectField("ledMode", "LED",
                 "[{\"value\":\"onoff\",\"label\":\"On/Off\"},{\"value\":\"pwm\",\"label\":\"PWM\"}]",
                 "onoff"),
+            makeSelectField("ledPolarity", "Câblage",
+                "[{\"value\":\"high\",\"label\":\"Pin → anode, cathode → GND\"},"
+                "{\"value\":\"low\",\"label\":\"Anode commune : 3V3 → anode, cathode → pin\"}]",
+                "high"),
         };
         static constexpr MidiMessageDef MM[] = {
             msgNote(), msgCc(),
         };
         return makeFlashDef(ID, DISPLAY_NAME, "cardLed", FAMILY, FAMILY_NAME, TYPE, PIN_TYPE,
-                            SUPPORTS_MIDI, SUPPORTS_OSC, IMPLEMENTED, FF, 1, MM, 2,
+                            SUPPORTS_MIDI, SUPPORTS_OSC, IMPLEMENTED, FF, 2, MM, 2,
                             "{\"ledMode\":{\"pwm\":\"PWM\",\"onoff\":\"On/Off\"}}");
     }
 };

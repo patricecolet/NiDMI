@@ -401,7 +401,11 @@ void ComponentInitializer::setupGpio(uint8_t gpio, ComponentType type, Component
     }
     if (type == ComponentType::LED) {
         pinMode(gpio, OUTPUT);
-        digitalWrite(gpio, LOW);
+        // État éteint au démarrage. En anode commune (LED entre 3V3 et la pin), c'est
+        // l'état HAUT qui éteint : forcer LOW y allumerait toutes les LEDs au boot.
+        const bool activeLow = config && config->specificConfig.led &&
+                               config->specificConfig.led->activeLow;
+        digitalWrite(gpio, activeLow ? HIGH : LOW);
         return;
     }
 

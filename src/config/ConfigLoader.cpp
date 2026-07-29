@@ -429,6 +429,9 @@ void ConfigLoader::loadFromNVS(ComponentManager& manager) {
                                                 strncpy(ledConfig->ledMode, fieldValue.c_str(), sizeof(ledConfig->ledMode) - 1);
                                                 ledConfig->ledMode[sizeof(ledConfig->ledMode) - 1] = '\0';
                                             }
+                                        } else if (field.id && strcmp(field.id, "ledPolarity") == 0) {
+                                            String pol = JSONParser::extractStr(pinConfig, field.id, field.defaultValue ? field.defaultValue : "high");
+                                            ledConfig->activeLow = (pol == "low");
                                         }
                                     }
                                 }
