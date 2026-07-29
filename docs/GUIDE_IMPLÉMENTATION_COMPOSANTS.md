@@ -472,6 +472,39 @@ Le chaînage :
 Le test est refait à chaque (re)chargement de configuration : rebrancher le capteur
 puis sauvegarder depuis l'UI suffit à le réactiver, sans reflash.
 
+### ⚡ Condition d'impédance — la contrainte à connaître
+
+Le test compare le montage externe au **pull interne de ~45 kΩ**. Il ne détecte donc pas
+« câblé / pas câblé » : il détecte « impédance externe faible / forte devant 45 kΩ ».
+
+**Tout capteur dont la résistance de tirage externe est grande devant 45 kΩ est déclaré
+flottant alors qu'il est correctement câblé.** Le pull interne l'emporte, la pin le suit
+dans les deux sens, et le composant devient muet — sans erreur, sans log au-delà d'une
+ligne au setup.
+
+Ordre de grandeur, pour un tirage `R` vers GND et la pin lue sous pull-up interne :
+
+| `R` externe | Tension sous pull-up | Verdict du test |
+|---|---|---|
+| 1 MΩ | ~3,16 V | ❌ déclaré flottant (faux positif) |
+| 22 kΩ | ~1,08 V | ⚠️ zone indéterminée entre VIL et VIH — instable |
+| 10 kΩ | ~0,6 V | ✅ sous VIL, détecté comme câblé de façon fiable |
+
+**Règle : tirage ≤ 10 kΩ sur tout capteur analogique soumis au gate.** C'est aussi la
+bonne valeur pour l'ADC, dont l'impédance de source recommandée est bien en dessous de
+100 kΩ — un tirage élevé dégrade de toute façon la lecture (bruit, dérive).
+
+> Cas réel, 2026-07-29 : un pad FSR câblé avec un tirage de 1 MΩ. Composant correctement
+> configuré (`role":"velostat"`, `midiMode":"rtp"`), câblage bon, sortie MIDI
+> fonctionnelle par ailleurs — et pourtant silence total. Plusieurs heures perdues à
+> chercher du côté de la config MIDI et du câblage. Le discriminant qui aurait fait
+> gagner du temps : **un bouton sur la même carte fonctionne** (autre chemin de code, pas
+> de gate) **et les potentiomètres basse impédance aussi ; seul le capteur haute impédance
+> est muet.**
+
+Le test ne tourne qu'au setup de la pin : **après avoir changé la résistance, rebooter**
+(ou re-sauvegarder la config depuis l'UI).
+
 ### Périmètre : mono-pin seulement
 
 | Type | Gate | Raison |
@@ -481,9 +514,16 @@ puis sauvegarder depuis l'UI suffit à le réactiver, sans reflash.
 
 Les joysticks sortent de `setupGpio()` **avant** d'atteindre le test. Sur ces
 composants, le test déclarait flottants des axes pourtant correctement câblés, ce qui
-muselait le composant entier. La cause exacte n'a pas été isolée (impédance des
-potentiomètres du module vs pull interne, ou montage). **Ne pas les réintégrer sans
-avoir d'abord relevé, sur la cible, les valeurs réellement lues sur ces pins.**
+muselait le composant entier.
+
+La cause est celle décrite plus haut : **c'est un problème d'impédance, pas de montage.**
+Les potentiomètres d'un module joystick sont typiquement de 10 kΩ, mais l'impédance vue
+depuis le curseur dépend de sa position et peut approcher le pull interne de 45 kΩ — d'où
+un verdict instable selon l'axe et la position au moment du boot. Le même mécanisme a
+produit un faux positif sur un pad FSR en 2026-07-29.
+
+**Ne pas les réintégrer** : le gate ne peut pas être fiable sur un capteur dont
+l'impédance de sortie varie avec la position.
 
 ### Ajouter un nouveau capteur analogique au gate
 
