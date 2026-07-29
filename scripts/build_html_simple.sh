@@ -277,8 +277,12 @@ echo "✅ HTML minimal généré"
 JS_SIZE=$(wc -c < "$TEMP_JS")
 
 # Compresser le JS avec gzip
+# -n : n'écrit ni le mtime ni le nom du fichier source dans l'en-tête gzip.
+# Sans ce flag, ui_bundle.h change à CHAQUE build même quand le JS est identique
+# (seuls les 8 octets d'en-tête diffèrent), ce qui salit l'arbre git en permanence
+# et provoque des conflits de merge sur un fichier généré, sans contenu réel en jeu.
 echo "🗜️  Compression JavaScript en gzip..."
-if ! gzip -c "$TEMP_JS" > build/bundle.js.gz; then
+if ! gzip -n -c "$TEMP_JS" > build/bundle.js.gz; then
     echo "❌ Erreur: La compression gzip a échoué"
     rm -f "$TEMP_HTML" "$TEMP_JS"
     exit 1
