@@ -79,7 +79,28 @@ public:
         uint8_t control,
         uint8_t value
     );
-    
+
+    /**
+     * @brief Moduler la luminosité depuis un Key Pressure (aftertouch polyphonique)
+     *
+     * N'agit qu'en mode PWM : la pression module la luminosité d'une LED déjà allumée
+     * par la Note On. En mode on/off l'aftertouch est ignoré, l'allumage restant piloté
+     * par les Note On/Off.
+     *
+     * @param configs Tableau des configurations de composants
+     * @param count Nombre de composants
+     * @param channel Canal MIDI
+     * @param note Note concernée
+     * @param pressure Pression (0-127)
+     */
+    static void handleMidiKeyPressure(
+        const ComponentConfig* configs,
+        uint8_t count,
+        uint8_t channel,
+        uint8_t note,
+        uint8_t pressure
+    );
+
     /**
      * @brief Gérer un message OSC entrant pour les LEDs
      * @param configs Tableau des configurations de composants

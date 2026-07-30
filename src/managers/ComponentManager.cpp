@@ -510,6 +510,10 @@ void ComponentManager::handleMidiNoteOff(uint8_t channel, uint8_t note, uint8_t 
     LedProcessor::handleMidiNoteOff(configs, component_count, channel, note, velocity);
 }
 
+void ComponentManager::handleMidiKeyPressure(uint8_t channel, uint8_t note, uint8_t pressure) {
+    LedProcessor::handleMidiKeyPressure(configs, component_count, channel, note, pressure);
+}
+
 void ComponentManager::handleMidiControlChange(uint8_t channel, uint8_t control, uint8_t value) {
     LedProcessor::handleMidiControlChange(configs, component_count, channel, control, value);
 }

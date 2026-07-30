@@ -137,6 +137,10 @@ void MidiRouter::sendKeyPressure(uint8_t channel, uint8_t note, uint8_t pressure
     if (usbMidiEnabled && serverCore.usbMidi().isSupported()) {
         serverCore.usbMidi().sendKeyPressure(ch, note, pressure);
     }
+
+    // Écho local (cf. sendNoteOn) : module la luminosité des LEDs en mode PWM appairées
+    // à cette note, pour que l'aftertouch soit visible sur le boîtier lui-même.
+    g_componentManager.handleMidiKeyPressure(ch, note, pressure);
     #ifdef NIDMI_ENABLE_OSC_ROUTER
     if (oscEnabled) {
         serverCore.sendOscKeyPressure(ch, note, pressure, oscToSta, oscPort);

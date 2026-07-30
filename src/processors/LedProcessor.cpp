@@ -90,6 +90,34 @@ void LedProcessor::handleMidiNoteOff(
     }
 }
 
+void LedProcessor::handleMidiKeyPressure(
+    const ComponentConfig* configs,
+    uint8_t count,
+    uint8_t channel,
+    uint8_t note,
+    uint8_t pressure
+) {
+    for (uint8_t i = 0; i < count; i++) {
+        const ComponentConfig& config = configs[i];
+        if ((config.type == ComponentType::LED || config.type == ComponentType::BARGRAPH) &&
+            config.midi_channel == channel &&
+            config.midi_param == note) {
+
+            const char* ledMode = "onoff"; // Défaut
+            if (config.specificConfig.led) {
+                ledMode = config.specificConfig.led->ledMode;
+            }
+            // Seul le mode PWM a du sens ici : en on/off, la LED est déjà allumée par la
+            // Note On et l'aftertouch n'a rien à y changer.
+            if (strcmp(ledMode, "pwm") == 0 && PinMapper::hasPwm(config.gpio)) {
+                uint16_t pwmValue = (uint16_t)pressure * 2; // 0-127 -> 0-254
+                if (pressure == 127) pwmValue = 255;        // Pression max = luminosité max
+                ledWritePwm(config, (uint8_t)pwmValue);
+            }
+        }
+    }
+}
+
 void LedProcessor::handleMidiControlChange(
     const ComponentConfig* configs,
     uint8_t count,
