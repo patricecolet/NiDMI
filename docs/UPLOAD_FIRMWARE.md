@@ -237,6 +237,25 @@ ping          1.3-1.8 ms
 route         défaut inchangée : brancher l'instrument ne détourne rien
 ```
 
+### Produire les binaires étiquetés
+
+```bash
+./scripts/nidmi.sh build --usb-net
+```
+
+```
+bin/nidmi-s3-usbnet.bin           image applicative — pour l'OTA
+bin/nidmi-s3-usbnet.merged.bin    bootloader + partitions + app — ESP Web Tools
+```
+
+Combinable avec `--variant` : `--variant on --usb-net` donne
+`nidmi-s3-usbmidi-on-usbnet`. Sans aucune des deux options, aucun binaire
+étiqueté n'est produit — le comportement d'avant est inchangé.
+
+Le firmware s'identifie lui-même : `NIDMI_FW_VARIANT` vaut `usbmidi-on+usbnet`,
+exposé par l'API et visible dans l'UI. Utile pour savoir ce qui tourne
+réellement sur une carte sans avoir à la reflasher pour vérifier.
+
 ### Deux points à connaître
 
 **Le lien met plus longtemps à monter qu'avec un firmware minimal.** Le boot de

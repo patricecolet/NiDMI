@@ -363,6 +363,7 @@ sync_files() {
     # Version = git describe (ou date si hors git) ; variante = selon le flag USB-MIDI courant.
     _fw_ver=$(cd "$REPO_DIR" && git describe --tags --always --dirty 2>/dev/null || date +%Y%m%d-%H%M%S)
     _fw_variant=$([ "${_usb_midi_flag:-0}" = "1" ] && echo "usbmidi-on" || echo "usbmidi-off")
+    [ "${USB_NET_MODE:-false}" = true ] && _fw_variant="${_fw_variant}+usbnet"
     printf '#pragma once\n#define NIDMI_FW_VERSION "%s"\n#define NIDMI_FW_VARIANT "%s"\n' "$_fw_ver" "$_fw_variant" > "$REPO_DIR/src/nidmi_fw_version.h"
     echo "   🏷️  Version firmware: $_fw_ver ($_fw_variant)"
 
@@ -848,11 +849,16 @@ build_binary() {
         # --variant : étiqueter les binaires pour distinguer off/on
         #   .bin        = image applicative (pour l'OTA, écrit dans le slot app)
         #   .merged.bin = bootloader + partitions + app (pour ESP Web Tools / flash complet)
-        if [ -n "$VARIANT" ]; then
-            _vlabel="nidmi-${BOARD_TYPE}-usbmidi-${VARIANT}"
+        _vlabel=""
+        [ -n "$VARIANT" ] && _vlabel="nidmi-${BOARD_TYPE}-usbmidi-${VARIANT}"
+        # --usb-net produit sa propre image nommee, avec ou sans --variant :
+        #   --variant on --usb-net -> nidmi-s3-usbmidi-on-usbnet
+        #   --usb-net seul         -> nidmi-s3-usbnet
+        [ "$USB_NET_MODE" = true ] && _vlabel="${_vlabel:-nidmi-${BOARD_TYPE}}-usbnet"
+        if [ -n "$_vlabel" ]; then
             [ -f "$REPO_DIR/bin/$SKETCH_NAME.ino.bin" ] && cp -f "$REPO_DIR/bin/$SKETCH_NAME.ino.bin" "$REPO_DIR/bin/${_vlabel}.bin"
             [ -f "$REPO_DIR/bin/$SKETCH_NAME.ino.merged.bin" ] && cp -f "$REPO_DIR/bin/$SKETCH_NAME.ino.merged.bin" "$REPO_DIR/bin/${_vlabel}.merged.bin"
-            echo "   🏷️  Variante '$VARIANT' -> bin/${_vlabel}.bin (OTA) + bin/${_vlabel}.merged.bin (Web Tools)"
+            echo "   🏷️  bin/${_vlabel}.bin (OTA) + bin/${_vlabel}.merged.bin (Web Tools)"
         fi
         echo "   📁 Fichiers créés:"
         ls -la "$REPO_DIR/bin/" 2>/dev/null || echo "   📁 Aucun fichier trouvé"
