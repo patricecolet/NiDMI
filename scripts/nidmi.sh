@@ -127,6 +127,8 @@ OTA_MODE=false
 VARIANT=""
 USB_MIDI_DEFINE=()
 
+USB_NET_MODE=false
+
 # Parser les arguments pour --lang, --board, --light, --pagination, --no-pagination, --large-app, --no-large-app, --split-fs, --port
 ARGS=()
 while [[ $# -gt 0 ]]; do
@@ -138,6 +140,12 @@ while [[ $# -gt 0 ]]; do
         --board)
             BOARD_TYPE="$2"
             shift 2
+            ;;
+        --usb-net)
+            # Variant : interface web servie aussi par le cable USB (CDC-NCM).
+            # S3 uniquement, et impose usb_mode=0 (donc USB-MIDI actif).
+            USB_NET_MODE=true
+            shift
             ;;
         --port)
             PORT_OVERRIDE="$2"
@@ -281,6 +289,7 @@ show_help() {
     echo "  --variant V     - [S3] Force la variante USB-MIDI au build (off|on) sans éditer le header :"
     echo "                    off = USB-MIDI désactivé, série stable (HW CDC/JTAG) ; on = MIDI USB (OTG)"
     echo "  --board BOARD - Type de carte ESP32 (c3|s3, défaut: s3)"
+    echo "  --usb-net     - Variant S3 : sert aussi l'interface web par le câble USB (CDC-NCM)"
     echo "                  c3 = XIAO ESP32-C3"
     echo "                  s3 = XIAO ESP32-S3"
     echo "  --port DEVICE - Port série explicite (ex: /dev/ttyUSB0, /dev/ttyACM0, /dev/cu.usbmodem*)"
@@ -311,6 +320,7 @@ show_help() {
     echo "  ./scripts/nidmi.sh compile --board s3 --split-fs       # S3 avec seqfs 512KB + mapfs 1MB"
     echo "  ./scripts/nidmi.sh compile --board s3      # Compiler pour ESP32-S3"
     echo "  ./scripts/nidmi.sh upload --board s3       # Uploader sur ESP32-S3"
+    echo "  ./scripts/nidmi.sh upload --usb-net        # S3 : UI accessible par le câble USB"
     echo "  ./scripts/nidmi.sh flash --board c3        # Reflash rapide (même build qu’après compile)"
     echo "  ./scripts/nidmi.sh upload --port /dev/ttyUSB0  # Uploader en forçant le port"
     echo "  ./scripts/nidmi.sh build                   # Build (S3 par défaut)"
@@ -718,6 +728,10 @@ compile_sketch() {
             EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
         fi
 
+        if [ "$USB_NET_MODE" = true ]; then
+            EXTRA_FLAGS_ARRAY+=("-DNIDMI_USB_NET=1")
+        fi
+
         # --variant : forcer le flag USB-MIDI au build (sans éditer le header)
         if [ ${#USB_MIDI_DEFINE[@]} -gt 0 ]; then
             EXTRA_FLAGS_ARRAY+=("${USB_MIDI_DEFINE[@]}")
@@ -797,6 +811,10 @@ build_binary() {
         
         if [ "$PAGINATION_MODE" = true ]; then
             EXTRA_FLAGS_ARRAY+=("-DNIDMI_COMPONENT_DEFS_PAGINATION")
+        fi
+
+        if [ "$USB_NET_MODE" = true ]; then
+            EXTRA_FLAGS_ARRAY+=("-DNIDMI_USB_NET=1")
         fi
 
         # --variant : forcer le flag USB-MIDI au build (sans éditer le header)
