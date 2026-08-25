@@ -96,6 +96,16 @@ const MidiConfig = {
       rtpMsgTypeSelect.value = currentCfg.rtpType; /* Compatibilité ancien format */
     }
 
+    /* La config peut porter le type de message d'un AUTRE composant : quand on
+       change de composant sur la meme pin, currentCfg vient encore de l'ancien
+       (ex. "Note + Key Pressure" du velostat sur un potentiometre). L'affectation
+       ci-dessus est alors sans effet, le select reste a selectedIndex = -1, et
+       updateVisibility() masque TOUS les parametres faute de type courant.
+       Retomber sur la premiere option pour que la section reste utilisable. */
+    if(rtpMsgTypeSelect.selectedIndex < 0 && rtpMsgTypeSelect.options.length > 0) {
+      rtpMsgTypeSelect.selectedIndex = 0;
+    }
+
     wrapper.appendChild(typeLabel);
     wrapper.appendChild(rtpMsgTypeSelect);
     container.appendChild(wrapper);
@@ -227,7 +237,17 @@ const MidiConfig = {
       /* Par défaut, utiliser midiMessageType pour X si disponible */
       rtpMsgTypeSelect.value = currentCfg.midiMessageType;
     }
-    
+
+    /* La config peut porter le type de message d'un AUTRE composant : quand on
+       change de composant sur la meme pin, currentCfg vient encore de l'ancien
+       (ex. "Note + Key Pressure" du velostat sur un potentiometre). L'affectation
+       ci-dessus est alors sans effet, le select reste a selectedIndex = -1, et
+       updateVisibility() masque TOUS les parametres faute de type courant.
+       Retomber sur la premiere option pour que la section reste utilisable. */
+    if(rtpMsgTypeSelect.selectedIndex < 0 && rtpMsgTypeSelect.options.length > 0) {
+      rtpMsgTypeSelect.selectedIndex = 0;
+    }
+
     wrapper.appendChild(typeLabel);
     wrapper.appendChild(rtpMsgTypeSelect);
     axisContainer.appendChild(wrapper);
