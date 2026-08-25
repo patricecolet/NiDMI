@@ -238,6 +238,15 @@ function initForms(){
  if (!f) return;
  const prog = $('#otaProgress');
  const msg = $('#otaMsg');
+ /* Le .merged.bin (bootloader + partitions + app) ne rentre pas dans le slot OTA et
+    n'est pas une image applicative. La carte le refuse desormais des le 1er fragment,
+    mais autant ne pas envoyer 8 Mo pour rien : le lien USB ne les supporte pas. */
+ if (/\.merged\.bin$/i.test(f.name) || f.size > 4 * 1024 * 1024) {
+   msg.style.color = '#ef4444';
+   msg.textContent = 'Image refusee : ' + f.name + ' (' + Math.round(f.size / 1024) + ' Ko). '
+     + 'L OTA attend le .bin applicatif, pas le .merged.bin.';
+   return;
+ }
  prog.style.display = 'block'; prog.value = 0;
  msg.style.color = '#059669';
  msg.textContent = 'Préparation...';
