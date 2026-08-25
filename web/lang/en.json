@@ -44,7 +44,9 @@
     "linkAp": "Access point (192.168.4.255)",
     "linkSta": "Joined WiFi network",
     "linkUsb": "USB cable (192.168.7.255)",
-    "oscLinksHint": "Several links can be ticked: the message goes out on each one."
+    "oscLinksHint": "Several links can be ticked: the message goes out on each one.",
+    "componentsPerCycle": "Components per cycle:",
+    "componentsPerCycleHint": "How many components are read on each 10 ms cycle (default 4). With N configured components, each one is revisited every ceil(N / value) x 10 ms: raising it lowers detection latency, at the cost of more work per cycle."
   },
   "pins": {
     "configured": "Configured pins",

@@ -44,7 +44,9 @@
     "linkAp": "Point d’accès (192.168.4.255)",
     "linkSta": "Réseau WiFi rejoint",
     "linkUsb": "Câble USB (192.168.7.255)",
-    "oscLinksHint": "Plusieurs liens possibles : le message part sur chacun."
+    "oscLinksHint": "Plusieurs liens possibles : le message part sur chacun.",
+    "componentsPerCycle": "Composants par cycle :",
+    "componentsPerCycleHint": "Nombre de composants lus a chaque cycle de 10 ms (defaut 4). Avec N composants configures, chacun est relu toutes les ceil(N / valeur) x 10 ms : monter la valeur reduit la latence de detection, au prix de plus de travail par cycle."
   },
   "pins": {
     "configured": "Pins configurées",

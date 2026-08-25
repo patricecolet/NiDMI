@@ -15,22 +15,24 @@ function checkBoardType() {
     }
     isS3 = caps.board.toLowerCase().includes('s3');
     
+    /* La section est visible sur les deux cartes : le nombre de composants par cycle
+       concerne aussi la C3, plus contrainte en CPU. Seule la ligne touch reste S3. */
     const systemSection = $('#systemSettingsSection');
     if (systemSection) {
-      systemSection.style.display = isS3 ? 'block' : 'none';
+      systemSection.style.display = 'block';
     }
-    
-    if (isS3) {
-      loadSystemConfig();
+    const touchRow = $('#touchRow');
+    if (touchRow) {
+      touchRow.style.display = isS3 ? 'block' : 'none';
     }
+
+    loadSystemConfig();
   } catch (e) {
     console.error('[checkBoardType] Erreur:', e);
   }
 }
 
 async function loadSystemConfig() {
-  if (!isS3) return;  /* Ne rien faire si ce n'est pas un S3 */
-
   try {
     const r = await fetch('/api/system/get');
     if (!r.ok) {
@@ -44,6 +46,11 @@ async function loadSystemConfig() {
       checkbox.checked = touchEnabled;
     }
 
+    const sliceInput = $('#componentsPerCycle');
+    if (sliceInput && d.componentsPerCycle !== undefined) {
+      sliceInput.value = d.componentsPerCycle;
+    }
+
     // Mettre à jour la visibilité du bouton de calibration touch
     const calContainer = $('#touchCalibrateContainer');
     if (calContainer) {
@@ -55,18 +62,23 @@ async function loadSystemConfig() {
 }
 
 async function saveSystemConfig() {
-  if (!isS3) return;  /* Ne rien faire si ce n'est pas un S3 */
-  
   const checkbox = $('#touchEnabled');
-  if (!checkbox) return;
-  
-  const touchEnabledValue = checkbox.checked;
-  
+  const sliceInput = $('#componentsPerCycle');
+
+  const touchEnabledValue = checkbox ? checkbox.checked : touchEnabled;
+
+  /* touchEnabled n'est envoye que sur S3 : ailleurs la case n'est pas affichee et
+     poster sa valeur ecraserait le reglage avec un faux "decoche". */
+  const params = [];
+  if (isS3 && checkbox) params.push(`touchEnabled=${touchEnabledValue ? 'true' : 'false'}`);
+  if (sliceInput && sliceInput.value !== '') params.push(`componentsPerCycle=${parseInt(sliceInput.value, 10)}`);
+  if (params.length === 0) return;
+
   try {
     const r = await fetch('/api/system/set', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `touchEnabled=${touchEnabledValue ? 'true' : 'false'}`
+      body: params.join('&')
     });
     
     const d = await r.json();

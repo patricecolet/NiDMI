@@ -1,4 +1,5 @@
 #include "ComponentManager.h"
+#include "../config/SystemConfig.h"
 #include <Arduino.h> // For Serial.printf
 #include <Preferences.h>
 #include <esp_task_wdt.h>
@@ -628,7 +629,7 @@ void ComponentManager::midiTaskLoop() {
         // Traiter les composants directs (potentiomètres, boutons, touch, etc.)
         // Round-robin: on ne traite qu'un sous-ensemble par cycle pour éviter de bloquer le CPU
         static uint8_t next_component_index = 0;
-        const uint8_t MAX_COMPONENTS_PER_CYCLE = 4;
+        const uint8_t MAX_COMPONENTS_PER_CYCLE = SystemConfig::componentsPerCycle();
         
         uint8_t total = component_count;
         if (total > 0) {
@@ -638,7 +639,7 @@ void ComponentManager::midiTaskLoop() {
             
             uint8_t processed = 0;
             uint8_t index = next_component_index;
-            
+
             while (processed < MAX_COMPONENTS_PER_CYCLE && processed < total) {
                 if (index >= total) {
                     index = 0;
