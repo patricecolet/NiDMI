@@ -254,10 +254,15 @@ function updateConfig() {
   
   /* Régénérer le formulaire seulement si le rôle a changé */
   if (roleChanged) {
-    /* Lire la config actuelle depuis le formulaire AVANT de régénérer pour préserver les valeurs */
+    /* Lire la config actuelle depuis le formulaire AVANT de régénérer pour préserver les valeurs.
+       Lire avec l'ANCIEN rôle : le DOM porte encore les champs de l'ancien composant, et leurs
+       identifiants sont préfixés par l'id du composant (joystick3JoyYPin, joystickJoyYPin...).
+       Lu avec le nouveau rôle — la valeur que #funcSelect porte déjà — readCfg ne trouve aucun
+       de ces champs : les additionalPins reviennent vides, le formulaire regénéré retombe sur
+       la première pin de la liste, et pcfg est réécrit avec cette valeur fausse. */
     let currentCfg = {};
     if (cur && typeof readCfg === 'function') {
-      const existingCfg = readCfg();
+      const existingCfg = readCfg(previousRole);
       if (existingCfg && existingCfg.role) {
         currentCfg = existingCfg;
         console.log('[updateConfig] Config lue depuis formulaire avant régénération:', currentCfg);
@@ -268,6 +273,15 @@ function updateConfig() {
       currentCfg = pcfg[cur];
     } else if (!currentCfg.role && pcfg && pcfg[lbl]) {
       currentCfg = pcfg[lbl];
+    }
+
+    /* Un composant intermédiaire ne porte pas forcément toutes les pins additionnelles :
+       passer par un joystick 2 axes fait disparaître joyZPin du formulaire, et il n'y a
+       alors rien à relire pour l'axe Z. Ce que le DOM n'a pas doit être repris de la
+       config précédente, sinon l'axe manquant est perdu au retour au composant d'origine. */
+    const previousPins = (cur && pcfg && pcfg[cur] && pcfg[cur].additionalPins) || null;
+    if (previousPins && typeof previousPins === 'object') {
+      currentCfg.additionalPins = Object.assign({}, previousPins, currentCfg.additionalPins || {});
     }
 
     /* Si le nom actuel est un nom généré pour l'ancien rôle, on le réinitialise pour le nouveau rôle */
@@ -284,6 +298,13 @@ function updateConfig() {
       if (cur && typeof readCfg === 'function') {
         const updatedCfg = readCfg(selectedRole);
         if (updatedCfg && updatedCfg.role) {
+          /* Le nouveau composant n'expose pas forcément toutes les pins additionnelles de
+             l'ancien : relu tel quel, un joystick 2 axes efface joyZPin de pcfg, et l'axe Z
+             est definitivement perdu si on revient au 3 axes. Conserver sous les valeurs
+             fraîches celles que le formulaire courant ne porte pas. */
+          if (previousPins && typeof previousPins === 'object') {
+            updatedCfg.additionalPins = Object.assign({}, previousPins, updatedCfg.additionalPins || {});
+          }
           /* Mettre à jour pcfg avec les nouvelles valeurs du formulaire */
           pcfg[cur] = updatedCfg;
           console.log('[updateConfig] Config mise à jour depuis formulaire (après régénération), pcfg[cur]:', pcfg[cur]);
