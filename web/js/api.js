@@ -36,10 +36,17 @@ async function loadOscConfig(){
  try {
  const r=await fetch('/api/osc/status');
  const d=await r.json();
- if($('#oscTarget')) $('#oscTarget').value=d.target||'sta';
  if($('#oscPort')) $('#oscPort').value=d.port||8000;
  if($('#oscIp')) $('#oscIp').value=d.ip||'';
  if($('#oscBroadcast')) $('#oscBroadcast').checked=!!d.broadcast;
+ /* Liens de diffusion : masque "ap+sta+usb" renvoye par /api/osc/status */
+ const links=(d.interface||'ap').split('+');
+ if($('#oscLinkAp')) $('#oscLinkAp').checked=links.indexOf('ap')>=0;
+ if($('#oscLinkSta')) $('#oscLinkSta').checked=links.indexOf('sta')>=0;
+ if($('#oscLinkUsb')) $('#oscLinkUsb').checked=links.indexOf('usb')>=0;
+ /* La case USB n'existe que si le firmware est le variant --usb-net */
+ const usbRow=$('#oscLinkUsbRow');
+ if(usbRow) usbRow.style.display=d.usb_link?'block':'none';
  const oscOutCb = $('#oscEnabled2');
  if(oscOutCb && oscOutCb.type === 'checkbox' && d.output_all_enabled !== undefined) {
    oscOutCb.checked = !!d.output_all_enabled;
@@ -47,15 +54,7 @@ async function loadOscConfig(){
  const oscOutMsg = $('#oscOutputMsg');
  if(oscOutMsg) { oscOutMsg.textContent = ''; oscOutMsg.style.color = ''; }
 
-const oscTarget = $('#oscTarget');
- const oscIpRow = $('#oscIpRow');
- if (oscTarget && oscIpRow) {
- if (oscTarget.value === 'ip') {
- oscIpRow.style.display = 'block';
- } else {
- oscIpRow.style.display = 'none';
- }
- }
+ if (typeof updateOscForm === 'function') updateOscForm();
  } catch(err) {
  console.log('Erreur chargement OSC:', err);
  }
@@ -124,24 +123,21 @@ async function loadMidiInterfaces(){
   }
 }
 
+/* Diffusion : les liens a cocher. Sinon : une IP unique. Les deux ne peuvent
+   pas etre actifs en meme temps, d'ou l'echange des deux blocs. */
+function updateOscForm() {
+ const broadcast = $('#oscBroadcast');
+ const ipRow = $('#oscIpRow');
+ const linksRow = $('#oscLinksRow');
+ if (!broadcast) return;
+ if (ipRow) ipRow.style.display = broadcast.checked ? 'none' : 'block';
+ if (linksRow) linksRow.style.display = broadcast.checked ? 'block' : 'none';
+}
+
 function initForms(){
- const oscTarget = $('#oscTarget');
- const oscIpRow = $('#oscIpRow');
  const oscBroadcast = $('#oscBroadcast');
- 
- function updateOscForm() {
- const target = oscTarget.value;
- if (target === 'ip') {
- oscIpRow.style.display = 'block';
- oscBroadcast.checked = false;
- } else {
- oscIpRow.style.display = 'none';
- oscBroadcast.checked = true;
- }
- }
- 
- if (oscTarget) {
- oscTarget.addEventListener('change', updateOscForm);
+ if (oscBroadcast) {
+ oscBroadcast.addEventListener('change', updateOscForm);
  updateOscForm();
  }
 
@@ -279,16 +275,19 @@ function initForms(){
  $('#osc').addEventListener('submit', async (e) => {
  e.preventDefault();
  const formData = new FormData();
- const target = $('#oscTarget').value;
- formData.append('target', target);
+ const broadcast = $('#oscBroadcast') && $('#oscBroadcast').checked;
+ const links = [];
+ if ($('#oscLinkAp') && $('#oscLinkAp').checked) links.push('ap');
+ if ($('#oscLinkSta') && $('#oscLinkSta').checked) links.push('sta');
+ if ($('#oscLinkUsb') && $('#oscLinkUsb').checked) links.push('usb');
+ const mask = links.join('+');
+
+ formData.append('target', broadcast ? (mask || 'ap') : 'ip');
+ formData.append('interface', mask || 'ap');
  formData.append('port', $('#oscPort').value);
- 
- if (target === 'ip' && $('#oscIp').value) {
+ formData.append('broadcast', broadcast ? 'true' : 'false');
+ if (!broadcast && $('#oscIp').value) {
  formData.append('ip', $('#oscIp').value);
- }
- 
- if ($('#oscBroadcast')) {
- formData.append('broadcast', $('#oscBroadcast').checked ? 'true' : 'false');
  }
  
  try {

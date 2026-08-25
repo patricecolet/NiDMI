@@ -1,5 +1,7 @@
 #pragma once
 
+#include "OSCLinks.h"
+
 #include <Arduino.h>
 #include <WiFiUdp.h>
 #include <OSCMessage.h>

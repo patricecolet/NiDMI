@@ -136,6 +136,24 @@ void ComponentManager::syncOSCConfig() {
     osc_queue.setBroadcast(broadcast);
 }
 
+void ComponentManager::reloadOscConfig() {
+    /* Setters seulement : ne pas rouvrir les sockets UDP, ils sont lus par la
+       tâche du cœur 0 pendant ce temps. */
+    const OSCConfigLoader::OSCConfig config = OSCConfigLoader::loadFromNVS();
+
+    osc_manager.setTarget(config.ip, config.port);
+    osc_manager.setBroadcast(config.broadcast);
+    osc_manager.setInterface(config.links);
+
+    osc_queue.setTarget(config.ip, config.port);
+    osc_queue.setBroadcast(config.broadcast);
+    osc_queue.setInterface(config.links);
+
+    Serial.printf("[ComponentManager] OSC rechargé: %s:%d (broadcast=%d, liens=%s)\n",
+                  config.ip.c_str(), config.port, config.broadcast,
+                  osc_links::maskToString(config.links).c_str());
+}
+
 void ComponentManager::update() {
     if (!midi_sender) {
         static unsigned long lastLog = 0;

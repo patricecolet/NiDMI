@@ -24,10 +24,6 @@
     "serverHint": "This name will be used for the Wi‑Fi AP and http://name.local",
     "save": "Save",
     "osc": "OSC",
-    "destination": "Destination",
-    "ipSpecific": "Specific IP",
-    "broadcastAp": "Broadcast AP (192.168.4.255)",
-    "broadcastSta": "Broadcast STA",
     "ipAddress": "IP Address",
     "port": "Port",
     "broadcastMode": "Broadcast mode",
@@ -43,7 +39,12 @@
     "dangerZone": "Danger Zone",
     "clearNVS": "Clear All NVS",
     "clearNVSWarning": "⚠️ Warning: This will delete all configurations (pins, OSC, WiFi, etc.) and completely reset the system.",
-    "clearNVSSuccess": "NVS cleared successfully. Reloading..."
+    "clearNVSSuccess": "NVS cleared successfully. Reloading...",
+    "oscLinks": "Broadcast links",
+    "linkAp": "Access point (192.168.4.255)",
+    "linkSta": "Joined WiFi network",
+    "linkUsb": "USB cable (192.168.7.255)",
+    "oscLinksHint": "Several links can be ticked: the message goes out on each one."
   },
   "pins": {
     "configured": "Configured pins",
@@ -102,7 +103,7 @@
     "muxConfig": "HC4067 Configuration",
     "mux": "Multiplexer:",
     "sigPin": "SIG pin (analog):",
-    "autoPins": "Auto (SIG \u2192 S0\u2013S3)",
+    "autoPins": "Auto (SIG → S0–S3)",
     "s0Pin": "S0 pin:",
     "s1Pin": "S1 pin:",
     "s2Pin": "S2 pin:",

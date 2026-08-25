@@ -256,6 +256,28 @@ Le firmware s'identifie lui-même : `NIDMI_FW_VARIANT` vaut `usbmidi-on+usbnet`,
 exposé par l'API et visible dans l'UI. Utile pour savoir ce qui tourne
 réellement sur une carte sans avoir à la reflasher pour vérifier.
 
+### Console série : elle passe dans l'UI
+
+En `--usb-net`, le câble porte NCM + MIDI et il n'y a pas de CDC : `Serial`
+retombe sur l'UART0 matériel (GPIO43/44) que rien n'écoute. Le firmware
+détourne donc `Serial` vers la console web — section **Console debug** de l'UI,
+case « Recevoir les logs ». Tout ce que le firmware imprime y arrive, y compris
+le journal de boot (ring de 96 lignes conservé avant l'abonnement).
+
+Le détournement est un `Print` dérivé force-inclus à la compilation
+(`src/utils/SerialTee.h`, actif uniquement avec `--usb-net`) : les ~390
+`Serial.printf` du firmware n'ont pas été touchés.
+
+### OSC par le câble
+
+L'OSC sort aussi par le lien USB : cocher **Câble USB** dans la section OSC de
+l'UI (la case n'apparaît que si le firmware est le variant `--usb-net`). Les
+liens sont cumulables — point d'accès, réseau WiFi rejoint et câble peuvent être
+cochés ensemble, le message part sur chacun.
+
+En mode « IP spécifique » il n'y a rien à cocher : une cible en `192.168.7.x`
+est routée par le câble comme n'importe quelle autre.
+
 ### Deux points à connaître
 
 **Le lien met plus longtemps à monter qu'avec un firmware minimal.** Le boot de

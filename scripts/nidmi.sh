@@ -128,6 +128,7 @@ VARIANT=""
 USB_MIDI_DEFINE=()
 
 USB_NET_MODE=false
+FORCE_CLEAN=false
 
 # Parser les arguments pour --lang, --board, --light, --pagination, --no-pagination, --large-app, --no-large-app, --split-fs, --port
 ARGS=()
@@ -154,6 +155,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --clear-nvs)
             CLEAR_NVS=true
+            shift
+            ;;
+        --clean)
+            FORCE_CLEAN=true
             shift
             ;;
         --light)
@@ -294,6 +299,7 @@ show_help() {
     echo "                  s3 = XIAO ESP32-S3"
     echo "  --port DEVICE - Port série explicite (ex: /dev/ttyUSB0, /dev/ttyACM0, /dev/cu.usbmodem*)"
     echo "  --clear-nvs   - Utiliser le sketch de reset NVS"
+    echo "  --clean       - Forcer le nettoyage du cache (sinon : nettoyé seulement si les flags changent)"
     echo "  --light          - Mode LIGHT: définitions simplifiées (réduit la taille JSON)"
     echo "  --pagination     - Activer la pagination (défaut: activée)"
     echo "  --no-pagination  - Désactiver la pagination (à utiliser seulement avec --large-app sur C3)"
@@ -335,6 +341,37 @@ show_help() {
 }
 
 # Fonction de synchronisation
+# cp -f qui laisse tranquilles les fichiers identiques. Recopier a l'identique
+# suffit a redater le fichier, et arduino-cli recompile alors les ~150 sources
+# de la bibliotheque a chaque appel : c'est la vraie cause des compilations a
+# 2 min 30, pas le cache.
+cp_changed() {
+    local argc=$#
+    local dest="${!argc}"
+    local f target
+    for f in "${@:1:$((argc-1))}"; do
+        [ -f "$f" ] || continue
+        target="$dest"
+        [ -d "$dest" ] && target="$dest/$(basename "$f")"
+        if [ -f "$target" ] && cmp -s "$f" "$target"; then
+            continue
+        fi
+        cp -f "$f" "$target"
+    done
+}
+
+# Supprime de la copie Arduino les fichiers qui n'existent plus dans le repo
+# (role de l'ancien « rm -rf src/* », mais sans redater ce qui reste).
+prune_stale_sources() {
+    [ -d "$ARDUINO_LIB_DIR/src" ] || return 0
+    local f rel
+    find "$ARDUINO_LIB_DIR/src" -type f | while IFS= read -r f; do
+        rel="${f#$ARDUINO_LIB_DIR/src/}"
+        [ -f "$REPO_DIR/src/$rel" ] || rm -f "$f"
+    done
+    find "$ARDUINO_LIB_DIR/src" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+}
+
 sync_files() {
     echo "🔄 Synchronisation des fichiers..."
     echo "   📁 Source: $REPO_DIR"
@@ -367,93 +404,93 @@ sync_files() {
     printf '#pragma once\n#define NIDMI_FW_VERSION "%s"\n#define NIDMI_FW_VARIANT "%s"\n' "$_fw_ver" "$_fw_variant" > "$REPO_DIR/src/nidmi_fw_version.h"
     echo "   🏷️  Version firmware: $_fw_ver ($_fw_variant)"
 
-    # Nettoyer les anciens fichiers source (pour éviter les conflits après réorganisation)
-    rm -rf $ARDUINO_LIB_DIR/src/* 2>/dev/null || true
+    # Retirer les sources disparues du repo (réorganisations), sans toucher aux autres
+    prune_stale_sources
     
     # Créer le dossier src/ et tous les sous-dossiers
     mkdir -p $ARDUINO_LIB_DIR/src
     mkdir -p $ARDUINO_LIB_DIR/src/{api,components,components/basic,components/multiplexer,components/distance,components/environment,components/motion,components/color,components/interface,components/actuator,components/display,components/signal,config,hardware,managers,managers/complex,managers/complex/multiplexer,managers/complex/joystick,managers/complex/joystick3,mapping,midi,midi/handlers,network,osc,processors,server,ui,utils}
     
     # Copier les fichiers de la racine src/
-    cp -f $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/nidmi_fw_version.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/nidmi_debug.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/Globals.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/NiDMI.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/NiDMI.cpp $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/nidmi_config.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/nidmi_fw_version.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/nidmi_debug.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/Globals.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/NiDMI.h $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/NiDMI.cpp $ARDUINO_LIB_DIR/src/ 2>/dev/null || true
     
     # Copier les sous-dossiers
-    cp -f $REPO_DIR/src/api/*.cpp $ARDUINO_LIB_DIR/src/api/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/api/*.h $ARDUINO_LIB_DIR/src/api/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/*.h $ARDUINO_LIB_DIR/src/components/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/*.cpp $ARDUINO_LIB_DIR/src/components/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/basic/*.h $ARDUINO_LIB_DIR/src/components/basic/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/basic/*.cpp $ARDUINO_LIB_DIR/src/components/basic/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/multiplexer/*.h $ARDUINO_LIB_DIR/src/components/multiplexer/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/multiplexer/*.cpp $ARDUINO_LIB_DIR/src/components/multiplexer/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/distance/*.h $ARDUINO_LIB_DIR/src/components/distance/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/distance/*.cpp $ARDUINO_LIB_DIR/src/components/distance/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/environment/*.h $ARDUINO_LIB_DIR/src/components/environment/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/environment/*.cpp $ARDUINO_LIB_DIR/src/components/environment/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/motion/*.h $ARDUINO_LIB_DIR/src/components/motion/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/motion/*.cpp $ARDUINO_LIB_DIR/src/components/motion/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/color/*.h $ARDUINO_LIB_DIR/src/components/color/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/color/*.cpp $ARDUINO_LIB_DIR/src/components/color/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/interface/*.h $ARDUINO_LIB_DIR/src/components/interface/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/interface/*.cpp $ARDUINO_LIB_DIR/src/components/interface/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/actuator/*.h $ARDUINO_LIB_DIR/src/components/actuator/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/actuator/*.cpp $ARDUINO_LIB_DIR/src/components/actuator/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/display/*.h $ARDUINO_LIB_DIR/src/components/display/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/display/*.cpp $ARDUINO_LIB_DIR/src/components/display/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/signal/*.h $ARDUINO_LIB_DIR/src/components/signal/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/components/signal/*.cpp $ARDUINO_LIB_DIR/src/components/signal/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/config/*.cpp $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/config/*.h $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/hardware/*.cpp $ARDUINO_LIB_DIR/src/hardware/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/hardware/*.h $ARDUINO_LIB_DIR/src/hardware/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/managers/*.cpp $ARDUINO_LIB_DIR/src/managers/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/managers/*.h $ARDUINO_LIB_DIR/src/managers/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/api/*.cpp $ARDUINO_LIB_DIR/src/api/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/api/*.h $ARDUINO_LIB_DIR/src/api/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/*.h $ARDUINO_LIB_DIR/src/components/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/*.cpp $ARDUINO_LIB_DIR/src/components/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/basic/*.h $ARDUINO_LIB_DIR/src/components/basic/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/basic/*.cpp $ARDUINO_LIB_DIR/src/components/basic/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/multiplexer/*.h $ARDUINO_LIB_DIR/src/components/multiplexer/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/multiplexer/*.cpp $ARDUINO_LIB_DIR/src/components/multiplexer/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/distance/*.h $ARDUINO_LIB_DIR/src/components/distance/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/distance/*.cpp $ARDUINO_LIB_DIR/src/components/distance/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/environment/*.h $ARDUINO_LIB_DIR/src/components/environment/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/environment/*.cpp $ARDUINO_LIB_DIR/src/components/environment/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/motion/*.h $ARDUINO_LIB_DIR/src/components/motion/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/motion/*.cpp $ARDUINO_LIB_DIR/src/components/motion/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/color/*.h $ARDUINO_LIB_DIR/src/components/color/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/color/*.cpp $ARDUINO_LIB_DIR/src/components/color/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/interface/*.h $ARDUINO_LIB_DIR/src/components/interface/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/interface/*.cpp $ARDUINO_LIB_DIR/src/components/interface/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/actuator/*.h $ARDUINO_LIB_DIR/src/components/actuator/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/actuator/*.cpp $ARDUINO_LIB_DIR/src/components/actuator/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/display/*.h $ARDUINO_LIB_DIR/src/components/display/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/display/*.cpp $ARDUINO_LIB_DIR/src/components/display/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/signal/*.h $ARDUINO_LIB_DIR/src/components/signal/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/components/signal/*.cpp $ARDUINO_LIB_DIR/src/components/signal/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/config/*.cpp $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/config/*.h $ARDUINO_LIB_DIR/src/config/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/hardware/*.cpp $ARDUINO_LIB_DIR/src/hardware/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/hardware/*.h $ARDUINO_LIB_DIR/src/hardware/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/managers/*.cpp $ARDUINO_LIB_DIR/src/managers/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/managers/*.h $ARDUINO_LIB_DIR/src/managers/ 2>/dev/null || true
     # Copier les sous-dossiers de managers (complex, etc.)
     if [ -d "$REPO_DIR/src/managers/complex" ]; then
-        cp -f $REPO_DIR/src/managers/complex/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/ 2>/dev/null || true
-        cp -f $REPO_DIR/src/managers/complex/*.h $ARDUINO_LIB_DIR/src/managers/complex/ 2>/dev/null || true
+        cp_changed $REPO_DIR/src/managers/complex/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/ 2>/dev/null || true
+        cp_changed $REPO_DIR/src/managers/complex/*.h $ARDUINO_LIB_DIR/src/managers/complex/ 2>/dev/null || true
         if [ -d "$REPO_DIR/src/managers/complex/multiplexer" ]; then
-            cp -f $REPO_DIR/src/managers/complex/multiplexer/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/multiplexer/ 2>/dev/null || true
-            cp -f $REPO_DIR/src/managers/complex/multiplexer/*.h $ARDUINO_LIB_DIR/src/managers/complex/multiplexer/ 2>/dev/null || true
+            cp_changed $REPO_DIR/src/managers/complex/multiplexer/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/multiplexer/ 2>/dev/null || true
+            cp_changed $REPO_DIR/src/managers/complex/multiplexer/*.h $ARDUINO_LIB_DIR/src/managers/complex/multiplexer/ 2>/dev/null || true
         fi
         if [ -d "$REPO_DIR/src/managers/complex/joystick" ]; then
-            cp -f $REPO_DIR/src/managers/complex/joystick/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/joystick/ 2>/dev/null || true
-            cp -f $REPO_DIR/src/managers/complex/joystick/*.h $ARDUINO_LIB_DIR/src/managers/complex/joystick/ 2>/dev/null || true
+            cp_changed $REPO_DIR/src/managers/complex/joystick/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/joystick/ 2>/dev/null || true
+            cp_changed $REPO_DIR/src/managers/complex/joystick/*.h $ARDUINO_LIB_DIR/src/managers/complex/joystick/ 2>/dev/null || true
         fi
         if [ -d "$REPO_DIR/src/managers/complex/joystick3" ]; then
-            cp -f $REPO_DIR/src/managers/complex/joystick3/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/joystick3/ 2>/dev/null || true
-            cp -f $REPO_DIR/src/managers/complex/joystick3/*.h $ARDUINO_LIB_DIR/src/managers/complex/joystick3/ 2>/dev/null || true
+            cp_changed $REPO_DIR/src/managers/complex/joystick3/*.cpp $ARDUINO_LIB_DIR/src/managers/complex/joystick3/ 2>/dev/null || true
+            cp_changed $REPO_DIR/src/managers/complex/joystick3/*.h $ARDUINO_LIB_DIR/src/managers/complex/joystick3/ 2>/dev/null || true
         fi
     fi
-    cp -f $REPO_DIR/src/midi/*.cpp $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/midi/*.h $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/midi/*.cpp $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/midi/*.h $ARDUINO_LIB_DIR/src/midi/ 2>/dev/null || true
     # Copier les handlers MIDI
     if [ -d "$REPO_DIR/src/midi/handlers" ]; then
-        cp -f $REPO_DIR/src/midi/handlers/*.cpp $ARDUINO_LIB_DIR/src/midi/handlers/ 2>/dev/null || true
-        cp -f $REPO_DIR/src/midi/handlers/*.h $ARDUINO_LIB_DIR/src/midi/handlers/ 2>/dev/null || true
+        cp_changed $REPO_DIR/src/midi/handlers/*.cpp $ARDUINO_LIB_DIR/src/midi/handlers/ 2>/dev/null || true
+        cp_changed $REPO_DIR/src/midi/handlers/*.h $ARDUINO_LIB_DIR/src/midi/handlers/ 2>/dev/null || true
     fi
     # Copier le moteur de mapping
     if [ -d "$REPO_DIR/src/mapping" ]; then
-        cp -f $REPO_DIR/src/mapping/*.cpp $ARDUINO_LIB_DIR/src/mapping/ 2>/dev/null || true
-        cp -f $REPO_DIR/src/mapping/*.h $ARDUINO_LIB_DIR/src/mapping/ 2>/dev/null || true
+        cp_changed $REPO_DIR/src/mapping/*.cpp $ARDUINO_LIB_DIR/src/mapping/ 2>/dev/null || true
+        cp_changed $REPO_DIR/src/mapping/*.h $ARDUINO_LIB_DIR/src/mapping/ 2>/dev/null || true
     fi
-    cp -f $REPO_DIR/src/network/*.cpp $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/network/*.h $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/osc/*.cpp $ARDUINO_LIB_DIR/src/osc/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/osc/*.h $ARDUINO_LIB_DIR/src/osc/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/processors/*.cpp $ARDUINO_LIB_DIR/src/processors/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/processors/*.h $ARDUINO_LIB_DIR/src/processors/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/server/*.cpp $ARDUINO_LIB_DIR/src/server/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/server/*.h $ARDUINO_LIB_DIR/src/server/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/ui/*.cpp $ARDUINO_LIB_DIR/src/ui/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/ui/*.h $ARDUINO_LIB_DIR/src/ui/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/utils/*.cpp $ARDUINO_LIB_DIR/src/utils/ 2>/dev/null || true
-    cp -f $REPO_DIR/src/utils/*.h $ARDUINO_LIB_DIR/src/utils/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/network/*.cpp $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/network/*.h $ARDUINO_LIB_DIR/src/network/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/osc/*.cpp $ARDUINO_LIB_DIR/src/osc/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/osc/*.h $ARDUINO_LIB_DIR/src/osc/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/processors/*.cpp $ARDUINO_LIB_DIR/src/processors/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/processors/*.h $ARDUINO_LIB_DIR/src/processors/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/server/*.cpp $ARDUINO_LIB_DIR/src/server/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/server/*.h $ARDUINO_LIB_DIR/src/server/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/ui/*.cpp $ARDUINO_LIB_DIR/src/ui/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/ui/*.h $ARDUINO_LIB_DIR/src/ui/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/utils/*.cpp $ARDUINO_LIB_DIR/src/utils/ 2>/dev/null || true
+    cp_changed $REPO_DIR/src/utils/*.h $ARDUINO_LIB_DIR/src/utils/ 2>/dev/null || true
     
     # Copier les exemples
     mkdir -p $ARDUINO_LIB_DIR/examples
@@ -504,6 +541,47 @@ clean_cache() {
     fi
     
     echo "   ✅ Cache Arduino nettoyé"
+}
+
+# Tout ce qui, en changeant, invalide les objets deja compiles : flags -D,
+# proprietes USB, partitions, carte, sketch. Le cas dangereux est la bascule des
+# options USB (usb_mode / cdc_on_boot) : sans nettoyage, le lien echoue sur
+# « undefined reference to USBSerial / HWCDCSerial ».
+build_signature() {
+    printf 'board=%s sketch=%s usbmidi=%s usbnet=%s light=%s pagination=%s largeapp=%s splitfs=%s ota=%s lang=%s\n' \
+        "$BOARD_TYPE" "$SKETCH_NAME" "${_usb_midi_flag:-}" "$USB_NET_MODE" \
+        "$LIGHT_MODE" "$PAGINATION_MODE" "$LARGE_APP" "$SPLIT_FS" "$OTA_MODE" "$LANG_CODE"
+}
+
+# Ne nettoie que si la signature a bouge (ou sur --clean). Sinon arduino-cli
+# reutilise le core ESP32 et les bibliotheques deja compiles : quelques secondes
+# au lieu d'une compilation a froid complete.
+maybe_clean_cache() {
+    local sig_file="$ARDUINO_CACHE_DIR/.nidmi_build_sig"
+    local sig previous
+    sig="$(build_signature)"
+    previous=""
+    [ -f "$sig_file" ] && previous="$(cat "$sig_file")"
+
+    if [ "$FORCE_CLEAN" = true ]; then
+        echo "🧹 --clean demandé"
+        clean_cache
+    elif [ -z "$previous" ]; then
+        echo "🧹 Pas de signature de build connue → nettoyage complet"
+        clean_cache
+    elif [ "$previous" != "$sig" ]; then
+        echo "🧹 Flags de build modifiés → nettoyage complet"
+        echo "   avant : $previous"
+        echo "   après : $sig"
+        clean_cache
+    else
+        echo "♻️  Flags de build inchangés → cache conservé (compilation incrémentale)"
+        echo "   $sig"
+        echo "   Forcer un nettoyage : ajouter --clean"
+    fi
+
+    mkdir -p "$ARDUINO_CACHE_DIR" 2>/dev/null || true
+    printf '%s\n' "$sig" > "$sig_file" 2>/dev/null || true
 }
 
 # Copie un CSV de partitions dans le package ESP32 Arduino (Arduino15)
@@ -678,7 +756,13 @@ sync_nidmi_core() {
 
     if [ -d "$REPO_SRC/src" ]; then
         mkdir -p "$DEST/src"
-        cp -r "$REPO_SRC/src/"* "$DEST/src/"
+        # Copie sélective : redater les sources de nidmi-core les ferait
+        # recompiler à chaque build au même titre que celles de NiDMI.
+        find "$REPO_SRC/src" -type f | while IFS= read -r _f; do
+            _rel="${_f#$REPO_SRC/src/}"
+            mkdir -p "$DEST/src/$(dirname "$_rel")"
+            cp_changed "$_f" "$DEST/src/$_rel"
+        done
         cp "$REPO_SRC/library.properties" "$DEST/" 2>/dev/null || true
         echo "   ✅ nidmi-core synced depuis $REPO_SRC"
     elif [ -d "$DEST/.git" ]; then
@@ -731,6 +815,10 @@ compile_sketch() {
 
         if [ "$USB_NET_MODE" = true ]; then
             EXTRA_FLAGS_ARRAY+=("-DNIDMI_USB_NET=1")
+            # Sans CDC sur le câble, Serial retombe sur l'UART0 que rien n'écoute :
+            # on force-inclut le tee dans toutes les unités C++ pour que chaque
+            # Serial.printf parte aussi dans la console web de l'UI.
+            EXTRA_FLAGS_ARRAY+=("-include" "$ARDUINO_LIB_DIR/src/utils/SerialTee.h")
         fi
 
         # --variant : forcer le flag USB-MIDI au build (sans éditer le header)
@@ -816,6 +904,10 @@ build_binary() {
 
         if [ "$USB_NET_MODE" = true ]; then
             EXTRA_FLAGS_ARRAY+=("-DNIDMI_USB_NET=1")
+            # Sans CDC sur le câble, Serial retombe sur l'UART0 que rien n'écoute :
+            # on force-inclut le tee dans toutes les unités C++ pour que chaque
+            # Serial.printf parte aussi dans la console web de l'UI.
+            EXTRA_FLAGS_ARRAY+=("-include" "$ARDUINO_LIB_DIR/src/utils/SerialTee.h")
         fi
 
         # --variant : forcer le flag USB-MIDI au build (sans éditer le header)
@@ -946,7 +1038,7 @@ main() {
             echo "🚀 NiDMI - Synchronisation"
             echo "================================"
             sync_files
-            clean_cache
+            maybe_clean_cache
             echo ""
             echo "✅ Synchronisation terminée !"
             echo "📝 Maintenant compile et upload dans l'IDE Arduino"
@@ -955,7 +1047,7 @@ main() {
                    echo "🚀 NiDMI - Synchronisation + Compilation"
                    echo "================================================"
                    sync_files
-                   clean_cache
+                   maybe_clean_cache
                    compile_sketch
                    echo ""
                    echo "✅ Compilation terminée !"
@@ -965,7 +1057,7 @@ main() {
                    echo "🚀 NiDMI - Synchronisation + Compilation + Stockage"
                    echo "========================================================"
                    sync_files
-                   clean_cache
+                   maybe_clean_cache
                    build_binary
                    echo ""
                    echo "✅ Build terminé !"
@@ -986,7 +1078,7 @@ main() {
                    echo "🚀 NiDMI - Synchronisation + Compilation + Upload"
                    echo "====================================================="
                    sync_files
-                   clean_cache
+                   maybe_clean_cache
                    compile_sketch
                    upload_sketch
                    if [ "$CLEAR_NVS" = true ]; then
@@ -1048,7 +1140,7 @@ main() {
             echo "🚀 NiDMI - TOUT FAIRE (Sync + Compile + Upload + Test)"
             echo "========================================================="
             sync_files
-            clean_cache
+            maybe_clean_cache
             compile_sketch
             upload_sketch
             if [ "$CLEAR_NVS" = true ]; then

@@ -79,6 +79,19 @@ Spécifie le type de carte ESP32.
 - `c3` → `esp32:esp32:XIAO_ESP32C3`
 - `s3` → `esp32:esp32:XIAO_ESP32S3`
 
+### Option `--clean`
+
+Force le nettoyage complet du cache Arduino et des bibliothèques staging.
+
+```bash
+./scripts/nidmi.sh compile --clean
+```
+
+Inutile en usage normal : le nettoyage est automatique dès qu'un flag de build
+change. Le cas qu'il couvre est la bascule des options USB (`usb_mode` /
+`cdc_on_boot`), qui sans nettoyage fait échouer le lien sur
+`undefined reference to USBSerial` / `HWCDCSerial`.
+
 ### Pagination (par défaut, C3 et S3)
 
 NiDMI **nécessite la pagination** pour que l’API des définitions de composants fonctionne correctement : sans elle, le buffer JSON est trop petit et le JSON est tronqué (erreur côté frontend). La pagination est donc **activée par défaut** pour les deux cartes (C3 et S3).
@@ -198,8 +211,17 @@ La synchronisation effectue :
    - `src/midi/*` → bibliothèque Arduino
    - `examples/*` → bibliothèque Arduino
 
-3. **Nettoyage du cache** :
-   - Nettoie le cache Arduino (`/Library/Caches/arduino/sketches`)
+3. **Nettoyage du cache, seulement s'il le faut** :
+   - Le cache n'est vidé que si la **signature de build** a changé (carte,
+     sketch, variante USB-MIDI, `--usb-net`, `--light`, `--pagination`,
+     `--large-app`, `--split-fs`, `--ota`, langue) ou si `--clean` est passé.
+   - Sinon il est conservé et la compilation est incrémentale.
+   - Les sources ne sont recopiées vers la bibliothèque Arduino que si leur
+     contenu a changé : recopier à l'identique redate le fichier, ce qui
+     suffisait à faire recompiler les ~150 sources à chaque appel.
+
+> Avant cette bascule, chaque `compile` repartait de zéro : **2 min 35** contre
+> **~30 s** aujourd'hui pour une compilation sans changement.
 
 ### Compilation (`compile`)
 

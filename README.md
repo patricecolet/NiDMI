@@ -54,7 +54,7 @@ Ces scripts installent le core `esp32:esp32` et les librairies requises.
 ### 🎵 **MIDI & OSC** (Amélioré !)
 - **Support RTP-MIDI complet** avec configuration par pin
 - **OSC avancé** : Format configurable (Float 0-1 ou MIDI 3 int)
-- **Broadcast OSC** : Support AP/STA et IP spécifique
+- **Broadcast OSC** : liens cumulables (point d'accès, WiFi rejoint, câble USB) ou IP spécifique
 - **Interface web intuitive** avec synchronisation temps réel
 - **Sauvegarde NVS automatique** de toutes les configurations
 

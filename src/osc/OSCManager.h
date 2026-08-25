@@ -5,12 +5,9 @@
 #include <OSCMessage.h>
 #include <functional>
 
-// Interfaces réseau pour l'envoi OSC
-enum OSCInterface : uint8_t {
-    OSC_INTERFACE_AP = 0,
-    OSC_INTERFACE_STA = 1,
-    OSC_INTERFACE_BOTH = 2
-};
+/* Les liens de diffusion sont un masque (osc_links::AP | STA | USB), pas un
+   choix exclusif : voir OSCLinks.h. */
+#include "OSCLinks.h"
 
 typedef std::function<void(const String&, float, const String&)> OSCMessageCallback;
 

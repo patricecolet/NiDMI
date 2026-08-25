@@ -78,6 +78,8 @@ public:
     void update();
     void reloadConfigs();
     void syncOSCConfig();
+    /** Relit la config OSC en NVS et l'applique (cible, port, broadcast, liens). */
+    void reloadOscConfig();
     // Gestion des composants
     bool addComponent(uint8_t gpio, ComponentType type, uint8_t midi_param, uint8_t channel, MidiMessageType msg_type = MidiMessageType::NOTE);
     bool removeComponent(uint8_t gpio);

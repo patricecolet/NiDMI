@@ -47,6 +47,14 @@ extern "C" void nidmi_requestReloadPins(){
     g_reloadRequestTime = millis();
 }
 
+// Demande de rechargement de la config OSC depuis l'API (même débounce que les pins)
+static volatile bool g_requestReloadOsc = false;
+static unsigned long g_reloadOscRequestTime = 0;
+extern "C" void nidmi_requestReloadOsc(){
+    g_requestReloadOsc = true;
+    g_reloadOscRequestTime = millis();
+}
+
 // Redémarrage différé (depuis la loop, pas depuis le handler HTTP — évite de couper la NVS en plein écriture)
 static volatile bool g_requestReboot = false;
 static unsigned long g_rebootRequestTime = 0;
@@ -257,6 +265,11 @@ void nidmi_begin() {
 }
 
 void nidmi_loop() {
+    /* Vidange du ring de logs vers le WebSocket. Fait ici, et nulle part
+       ailleurs : les producteurs (cœur 0, event WiFi) n'écrivent que dans le
+       ring, AsyncWebSocket n'est touché que depuis cette tâche. */
+    nidmi_web_debug_pump();
+
     // Redémarrage différé (laisse le temps à la réponse HTTP et à la NVS de se fermer proprement)
     if (g_requestReboot && (millis() - g_rebootRequestTime >= 2000)) {
         ESP.restart();
@@ -307,6 +320,12 @@ void nidmi_loop() {
     if (g_requestReloadPins && (millis() - g_reloadRequestTime >= 500)) {
         g_requestReloadPins = false;
         g_componentManager.reloadConfigs();
+    }
+
+    // Recharger la config OSC si demandé (sauvegarde depuis /api/osc)
+    if (g_requestReloadOsc && (millis() - g_reloadOscRequestTime >= 500)) {
+        g_requestReloadOsc = false;
+        g_componentManager.reloadOscConfig();
     }
     
     processComponents();

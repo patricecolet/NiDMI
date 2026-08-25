@@ -4,6 +4,8 @@
 #include "OSCManager.h"
 #include <WiFi.h>
 
+
+
 OSCManager::OSCManager() : 
     targetIP(""),
     targetPort(8000),
@@ -12,7 +14,7 @@ OSCManager::OSCManager() :
     enabled(false),
     broadcastEnabled(false),
     broadcastIP(""),
-    networkInterface(OSC_INTERFACE_AP),
+    networkInterface(osc_links::AP),
     messageCallback() {
 }
 
@@ -57,7 +59,7 @@ bool OSCManager::begin(const String& target_ip, uint16_t target_port, uint16_t l
                   localPort, targetIP.c_str(), targetPort);
     debug_network( "[OSC] Broadcast disponible: %s:%d\n", 
                   broadcastIP.c_str(), targetPort);
-    debug_network( "[OSC] Interface réseau: %d (0=AP, 1=STA, 2=BOTH)\n", networkInterface);
+    debug_network( "[OSC] Liens de diffusion: %s\n", osc_links::maskToString(networkInterface).c_str());
     debug_network( "[OSC] Broadcast activé: %s\n", broadcastEnabled ? "OUI" : "NON\n");
     
     return true;
@@ -171,9 +173,7 @@ void OSCManager::setBroadcast(bool enable) {
 
 void OSCManager::setInterface(uint8_t interface) {
     networkInterface = interface;
-    const char* interfaceNames[] = {"AP", "STA", "BOTH"};
-    debug_network( "[OSC] Interface réseau configurée: %s\n", 
-                 interface < 3 ? interfaceNames[interface] : "INVALID\n");
+    debug_network( "[OSC] Liens de diffusion: %s\n", osc_links::maskToString(interface).c_str());
 }
 
 uint8_t OSCManager::getInterface() const {
@@ -191,78 +191,15 @@ bool OSCManager::sendOSCMessage(OSCMessage& msg) {
     }
 
     bool success = false;
-    int retryCount = 0;
-    const int maxRetries = 2;
-    
-    // Mode broadcast OU IP spécifique selon l'interface configurée
+
     if (broadcastEnabled) {
-        // Mode broadcast selon l'interface réseau
-        if (networkInterface == OSC_INTERFACE_AP || networkInterface == OSC_INTERFACE_BOTH) {
-            // Broadcast sur AP (192.168.4.255)
-            while (retryCount <= maxRetries && !success) {
-                if (udp.beginPacket("192.168.4.255", targetPort)) {
-                    msg.send(udp);
-                    if (udp.endPacket()) {
-                        success = true;
-                        debug_network( "[OSC] Broadcast AP réussi (tentative %d)\n", retryCount + 1);
-                    } else {
-                        debug_network( "[OSC] Échec endPacket AP (tentative %d)\n", retryCount + 1);
-                    }
-                } else {
-                    debug_network( "[OSC] Échec beginPacket AP (tentative %d)\n", retryCount + 1);
-                }
-                retryCount++;
-            }
-        }
-        
-        if ((networkInterface == OSC_INTERFACE_STA || networkInterface == OSC_INTERFACE_BOTH) && 
-            WiFi.status() == WL_CONNECTED) {
-            // Broadcast sur STA (calculé selon le réseau)
-            IPAddress ip = WiFi.localIP();
-            IPAddress subnet = WiFi.subnetMask();
-            IPAddress broadcast = IPAddress(ip[0] | (~subnet[0]), 
-                                           ip[1] | (~subnet[1]), 
-                                           ip[2] | (~subnet[2]), 
-                                           ip[3] | (~subnet[3]));
-            
-            retryCount = 0;
-            while (retryCount <= maxRetries && !success) {
-                if (udp.beginPacket(broadcast, targetPort)) {
-                    msg.send(udp);
-                    if (udp.endPacket()) {
-                        success = true;
-                        debug_network( "[OSC] Broadcast STA réussi (tentative %d)\n", retryCount + 1);
-                    } else {
-                        debug_network( "[OSC] Échec endPacket STA (tentative %d)\n", retryCount + 1);
-                    }
-                } else {
-                    debug_network( "[OSC] Échec beginPacket STA (tentative %d)\n", retryCount + 1);
-                }
-                retryCount++;
-            }
-        }
-    } else {
-        // Mode IP spécifique
-        if (!targetIP.isEmpty()) {
-            while (retryCount <= maxRetries && !success) {
-                if (udp.beginPacket(targetIP.c_str(), targetPort)) {
-                    msg.send(udp);
-                    if (udp.endPacket()) {
-                        success = true;
-                        debug_network( "[OSC] Unicast réussi (tentative %d)\n", retryCount + 1);
-                    } else {
-                        debug_network( "[OSC] Échec endPacket unicast (tentative %d)\n", retryCount + 1);
-                    }
-                } else {
-                    debug_network( "[OSC] Échec beginPacket unicast (tentative %d)\n", retryCount + 1);
-                }
-                retryCount++;
-            }
-        }
+        success = osc_links::broadcast(udp, msg, networkInterface, targetPort);
+    } else if (!targetIP.isEmpty()) {
+        success = osc_links::unicast(udp, msg, targetIP.c_str(), targetPort);
     }
-    
+
     if (!success) {
-        debug_network( "[OSC] Échec définitif après %d tentatives\n", maxRetries + 1);
+        debug_network( "[OSC] Échec définitif de l'envoi\n");
     }
     
     return success;

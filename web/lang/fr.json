@@ -24,10 +24,6 @@
     "serverHint": "Ce nom sera utilisé pour l'AP Wi‑Fi et http://nom.local",
     "save": "Enregistrer",
     "osc": "OSC",
-    "destination": "Destination",
-    "ipSpecific": "IP spécifique",
-    "broadcastAp": "Broadcast AP (192.168.4.255)",
-    "broadcastSta": "Broadcast STA",
     "ipAddress": "Adresse IP",
     "port": "Port",
     "broadcastMode": "Mode broadcast",
@@ -43,7 +39,12 @@
     "dangerZone": "Zone de danger",
     "clearNVS": "Effacer toute la NVS",
     "clearNVSWarning": "⚠️ Attention : Cela supprimera toutes les configurations (pins, OSC, WiFi, etc.) et réinitialisera complètement le système.",
-    "clearNVSSuccess": "NVS effacée avec succès. Rechargement..."
+    "clearNVSSuccess": "NVS effacée avec succès. Rechargement...",
+    "oscLinks": "Liens de diffusion",
+    "linkAp": "Point d’accès (192.168.4.255)",
+    "linkSta": "Réseau WiFi rejoint",
+    "linkUsb": "Câble USB (192.168.7.255)",
+    "oscLinksHint": "Plusieurs liens possibles : le message part sur chacun."
   },
   "pins": {
     "configured": "Pins configurées",
@@ -102,7 +103,7 @@
     "muxConfig": "Configuration HC4067",
     "mux": "Multiplexeur:",
     "sigPin": "Pin SIG (analogique):",
-    "autoPins": "Auto (SIG \u2192 S0\u2013S3)",
+    "autoPins": "Auto (SIG → S0–S3)",
     "s0Pin": "Pin S0:",
     "s1Pin": "Pin S1:",
     "s2Pin": "Pin S2:",

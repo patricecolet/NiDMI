@@ -3,7 +3,7 @@
 
 OSCQueue::OSCQueue() 
     : messageQueue(nullptr), targetPort(8000), initialized(false), 
-      broadcastEnabled(false), networkInterface(0), sentCount(0), failedCount(0) {
+      broadcastEnabled(false), networkInterface(osc_links::AP), sentCount(0), failedCount(0) {
 }
 
 OSCQueue::~OSCQueue() {
@@ -271,7 +271,7 @@ void OSCQueue::printNetworkStatus() const {
     }
     Serial.printf("Target: %s:%d\n", targetIP.c_str(), targetPort);
     Serial.printf("Broadcast: %s\n", broadcastEnabled ? "Enabled" : "Disabled");
-    Serial.printf("Interface: %d (0=AP, 1=STA, 2=BOTH)\n", networkInterface);
+    Serial.printf("Liens: %s\n", osc_links::maskToString(networkInterface).c_str());
     Serial.printf("Queue Size: %d/%d\n", getQueueSize(), QUEUE_SIZE);
     Serial.println("===============================");
 }
@@ -289,92 +289,11 @@ void OSCQueue::printDetailedStats() const {
 }
 
 bool OSCQueue::sendOSCMessage(OSCMessage& msg) {
-    bool success = false;
-    int retryCount = 0;
-    const int maxRetries = 3; // Plus de retry pour la fiabilité
-    
-    // Vérifier l'état WiFi avant l'envoi
-    if (WiFi.status() != WL_CONNECTED && networkInterface != 0) {
-        // Serial.printf("[OSCQueue] WiFi déconnecté, statut: %d\n", WiFi.status());
-        return false;
-    }
-    
+    /* Plus de garde « pas de STA connecté => on n'envoie rien » : elle coupait
+       toute sortie OSC en mode AP seul, l'interface étant figée sur STA au
+       chargement. Chaque lien décide maintenant pour lui-même (OSCLinks.cpp). */
     if (broadcastEnabled) {
-        // Mode broadcast avec optimisation
-        if (networkInterface == 0 || networkInterface == 2) { // AP ou BOTH
-            while (retryCount <= maxRetries && !success) {
-                if (udp.beginPacket("192.168.4.255", targetPort)) {
-                    msg.send(udp);
-                    if (udp.endPacket()) {
-                        success = true;
-                        // Serial.printf("[OSCQueue] Broadcast AP réussi (tentative %d)\n", retryCount + 1);
-                    } else {
-                        // Serial.printf("[OSCQueue] Échec endPacket AP (tentative %d)\n", retryCount + 1);
-                    }
-                } else {
-                    // Serial.printf("[OSCQueue] Échec beginPacket AP (tentative %d)\n", retryCount + 1);
-                }
-                retryCount++;
-                if (!success && retryCount <= maxRetries) {
-                    delay(2); // Petit délai entre les tentatives
-                }
-            }
-        }
-        
-        if ((networkInterface == 1 || networkInterface == 2) && WiFi.status() == WL_CONNECTED) {
-            // Broadcast STA avec calcul d'adresse optimisé
-            IPAddress ip = WiFi.localIP();
-            IPAddress subnet = WiFi.subnetMask();
-            IPAddress broadcast = IPAddress(ip[0] | (~subnet[0]), 
-                                           ip[1] | (~subnet[1]), 
-                                           ip[2] | (~subnet[2]), 
-                                           ip[3] | (~subnet[3]));
-            
-            retryCount = 0;
-            while (retryCount <= maxRetries && !success) {
-                if (udp.beginPacket(broadcast, targetPort)) {
-                    msg.send(udp);
-                    if (udp.endPacket()) {
-                        success = true;
-                        // Serial.printf("[OSCQueue] Broadcast STA réussi (tentative %d)\n", retryCount + 1);
-                    } else {
-                        // Serial.printf("[OSCQueue] Échec endPacket STA (tentative %d)\n", retryCount + 1);
-                    }
-                } else {
-                    // Serial.printf("[OSCQueue] Échec beginPacket STA (tentative %d)\n", retryCount + 1);
-                }
-                retryCount++;
-                if (!success && retryCount <= maxRetries) {
-                    delay(2); // Petit délai entre les tentatives
-                }
-            }
-        }
-    } else {
-        // Mode unicast avec vérification d'adresse
-        if (!targetIP.isEmpty()) {
-            while (retryCount <= maxRetries && !success) {
-                if (udp.beginPacket(targetIP.c_str(), targetPort)) {
-                    msg.send(udp);
-                    if (udp.endPacket()) {
-                        success = true;
-                        // Serial.printf("[OSCQueue] Unicast réussi (tentative %d)\n", retryCount + 1);
-                    } else {
-                        // Serial.printf("[OSCQueue] Échec endPacket unicast (tentative %d)\n", retryCount + 1);
-                    }
-                } else {
-                    // Serial.printf("[OSCQueue] Échec beginPacket unicast (tentative %d)\n", retryCount + 1);
-                }
-                retryCount++;
-                if (!success && retryCount <= maxRetries) {
-                    delay(2); // Petit délai entre les tentatives
-                }
-            }
-        }
+        return osc_links::broadcast(udp, msg, networkInterface, targetPort);
     }
-    
-    if (!success) {
-        // Serial.printf("[OSCQueue] Échec définitif après %d tentatives\n", maxRetries + 1);
-    }
-    
-    return success;
+    return osc_links::unicast(udp, msg, targetIP.c_str(), targetPort);
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "OSCLinks.h"
+
 #include <Arduino.h>
 #include <functional>
 
@@ -22,7 +24,8 @@ public:
         String ip;
         int port;
         bool broadcast;
-        String target; // "ap", "sta", "both"
+        String target;   // ancienne « destination » : "ap", "sta", "ip"
+        uint8_t links;   // masque osc_links::AP | STA | USB
     };
     
     /**

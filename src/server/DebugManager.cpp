@@ -115,12 +115,12 @@ void DebugManager::printLog(const char* prefix, const char* format, va_list args
     vsnprintf(body, sizeof(body), format, args);
     body[sizeof(body) - 1] = '\0';
 
-    Serial.printf("[%lu] ", static_cast<unsigned long>(millis()));
-    Serial.print(prefix);
-    Serial.print(body);
+    NIDMI_RAW_SERIAL.printf("[%lu] ", static_cast<unsigned long>(millis()));
+    NIDMI_RAW_SERIAL.print(prefix);
+    NIDMI_RAW_SERIAL.print(body);
     size_t len = strlen(body);
     if (len == 0 || body[len - 1] != '\n') {
-        Serial.println();
+        NIDMI_RAW_SERIAL.println();
     }
 
     char line[256];
