@@ -25,13 +25,51 @@ via la page web servie par la carte, **sans câble série**.
 3. **Flasher depuis l'interface** : ouvrir `http://192.168.4.1`, onglet/section **« Firmware (OTA) »** →
    bouton **« Flasher »** → choisir le `.bin`. La carte écrit dans le slot OTA libre puis **redémarre** dessus.
 
-### Trois pièges à connaître (sources d'erreurs réelles)
+### Pièges à connaître (sources d'erreurs réelles)
 
 | Piège | Détail |
 |-------|--------|
 | **`compile` ≠ `build`** | `./scripts/nidmi.sh compile` ne fait que **vérifier** la compilation dans le cache Arduino (nettoyé juste après) → **rien n'est écrit dans `bin/`**. Seul **`build`** (`--output-dir bin`) produit l'image. Après un `compile`, le `bin/` contient encore l'**ancien** build (timestamp périmé). |
 | **Variante USB-MIDI** | `--variant on` = `usb_mode=0` (TinyUSB/OTG, **requis pour le MIDI USB**, c'est la variante de **prod**). `--variant off` = `usb_mode=1` (HW CDC/JTAG, série stable pour **debug**). Par défaut le script suit le flag du header `UsbMidiManager.h` — **toujours préciser `--variant on` pour la prod**. |
 | **`--ota` obligatoire** | L'OTA nécessite une table à **2 slots app** (`--ota` → `nidmi_s3_ota_dual_littlefs`). Sans `--ota` : la carte ne peut pas recevoir l'OTA (`Update.begin()` échoue), et flasher une image non-`--ota` fait **perdre la capacité OTA** pour la fois d'après. Cf. `src/api/OtaAPI.cpp`. |
+
+### OTA en ligne de commande : deux en-têtes obligatoires
+
+L'interface web envoie le bon format toute seule. **En `curl`, deux en-têtes sont indispensables** —
+sans eux l'OTA échoue de façon déroutante, et peut emporter le lien réseau avec lui :
+
+```bash
+curl -sS -m 150 --http1.1 \
+     -H "Content-Type: application/octet-stream" \
+     -H "Expect:" \
+     -X POST --data-binary @bin/nidmi-s3-usbmidi-on-usbnet.bin \
+     http://192.168.7.1/api/ota
+# -> {"status":"ok","reboot":true} en ~7,5 s
+```
+
+| En-tête | Pourquoi |
+|---------|----------|
+| `Content-Type: application/octet-stream` | Sans lui, curl envoie `application/x-www-form-urlencoded` par défaut. ESPAsyncWebServer parse alors le corps **comme un formulaire** : le handler d'upload n'est **jamais appelé**, la carte tente d'allouer 1,4 Mo en paramètres, et **le lien réseau tombe**. Symptôme : `http=000` après 13 à 75 s, et sur le variant `--usb-net`, `ifconfig` montre l'interface en `status: inactive`. |
+| `-H "Expect:"` | Sans lui, curl envoie `Expect: 100-continue` sur les gros corps ; le serveur répond `100` et l'upload se casse (`http=100`, connexion réinitialisée). |
+
+**Diagnostic** : si un OTA par `curl` échoue alors que l'interface web fonctionne, c'est l'en-tête
+`Content-Type` dans neuf cas sur dix — vérifier la forme de sa requête **avant** d'accuser le
+matériel ou la pile USB. Pour trancher, lire les logs de la carte (WebSocket `ws://<ip>/ws`, envoyer
+`DEBUG_CONSOLE:1`, filtrer `DEBUG_LOG:`) : l'absence de la ligne `[OTA] Debut upload` prouve que le
+handler de corps n'a pas été appelé.
+
+### Images refusées
+
+L'endpoint vérifie l'image **avant toute écriture** en flash (`src/api/OtaAPI.cpp`) :
+
+| Réponse | Cause |
+|---------|-------|
+| `413` | Image plus grosse que le slot OTA — typiquement un `.merged.bin` (8 Mo pour un slot de 3,3 Mo). |
+| `400` « image sans descripteur applicatif » | Image flash complète ou bootloader. Le `.merged.bin` commence lui aussi par `0xE9` : le seul discriminateur fiable est le mot magique du descripteur applicatif à l'offset 32 (`0xABCD5432` pour une image app). |
+| `400` « corps vide » | `Content-Length: 0`. |
+
+**Charger le `.bin` applicatif, jamais le `.merged.bin`** — ce dernier (bootloader + partitions + app)
+sert au flash complet par câble ou à ESP Web Tools.
 
 ### Robustesse
 

@@ -17,6 +17,16 @@
  * actuel (pas de brick). C'est le correctif après un upload tronqué qui avait
  * booté une image partielle.
  *
+ * En ligne de commande, DEUX en-tetes sont obligatoires :
+ *   -H "Content-Type: application/octet-stream"   -H "Expect:"
+ * Sans le premier, curl envoie application/x-www-form-urlencoded, ESPAsyncWebServer
+ * parse le corps COMME UN FORMULAIRE, le handler ci-dessous n'est jamais appele, et
+ * la carte tente d'allouer le firmware entier en parametres -> le lien reseau tombe
+ * (http=000 apres 13 a 75 s ; en --usb-net, interface en "status: inactive").
+ * Sans le second, curl envoie Expect: 100-continue et l'upload se casse.
+ * Le navigateur, lui, envoie le bon type tout seul : si l'UI marche et que curl
+ * echoue, regarder l'en-tete AVANT d'accuser le materiel.
+ *
  * Prérequis : table de partitions avec 2 slots app (build --ota /
  * nidmi_s3_ota_dual_littlefs). Sans slot OTA, Update.begin() échoue.
  * Progression suivie côté navigateur (XHR upload).
