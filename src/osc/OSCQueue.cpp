@@ -57,7 +57,7 @@ bool OSCQueue::enqueueFloat(const String& address, float value) {
     }
     
     OSCMessageItem item;
-    item.address = address;
+    strlcpy(item.address, address.c_str(), sizeof(item.address));
     item.value = value;
     item.value2 = 0.0f;
     item.data1 = 0;
@@ -82,7 +82,7 @@ bool OSCQueue::enqueueFloat2(const String& address, float value1, float value2) 
     }
     
     OSCMessageItem item;
-    item.address = address;
+    strlcpy(item.address, address.c_str(), sizeof(item.address));
     item.value = value1;
     item.value2 = value2;
     item.data1 = 0;
@@ -107,7 +107,7 @@ bool OSCQueue::enqueueMidi(const String& address, uint8_t data1, uint8_t data2, 
     }
     
     OSCMessageItem item;
-    item.address = address;
+    strlcpy(item.address, address.c_str(), sizeof(item.address));
     item.value = 0.0f;
     item.value2 = 0.0f;
     item.data1 = data1;
@@ -204,7 +204,7 @@ void OSCQueue::update() {
         }
         
         // Créer et envoyer le message OSC
-        OSCMessage msg(item.address.c_str());
+        OSCMessage msg(item.address);
         
         if (item.messageType == 0) { // Float
             msg.add(item.value);

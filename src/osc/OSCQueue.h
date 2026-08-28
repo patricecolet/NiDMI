@@ -8,9 +8,19 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
-// Structure pour les messages OSC en queue
+// Taille max d'une adresse OSC en queue (osc_address fait 32 dans ComponentConfig,
+// on garde de la marge pour les adresses composées des handlers complexes).
+#define OSC_QUEUE_ADDRESS_MAX 48
+
+// Structure pour les messages OSC en queue.
+// IMPORTANT : cette struct transite par xQueueSend/xQueueReceive, qui la copient
+// par memcpy brut sans appeler constructeur de copie ni destructeur. Elle doit
+// donc rester trivialement copiable : PAS de String ni d'autre type possédant
+// de la mémoire heap, sinon le buffer est libéré à la sortie de portée de
+// l'appelant et la queue conserve un pointeur mort (use-after-free au
+// traitement, puis double free à la destruction de la copie reçue).
 struct OSCMessageItem {
-    String address;
+    char address[OSC_QUEUE_ADDRESS_MAX];
     float value;
     float value2; // Deuxième valeur float (pour canal MUX)
     uint8_t data1;
