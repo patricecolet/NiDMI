@@ -21,6 +21,14 @@ static uint8_t lastZNormValues3[MAX_JOYSTICK3_FILTERS];
 static uint8_t joy3SweepLastNote[MAX_JOYSTICK3_FILTERS][3];
 static uint32_t joy3SweepNoteOnTime[MAX_JOYSTICK3_FILTERS][3];
 
+// Dernière valeur ADC émise en OSC RAW, par joystick et par axe (0=x, 1=y, 2=z).
+// Sert d'hystérésis à la sortie RAW, qui ne peut pas se fier au changement de la valeur
+// normalisée : voir le commentaire dans process().
+static uint16_t joy3LastOscRaw[MAX_JOYSTICK3_FILTERS][3];
+// Zone morte de la sortie OSC RAW, en unités ADC (0-4095). Assez fine pour régler
+// zeroMin/zeroMax au voisinage du centre, assez large pour ne pas saturer la queue OSC.
+static const uint16_t JOY3_OSC_RAW_DELTA = 8;
+
 static uint8_t axisCharToJoy3Slot(char axis) {
     if (axis == 'x') return 0u;
     if (axis == 'y') return 1u;
@@ -214,6 +222,27 @@ void Joystick3Processor::process(
     bool yCh = (yNorm != lastYNorm);
     bool zCh = (zNorm != lastZNorm);
 
+    // --- Déclenchement de la sortie OSC ---
+    // mapAxisValue() fige la valeur normalisée à 0 dans toute la zone morte. Se fier à son
+    // changement pour émettre rendait donc la zone morte entièrement muette en OSC, y compris
+    // au format RAW — et zeroMin/zeroMax impossibles à régler autrement qu'à l'aveugle.
+    // Au format RAW, on déclenche sur la valeur filtrée elle-même, en amont de la zone morte,
+    // avec une hystérésis en unités ADC pour ne pas saturer la queue. Les autres formats
+    // (MIDI, float normalisé) gardent le déclenchement sur la valeur normalisée : ils
+    // transportent cette valeur, donc l'émettre hors de ses changements n'aurait aucun sens.
+    const bool oscRaw = (config.flags & 0x02) && (config.flags & 0x08);
+    auto rawMoved = [&](uint16_t filtered, uint8_t axisSlot) -> bool {
+        if (joyIdx >= MAX_JOYSTICK3_FILTERS) return false;
+        uint16_t last = joy3LastOscRaw[joyIdx][axisSlot];
+        uint16_t d = (filtered > last) ? (uint16_t)(filtered - last) : (uint16_t)(last - filtered);
+        if (d < JOY3_OSC_RAW_DELTA) return false;
+        joy3LastOscRaw[joyIdx][axisSlot] = filtered;
+        return true;
+    };
+    bool xOscCh = oscRaw ? rawMoved(xFiltered, 0) : xCh;
+    bool yOscCh = oscRaw ? rawMoved(yFiltered, 1) : yCh;
+    bool zOscCh = oscRaw ? rawMoved(zFiltered, 2) : zCh;
+
     auto handleAxis = [&](char axis, const Joy3AxisCfg& ac, int8_t norm, uint16_t filtered, bool changed, uint8_t* lastNormPtr) {
         if (ac.msgType == MidiMessageType::NOTE_SWEEP) {
             processNoteSweepJoystick3Axis(joyIdx, axis, config, joyCfg, midi_sender, static_cast<int32_t>(filtered));
@@ -223,8 +252,10 @@ void Joystick3Processor::process(
     };
 
     handleAxis('x', xc, xNorm, xFiltered, xCh, lastXNormPtr);
-    if (xCh && lastXNormPtr) {
+    if (xOscCh && lastXNormPtr) {
         sendOscForAxis(osc_queue, config, 'x', xNorm, xFiltered);
+    }
+    if (xCh && lastXNormPtr) {
         *lastXNormPtr = (uint8_t)(xNorm + 127);
         state.last_raw_value_u32 = xFiltered;
         state.last_midi_value_u8 = normToMidiValue(xNorm);
@@ -232,8 +263,10 @@ void Joystick3Processor::process(
     }
 
     handleAxis('y', yc, yNorm, yFiltered, yCh, lastYNormPtr);
-    if (yCh && lastYNormPtr) {
+    if (yOscCh && lastYNormPtr) {
         sendOscForAxis(osc_queue, config, 'y', yNorm, yFiltered);
+    }
+    if (yCh && lastYNormPtr) {
         *lastYNormPtr = (uint8_t)(yNorm + 127);
         state.last_raw_value_aux_u32 = yFiltered;
         state.last_midi_value_aux_u8 = normToMidiValue(yNorm);
@@ -241,8 +274,10 @@ void Joystick3Processor::process(
     }
 
     handleAxis('z', zc, zNorm, zFiltered, zCh, lastZNormPtr);
-    if (zCh && lastZNormPtr) {
+    if (zOscCh && lastZNormPtr) {
         sendOscForAxis(osc_queue, config, 'z', zNorm, zFiltered);
+    }
+    if (zCh && lastZNormPtr) {
         *lastZNormPtr = (uint8_t)(zNorm + 127);
         state.last_raw_value_aux2_u32 = zFiltered;
         state.last_midi_value_aux2_u8 = normToMidiValue(zNorm);
