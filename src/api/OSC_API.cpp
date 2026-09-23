@@ -1,7 +1,7 @@
 #include "APICommon.h"
 #include "../server/ServerCallbacks.h"
 #include "../osc/OSCLinks.h"
-#include "../osc/OSCDefaults.h"
+#include "../osc/OSCConfigLoader.h"
 #include <Preferences.h>
 
 void setupOSC_API(AsyncWebServer& server) {
@@ -56,20 +56,19 @@ void setupOSC_API(AsyncWebServer& server) {
 
     /* API - Statut OSC */
     server.on("/api/osc/status", HTTP_GET, [](AsyncWebServerRequest *request){
+        /* Relue par le même chargeur que l'émetteur : la page montre ce que fait
+           la carte, valeurs de repli comprises. */
+        const OSCConfigLoader::OSCConfig config = OSCConfigLoader::loadFromNVS();
         Preferences preferences;
         preferences.begin("nidmi", true);
-        String target = preferences.getString("osc_target", "192.168.4.100");
-        int port = preferences.getInt("osc_port", osc_defaults::kRemotePort);
-        bool broadcast = preferences.getBool("osc_broadcast", false);
-        String interface = preferences.getString("osc_interface", "ap");
-        String ip = preferences.getString("osc_ip", "");
         bool outputAll = preferences.getBool("osc_out_all", true);
         preferences.end();
+        const String& ip = config.ip;
         String json = "{";
-        json += "\"target\":\"" + target + "\",";
-        json += "\"port\":" + String(port) + ",";
-        json += "\"broadcast\":" + String(broadcast ? "true" : "false") + ",";
-        json += "\"interface\":\"" + osc_links::maskToString(osc_links::parseMask(interface)) + "\",";
+        json += "\"target\":\"" + config.target + "\",";
+        json += "\"port\":" + String(config.port) + ",";
+        json += "\"broadcast\":" + String(config.broadcast ? "true" : "false") + ",";
+        json += "\"interface\":\"" + osc_links::maskToString(config.links) + "\",";
         /* L'IP unicast n'était pas renvoyée : le champ du formulaire repartait
            vide à chaque chargement de page. */
         json += "\"ip\":\"" + ip + "\",";

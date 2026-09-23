@@ -3,7 +3,7 @@
 #include "../server/ServerCore.h"
 #include "../server/WebDebugConsole.h"
 #include "../server/ServerCallbacks.h"
-#include "../osc/OSCDefaults.h"
+#include "../osc/OSCConfigLoader.h"
 #include <Preferences.h>
 #include <WiFi.h>
 
@@ -28,13 +28,14 @@ void setupNetworkAPI(AsyncWebServer& server) {
         Preferences preferences;
         preferences.begin("nidmi", true);
         String mdnsName = preferences.getString("mdns_name", "nidmi");
-        
-        // Récupérer OSC
-        String oscTarget = preferences.getString("osc_target", "sta");
-        int oscPort = preferences.getInt("osc_port", osc_defaults::kRemotePort);
-        String oscIp = preferences.getString("osc_ip", "");
-        bool oscBroadcast = preferences.getBool("osc_broadcast", false);
         preferences.end();
+
+        // OSC : même chargeur que l'émetteur, valeurs de repli comprises
+        const OSCConfigLoader::OSCConfig osc = OSCConfigLoader::loadFromNVS();
+        const String& oscTarget = osc.target;
+        const int oscPort = osc.port;
+        const String& oscIp = osc.ip;
+        const bool oscBroadcast = osc.broadcast;
         
         String json = "{";
         json += "\"ap_ssid\":\"" + WiFi.softAPSSID() + "\",";
