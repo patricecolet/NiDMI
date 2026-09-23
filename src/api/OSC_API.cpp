@@ -1,6 +1,7 @@
 #include "APICommon.h"
 #include "../server/ServerCallbacks.h"
 #include "../osc/OSCLinks.h"
+#include "../osc/OSCDefaults.h"
 #include <Preferences.h>
 
 void setupOSC_API(AsyncWebServer& server) {
@@ -58,7 +59,7 @@ void setupOSC_API(AsyncWebServer& server) {
         Preferences preferences;
         preferences.begin("nidmi", true);
         String target = preferences.getString("osc_target", "192.168.4.100");
-        int port = preferences.getInt("osc_port", 8000);
+        int port = preferences.getInt("osc_port", osc_defaults::kRemotePort);
         bool broadcast = preferences.getBool("osc_broadcast", false);
         String interface = preferences.getString("osc_interface", "ap");
         String ip = preferences.getString("osc_ip", "");

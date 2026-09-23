@@ -3,6 +3,7 @@
 #include "../server/ServerCore.h"
 #include "../server/WebDebugConsole.h"
 #include "../server/ServerCallbacks.h"
+#include "../osc/OSCDefaults.h"
 #include <Preferences.h>
 #include <WiFi.h>
 
@@ -30,7 +31,7 @@ void setupNetworkAPI(AsyncWebServer& server) {
         
         // Récupérer OSC
         String oscTarget = preferences.getString("osc_target", "sta");
-        int oscPort = preferences.getInt("osc_port", 8000);
+        int oscPort = preferences.getInt("osc_port", osc_defaults::kRemotePort);
         String oscIp = preferences.getString("osc_ip", "");
         bool oscBroadcast = preferences.getBool("osc_broadcast", false);
         preferences.end();

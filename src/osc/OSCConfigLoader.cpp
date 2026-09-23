@@ -1,6 +1,7 @@
 #include "OSCConfigLoader.h"
 #include "OSCManager.h"
 #include "OSCQueue.h"
+#include "OSCDefaults.h"
 #include <Preferences.h>
 
 OSCConfigLoader::OSCConfig OSCConfigLoader::loadFromNVS() {
@@ -9,7 +10,7 @@ OSCConfigLoader::OSCConfig OSCConfigLoader::loadFromNVS() {
     
     OSCConfig config;
     config.target = prefs.getString("osc_target", "sta");
-    config.port = prefs.getInt("osc_port", 8001);
+    config.port = prefs.getInt("osc_port", osc_defaults::kRemotePort);
     config.ip = prefs.getString("osc_ip", "255.255.255.255");
     config.broadcast = prefs.getBool("osc_broadcast", true);
     /* Le réglage était écrit en NVS par /api/osc et relu par personne : les
@@ -36,7 +37,7 @@ void OSCConfigLoader::initialize(
     std::function<void(const String&, float, const String&)> messageCallback
 ) {
     // Initialiser osc_manager avec la config NVS
-    osc_manager.begin(config.ip, config.port, 8001);
+    osc_manager.begin(config.ip, config.port, osc_defaults::kLocalPort);
     osc_manager.setBroadcast(config.broadcast);
     osc_manager.setInterface(config.links);
     osc_manager.setEnabled(true);
