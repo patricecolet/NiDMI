@@ -670,16 +670,6 @@ void ComponentManager::midiTaskLoop() {
                         filter_ptr = nullptr;
                     }
                     
-                    // Capteur mono-pin dont la pin a été détectée dans le vide au setup
-                    // (voir ComponentInitializer::setupGpio) : on garde la config mais on
-                    // n'émet rien, plutôt que d'envoyer le bruit d'une entrée flottante.
-                    // Les joysticks ne lèvent jamais ce drapeau (exclus de la détection).
-                    if (config.pin_disconnected) {
-                        index++;
-                        processed++;
-                        continue;
-                    }
-
                     // Appeler le processeur enregistré pour ce type de composant
                     if (filter_ptr || !def || def->pinType != PinType::PIN_ANALOG) {
                         if (!ProcessorRegistry::process(config.type, configs[index], states[index], filter_ptr, midi_sender, osc_queue)) {

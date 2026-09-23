@@ -378,7 +378,7 @@ void ComponentInitializer::setupGpio(uint8_t gpio, ComponentType type, Component
     // findByType(BUTTON) / findByType(POTENTIOMETER) renvoyaient LEUR définition
     // (souvent pinType != celui attendu) au lieu de la bonne : le switch plus bas
     // tombait alors dans la mauvaise branche (aucun pull-up/pulldown pour un bouton,
-    // aucun test de pin flottante pour un potentiomètre). On connaît le comportement
+    // mauvaise configuration pour un potentiomètre). On connaît le comportement
     // de ces types sans ambiguïté : pas besoin de dépendre de cette recherche pour eux.
     if (type == ComponentType::BUTTON) {
         // Configurer le mode pull selon btnPullMode
@@ -409,30 +409,12 @@ void ComponentInitializer::setupGpio(uint8_t gpio, ComponentType type, Component
         return;
     }
 
-    // Joysticks (multi-pins) : rien à configurer, l'ADC est attaché à la lecture.
-    // Volontairement EXCLUS de la détection "pin dans le vide" ci-dessous : le test
-    // pull-up/pull-down y a produit des faux positifs qui muselaient des axes pourtant
-    // câblés (les 3 axes du joystick 3 axes devenaient muets). Ne les y réintégrer
-    // qu'avec une méthode validée sur la cible.
-    if (type == ComponentType::JOYSTICK || type == ComponentType::JOYSTICK3) {
-        return;
-    }
-
-    // Capteurs analogiques MONO-PIN connus (toujours PIN_ANALOG, cf. leurs *Def.h) :
-    // une seule pin, donc pin flottante = composant entier inutilisable. Traités ici
-    // plutôt que via findByType() pour la même raison d'ambiguïté que BUTTON/LED.
-    bool is_single_pin_analog_sensor =
-        type == ComponentType::POTENTIOMETER ||
-        type == ComponentType::VELOSTAT ||
-        type == ComponentType::NOISE_SAMPLER;
-    if (is_single_pin_analog_sensor) {
-        bool floating = PinMapper::isPinFloating(gpio);
-        if (config) {
-            config->pin_disconnected = floating;
-        }
-        if (floating) {
-            Serial.printf("[ComponentInitializer] GPIO%d: pin flottante détectée — envoi MIDI/OSC désactivé\n", gpio);
-        }
+    // Capteurs analogiques connus (joysticks multi-pins, capteurs mono-pin) : rien à
+    // configurer, l'ADC est attaché à la lecture. Traités ici plutôt que via
+    // findByType() pour la même raison d'ambiguïté que BUTTON/LED.
+    if (type == ComponentType::JOYSTICK || type == ComponentType::JOYSTICK3 ||
+        type == ComponentType::POTENTIOMETER || type == ComponentType::VELOSTAT ||
+        type == ComponentType::NOISE_SAMPLER) {
         return;
     }
 

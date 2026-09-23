@@ -11,8 +11,7 @@ Ce guide s'adresse aux stagiaires et développeurs qui souhaitent ajouter de nou
 5. [Création d'un composant complexe](#création-dun-composant-complexe)
 6. [Intégration dans l'UI](#intégration-dans-lui)
 7. [Bonnes pratiques](#bonnes-pratiques)
-8. [Détection de pin non câblée](#-détection-de-pin-non-câblée-capteurs-mono-pin-uniquement)
-9. [TODO - Prochaines étapes](#todo---prochaines-étapes)
+8. [TODO - Prochaines étapes](#todo---prochaines-étapes)
 
 ## 🏗️ Architecture des composants
 
@@ -449,92 +448,13 @@ Les composants avec `implemented: false` sont affichés en grisé.
 2. **Valider les pins dans le Validator**
 3. **NVS est géré automatiquement par `ConfigLoader`**
 
-## 🔌 Détection de pin non câblée (capteurs mono-pin uniquement)
+## 🔌 Pas de détection de pin non câblée
 
-Une entrée analogique laissée en l'air capte du bruit et envoie un flot de MIDI/OSC
-parasite. Pour l'éviter, un capteur **mono-pin** dont la pin est détectée « dans le
-vide » au setup est neutralisé : il reste configuré mais n'émet plus rien.
-
-### Fonctionnement
-
-`PinMapper::isPinFloating(gpio)` applique successivement le pull-up puis le pull-down
-interne (~45 kΩ) et lit la pin. Si elle suit le pull dans les deux sens (HIGH sous
-pull-up **et** LOW sous pull-down), c'est qu'aucune source externe ne s'y oppose :
-la pin est déclarée flottante.
-
-Le chaînage :
-
-1. `ComponentInitializer::setupGpio()` appelle le test pour les types mono-pin et
-   écrit le résultat dans `ComponentConfig::pin_disconnected`.
-2. La boucle de traitement de `ComponentManager` saute entièrement les composants dont
-   ce drapeau est levé — ni MIDI, ni OSC, ni télémétrie.
-
-Le test est refait à chaque (re)chargement de configuration : rebrancher le capteur
-puis sauvegarder depuis l'UI suffit à le réactiver, sans reflash.
-
-### ⚡ Condition d'impédance — la contrainte à connaître
-
-Le test compare le montage externe au **pull interne de ~45 kΩ**. Il ne détecte donc pas
-« câblé / pas câblé » : il détecte « impédance externe faible / forte devant 45 kΩ ».
-
-**Tout capteur dont la résistance de tirage externe est grande devant 45 kΩ est déclaré
-flottant alors qu'il est correctement câblé.** Le pull interne l'emporte, la pin le suit
-dans les deux sens, et le composant devient muet — sans erreur, sans log au-delà d'une
-ligne au setup.
-
-Ordre de grandeur, pour un tirage `R` vers GND et la pin lue sous pull-up interne :
-
-| `R` externe | Tension sous pull-up | Verdict du test |
-|---|---|---|
-| 1 MΩ | ~3,16 V | ❌ déclaré flottant (faux positif) |
-| 22 kΩ | ~1,08 V | ⚠️ zone indéterminée entre VIL et VIH — instable |
-| 10 kΩ | ~0,6 V | ✅ sous VIL, détecté comme câblé de façon fiable |
-
-**Règle : tirage ≤ 10 kΩ sur tout capteur analogique soumis au gate.** C'est aussi la
-bonne valeur pour l'ADC, dont l'impédance de source recommandée est bien en dessous de
-100 kΩ — un tirage élevé dégrade de toute façon la lecture (bruit, dérive).
-
-> Cas réel, 2026-07-29 : un pad FSR câblé avec un tirage de 1 MΩ. Composant correctement
-> configuré (`role":"velostat"`, `midiMode":"rtp"`), câblage bon, sortie MIDI
-> fonctionnelle par ailleurs — et pourtant silence total. Plusieurs heures perdues à
-> chercher du côté de la config MIDI et du câblage. Le discriminant qui aurait fait
-> gagner du temps : **un bouton sur la même carte fonctionne** (autre chemin de code, pas
-> de gate) **et les potentiomètres basse impédance aussi ; seul le capteur haute impédance
-> est muet.**
-
-Le test ne tourne qu'au setup de la pin : **après avoir changé la résistance, rebooter**
-(ou re-sauvegarder la config depuis l'UI).
-
-### Périmètre : mono-pin seulement
-
-| Type | Gate | Raison |
-|---|---|---|
-| `POTENTIOMETER`, `VELOSTAT`, `NOISE_SAMPLER` | ✅ actif | Une seule pin : flottante = composant inutilisable |
-| `JOYSTICK`, `JOYSTICK3` | ❌ exclus | Faux positifs constatés sur du matériel câblé |
-
-Les joysticks sortent de `setupGpio()` **avant** d'atteindre le test. Sur ces
-composants, le test déclarait flottants des axes pourtant correctement câblés, ce qui
-muselait le composant entier.
-
-La cause est celle décrite plus haut : **c'est un problème d'impédance, pas de montage.**
-Les potentiomètres d'un module joystick sont typiquement de 10 kΩ, mais l'impédance vue
-depuis le curseur dépend de sa position et peut approcher le pull interne de 45 kΩ — d'où
-un verdict instable selon l'axe et la position au moment du boot. Le même mécanisme a
-produit un faux positif sur un pad FSR en 2026-07-29.
-
-**Ne pas les réintégrer** : le gate ne peut pas être fiable sur un capteur dont
-l'impédance de sortie varie avec la position.
-
-### Ajouter un nouveau capteur analogique au gate
-
-Si le composant a **une seule pin analogique**, l'ajouter à la liste
-`is_single_pin_analog_sensor` dans `ComponentInitializer::setupGpio()`. Pour un
-composant multi-pins, s'abstenir : le drapeau `pin_disconnected` est global au
-composant, il n'existe pas de granularité par pin.
-
-> ⚠️ Une détection trop zélée est pire que pas de détection : elle rend muet du
-> matériel qui fonctionne, et le symptôme (« ça n'envoie rien ») ne pointe pas du tout
-> vers sa cause. En cas de doute sur un nouveau type, ne pas activer le gate.
+Il n'y a volontairement **aucune** détection de pin « dans le vide » : une entrée
+analogique laissée en l'air émet son bruit. La tentative (test pull-up/pull-down au setup,
+qui rendait le composant muet) produisait des faux positifs sur du matériel câblé —
+potentiomètres, pads FSR, axes de joystick — avec un symptôme (« ça n'envoie rien ») qui
+ne pointe pas vers sa cause. Elle est conservée sur la branche `feat/garde-pin-flottante`.
 
 ## 🎯 Checklist
 

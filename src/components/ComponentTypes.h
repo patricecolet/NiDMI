@@ -103,17 +103,6 @@ struct ComponentConfig {
     uint8_t customInt1;     // Valeur numérique générique (ex: encoderSteps, touchSensitivity, etc.)
     uint8_t customInt2;     // Valeur numérique générique supplémentaire
 
-    /**
-     * Pin détectée "dans le vide" au setup (test pull-up/pull-down, voir
-     * PinMapper::isPinFloating) : le composant reste configuré mais n'émet plus rien,
-     * pour ne pas envoyer le bruit d'une entrée flottante.
-     *
-     * Réservé aux capteurs MONO-PIN (potentiomètre, velostat, noiseSampler). Les
-     * joysticks en sont volontairement exclus : le test y donnait des faux positifs
-     * qui muselaient des axes pourtant câblés (voir ComponentInitializer::setupGpio).
-     */
-    bool pin_disconnected;
-
     ComponentConfig() {
         specificConfig.specific = nullptr;
         customField1[0] = '\0';
@@ -123,7 +112,6 @@ struct ComponentConfig {
         mappingScript[0] = '\0';
         name[0] = '\0';
         midiMode = MidiMode::RTP;  // Défaut: mode RTP classique
-        pin_disconnected = false;
     }
     
     ~ComponentConfig() {
