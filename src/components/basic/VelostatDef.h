@@ -78,9 +78,7 @@ struct Velostat {
                 "1=rapide, 10=stable", 60),
             makeInfoField("veloWiring",
                 "Câblage : capteur entre 3V3 et la pin, résistance 10 kΩ entre la pin et GND. "
-                "Au repos la tension doit être proche de 0 V et monter à la pression. "
-                "Une résistance trop élevée (≥100 kΩ) fait détecter la pin comme non câblée "
-                "et rend le composant muet."),
+                "Au repos la tension doit être proche de 0 V et monter à la pression."),
             makeNumberFieldWithHint("scanTimeMs", "Fenêtre de frappe (ms)", 0, 20, "5",
                 "0=vélocité au seuil, 5=pic de frappe", 60),
             makeNumberFieldWithHint("maskTimeMs", "Anti-rebond (ms)", 0, 200, "30",
