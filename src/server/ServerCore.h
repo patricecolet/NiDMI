@@ -24,6 +24,8 @@
  */
 class ServerCore {
 private:
+    void startWifi(const char* apSsid, const char* apPass, bool apOnlyMode);
+
     AsyncWebServer server;
     AsyncWebSocket ws;
     nidmi_core::RtpMidiService rtpMidiInstance;
@@ -36,7 +38,10 @@ public:
     ServerCore();
     
     // Initialisation (apOnlyMode: true si aucun STA en NVS — WIFI_AP pur évite boucles d’auth sur certains ESP32)
-    void begin(const char* apSsid, const char* apPass, const char* hostname, bool apOnlyMode = false);
+    // wifiEnabled=false : ni AP ni STA, seuls mDNS et le serveur web démarrent — l'appelant
+    // doit alors avoir initialisé esp_netif lui-même (réseau USB démarré avant).
+    void begin(const char* apSsid, const char* apPass, const char* hostname, bool apOnlyMode = false,
+               bool wifiEnabled = true);
     void connectSta(const char* staSsid, const char* staPass);
     void setStaticStaIp(IPAddress ip, IPAddress gateway, IPAddress subnet);
     void reconfigureMdns(const char* hostname);

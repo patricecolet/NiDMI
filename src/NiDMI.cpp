@@ -121,6 +121,8 @@ void nidmi_begin() {
     g_staGwStr = "";
     g_staSnStr = "";
     bool touchEnabled = false;
+    bool wifiEnabledNvs = true;
+    bool rtpEnabled = true;
     uint32_t storedSchema = 0;
     const bool usbMidiEnabled = nidmi_usb_midi_enabled_at_compile_time();
 
@@ -132,6 +134,8 @@ void nidmi_begin() {
         g_staGwStr = preferences.getString("sta_gw", "");
         g_staSnStr = preferences.getString("sta_sn", "");
         touchEnabled = preferences.getBool("touch_enabled", false);
+        wifiEnabledNvs = preferences.getBool("wifi_enabled", true);
+        rtpEnabled = preferences.getBool("rtp_enabled", true);
         storedSchema = preferences.getUInt("nvs_schema", 0);
         preferences.end();
     } else {
@@ -185,12 +189,25 @@ void nidmi_begin() {
     const char* apPass = "nidmipass";
     const char* host   = serverName.c_str();
 
+    // Wi-Fi coupé seulement si le réseau USB est compilé : sans lui la carte
+    // ne serait plus joignable que par un reflash.
+    const bool wifiEnabled = wifiEnabledNvs || !nidmi_usbnet::enabled();
+    if (!wifiEnabledNvs && wifiEnabled) {
+        Serial.println("[NiDMI] wifi_enabled = 0 ignoré : firmware sans réseau USB");
+    }
+    if (!wifiEnabled) {
+        g_staSsid = "";  // ni connexion STA au boot, ni reconnexion dans nidmi_loop()
+    }
+
     touchDiag("AVANT WiFi/serveur");
 
     // Démarre l’AP : AP seul si aucun STA en NVS (évite soucis d’association client en APSTA « vide »)
-    NIDMI_WEB_LOG("[MEM] avant WiFi: %d\n", (int)ESP.getFreeHeap());
-    serverCore.begin(apSsid, apPass, host, g_staSsid.length() == 0);
-    NIDMI_WEB_LOG("[MEM] apres WiFi+serveur: %d\n", (int)ESP.getFreeHeap());
+    // Wi-Fi coupé : le serveur démarre plus bas, après le réseau USB.
+    if (wifiEnabled) {
+        NIDMI_WEB_LOG("[MEM] avant WiFi: %d\n", (int)ESP.getFreeHeap());
+        serverCore.begin(apSsid, apPass, host, g_staSsid.length() == 0);
+        NIDMI_WEB_LOG("[MEM] apres WiFi+serveur: %d\n", (int)ESP.getFreeHeap());
+    }
 
     touchDiag("APRES WiFi/serveur");
 
@@ -220,21 +237,41 @@ void nidmi_begin() {
     // configuration qu'une fois. Le descripteur NCM, lui, a été enregistré
     // pendant l'initialisation statique (instance globale dans
     // UsbNetBootstrap.cpp), donc bien avant.
+    bool usbNetUp = false;
     if (nidmi_usbnet::enabled()) {
-        if (nidmi_usbnet::begin()) {
+        usbNetUp = nidmi_usbnet::begin();
+        if (usbNetUp) {
             NIDMI_WEB_LOG("[UsbNet] %s", nidmi_usbnet::statusLine().c_str());
         }
         NIDMI_WEB_LOG("[MEM] apres UsbNet: %d\n", (int)ESP.getFreeHeap());
     }
-    
-    // Initialiser RTP-MIDI
-    serverCore.rtpMidi().begin(serverName.c_str());
-    serverCore.rtpMidi().setMidiInputHooks(
-        [](uint8_t ch, uint8_t note, uint8_t vel) { g_componentManager.handleMidiNoteOn(ch, note, vel); },
-        [](uint8_t ch, uint8_t note, uint8_t vel) { g_componentManager.handleMidiNoteOff(ch, note, vel); },
-        [](uint8_t ch, uint8_t cc,   uint8_t val) { g_componentManager.handleMidiControlChange(ch, cc, val); }
-    );
-    NIDMI_WEB_LOG("[MEM] apres RTP-MIDI: %d\n", (int)ESP.getFreeHeap());
+
+    // Wi-Fi coupé : mDNS et serveur web APRÈS le réseau USB, qui initialise
+    // esp_netif et la boucle d'événements (le Wi-Fi le faisait jusqu'ici).
+    // Si le réseau USB n'a pas démarré, le Wi-Fi reprend : jamais de carte injoignable.
+    if (!wifiEnabled) {
+        if (usbNetUp) {
+            serverCore.begin(apSsid, apPass, host, true, false);
+        } else {
+            Serial.println("[NiDMI] réseau USB en échec : Wi-Fi démarré en secours");
+            serverCore.begin(apSsid, apPass, host, true);
+        }
+        NIDMI_WEB_LOG("[MEM] apres serveur: %d\n", (int)ESP.getFreeHeap());
+    }
+
+    // Initialiser RTP-MIDI (NVS rtp_enabled, activé par défaut)
+    if (rtpEnabled) {
+        serverCore.rtpMidi().begin(serverName.c_str());
+        serverCore.rtpMidi().setMidiInputHooks(
+            [](uint8_t ch, uint8_t note, uint8_t vel) { g_componentManager.handleMidiNoteOn(ch, note, vel); },
+            [](uint8_t ch, uint8_t note, uint8_t vel) { g_componentManager.handleMidiNoteOff(ch, note, vel); },
+            [](uint8_t ch, uint8_t cc,   uint8_t val) { g_componentManager.handleMidiControlChange(ch, cc, val); }
+        );
+        NIDMI_WEB_LOG("[MEM] apres RTP-MIDI: %d\n", (int)ESP.getFreeHeap());
+    } else {
+        g_midiRouter.enableRtpMidi(false);
+        Serial.println("[NiDMI] RTP-MIDI désactivé (NVS rtp_enabled = 0)");
+    }
     
     // Initialiser Bluetooth MIDI
     serverCore.bluetooth().begin(serverName.c_str());

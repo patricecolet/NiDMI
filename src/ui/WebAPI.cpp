@@ -242,7 +242,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
 // Fonction pour envoyer le statut RTP-MIDI via WebSocket
 void sendRtpStatus(AsyncWebSocket& ws) {
     preferences.begin("nidmi", false);
-    bool enabled = preferences.getBool("rtp_enabled", false);
+    bool enabled = preferences.getBool("rtp_enabled", true);  // défaut aligné sur le démarrage (NiDMI.cpp)
     String name = preferences.getString("rtp_name", "ESP32-Studio");
     String target = preferences.getString("rtp_target", "sta");
     preferences.end();

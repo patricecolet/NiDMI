@@ -12,7 +12,7 @@ ServerCore serverCore;
 ServerCore::ServerCore()
     : server(80), ws("/ws") {}
 
-void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostname, bool apOnlyMode) {
+void ServerCore::startWifi(const char* apSsid, const char* apPass, bool apOnlyMode) {
     /* Événements WiFi : visibilité des drops STA (avec la RAISON, indisponible par polling)
      * et de l'obtention d'IP. Log Serial uniquement — pas d'accès WebSocket depuis la tâche
      * event WiFi, pour éviter les races avec la tâche serveur (AsyncWebSocket). */
@@ -57,6 +57,15 @@ void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostn
     Serial.print("  SSID: "); Serial.println(apSsid);
     Serial.print("  PASS: "); Serial.println(apPass);
     Serial.print("  AP IP: "); Serial.println(apIp);
+}
+
+void ServerCore::begin(const char* apSsid, const char* apPass, const char* hostname, bool apOnlyMode,
+                       bool wifiEnabled) {
+    if (wifiEnabled) {
+        startWifi(apSsid, apPass, apOnlyMode);
+    } else {
+        Serial.println("[ServerCore] WiFi désactivé (NVS wifi_enabled = 0) : ni AP ni STA");
+    }
 
     // Configuration mDNS - Détecter le mode automatiquement
     bool staConnected = (WiFi.status() == WL_CONNECTED);
